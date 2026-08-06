@@ -160,20 +160,12 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 	if TestSnapshotRC != nil {
 		TestSnapshotRC(rc)
 	}
-	if rc.Render == nil {
-		rc.Render = &tpl.RenderContext{}
-	}
+	normalizeRenderContext(&rc)
 
-	if rc.Render.Raw == nil && rc.Config != nil {
-		rc.Render.Raw = rc.Config.Raw
-	}
-
-	if rc.Render.Params == nil {
-		rc.Render.Params = make(map[string]any)
-	}
-	if rc.Render.Context == nil {
-		rc.Render.Context = make(map[string]any)
-	}
+	// Set when argv_append_from produced nothing to process. The notifier defer
+	// below reads it: the command did not do the work it would report on, so it
+	// is suppressed exactly like a declined confirmation.
+	var skippedEmptyAppend bool
 
 	// Conditional notifier install — only when this is the top-level user
 	// invocation of a command opted into notifications. Workflow sub-steps
@@ -195,6 +187,12 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 		defer func() {
 			// User explicitly declined the confirmation prompt — not a failure.
 			if errors.As(err, new(*commandAbortedError)) {
+				return
+			}
+			// Nothing to process — the command never ran, so there is no
+			// outcome to report. (err is nil here, so without this the user
+			// would get a "success" notification for work that did not happen.)
+			if skippedEmptyAppend {
 				return
 			}
 			n.Notify(context.Background(), notify.Event{
@@ -233,6 +231,15 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 		for _, cleanup := range slices.Backward(cleanups) {
 			cleanup()
 		}
+		// argv_append_from produced nothing: the command is skipped, not
+		// failed. File effects are rolled back above for the same reason they
+		// are on the error path — nothing consumed them. See
+		// spec.ErrArgvAppendEmpty for the full contract.
+		if errors.Is(err, spec.ErrArgvAppendEmpty) {
+			skippedEmptyAppend = true
+			_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ command %q: skipped (nothing to process)\n", rc.Cmd.ID)
+			return nil
+		}
 		if msgErr := emitCommandMessage(rc, rc.Cmd.Messages.Error, false); msgErr != nil {
 			return fmt.Errorf("%w; render error message: %v", err, msgErr)
 		}
@@ -243,6 +250,39 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 		return err
 	}
 	return nil
+}
+
+// normalizeRenderContext fills in the render-context defaults every dispatcher
+// depends on, at the single point every dispatcher passes through.
+//
+// Doing this per-call-site is what review caught: several dispatchers build
+// their RenderContext inline rather than via BuildRunContext (the workflow
+// sub-step path builds a fresh one; pipeline actions, reset hooks and validate
+// checks go through the constructor), so a per-site rule invites exactly one of
+// them to be forgotten — and for ${args} the symptom is silent. A command
+// declaring `argv: [go, test, "${args}"]` with args.default ["./..."] renders
+// as `go test` on the path that missed it, testing the current directory
+// instead of the module: a different command, not a visible failure.
+//
+// Recomputing the args default over an already-resolved value is idempotent —
+// the CLI's Resolve(userArgs) is non-nil whenever the caller supplied anything,
+// and Resolve(nil) yields that same default otherwise.
+func normalizeRenderContext(rc *RunContext) {
+	if rc.Render == nil {
+		rc.Render = &tpl.RenderContext{}
+	}
+	if rc.Render.Raw == nil && rc.Config != nil {
+		rc.Render.Raw = rc.Config.Raw
+	}
+	if rc.Render.Params == nil {
+		rc.Render.Params = make(map[string]any)
+	}
+	if rc.Render.Context == nil {
+		rc.Render.Context = make(map[string]any)
+	}
+	if rc.Render.Args == nil && rc.Cmd != nil {
+		rc.Render.Args = rc.Cmd.Args.Resolve(nil)
+	}
 }
 
 func emitCommandMessage(ctx RunContext, message string, success bool) error {

@@ -614,8 +614,66 @@ func TestResolveStepWhen(t *testing.T) {
 	t.Run("runtime condition is returned and step kept", func(t *testing.T) {
 		c := &condition.Condition{Type: condition.TypeShell, Cmd: "true"}
 		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
-		if err != nil || !keep || rt != c {
+		if err != nil || !keep {
 			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+		if rt == c {
+			t.Fatal("expected a rendered copy, not the original *condition.Condition (render-into-copy contract)")
+		}
+		if rt.Cmd != "true" {
+			t.Errorf("Cmd = %q, want unchanged %q", rt.Cmd, "true")
+		}
+	})
+
+	t.Run("runtime shell condition renders a known-head cmd", func(t *testing.T) {
+		cfg := configWithSourceVars()
+		c := &condition.Condition{Type: condition.TypeShell, Cmd: "test -d ${vars.source.dir}"}
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err != nil || !keep {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+		if rt.Cmd != "test -d app" {
+			t.Errorf("Cmd = %q, want %q", rt.Cmd, "test -d app")
+		}
+		if c.Cmd != "test -d ${vars.source.dir}" {
+			t.Errorf("input condition mutated: Cmd = %q", c.Cmd)
+		}
+	})
+
+	t.Run("runtime builtin condition renders a known-head cmd", func(t *testing.T) {
+		cfg := configWithSourceVars()
+		c := &condition.Condition{Type: condition.TypeBuiltin, Cmd: "dir-empty ${vars.source.dir}"}
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err != nil || !keep {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+		if rt.Cmd != "dir-empty app" {
+			t.Errorf("Cmd = %q, want %q", rt.Cmd, "dir-empty app")
+		}
+	})
+
+	t.Run("runtime condition keeps an unknown-head cmd literal", func(t *testing.T) {
+		c := &condition.Condition{Type: condition.TypeShell, Cmd: "test -d ${HOME}"}
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err != nil || !keep {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+		if rt.Cmd != "test -d ${HOME}" {
+			t.Errorf("Cmd = %q, want unchanged", rt.Cmd)
+		}
+	})
+
+	t.Run("runtime condition render error is wrapped with step prefix", func(t *testing.T) {
+		c := &condition.Condition{Type: condition.TypeShell, Cmd: "${vars.x}{{ if }}"}
+		_, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if keep {
+			t.Fatal("expected keep=false on error")
+		}
+		if !strings.Contains(err.Error(), "init/s") {
+			t.Fatalf("error should name the step: %v", err)
 		}
 	})
 
@@ -744,5 +802,292 @@ func TestResolvePhaseSteps_parallelSubStepCarriesOwnTimeout(t *testing.T) {
 	}
 	if rp.Steps[1].Timeout != 0 {
 		t.Errorf("substep b Timeout = %v, want 0 (absent)", rp.Steps[1].Timeout)
+	}
+}
+
+func configWithSourceVars() *config.DweConfig {
+	return &config.DweConfig{
+		Raw: map[string]any{
+			"vars": map[string]any{
+				"source": map[string]any{
+					"repo": "https://example.com/repo.git",
+					"dir":  "app",
+				},
+			},
+		},
+	}
+}
+
+func TestResolvePhaseSteps_rendersKnownHeadCmd(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "clone", Type: "shell", Cmd: "git clone ${vars.source.repo} ${vars.source.dir}"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "git clone https://example.com/repo.git app"
+	if resolved[0].Step.Cmd != want {
+		t.Errorf("Step.Cmd = %q, want %q", resolved[0].Step.Cmd, want)
+	}
+}
+
+func TestResolvePhaseSteps_leavesUnknownHeadLiteral(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "greet", Type: "shell", Cmd: "echo ${HOME}"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].Step.Cmd != "echo ${HOME}" {
+		t.Errorf("Step.Cmd = %q, want unchanged", resolved[0].Step.Cmd)
+	}
+}
+
+func TestResolvePhaseSteps_rendersCommandStepWith(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "clone", Type: "command", Cmd: "source_clone", With: map[string]any{"repo": "${vars.source.repo}"}},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].Step.With["repo"] != "https://example.com/repo.git" {
+		t.Errorf("Step.With[repo] = %v", resolved[0].Step.With["repo"])
+	}
+	if phase.Steps[0].With["repo"] != "${vars.source.repo}" {
+		t.Errorf("original phase.Steps[0].With mutated: %v", phase.Steps[0].With["repo"])
+	}
+}
+
+func TestResolvePhaseSteps_rendersFilesGateWith(t *testing.T) {
+	cfg := configWithSourceVars()
+	original := &filesgate.FilesGate{With: map[string]any{"x": "${vars.source.repo}"}, State: filesgate.StateReadable}
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "true", FilesGate: original},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].FilesGate.With["x"] != "https://example.com/repo.git" {
+		t.Errorf("FilesGate.With[x] = %v", resolved[0].FilesGate.With["x"])
+	}
+	if original.With["x"] != "${vars.source.repo}" {
+		t.Errorf("original FilesGate mutated: %v", original.With["x"])
+	}
+}
+
+func TestResolvePhaseSteps_renderErrorFailsResolve(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "bad", Type: "shell", Cmd: "${vars.x}{{ if }}"},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err == nil {
+		t.Fatal("expected a render error")
+	}
+	if !strings.Contains(err.Error(), "init/bad") {
+		t.Errorf("error should name the step: %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_resolvingSameConfigTwiceIsIdempotent(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "clone", Type: "command", Cmd: "source_clone", With: map[string]any{"repo": "${vars.source.repo}"}},
+		},
+	}
+	first, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("first resolve: unexpected error: %v", err)
+	}
+	second, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("second resolve: unexpected error: %v", err)
+	}
+	if first[0].Step.With["repo"] != second[0].Step.With["repo"] {
+		t.Errorf("resolve is not byte-identical across calls: first=%v second=%v",
+			first[0].Step.With["repo"], second[0].Step.With["repo"])
+	}
+}
+
+// --- Task 2b: rendering the runtime `when` at all three scopes ---
+
+func TestResolvePhaseSteps_rendersPhaseRuntimeWhen(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		When: &condition.Condition{Type: condition.TypeShell, Cmd: "test -d ${vars.source.dir}"},
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "echo a"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].PhaseWhen == nil {
+		t.Fatal("expected a non-nil PhaseWhen")
+	}
+	if resolved[0].PhaseWhen.Cmd != "test -d app" {
+		t.Errorf("PhaseWhen.Cmd = %q, want %q", resolved[0].PhaseWhen.Cmd, "test -d app")
+	}
+	if phase.When.Cmd != "test -d ${vars.source.dir}" {
+		t.Errorf("original phase.When mutated: Cmd = %q", phase.When.Cmd)
+	}
+}
+
+func TestResolvePhaseSteps_phaseRuntimeWhenLeavesUnknownHeadLiteral(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		When: &condition.Condition{Type: condition.TypeShell, Cmd: "test -d ${HOME}"},
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "echo a"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].PhaseWhen.Cmd != "test -d ${HOME}" {
+		t.Errorf("PhaseWhen.Cmd = %q, want unchanged", resolved[0].PhaseWhen.Cmd)
+	}
+}
+
+func TestResolvePhaseSteps_phaseRuntimeWhenRenderErrorFailsResolve(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		When: &condition.Condition{Type: condition.TypeShell, Cmd: "${vars.x}{{ if }}"},
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "echo a"},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err == nil {
+		t.Fatal("expected a render error")
+	}
+	if !strings.Contains(err.Error(), "init") {
+		t.Errorf("error should name the phase: %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_rendersParallelGroupParentWhen(t *testing.T) {
+	cfg := configWithSourceVars()
+	group := newParallelStep("group", 0, nil,
+		config.DeployStep{Name: "a", Type: "shell", Cmd: "echo a"},
+		config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
+	)
+	group.When = &condition.Condition{Type: condition.TypeShell, Cmd: "test -d ${vars.source.dir}"}
+	phase := config.DeployPhase{Name: "init", Steps: []config.DeployStep{group}}
+
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].RuntimeWhen == nil {
+		t.Fatal("expected a non-nil group RuntimeWhen")
+	}
+	if resolved[0].RuntimeWhen.Cmd != "test -d app" {
+		t.Errorf("group RuntimeWhen.Cmd = %q, want %q", resolved[0].RuntimeWhen.Cmd, "test -d app")
+	}
+}
+
+func TestResolvePhaseSteps_rendersLeafStepRuntimeWhen(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "a", Type: "shell", Cmd: "echo a",
+				When: &condition.Condition{Type: condition.TypeShell, Cmd: "test -d ${vars.source.dir}"},
+			},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].RuntimeWhen == nil {
+		t.Fatal("expected a non-nil RuntimeWhen")
+	}
+	if resolved[0].RuntimeWhen.Cmd != "test -d app" {
+		t.Errorf("RuntimeWhen.Cmd = %q, want %q", resolved[0].RuntimeWhen.Cmd, "test -d app")
+	}
+}
+
+func TestResolvePhaseSteps_leafWhenCmdMatchesDerivedCheckAutoInput(t *testing.T) {
+	// Plan B derives `check: auto` from when.Cmd; both sides must see the
+	// identical rendered string, or the derived check would compare against
+	// different text than the gate it inverts.
+	cfg := configWithSourceVars()
+	whenCmd := "test -d ${vars.source.dir}"
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "a", Type: "shell", Cmd: "echo a",
+				When: &condition.Condition{Type: condition.TypeShell, Cmd: whenCmd},
+			},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "test -d app"
+	if resolved[0].RuntimeWhen.Cmd != want {
+		t.Fatalf("RuntimeWhen.Cmd = %q, want %q", resolved[0].RuntimeWhen.Cmd, want)
+	}
+}
+
+// TestResolvePhaseSteps_parallelGroupRawStepWhenDivergence pins a known,
+// harmless divergence: resolveParallelStep builds ResolvedStep.Step directly
+// from the raw group step, so rs.Step.Parallel.Steps[i] (the raw sub-step
+// stored on the group's own Step field) stays unrendered while
+// rs.Parallel.Steps[i].Step (the actual resolved sub-step) is rendered.
+// Harmless because Parallel is not hashed by StepHash — pinned here so this
+// is never later mistaken for a bug.
+func TestResolvePhaseSteps_parallelGroupRawStepWhenDivergence(t *testing.T) {
+	cfg := configWithSourceVars()
+	group := newParallelStep("group", 0, nil,
+		config.DeployStep{Name: "a", Type: "shell", Cmd: "echo ${vars.source.dir}"},
+		config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
+	)
+	phase := config.DeployPhase{Name: "init", Steps: []config.DeployStep{group}}
+
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	rs := resolved[0]
+	if rs.Step.Parallel.Steps[0].Cmd != "echo ${vars.source.dir}" {
+		t.Errorf("rs.Step.Parallel.Steps[0].Cmd = %q, want the raw literal (known divergence)", rs.Step.Parallel.Steps[0].Cmd)
+	}
+	if rs.Parallel.Steps[0].Step.Cmd != "echo app" {
+		t.Errorf("rs.Parallel.Steps[0].Step.Cmd = %q, want rendered %q", rs.Parallel.Steps[0].Step.Cmd, "echo app")
 	}
 }

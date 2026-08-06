@@ -1,4 +1,4 @@
-> Translated from: reference/docs/browser.md @ 430240cc94a6
+> Translated from: reference/docs/browser.md @ fd4a9a2e7f19
 
 # Интерактивный TUI-браузер
 
@@ -7,8 +7,10 @@
 ## Использование
 
 ```bash
-dwe docs
+dwe docs [--lang <code>]
 ```
+
+`--lang` заранее выбирает локаль, с которой откроется браузер (по умолчанию: активная локаль или `en`); `L` по-прежнему переключает языки прямо в сессии.
 
 ## Требования
 

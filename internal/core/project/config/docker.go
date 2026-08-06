@@ -219,6 +219,22 @@ func applyDockerArgsDefaults(args *DockerArgs, presentKeys map[string]bool) {
 	}
 }
 
+// normalizeComposeProjectName lowercases a compose project name. Docker
+// Compose requires project names to match [a-z0-9][a-z0-9_-]*, rejecting
+// uppercase — the one violation dwe cannot construct around, since
+// project.name/project.prefix and docker.yml's project_name are free-form
+// user text. ResolveComposeProjectName and ComposeProjectName both route
+// through this single helper so the two entry points can never diverge on
+// casing, and every other site that needs the name — docker.buildCompose (the
+// -p value itself), `dwe docker project-name`, the reset stop/remove builtin,
+// spec.RunContext.Compose, the ports preflight — calls one of those two
+// rather than re-deriving the precedence. The one deliberate exception is
+// internal/shared/prompt.readComposeProjectName, a standalone hot-path reader
+// that repeats the lowercasing itself.
+func normalizeComposeProjectName(name string) string {
+	return strings.ToLower(name)
+}
+
 // ResolveComposeProjectName returns the authoritative compose project name —
 // the same identifier `docker compose -p <name>` uses to scope containers,
 // networks, and volumes for the project. It is the single source of truth for
@@ -244,19 +260,19 @@ func applyDockerArgsDefaults(args *DockerArgs, presentKeys map[string]bool) {
 // empty baseDir skips the docker.yml read and returns FullName().
 func ResolveComposeProjectName(baseDir string, cfg *DweConfig) (string, error) {
 	if baseDir == "" {
-		return cfg.Project.FullName(), nil
+		return normalizeComposeProjectName(cfg.Project.FullName()), nil
 	}
 	name, err := readDockerProjectName(baseDir, cfg)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return cfg.Project.FullName(), nil
+			return normalizeComposeProjectName(cfg.Project.FullName()), nil
 		}
 		return "", err
 	}
 	if name == "" {
-		return cfg.Project.FullName(), nil
+		return normalizeComposeProjectName(cfg.Project.FullName()), nil
 	}
-	return name, nil
+	return normalizeComposeProjectName(name), nil
 }
 
 // ComposeProjectName returns the compose project name from an already-loaded
@@ -274,10 +290,10 @@ func ResolveComposeProjectName(baseDir string, cfg *DweConfig) (string, error) {
 // no template expansion.
 func ComposeProjectName(dockerCfg *DockerConfig, cfg *DweConfig) string {
 	if dockerCfg != nil && dockerCfg.ProjectName != "" {
-		return dockerCfg.ProjectName
+		return normalizeComposeProjectName(dockerCfg.ProjectName)
 	}
 	if cfg != nil {
-		return cfg.Project.FullName()
+		return normalizeComposeProjectName(cfg.Project.FullName())
 	}
 	return ""
 }
@@ -285,26 +301,44 @@ func ComposeProjectName(dockerCfg *DockerConfig, cfg *DweConfig) string {
 // ComposeProjectNameCandidates returns the compose project name(s) a
 // compose-bypass daemon lookup should consider, canonical name first:
 //
-//  1. ComposeProjectName(dockerCfg, cfg) — the name daemons are created under now.
-//  2. cfg.Project.FullName() — the LEGACY scope, included only when it differs
-//     from (1). Before docker.yml project_name was honored, daemon containers were
-//     named/labeled with FullName even when project_name was set; this second
-//     candidate lets stop/reap/status/completion still find those daemons across
-//     the one-time naming transition.
+//  1. ComposeProjectName(dockerCfg, cfg) — the normalized (lowercase) name
+//     daemons are created under now.
+//  2. dockerCfg.ProjectName — the PRE-NORMALIZATION spelling, included only
+//     when it differs from (1). Compose-bypass paths (daemon builtins,
+//     StopContainer/RemoveContainer, label filters) build "<project>-<name>"
+//     directly, so a daemon container created under an explicit
+//     docker.yml project_name before case normalization landed is named with
+//     the original spelling, not the lowercased one — this candidate lets
+//     stop/reap/status/completion still find it.
+//  3. cfg.Project.FullName() — the LEGACY scope, included only when it
+//     differs from the candidates already collected. Before docker.yml
+//     project_name was honored, daemon containers were named/labeled with
+//     FullName even when project_name was set; this candidate lets
+//     stop/reap/status/completion still find those daemons across the
+//     one-time naming transition, including the case-only difference
+//     introduced by normalization itself.
 //
-// Empty values are dropped, so the result is never empty unless both names are
-// empty (a project with no project.name). When project_name is absent or equal
-// to FullName the slice has a single element — there is no legacy scope to sweep.
+// Empty and duplicate values are dropped, so the result is never empty unless
+// every candidate is empty (a project with no project.name). When all three
+// sources agree the slice has a single element — there is no legacy scope to
+// sweep.
 func ComposeProjectNameCandidates(dockerCfg *DockerConfig, cfg *DweConfig) []string {
 	primary := ComposeProjectName(dockerCfg, cfg)
+	seen := make(map[string]bool)
 	var out []string
-	if primary != "" {
-		out = append(out, primary)
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	add(primary)
+	if dockerCfg != nil {
+		add(dockerCfg.ProjectName)
 	}
 	if cfg != nil {
-		if full := cfg.Project.FullName(); full != "" && full != primary {
-			out = append(out, full)
-		}
+		add(cfg.Project.FullName())
 	}
 	return out
 }

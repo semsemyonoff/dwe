@@ -61,11 +61,11 @@ func newCfg(svcName, dir string, raw map[string]any) *projectconfig.DweConfig {
 func TestRenderConfigs_writesUnderHubDir(t *testing.T) {
 	root := t.TempDir()
 	writePack(t, root, "default", "render:\n  - from: env.tmpl\n    to: src/.env\n", map[string]string{
-		"env.tmpl": "DB=${databases.magento}\n",
+		"env.tmpl": "DB=${vars.databases.magento}\n",
 	})
 
 	cfg := newCfg("main", "services/main", map[string]any{
-		"databases": map[string]any{"magento": "pgsql"},
+		"vars": map[string]any{"databases": map[string]any{"magento": "pgsql"}},
 	})
 	store := generatedstore.New()
 

@@ -1,0 +1,29 @@
+# Fixture for ScanComposeCost: one building service, two pulled images, one
+# duplicate image, plus healthcheck start_period variants.
+services:
+  app:
+    build: .
+    image: demo-app:dev
+    healthcheck:
+      start_period: 1m30s
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+  db:
+    image: postgres:16
+    healthcheck:
+      start_period: 30s
+  cache:
+    image: redis:7
+    healthcheck:
+      disable: true
+      start_period: 10m
+  cache_replica:
+    image: redis:7
+  legacy:
+    image: busybox
+    healthcheck:
+      start_period: not-a-duration
+  buildless:
+    build:

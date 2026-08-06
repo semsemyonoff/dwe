@@ -25,6 +25,20 @@ import (
 // when no starter service is requested).
 const serviceTemplateDir = "workspace/services/app"
 
+// serviceScopedOutputs lists output paths OUTSIDE serviceTemplateDir whose
+// content names the starter service. They are dropped together with it when no
+// starter service is requested, so the scaffold never ships an artefact
+// referencing a service that does not exist.
+//
+// Paths are output paths (post-mapEmbedPath: `dot-` unwrapped, one `.tmpl`
+// stripped). TestScaffold_ServiceScopedOutputsExist pins every entry against
+// the rendered plan, so a template rename cannot silently stop dropping one.
+var serviceScopedOutputs = []string{
+	"workspace/templates/ai/default/AGENTS.md.tmpl",
+	"workspace/templates/ai/default/manifest.yml",
+	"workspace/tests/smoke.yml",
+}
+
 // Branding holds the optional project-branding values collected interactively
 // (or via flags) and rendered into workspace/styles.yml.
 type Branding struct {
@@ -204,11 +218,21 @@ func HasProjectConfig(absTarget string) (bool, error) {
 
 // applyServicePlan rewrites the embedded service-template output paths to the
 // chosen service name. When service is empty the starter service is dropped
-// entirely; when it differs from the template's "app" segment, the path segment
-// is renamed (the file *content* already substitutes [[ .Service ]]).
+// entirely — together with every serviceScopedOutputs artefact that references
+// it; when it differs from the template's "app" segment, the path segment is
+// renamed (the file *content* already substitutes [[ .Service ]]).
 func applyServicePlan(plan map[string][]byte, service string) map[string][]byte {
+	drop := make(map[string]struct{})
+	if service == "" {
+		for _, p := range serviceScopedOutputs {
+			drop[p] = struct{}{}
+		}
+	}
 	out := make(map[string][]byte, len(plan))
 	for path, data := range plan {
+		if _, skip := drop[path]; skip {
+			continue
+		}
 		rest, isService := strings.CutPrefix(path, serviceTemplateDir+"/")
 		if !isService {
 			out[path] = data

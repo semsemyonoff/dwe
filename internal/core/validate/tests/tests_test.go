@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 )
 
 // baseCfg returns a minimal but valid *config.DweConfig with one known
@@ -103,8 +105,13 @@ steps:
     cmd: echo hi
 `)
 	diags := runFor(root, baseCfg())
-	if len(diags) != 0 {
-		t.Fatalf("valid scenario: want no diagnostics, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("valid scenario: want no problems, got %+v", problems)
+	}
+	// A clean file must still report itself, or the summary renders as
+	// "validation skipped (no files found)".
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityOK || diags[0].Target != "tests.smoke" {
+		t.Fatalf("valid scenario: want one OK row for tests.smoke, got %+v", diags)
 	}
 }
 
@@ -294,8 +301,57 @@ steps:
 		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
 	})
 	diags := runForWithRegistry(root, baseCfg(), reg)
-	if len(diags) != 0 {
-		t.Fatalf("known command: want no diagnostics, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("known command: want no diagnostics, got %+v", problems)
+	}
+}
+
+// TestScenariosValidator_CommandRefThroughVarIsRendered: a `type: command` step
+// naming its target through a ${vars.*} reference is a valid scenario. These are
+// raw loaded steps, so without the render pass the lookup runs against the
+// literal `${vars.target}` and `dwe validate tests` reports a bogus
+// "unknown command" ERROR (exit 1) on a project that deploys fine.
+func TestScenariosValidator_CommandRefThroughVarIsRendered(t *testing.T) {
+	root := writeScenario(t, t.TempDir(), "varcmd.yml", `
+steps:
+  - name: run-it
+    type: command
+    cmd: "${vars.target}"
+`)
+	cfg := baseCfg()
+	cfg.Raw = map[string]any{
+		"vars": map[string]any{"target": "queue.logs"},
+	}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
+	})
+	diags := runForWithRegistry(root, cfg, reg)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("a ${vars.*} command ref must render before the lookup, got %+v", problems)
+	}
+}
+
+// The rendered value is still looked up: a var pointing at a command that does
+// not exist must report, or the render pass would turn every typo into silence.
+func TestScenariosValidator_CommandRefThroughVarStillReportsUnknown(t *testing.T) {
+	root := writeScenario(t, t.TempDir(), "varcmdbad.yml", `
+steps:
+  - name: run-it
+    type: command
+    cmd: "${vars.target}"
+`)
+	cfg := baseCfg()
+	cfg.Raw = map[string]any{
+		"vars": map[string]any{"target": "does.not.exist"},
+	}
+	reg := registry.NewEmptyRegistry()
+	diags := errorDiags(runForWithRegistry(root, cfg, reg))
+	if len(diags) != 1 {
+		t.Fatalf("want 1 error diagnostic, got %+v", diags)
+	}
+	if !strings.Contains(diags[0].Message, `unknown command "does.not.exist"`) {
+		t.Errorf("message = %q, want the RESOLVED id, not the literal ${vars.target}", diags[0].Message)
 	}
 }
 
@@ -309,8 +365,8 @@ steps:
 	// No CommandRegistry in ctx at all (nil, not even a *registry.Registry) -
 	// the command-ref check must self-skip rather than panic or misreport.
 	diags := runFor(root, baseCfg())
-	if len(diags) != 0 {
-		t.Fatalf("nil registry: want no diagnostics (self-skip), got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("nil registry: want no diagnostics (self-skip), got %+v", problems)
 	}
 }
 
@@ -347,8 +403,8 @@ steps:
       port: "${vars.db.port}"
 `)
 	diags := runFor(root, baseCfg())
-	if len(diags) != 0 {
-		t.Fatalf("auto-var placeholder: want no diagnostics, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("auto-var placeholder: want no diagnostics, got %+v", problems)
 	}
 }
 
@@ -393,10 +449,11 @@ steps:
 	}
 }
 
-func TestScenariosValidator_RenderErrorAbortsRemainingChecks(t *testing.T) {
-	// A ${snapshot.*} reference is scope-rejected at RENDER time (scenarios have
-	// no snapshot scope), which is a distinct diagnostic ("rendering steps") from
-	// the resolve-time path — and it must early-return, so no later check runs.
+func TestScenariosValidator_RenderErrorSurfacesFromResolve(t *testing.T) {
+	// A ${snapshot.*} reference is scope-rejected when the step is rendered,
+	// and rendering happens inside ResolvePhaseSteps — there is no separate
+	// pre-pass — so it must surface as a single "resolving steps" diagnostic
+	// naming the offending reference.
 	root := writeScenario(t, t.TempDir(), "renderfail.yml", `
 steps:
   - name: bad-render
@@ -405,10 +462,47 @@ steps:
 `)
 	diags := errorDiags(runFor(root, baseCfg()))
 	if len(diags) != 1 {
-		t.Fatalf("render error: want exactly 1 error diagnostic (abort after render), got %+v", diags)
+		t.Fatalf("render error: want exactly 1 error diagnostic, got %+v", diags)
 	}
-	if !strings.Contains(diags[0].Message, "rendering steps") {
-		t.Errorf("message = %q, want to mention rendering steps", diags[0].Message)
+	if !strings.Contains(diags[0].Message, "resolving steps") ||
+		!strings.Contains(diags[0].Message, "${snapshot.foo}") {
+		t.Errorf("message = %q, want to mention resolving steps and ${snapshot.foo}", diags[0].Message)
+	}
+}
+
+func TestScenariosValidator_StepsRenderedExactlyOnce(t *testing.T) {
+	// Regression: a scenario-local render pre-pass on top of the one inside
+	// ResolvePhaseSteps expanded a var whose value is itself a ${...}
+	// reference twice, so the scenario tested a command the deploy pipeline
+	// never runs. One pass leaves the inner reference literal.
+	cfg := baseCfg()
+	cfg.Raw["vars"] = map[string]any{
+		"outer": "${vars.inner}",
+		"inner": "expanded",
+	}
+	root := writeScenario(t, t.TempDir(), "once.yml", `
+steps:
+  - name: nested
+    type: shell
+    cmd: echo ${vars.outer}
+`)
+	if diags := errorDiags(runFor(root, cfg)); len(diags) != 0 {
+		t.Fatalf("want no error diagnostics, got %+v", diags)
+	}
+
+	scn, err := envtest.LoadScenario(filepath.Join(root, "workspace", "tests", "once.yml"))
+	if err != nil {
+		t.Fatalf("LoadScenario: %v", err)
+	}
+	resolved, err := pipeline.ResolvePhaseSteps(cfg, nil, config.DeployPhase{Name: "tests", Steps: scn.Steps}, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("resolved %d steps, want 1", len(resolved))
+	}
+	if got := resolved[0].Step.Cmd; got != "echo ${vars.inner}" {
+		t.Errorf("cmd = %q, want a single render pass leaving %q", got, "echo ${vars.inner}")
 	}
 }
 
@@ -490,4 +584,17 @@ steps:
 	if diags[0].Target != "tests.a" {
 		t.Errorf("Target = %q, want %q", diags[0].Target, "tests.a")
 	}
+}
+
+// problemDiags drops the per-file SeverityOK rows a clean scenario emits,
+// leaving only the diagnostics a test is actually asserting on.
+func problemDiags(diags []validate.Diagnostic) []validate.Diagnostic {
+	out := make([]validate.Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		if d.Severity == validate.SeverityOK {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }

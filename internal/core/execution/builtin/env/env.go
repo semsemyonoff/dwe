@@ -7,7 +7,7 @@ import "github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 // Builtins returns the env builtin entries keyed by their registered name.
 func Builtins() map[string]spec.Entry {
 	return map[string]spec.Entry{
-		"env_keys_present":   {Impl: KeysPresent{}, Kind: spec.KindPredicate},
-		"executable_in_path": {Impl: ExecutableInPath{}, Kind: spec.KindPredicate},
+		"env_keys_present":   {Impl: KeysPresent{}, Kind: spec.KindPredicate, Summary: "verify the named keys are defined and non-empty in an env file"},
+		"executable_in_path": {Impl: ExecutableInPath{}, Kind: spec.KindPredicate, Summary: "verify an executable resolves on PATH"},
 	}
 }

@@ -1,0 +1,70 @@
+# my-project
+
+> DWE (Dev Workspace Engine) project environment. Use `dwe status` to see running services, `dwe validate` to check project health, and `dwe docs llms-txt` to regenerate this index.
+
+## Project
+
+- Service: api (type: app) — API Server
+
+## Commands
+
+- build — build the project
+
+## Builtins
+
+Two disjoint registries share the word "builtin". A name from one is NOT accepted by the other.
+
+1. Step builtins — `type: builtin` with `cmd: <name>`, usable in a step body and in `check:`. Kinds: `action` runs work; `predicate` is a boolean check (as a step body it asserts — false fails the step); `internal` is engine-only and rejected in user-authored YAML.
+
+- `confirm` — action — interactive confirmation prompt
+- `shell` — predicate — run an arbitrary sh -c command
+- `daemons_reap` — internal — stop every project daemon container
+
+2. Condition predicates — the `when:` registry only. A pipeline `when:` is always a mapping (`when: {type: builtin, cmd: "<verb> <args>"}`); the scalar shorthand is rejected at load. This set is the whole of it:
+
+- `dir-empty <path>` — path is missing or is an empty directory
+
+A `when:` needing anything else uses `when: {type: shell, cmd: …}`; a `check:` needing a filesystem test uses `check: {type: builtin, cmd: shell, with: {cmd: …}}` (the `shell` builtin's param is `cmd`, not `command`) or the `check: auto` inverse of a shell `when:`.
+
+## Template syntax by site
+
+| Site | Syntax | Notes |
+|---|---|---|
+| pipeline `cmd`, `with` leaves, `check`, `timeout`, shell `when` | `${...}` only | rendered ONCE at plan-resolution time; only `${vars.*}` / `${project.*}` / `${services.*}` / other config roots + `${host.*}` resolve — `${param.*}`, `${context.*}`, `${files.*}`, `${generated.*}`, `${args}` fail the resolve here |
+| pipeline `when: {type: template, expr}` | `{{ ... }}` | evaluated at plan time against the resolved config |
+| `workspace/commands/**` — `cmd`, `argv`, `workdir`, `env`, `messages.*`, `files.*` | `${...}` and `{{ ... }}` | full command context: `${param.*}`, `${context.*}`, `${files.*}`, `${args}`, `${host.*}` |
+| `info.yml` — `text`, `value`, `title`; custom columns | `{{ ... }}` and `${...}` | resolved project config |
+| `message` builtin — `text` | `{{ ... }}` | resolved project config (`{{ .Project.Name }}`) |
+| `workspace/templates/config/**` | `${...}` | lenient (absent → `""`); the only site where `${generated.<name>}` resolves |
+| `workspace/templates/{ide,ai,git}/**` | `{{ ... }}` | strict render packs; `${...}` is NOT interpreted here |
+| `docker.yml` — `project_name` | `${...}` | separate resolver: any `Raw` dot-path, and an unresolved path is a hard error |
+| `params.*.default_from`, `context.*.from` | — | plain dot-paths, no template expressions |
+
+An unknown `${...}` head (`${HOME}`, a typo) is left literal, never blanked. Full reference: `dwe docs show reference/templates`.
+
+## Diagnostics and machine-readable output
+
+- `dwe validate --quiet` — hide the ok/info rows; only warnings and errors remain
+- `dwe validate --level error,warning` — filter by severity instead of grepping the table
+- `dwe validate -o json` — structured diagnostics (this command emits diagnostics-as-data even at severity=error)
+- `-v` / `--debug` — echo executed commands, skip decisions, timings and exit codes to **stderr**; stdout (including `-o json`) stays clean, so `dwe run --debug 2>debug.log` captures them
+- `dwe docs show <topic> --toc` / `--anchors` — headings or anchor ids instead of the whole document; use these instead of piping through `head`/`sed`
+- `dwe docs search <query> -o json` — search hits with `source`, `path`, `anchor`, `count`, `snippet`. Every word of the query must appear in the same section (or, failing that, the same document); `--literal` matches the whole query as one substring
+- `-o json` (+ `--pretty`) — every read-only command. Two exceptions: `dwe docs show` always emits markdown and ignores `-o json`; on `dwe docs llms-txt` the local `--output` is a file PATH (`--output json` writes a file called `json`) and `-o` is not accepted there at all
+
+## Reserved env names
+
+`dwe render env` always emits these itself, before any `exports.env` rule: `PROJECT`, `UID`, `GID`. They are available in `compose.yaml` without being declared, and an `exports.env` rule may not redeclare them.
+
+## Documentation
+
+- [Services](dwe-docs://reference/config/services)
+
+## Quick start
+
+- `dwe status` — see what's running
+- `dwe validate` — check project health
+- `dwe info` — project overview
+- `dwe docs llms-txt` — regenerate this index
+- `dwe --help` — full command list
+

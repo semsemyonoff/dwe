@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/templating.md @ d2b3a06c062c
+> Translated from: reference/config/commands/templating.md @ f0fff008deb3
 
 # Шаблонизация в файлах команд
 
@@ -81,6 +81,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `${param.<name>}` | Разрешённый параметр |
 | `${context.<name>}` | Разрешённое значение контекста |
 | `${files.<id>.path}` | Абсолютный путь файлового артефакта |
+| `${args}` | Аргументы, переданные вызывающим после `--` — см. [Сквозные аргументы](directives.md#сквозные-аргументы). Допустим в `cmd:`/`argv:` типов `shell` / `dwe` / `service_exec` / `service_run` |
 | `${host.uid}` / `${host.gid}` | Эффективные UID/GID для `--user` контейнера |
 | `{{ .Raw.x.y }}` | Прямой доступ через точку к объединённому конфигу |
 | `{{ .Params.<name> }}` | Прямой доступ через точку к params |

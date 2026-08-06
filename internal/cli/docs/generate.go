@@ -13,6 +13,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 
 	"github.com/spf13/cobra"
 )
@@ -136,7 +137,11 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 		defs := byGroup[group]
 		groupDir := dir
 		if group != "" {
-			groupDir = filepath.Join(dir, filepath.FromSlash(strings.ReplaceAll(group, ".", "/")))
+			var err error
+			groupDir, err = containedJoin(dir, filepath.FromSlash(strings.ReplaceAll(group, ".", "/")))
+			if err != nil {
+				return fmt.Errorf("group %q: %w", group, err)
+			}
 		}
 		if err := os.MkdirAll(groupDir, 0o755); err != nil {
 			return fmt.Errorf("creating group dir %s: %w", groupDir, err)
@@ -204,8 +209,28 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercom
 	writeCommandFiles(&sb, def, store, locale)
 	writeCommandEnv(&sb, def, store, locale)
 
-	filename := def.LocalName + ".md"
-	return os.WriteFile(filepath.Join(dir, filename), []byte(sb.String()), 0o644)
+	path, err := containedJoin(dir, def.LocalName+".md")
+	if err != nil {
+		return fmt.Errorf("command %q: %w", def.ID, err)
+	}
+	return os.WriteFile(path, []byte(sb.String()), 0o644)
+}
+
+// containedJoin joins a caller-supplied relative element onto dir and rejects
+// the result if it escapes dir.
+//
+// Both elements passed here are raw user text: a command's LocalName is the
+// verbatim YAML map key from workspace/commands/*.yml and a group id is built
+// from the same source, and neither is validated beyond non-emptiness. A plain
+// filepath.Join would silently RESOLVE a "../.." in either one rather than
+// reject it, turning `dwe docs generate` on an untrusted project into an
+// arbitrary file write outside both --out and the project root.
+func containedJoin(dir, elem string) (string, error) {
+	joined := filepath.Join(dir, elem)
+	if _, err := pathsafe.ContainedRel(dir, joined); err != nil {
+		return "", fmt.Errorf("refusing to write outside the output directory: %w", err)
+	}
+	return joined, nil
 }
 
 // writeCommandTypeDetails writes the type-specific detail section (command/argv/
@@ -219,6 +244,7 @@ func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, 
 	serviceLabel := store.T(locale, "docs.property.service", "Service")
 	shellLabel := store.T(locale, "docs.property.shell", "Shell")
 	composeArgsLabel := store.T(locale, "docs.property.compose_args", "Compose args")
+	argvAppendFromLabel := store.T(locale, "docs.property.argv_append_from", "Argv append from")
 	scriptLabel := store.T(locale, "docs.property.script", "Script")
 	builtinLabel := store.T(locale, "docs.property.builtin", "Builtin")
 
@@ -229,6 +255,9 @@ func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, 
 		}
 		if len(def.Argv) > 0 {
 			fmt.Fprintf(sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
+		}
+		if def.ArgvAppendFrom != "" {
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", argvAppendFromLabel, def.ArgvAppendFrom)
 		}
 		if def.Workdir != "" {
 			fmt.Fprintf(sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
@@ -242,6 +271,9 @@ func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, 
 		}
 		if len(def.Argv) > 0 {
 			fmt.Fprintf(sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
+		}
+		if def.ArgvAppendFrom != "" {
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", argvAppendFromLabel, def.ArgvAppendFrom)
 		}
 		if len(def.ComposeArgs) > 0 {
 			fmt.Fprintf(sb, "**%s:** `%s`\n\n", composeArgsLabel, strings.Join(def.ComposeArgs, " "))

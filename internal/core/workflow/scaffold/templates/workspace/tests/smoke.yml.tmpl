@@ -1,0 +1,32 @@
+# workspace/tests/smoke.yml — starter integration-test scenario.
+#
+# `dwe test run smoke` copies the project into a disposable directory, gives the
+# copy its own compose project name and freshly allocated host ports, deploys it
+# from a clean slate, runs the steps below, then tears the copy down.
+#
+# This is the ONE scaffold file that ships ACTIVE rather than fully commented:
+# the scenario loader is strict and rejects an empty document, so there is
+# nothing here to uncomment.
+#
+# It is also deliberately free of assertions: on a fresh scaffold compose.yaml
+# declares no services, so the deploy the scenario wraps fails at `start/up`
+# with "empty compose file" and `dwe test run smoke` reports a failure. The
+# scenario becomes meaningful once [[ .Service ]] exists in compose.yaml — then
+# add steps here; an `http_check` builtin against the service's exported port is
+# the usual first assertion.
+#
+# Schema and step reference: `dwe docs show config/tests`
+
+description: "Smoke test: the stack deploys from a clean slate"
+
+# timeout: 15m
+
+# Per-scenario overrides applied to the copy only. `auto` is the one magic
+# value: it allocates a free host port before the copy is deployed.
+# env:
+#   services:
+#     enable: ["[[ .Service ]]"]
+#   vars:
+#     [[ .Service ]].port: auto
+
+steps: []

@@ -17,7 +17,7 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 - [`generated` block](#generated-block)
 - [`bridge` block](#bridge-block)
 
-**Host vs internal terminology:** Fields ending in `*_internal` or using the suffix convention (like `dir` for host, `dir_internal` for container) refer to paths: host side runs on your machine, internal side is the container mount point. Apply the same distinction to ports and hostnames: `ports.http` binds a container port to your host; `hosts.main` is the hostname the container resolves as.
+**Host vs internal terminology:** Fields ending in `*_internal` or using the suffix convention (like `dir` for host, `dir_internal` for container) refer to paths: host side runs on your machine, internal side is the container mount point. Apply the same distinction to ports and hostnames: `ports.http` names a container port and the host port it is meant to appear on; `hosts.main` is the hostname the container resolves as.
 
 ## Top-level service fields
 
@@ -50,6 +50,8 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 ## `ports` field
 
 `ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined in `workspace/services/<name>/service.yml`; `workspace/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
+
+**`ports:` is declarative metadata — on its own it binds nothing.** `dwe status`, `dwe info` and the `ports_free` preflight read it, but the actual binding lives in your compose file, which reaches the value through a paired `exports.env` rule (`from: services.<name>.ports.http`) in `workspace/defaults.yml`. A port declared here with no such rule is display-only; `dwe validate` warns about it. See [`exports.env`](../workspace.md#exportsenv).
 
 Each port entry accepts two equivalent forms:
 
@@ -593,7 +595,7 @@ render:
 |-------|---------|-------------|
 | `template` | — | Optional custom template pack directory name under `workspace/templates/config/<template>/`. When set, resolution is **strict** (a typo fails rather than silently falling back). When omitted, resolution walks service-name → `extends` ancestors → `default`, plus the `<pack>.local/` sibling override. |
 
-Unlike `render.ide` / `ai` / `git`, `render.config` has **no `enabled` flag** — config rendering is gated solely by whether a pack resolves (opt-in: no pack → no render). Config templates use the `${...}` shorthand (e.g. `${services.main.ports.http}`, `${databases.main}`, `${generated.app_key}`), a deliberate divergence from the raw `{{ }}` substrate used by the other render kinds. See [render config](../../render/config.md) for the full reference, substrate, manifest schema, and the harvest/replay flow.
+Unlike `render.ide` / `ai` / `git`, `render.config` has **no `enabled` flag** — config rendering is gated solely by whether a pack resolves (opt-in: no pack → no render). Config templates use the `${...}` shorthand (e.g. `${services.main.ports.http}`, `${vars.databases.main}`, `${generated.app_key}`), a deliberate divergence from the raw `{{ }}` substrate used by the other render kinds. See [render config](../../render/config.md) for the full reference, substrate, manifest schema, and the harvest/replay flow.
 
 ## `generated` block
 

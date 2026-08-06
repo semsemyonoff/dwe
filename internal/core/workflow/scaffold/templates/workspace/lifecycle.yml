@@ -10,9 +10,11 @@
 #   (internal/core/workflow/lifecycle/defaults.go)
 # Schema and field reference: `dwe docs show config/lifecycle`
 #
+# The self-update probe is NOT configured here — it moved to the top-level
+# `update:` block (workspace.yml / local.yml). See
+# `dwe docs show config/workspace` § "The update: block".
+#
 # run:
-#   update:
-#     mode: "off"
 #   show_info: true
 #   final_message: "Project is ready for work!"
 #   phases:

@@ -81,7 +81,7 @@ func BuildDeployStatusView(state *journal.ProjectState, cfg *config.DweConfig, s
 		}
 
 		svcDeploy := svcDeploys[serviceName]
-		currHash := journal.ServiceConfigHash(svcCfg, svcDeploy)
+		currHash := journal.ServiceConfigHash(svcCfg, svcDeploy, cfg.Vars)
 
 		delta := statusview.ConfigDeltaOK
 		var prevHashShort string

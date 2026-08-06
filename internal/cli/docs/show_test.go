@@ -78,3 +78,51 @@ func TestDocsShowBuiltinTopic(t *testing.T) {
 	require.NoError(t, err, "expected built-in topic to render without error")
 	require.NotEmpty(t, outBuf.String(), "expected non-empty output for built-in topic")
 }
+
+// runDocsShow executes `docs show` with the given args and returns stdout and
+// stderr separately — the long-doc hint is a stderr-only side channel, so a
+// test that merged the two could not tell it from document body.
+func execDocsShow(t *testing.T, args ...string) (stdout, stderr string) {
+	t.Helper()
+
+	flags := &cmdctx.RootFlags{Locale: "en"}
+	cmd := newDocsShowCmd(flags)
+	var outBuf, errBuf strings.Builder
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	// --lang en pins the locale: without it the resolved language follows the
+	// developer's $LANG, and an anchor from the English source does not exist
+	// in the Russian mirror.
+	cmd.SetArgs(append([]string{"--lang", "en"}, args...))
+
+	require.NoError(t, cmd.Execute())
+	return outBuf.String(), errBuf.String()
+}
+
+// TestDocsShowLongDocHint pins the point-of-use nudge toward --toc/--anchors.
+// Stdout is not a terminal under `go test`, which is exactly the piped shape
+// the hint targets.
+func TestDocsShowLongDocHint(t *testing.T) {
+	t.Run("fires on a long whole document", func(t *testing.T) {
+		stdout, stderr := execDocsShow(t, "--raw", "reference/config/workspace")
+		require.NotEmpty(t, stdout)
+		require.Contains(t, stderr, "--toc")
+		require.Contains(t, stderr, "sections")
+		require.NotContains(t, stdout, "--toc` lists them",
+			"the hint must not contaminate stdout — a caller parsing the markdown would ingest it")
+	})
+
+	t.Run("silent when a section was requested", func(t *testing.T) {
+		// Asking for an anchor is already the behaviour the hint teaches.
+		_, stderr := execDocsShow(t, "--raw", "reference/config/workspace#merge-overview")
+		require.NotContains(t, stderr, "--toc")
+	})
+
+	t.Run("silent for --anchors and --toc themselves", func(t *testing.T) {
+		_, stderr := execDocsShow(t, "reference/config/workspace", "--anchors")
+		require.Empty(t, stderr)
+
+		_, stderr = execDocsShow(t, "reference/config/workspace", "--toc")
+		require.Empty(t, stderr)
+	})
+}

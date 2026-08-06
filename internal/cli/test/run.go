@@ -544,6 +544,16 @@ func renderScenarioLine(o scenarioOutcome, keep, color bool) string {
 	if keep && o.ComposeProject != "" {
 		b.WriteString("\n  ")
 		b.WriteString(cMuted(fmt.Sprintf("kept: compose project %s, copy at %s — run `dwe test clean %s` to remove", o.ComposeProject, o.CopyPath, o.Name), color))
+		// A failed --keep run collects no report by design (the copy is still
+		// live, so a snapshot of it would be redundant), but the absence reads
+		// as an omission: an observed session went looking for the report
+		// directory first and only then found the live evidence. Name it here.
+		if o.Status != envtest.StatusPassed && o.ReportDir == "" {
+			b.WriteString("\n  ")
+			b.WriteString(cMuted(fmt.Sprintf(
+				"no report collected under --keep — the evidence is live: %s/.dwe/logs/ and `docker compose -p %s logs`",
+				o.CopyPath, o.ComposeProject), color))
+		}
 	}
 	if o.ReportDir != "" {
 		b.WriteString("\n  ")

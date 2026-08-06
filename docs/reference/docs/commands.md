@@ -21,9 +21,12 @@ dwe docs show <topic> [--lang <code>] [--raw] [--source all|dwe|project] [--anch
 - `--anchors` — Print every anchor slug for the topic (one per line) and exit. Useful for shell completion of `topic#anchor` forms.
 - `--toc` — Print the topic's table of contents as TSV (`level\tslug\ttext`, one heading per line) and exit. Agent-friendly outline of the page.
 
+Anchors printed by `--anchors` / `--toc` are exactly the strings `topic#anchor` accepts — including the underscores in every builtin name and snake_case key (`config/deploy/builtins#service_dirs_ensure`). Take them from that listing rather than deriving them from the rendered heading text.
+
 **Output:**
 - **TTY:** Glamour-rendered markdown with syntax highlighting. Mermaid diagrams are rendered to PNG and cached; inline display on capable terminals (kitty, ghostty, wezterm), system viewer fallback on others.
 - **Pipe or `--raw`:** Raw markdown, no ANSI escapes.
+- **stderr:** when a *whole* long document (≥ 120 lines and ≥ 4 sections) is piped or captured rather than shown on a terminal, one note names `--toc` and the `topic#anchor` form. It is silent on a TTY, when an anchor was requested, and under `--anchors`/`--toc`. It goes to stderr so that `dwe docs show <topic> | head` — the case it addresses — still receives it.
 
 **Examples:**
 ```bash
@@ -76,31 +79,40 @@ project	guides/getting-started	en
 
 ## `dwe docs search <query>`
 
-Search every documentation topic for a case-insensitive literal substring and emit the sections that contain it. Built for pipes, scripts, agents, and CI.
+Search every documentation topic and emit the sections that contain the query. Built for pipes, scripts, agents, and CI.
 
 **Usage:**
 ```bash
-dwe docs search <query> [--source all|dwe|project] [--lang <code>] [--limit <n>] [--output text|json] [--pretty]
+dwe docs search <query> [--literal] [--source all|dwe|project] [--lang <code>] [--limit <n>] [--output text|json] [--pretty]
 ```
 
 **Arguments:**
-- `<query>` — Literal substring to search for (case-insensitive). Matches inside fenced code blocks are counted too — that's where schema names usually appear.
+- `<query>` — One or more words. The query is split on whitespace and **every** word must be present for a section to match (AND). Each word matches as a case-insensitive **substring**, so identifiers work (`depends_on:`, `RunContext.Render`). Matches inside fenced code blocks are counted too — that's where schema names usually appear.
 
 **Flags:**
+- `--literal` — Match the whole query as one substring instead of splitting it into words. Needed because `docs search` takes exactly one argument and the shell strips quotes, so `'a b'` and `a b` arrive identical — quoting cannot select literal mode.
 - `--source <all|dwe|project>` — Doc source (default `all`). `dwe` searches only built-in docs; `project` searches only `./docs/`; `all` searches both.
 - `--lang <code>` — Language code (default: active locale or `en`).
 - `--limit <n>` — Maximum result rows (default `50`; `0` = unlimited).
 - `--output <text|json>` — Output format (global flag; default `text`).
 - `--pretty` — Pretty-print JSON output (only with `--output json`).
 
+**Matching:**
+- **Substring, not word-boundary.** The known trade-off: a short word matches inside a longer one — `uid` also matches `guide`/`guides`, `env` also matches `environment`. Deliberate, because word-boundary matching would break `depends_on:`.
+- **Two tiers.** First, sections that contain every word. Then, for a document where *no* section holds them all but the document as a whole does, one row anchored at its densest section — a page explaining a pair of concepts in two adjacent sections would otherwise be invisible to the query naming both. The tier is a **tie-break, not the primary sort key**: `<count>` decides first, and a tier-1 row outranks a tier-2 row only when the two match equally often — so a page matching four times still leads a section matching once.
+- **`<count>` is the rarest word's occurrences, not the total.** Summing would let a section with 40 hits of `vars` and one of `interpolation` outrank the section actually about the pair; it also makes a repeated word (`vars vars`) harmless.
+
 **Output:**
-- **`text` (default):** Tab-separated, one row per matching section: `<source>\t<path>#<anchor>\t<count>`. Sections are sorted by match count (descending), then by path. Lead text under the H1 (before the first H2) is reported with an empty anchor.
-- **`--output json`:** A JSON array of `{source, path, anchor, count}` records (path and anchor are split; anchor is empty for lead text under the H1 before the first H2/H3).
+- **`text` (default):** Tab-separated, one row per matching section: `<source>\t<path>#<anchor>\t<count>\t<snippet>`. Rows are sorted by match count (descending), then by tier, then by path, anchor and source. Lead text under the H1 (before the first H2) is reported with an empty anchor.
+- **`--output json`:** A JSON array of `{source, path, anchor, count, snippet}` records (path and anchor are split; anchor is empty for lead text under the H1 before the first H2/H3).
+- **`<snippet>`** is the source line carrying the most distinct words of the query (densest line, first wins ties), so a hit is actionable without a second `docs show`. It is whitespace-collapsed (tabs and newlines removed — markdown tables contain both) and capped at 160 bytes on a rune boundary, so a TSV row can never gain a fifth field. The column is **append-only**: a consumer reading fields `[0..2]` is unaffected.
+- **Zero matches:** stdout stays empty (text) or `[]` (JSON) and the exit code stays 0. In text mode a one-line notice goes to **stderr** naming the query, the active `--source` and the resolved locale — the filters that most often produce a false empty result — and suggests dropping a word (or dropping `--literal`, when that flag is what produced the empty result). JSON mode emits no notice, so a piped consumer sees byte-identical output either way.
 
 **Examples:**
 ```bash
 dwe docs search depends_on
-dwe docs search 'RunContext.Render' --source dwe
+dwe docs search 'RunContext.Render' --source dwe --literal
+dwe docs search 'UID GID env' --lang en --limit 5
 dwe docs search topo-sort --lang en --limit 5
 ```
 
@@ -142,7 +154,7 @@ dwe docs export ./docs-latest/ --force
 
 ## `dwe docs llms-txt`
 
-Emit a single [llms.txt](https://llmstxt.org/) document — a dense ~2-5KB index that gives an AI agent a complete picture of what this DWE project is and where to find more detail.
+Emit a single [llms.txt](https://llmstxt.org/) document — a dense briefing that gives an AI agent a complete picture of what this DWE project is and where to find more detail. The project-agnostic part is capped at 12KB (enforced by a test on `--no-project`); the project-aware document adds services, commands and URLs on top and therefore grows with the workspace.
 
 **Usage:**
 ```bash
@@ -160,8 +172,14 @@ dwe docs llms-txt --lang ru                # localize command descriptions
 - `--no-project` — force the project-agnostic shape even when run inside a DWE project.
 
 **Output shapes:**
-- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), `## Documentation` (topic links as `dwe-docs://path`), and `## Quick start`.
-- *Outside a project* (or with `--no-project`): generic DWE reference — H1 "dwe", blockquote, `## Documentation`, `## Quick start`. No project-specific sections.
+- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), the briefing sections below, `## Documentation` (topic links as `dwe-docs://path`), and `## Quick start`.
+- *Outside a project* (or with `--no-project`): generic DWE reference — H1 "dwe", blockquote, the briefing sections, `## Documentation`, `## Quick start`. No project-specific sections.
+
+**Briefing sections** (identical in both shapes — they describe DWE itself):
+- `## Builtins` — every registered step builtin (`name — kind — purpose`, including `internal` ones), then the disjoint `when:` predicate registry. The two registries share the word "builtin" and accept nothing from each other; the section says so explicitly.
+- `## Template syntax by site` — which of `${...}` / `{{ ... }}` is evaluated where, and which `${...}` namespaces are unavailable in pipeline fields.
+- `## Diagnostics and machine-readable output` — `--quiet`, `--level`, `-v`/`--debug`, `docs show --toc`/`--anchors`, and the `-o json` exceptions.
+- `## Reserved env names` — the names `dwe render env` always emits itself (`PROJECT`, `UID`, `GID`), which `exports.env` rules may not redeclare.
 
 **Details:**
 - Read-only. Acquires no project lock and runs no preflight; works without `workspace.yml`.

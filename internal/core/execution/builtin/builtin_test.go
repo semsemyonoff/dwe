@@ -12,6 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/fs"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/interaction"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/services"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/source"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -59,6 +60,77 @@ func TestKnownNames_AllRegistered(t *testing.T) {
 	for _, expected := range []string{"confirm", "message", "service_dirs_ensure"} {
 		if !slices.Contains(names, expected) {
 			t.Errorf("expected %q in knownNames, got: %v", expected, names)
+		}
+	}
+}
+
+// --- Inventory ---
+
+func TestInventory_EveryEntryHasSummary(t *testing.T) {
+	inv := Inventory()
+	if len(inv) != len(registry) {
+		t.Fatalf("Inventory returned %d entries, registry has %d", len(inv), len(registry))
+	}
+	for _, e := range inv {
+		if strings.TrimSpace(e.Summary) == "" {
+			t.Errorf("builtin %q has no Summary; add one to its Builtins() map entry", e.Name)
+		}
+	}
+}
+
+func TestInventory_SortedAndMatchesRegistry(t *testing.T) {
+	inv := Inventory()
+	for i := 1; i < len(inv); i++ {
+		if inv[i].Name < inv[i-1].Name {
+			t.Fatalf("Inventory not sorted at %d: %q after %q", i, inv[i].Name, inv[i-1].Name)
+		}
+	}
+	for _, e := range inv {
+		entry, ok := registry[e.Name]
+		if !ok {
+			t.Errorf("Inventory reports unregistered builtin %q", e.Name)
+			continue
+		}
+		if entry.Kind != e.Kind {
+			t.Errorf("%s: Inventory kind %v, registry kind %v", e.Name, e.Kind, entry.Kind)
+		}
+	}
+}
+
+func TestInventory_CoversEveryKind(t *testing.T) {
+	// The internal kinds must be enumerated too: a reader needs to know why
+	// docker_daemon_start is rejected from user-authored YAML.
+	want := map[string]Kind{
+		"message":             KindAction,
+		"shell":               KindPredicate,
+		"docker_daemon_start": KindInternal,
+	}
+	got := make(map[string]Kind, len(want))
+	for _, e := range Inventory() {
+		if _, ok := want[e.Name]; ok {
+			got[e.Name] = e.Kind
+		}
+	}
+	for name, kind := range want {
+		if got[name] != kind {
+			t.Errorf("Inventory[%q].Kind = %v, want %v", name, got[name], kind)
+		}
+	}
+}
+
+func TestKindString(t *testing.T) {
+	cases := []struct {
+		kind Kind
+		want string
+	}{
+		{KindAction, "action"},
+		{KindPredicate, "predicate"},
+		{KindInternal, "internal"},
+		{spec.Kind(99), "unknown"},
+	}
+	for _, tc := range cases {
+		if got := tc.kind.String(); got != tc.want {
+			t.Errorf("Kind(%d).String() = %q, want %q", tc.kind, got, tc.want)
 		}
 	}
 }
@@ -139,6 +211,10 @@ func TestKindCategorization(t *testing.T) {
 		{"docker_remove_project_volumes", KindAction, true, true, false},
 		{"docker_wait_healthy", KindAction, true, true, false},
 		{"remove_paths", KindAction, true, true, false},
+		// source_clone mutates, but kindAllowed deliberately permits actions in
+		// CtxPredicate — so it IS reachable from check:. The boundary that holds
+		// is validate.yml's own allowlist (see validate/checks).
+		{"source_clone", KindAction, true, true, false},
 		// KindPredicate: check: (CtxPredicate) AND step body (CtxUserYAML) —
 		// a predicate body is an assertion (false fails the step)
 		{"containers_running", KindPredicate, true, true, false},
@@ -327,6 +403,8 @@ var allBuiltinNames = []string{
 	// interaction/
 	"confirm",
 	"message",
+	// source/
+	"source_clone",
 }
 
 // TestRegistryHasAllNames asserts the registry contains exactly the expected
@@ -363,6 +441,7 @@ func TestNoDuplicateRegistryNames(t *testing.T) {
 		{"fs", fs.Builtins()},
 		{"env", env.Builtins()},
 		{"interaction", interaction.Builtins()},
+		{"source", source.Builtins()},
 	}
 	owner := map[string]string{}
 	for _, src := range sources {

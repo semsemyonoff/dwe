@@ -153,6 +153,101 @@ func TestLoadInfoConfig_notFound(t *testing.T) {
 	}
 }
 
+// TestLoadInfoConfig_fallbackStates pins the four states an info.yml can decode
+// to: an all-comment or empty file must fall back to the built-in default
+// (mirroring an absent file), while a deliberate `sections: []` or a genuine
+// section must NOT be silently overridden.
+func TestLoadInfoConfig_fallbackStates(t *testing.T) {
+	t.Parallel()
+
+	defaultCfg := DefaultInfoConfig()
+
+	tests := []struct {
+		name      string
+		yaml      string
+		wantLen   int  // want len(cfg.Sections)
+		wantDef   bool // want cfg to equal the built-in default
+		wantState InfoConfigState
+	}{
+		{
+			name: "fully commented",
+			yaml: `# workspace/info.yml — inert mirror.
+# sections:
+#   - id: project
+#     items: []
+# footer: true
+`,
+			wantLen:   len(defaultCfg.Sections),
+			wantDef:   true,
+			wantState: InfoStateDefaultFallback,
+		},
+		{
+			name:      "empty file",
+			yaml:      ``,
+			wantLen:   len(defaultCfg.Sections),
+			wantDef:   true,
+			wantState: InfoStateDefaultFallback,
+		},
+		{
+			name: "deliberate empty sections",
+			yaml: `sections: []
+`,
+			wantLen:   0,
+			wantDef:   false,
+			wantState: InfoStateDeliberatelyEmpty,
+		},
+		{
+			// Active keys but no `sections:` key at all — the loader treats it
+			// exactly like `sections: []`, so `dwe validate` must not claim the
+			// file wrote an explicit empty list.
+			name: "active keys but no sections key",
+			yaml: `footer: true
+`,
+			wantLen:   0,
+			wantDef:   false,
+			wantState: InfoStateDeliberatelyEmpty,
+		},
+		{
+			name: "one real section",
+			yaml: `sections:
+  - id: custom
+    items:
+      - type: separator
+`,
+			wantLen:   1,
+			wantDef:   false,
+			wantState: InfoStateAuthored,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeTempYML(t, tt.yaml)
+			cfg, state, err := LoadInfoConfigWithState(path)
+			if err != nil {
+				t.Fatalf("LoadInfoConfigWithState: %v", err)
+			}
+			// The state is what `dwe validate` reports on; deriving it a second
+			// time from the raw file is exactly the duplication this replaced.
+			if state != tt.wantState {
+				t.Errorf("state = %v, want %v", state, tt.wantState)
+			}
+			if len(cfg.Sections) != tt.wantLen {
+				t.Fatalf("sections count = %d, want %d", len(cfg.Sections), tt.wantLen)
+			}
+			if tt.wantDef {
+				if cfg.Footer != defaultCfg.Footer {
+					t.Errorf("footer = %v, want default %v", cfg.Footer, defaultCfg.Footer)
+				}
+				if len(cfg.Sections) != 2 || cfg.Sections[0].ID != "urls" || cfg.Sections[1].ID != "hosts" {
+					t.Errorf("expected built-in default sections (urls, hosts), got %+v", cfg.Sections)
+				}
+			}
+		})
+	}
+}
+
 func parseInfoIndent(t *testing.T, yamlStr string) InfoIndent {
 	t.Helper()
 	var item struct {

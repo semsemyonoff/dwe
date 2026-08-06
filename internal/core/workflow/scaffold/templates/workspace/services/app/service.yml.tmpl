@@ -1,20 +1,34 @@
 # workspace/services/[[ .Service ]]/service.yml — the "[[ .Service ]]" starter service.
 #
-# type + container are active; every other field is an optional, commented
-# example. The folder name ([[ .Service ]]) is the service's map key — there is
-# no `name:` field. Run `dwe docs show config/services/index`.
+# The folder name ([[ .Service ]]) is the service's map key — there is no `name:`
+# field. Run `dwe docs show config/services/index` for the full schema.
 
 type: app
 container: "[[ .Service | yamlEsc ]]"
 
+# Source hub: `dir` is the host directory holding this app's checkout (created
+# by the deploy pipeline, gitignored), mounted at `dir_internal` inside the
+# container. Mount the whole hub, not just the sources — build artefacts,
+# caches and tooling state live next to `src/`. `work_dir_internal` is where
+# `dwe cmd` / bridged commands run.
+dir: "./services/[[ .Service ]]"
+dir_internal: /workspace
+work_dir_internal: /workspace/src
+
+icon: "📦"
+
+info:
+  title: "[[ .Service | yamlEsc ]]"
+
 # required: true              # always-on; removes the enable/disable toggle
-# dir: "./[[ .Service ]]"            # host source directory for this app
 # depends_on: []
+
+# Ports are DISPLAY-ONLY on their own: `dwe status` and info blocks read them,
+# but nothing binds them. To bind one, uncomment the pair — the port here AND
+# the matching `exports.env` rule in workspace/defaults.yml that turns it into
+# an environment variable your compose.yaml can reference.
 # ports:
 #   http: 8080
+
 # hosts:
 #   web: "[[ .Service ]].localhost"
-# icon: "📦"
-# render:
-#   ide:
-#     enabled: true

@@ -3,6 +3,7 @@ package validate
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/scaffold"
 
 	"github.com/stretchr/testify/require"
 )
@@ -762,6 +764,100 @@ func TestValidateCmd_JSONMode_DiagnosticFields(t *testing.T) {
 	}
 }
 
+// TestValidateCmd_JSONMode_SummaryScope verifies that the JSON summary carries
+// a machine-identifiable scope field, so a narrowed run (e.g. `dwe validate
+// config services`, one validator) is no longer indistinguishable from a full
+// domain run (`dwe validate config`, ten validators) by diagnostic count alone.
+func TestValidateCmd_JSONMode_SummaryScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	tests := []struct {
+		name      string
+		args      []string
+		wantScope string
+	}{
+		{name: "full run", args: nil, wantScope: "all"},
+		{name: "domain run", args: []string{"config"}, wantScope: "config"},
+		{name: "leaf run", args: []string{"config", "services"}, wantScope: "config/services"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout, _ := runValidateJSONCmd(t, workspacePath, tt.args...)
+
+			var got struct {
+				Summary validateSummaryJSON `json:"summary"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+			require.Equal(t, tt.wantScope, got.Summary.Scope)
+		})
+	}
+}
+
+// TestValidateCmd_JSONMode_SummaryScopeAddsFieldOnly verifies that the new
+// summary.scope field is additive: every previously-existing summary key
+// keeps decoding into its own typed field alongside it.
+func TestValidateCmd_JSONMode_SummaryScopeAddsFieldOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "config")
+
+	var got struct {
+		Summary struct {
+			Scope   string `json:"scope"`
+			Ok      int    `json:"ok"`
+			Info    int    `json:"info"`
+			Warning int    `json:"warning"`
+			Error   int    `json:"error"`
+		} `json:"summary"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, "config", got.Summary.Scope)
+	// The point of this test is that adding `scope` did not displace the
+	// pre-existing counters, so at least one of them must still be populated —
+	// a `>= 0` assertion on four non-negative ints can never fail and would
+	// pass just as happily against an empty summary object.
+	require.Positive(t, got.Summary.Ok+got.Summary.Info+got.Summary.Warning+got.Summary.Error,
+		"the counters must still decode alongside scope")
+}
+
+// TestValidateText_SummaryReportsScope verifies the human summary line names
+// the active scope, matching the JSON contract, for a full run, a domain run
+// and a leaf run.
+func TestValidateText_SummaryReportsScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	tests := []struct {
+		name      string
+		args      []string
+		wantScope string
+	}{
+		{name: "full run", args: nil, wantScope: "all"},
+		{name: "domain run", args: []string{"config"}, wantScope: "config"},
+		{name: "leaf run", args: []string{"config", "services"}, wantScope: "config/services"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := &cmdctx.RootFlags{ConfigPath: workspacePath}
+			cmd := NewCmd("", flags)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(tt.args)
+			_ = cmd.Execute()
+
+			require.Contains(t, out.String(), fmt.Sprintf("(scope: %s)", tt.wantScope))
+		})
+	}
+}
+
 // TestValidateCmd_JSONMode_ExitCodePreserved verifies that validation errors in
 // JSON mode still produce a non-zero exit code (via validationFailedError).
 func TestValidateCmd_JSONMode_ExitCodePreserved(t *testing.T) {
@@ -1122,4 +1218,161 @@ func TestValidateFullRunIncludesTestsDomain(t *testing.T) {
 		}
 	}
 	require.Len(t, testsScopes, 1, "full run must include the tests domain rows")
+}
+
+// TestShouldEmitFilterHint pins the decision rule of the point-of-need
+// --level/--quiet hint. The threshold is a concrete row count so both the
+// positive and the negative case are testable.
+func TestShouldEmitFilterHint(t *testing.T) {
+	tests := []struct {
+		name     string
+		rows     int
+		errors   int
+		warnings int
+		quiet    bool
+		levelRaw string
+		want     bool
+	}{
+		{name: "long run with narrowable rows", rows: filterHintThreshold + 1, warnings: 1, want: true},
+		{name: "exactly at the threshold stays silent", rows: filterHintThreshold, warnings: 1},
+		{name: "short run stays silent", rows: 3, warnings: 1},
+		{name: "no rows at all", rows: 0},
+		{name: "already quiet", rows: filterHintThreshold + 10, warnings: 1, quiet: true},
+		{name: "already filtered by level", rows: filterHintThreshold + 10, warnings: 1, levelRaw: "error"},
+		{name: "level with surrounding space still counts as filtering", rows: filterHintThreshold + 10, warnings: 1, levelRaw: "  error  "},
+		{name: "all rows are errors so nothing to narrow", rows: filterHintThreshold + 5, errors: filterHintThreshold + 5},
+		{name: "one non-error row is enough to narrow", rows: filterHintThreshold + 5, errors: filterHintThreshold + 4, want: true},
+		// A clean project is long precisely because every check renders an ok
+		// row; both suggested flags would empty the table, so the hint would be
+		// false advice. This is the freshly-scaffolded case.
+		{name: "long but nothing above info so both flags empty the table", rows: filterHintThreshold + 5},
+		{name: "a single warning is enough to make --quiet useful", rows: filterHintThreshold + 5, warnings: 1, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldEmitFilterHint(tt.rows, tt.errors, tt.warnings, tt.quiet, tt.levelRaw)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// writeLongValidateFixture builds a project whose unscoped `dwe validate` run
+// renders comfortably more than filterHintThreshold rows: the base domains
+// already contribute ~19 informational rows, and each manifest-less snapshot
+// directory adds one more.
+func writeLongValidateFixture(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+	for i := range 10 {
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "snapshots", fmt.Sprintf("s%d", i)), 0o755))
+	}
+	return workspacePath
+}
+
+// runValidateTextCmd runs the validate tree in human mode and returns the two
+// streams separately, so a test can assert the hint never contaminates stdout.
+func runValidateTextCmd(t *testing.T, cfgPath string, args ...string) (stdout, stderr string) {
+	t.Helper()
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
+	cmd := NewCmd("", flags)
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(args)
+	_ = cmd.Execute()
+	return outBuf.String(), errBuf.String()
+}
+
+// TestValidateFilterHint_LongRunEmitsToStderrOnly: above the threshold the hint
+// names both flags, and it goes to stderr — stdout stays the parseable surface.
+func TestValidateFilterHint_LongRunEmitsToStderrOnly(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	stdout, stderr := runValidateTextCmd(t, workspacePath)
+
+	require.Contains(t, stderr, "--level")
+	require.Contains(t, stderr, "--quiet")
+	require.NotContains(t, stdout, "--level", "the hint must never reach stdout")
+	require.NotContains(t, stdout, "--quiet", "the hint must never reach stdout")
+}
+
+// TestValidateFilterHint_ShortRunSilent: a scoped run renders a single row, well
+// below the threshold, so no hint is emitted.
+func TestValidateFilterHint_ShortRunSilent(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	stdout, stderr := runValidateTextCmd(t, workspacePath, "commands")
+
+	// Precondition: the run actually rendered a table. Without this the
+	// "stderr lacks the hint" assertions would also pass on an aborted run.
+	require.Contains(t, stdout, "(scope:", "the run must have rendered a summary")
+	require.NotContains(t, stderr, "--level")
+	require.NotContains(t, stderr, "--quiet")
+}
+
+// TestValidateFilterHint_SuppressedWhenAlreadyFiltering: the hint is
+// point-of-need advice, so a user who already passed one of the flags does not
+// get told about them.
+func TestValidateFilterHint_SuppressedWhenAlreadyFiltering(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	for _, args := range [][]string{
+		{"--quiet"},
+		{"--level", "ok,info,warning,error"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, stderr := runValidateTextCmd(t, workspacePath, args...)
+			require.Contains(t, stdout, "(scope:", "the run must have rendered a summary")
+			require.NotContains(t, stderr, "Narrow the output")
+		})
+	}
+}
+
+// TestValidateFilterHint_SilentOnFreshScaffold pins the case the hint must never
+// fire on: a freshly scaffolded project is ABOVE the row threshold (one ok row
+// per check, currently 21) yet has zero errors and zero warnings, so both
+// suggested flags render an empty table. This is the most common way to meet the
+// threshold at all, and it goes through the real scaffold rather than a
+// hand-built fixture so that adding another scaffolded artefact — the way
+// workspace/tests/smoke.yml first pushed the count past 20 — cannot silently
+// re-trip it.
+func TestValidateFilterHint_SilentOnFreshScaffold(t *testing.T) {
+	targetDir := t.TempDir()
+	_, err := scaffold.Scaffold(scaffold.Options{TargetDir: targetDir, Name: "hintcheck", Prefix: "dwe", Service: "app"})
+	require.NoError(t, err)
+
+	workspacePath := filepath.Join(targetDir, "workspace.yml")
+
+	// Precondition: without this the assertion below would also pass on a
+	// scaffold that simply fell back under the threshold, testing nothing.
+	jsonOut, _ := runValidateJSONCmd(t, workspacePath)
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(jsonOut), &got))
+	require.Greater(t, len(got.Diagnostics), filterHintThreshold,
+		"the scaffold must exceed the threshold or the suppression is untested")
+	require.Zero(t, got.Summary.Error)
+	require.Zero(t, got.Summary.Warning)
+
+	stdout, stderr := runValidateTextCmd(t, workspacePath)
+
+	require.Contains(t, stdout, "(scope:", "the run must have rendered a summary")
+	require.NotContains(t, stderr, "Narrow the output",
+		"a clean scaffold has nothing to narrow to — both suggested flags empty the table")
+}
+
+// TestValidateFilterHint_SuppressedInJSON: JSON consumers filter the array
+// themselves, and a stderr line would be noise for them.
+func TestValidateFilterHint_SuppressedInJSON(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	stdout, stderr := runValidateJSONCmd(t, workspacePath)
+
+	require.NotContains(t, stderr, "Narrow the output")
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Greater(t, len(got.Diagnostics), filterHintThreshold,
+		"fixture must exceed the threshold or the JSON suppression is untested")
 }

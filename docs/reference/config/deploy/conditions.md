@@ -6,6 +6,7 @@
 
 - [`when:` (pre-condition)](#when-pre-condition)
 - [`check:` (post-condition)](#check-post-condition)
+- [`check: auto` (the inverse of `when:`)](#check-auto-the-inverse-of-when)
 - [`files_gate:` (pre-condition for files)](#files_gate-pre-condition-for-files)
 
 ## `when:` (pre-condition)
@@ -78,6 +79,50 @@ Use `check:` to assert that a step had its intended effect — e.g. that a migra
 
 - When a step body fails and `continue_on_error: true` is set, `check:` is **not** evaluated. The step is reported as failed and the pipeline continues.
 - When a step body succeeds but `check:` fails, the step is reported as failed. If `continue_on_error: true`, the pipeline continues; otherwise it aborts.
+
+## `check: auto` (the inverse of `when:`)
+
+`check: auto` is the one **scalar** form `check:` accepts. It resolves to the logical inverse of the step's own `when:` — "the step is done when the condition that asked for it no longer holds":
+
+```yaml
+- name: clone-source
+  type: shell
+  cmd: "git clone ${vars.source.repo} services/backend/src"
+  when:
+    type: shell
+    cmd: "[ ! -e services/backend/src/.git ]"
+  check: auto
+```
+
+which is exactly equivalent to writing the negation out by hand:
+
+```yaml
+  check:
+    type: builtin
+    cmd: shell
+    with:
+      cmd: "test -e services/backend/src/.git"
+```
+
+**Opt-in, never inferred.** `when:` ("should this run now") and `check:` ("is this already done") coincide often but are not the same question, so DWE never derives one from the other silently — a step with a `when:` and deliberately no `check:` keeps behaving exactly as before.
+
+**Only `when: {type: shell}`.** The other two condition kinds are rejected at load time, each for its own reason:
+
+| Form | Load-time result |
+|---|---|
+| `check: auto` with no `when:` | rejected — there is nothing to invert |
+| `check: auto` with `when: {type: builtin}` | rejected — the predicate registry and the `check:` builtin registry are [disjoint](../conditions.md#two-type-builtin-registries); there is no action that expresses "NOT `dir-empty foo`" |
+| `check: auto` with `when: {type: template}` | rejected — template conditions are evaluated at plan time and the step is dropped when false, so any step that reaches execution had `when == true` and its inverse would *always* fail |
+
+Only the exact scalar `auto` is accepted; `Auto`, `AUTO` and `"auto "` keep the ordinary "action must be a mapping" error.
+
+**How it resolves.** The inverse is built at plan-resolution time from the **rendered** `when:` command — the very string the runtime evaluation will see, so the pair can never disagree about what the command is — and it is wrapped across newlines (`! (\n<cmd>\n)`), not inline: an inline `! ( <cmd> )` turns a `when:` with a trailing `# comment` into a syntax error instead of an inversion.
+
+The derived check is a `{type: builtin, cmd: shell}` action, which means it runs under hardcoded `sh -c` in the **project root** — the same shell and the same working directory `when:` uses — and it is **unbounded** (`timeout: "0"`), matching the `when:` it inverts rather than the `shell` builtin's 10s default.
+
+**Plan output** reports what you wrote, not the machinery: `dwe deploy plan` prints `[check: auto (inverse of when)]`.
+
+**Journal behaviour is identical to an explicit check.** The sentinel exists from load time onward, so `check: auto` forces the step to re-run on every deploy exactly as any other `check:` does. One migration note: the raw `check:` value participates in the project/service config hash, so switching a step from a hand-written inverse to `check: auto` shifts that hash and causes a **one-time re-run** of the service's steps.
 
 ## `files_gate:` (pre-condition for files)
 

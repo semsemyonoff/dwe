@@ -2,8 +2,10 @@
 #
 # This file controls how `dwe docker` builds and runs `docker compose` commands
 # (project name, per-subcommand args, process env). It is shipped fully
-# commented; with no docker.yml the built-in policy applies. Uncomment to
-# override — an active docker.yml replaces the built-in policy.
+# commented; with no docker.yml the built-in policy applies. Overriding is
+# per-key, not whole-file: uncommenting one key replaces only that key, and
+# every key you leave commented keeps its built-in default (up, logs, run and
+# down carry defaults; the other args keys default to empty).
 #
 # Per-developer overrides go in workspace/docker.local.yml (gitignored), which
 # is deep-merged on top of this file.
@@ -14,6 +16,7 @@
 # args:
 #   global: ["--ansi", "always", "--progress", "tty"]
 #   up: ["-d", "--remove-orphans"]
+#   down: ["--remove-orphans"]
 #   logs: ["-f"]
 #   run: ["--rm"]
 #   pull: []

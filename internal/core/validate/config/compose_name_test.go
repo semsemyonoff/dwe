@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -142,4 +143,45 @@ func TestComposeProjectNameValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&composeProjectNameValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})
 	require.Empty(t, diags)
+}
+
+// TestComposeProjectNameValidator_HintSuggestsConvergingFix pins that every
+// value the hint suggests is both a VALID compose project name and one that
+// actually clears the warning. Two regressions are guarded:
+//   - suggesting `project_name: <declared>` verbatim, which docker compose
+//     rejects outright when the declared name contains uppercase;
+//   - suggesting `project_name: <resolved>`, which is a no-op — resolved is by
+//     definition the name dwe already passes to -p, so writing it into
+//     docker.yml leaves the divergence (and this warning) exactly as it was.
+func TestComposeProjectNameValidator_HintSuggestsConvergingFix(t *testing.T) {
+	t.Parallel()
+
+	t.Run("lowercase declared name leads with the docker.yml route", func(t *testing.T) {
+		t.Parallel()
+		root := writeComposeNameProject(t, composeNameWorkspaceYML, "name: legacy_shop\nservices: {}\n", "")
+		d := hasDiag(t, runComposeNameValidator(t, root), validate.SeverityWarning, "silently overridden")
+
+		// Adopting the compose-declared identity converges here, so it leads.
+		require.True(t, strings.HasPrefix(d.Hint, "align the two: set workspace/docker.yml `project_name: legacy_shop`"),
+			"hint must lead with the converging docker.yml suggestion, got: %s", d.Hint)
+		require.NotContains(t, d.Hint, "project_name: dwe-shop",
+			"pinning the already-resolved name into docker.yml would not clear the warning")
+	})
+
+	t.Run("uppercase declared name leads with the compose-file route", func(t *testing.T) {
+		t.Parallel()
+		root := writeComposeNameProject(t, composeNameWorkspaceYML, "name: LegacyShop\nservices: {}\n", "")
+		d := hasDiag(t, runComposeNameValidator(t, root), validate.SeverityWarning, "silently overridden")
+
+		// `project_name: LegacyShop` is invalid and `project_name: dwe-shop` is
+		// a no-op, so the compose file must change either way.
+		require.True(t, strings.HasPrefix(d.Hint, "align the two: change the compose top-level to `name: dwe-shop`"),
+			"hint must lead with the compose-file suggestion, got: %s", d.Hint)
+		require.NotContains(t, d.Hint, "project_name: LegacyShop",
+			"hint must never suggest writing the invalid declared name into project_name")
+		require.NotContains(t, d.Hint, "project_name: dwe-shop",
+			"pinning the already-resolved name into docker.yml would not clear the warning")
+		require.Contains(t, d.Hint, "project_name: legacyshop",
+			"the alternative route must offer the lowercased declared name")
+	})
 }

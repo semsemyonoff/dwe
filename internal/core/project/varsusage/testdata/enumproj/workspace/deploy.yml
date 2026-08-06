@@ -1,0 +1,27 @@
+phases:
+  - name: setup
+    steps:
+      - name: clone
+        type: shell
+        cmd: "git clone ${vars.source.repo}"
+        with:
+          opts:
+            branch: "${vars.source.branch}"
+          list:
+            - "${project.name}"
+            - plain
+      - name: env-step
+        type: builtin
+        cmd: message
+        env:
+          HOST: "${HOME}"
+      - name: wait-db
+        type: shell
+        cmd: "pg_isready -h ${vars.db.host} -p ${vars.db.port}"
+      - name: migrate
+        type: shell
+        cmd: "app migrate"
+        timeout: "${vars.timeouts.migrate}"
+        files_gate:
+          command: "${vars.gate.command}"
+          state: readable

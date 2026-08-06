@@ -236,23 +236,27 @@ func (b *browser) resolveInternalLink(href string) (*TreeNode, int, bool) {
 // matching H2/H3 heading, mirroring docs.SliceByAnchor's tiers: exact slug,
 // then case-insensitive, then slug-prefix (`anchor-…`). Returns −1 on no match.
 // The index is the source H2/H3 order, which aligns with currentHeadingLines.
+//
+// Compares docs.Heading.Slug, never docs.Slugify(h.Text): Text is the
+// markdown-stripped display label, and slugging it drops the `_` in every
+// builtin name and snake_case key, so `#service_dirs_ensure` would never match.
 func headingIndexForAnchor(headings []docs.Heading, anchor string) int {
 	if anchor == "" {
 		return -1
 	}
 	for i, h := range headings {
-		if docs.Slugify(h.Text) == anchor {
+		if h.Slug == anchor {
 			return i
 		}
 	}
 	for i, h := range headings {
-		if strings.EqualFold(docs.Slugify(h.Text), anchor) {
+		if strings.EqualFold(h.Slug, anchor) {
 			return i
 		}
 	}
 	al := strings.ToLower(anchor)
 	for i, h := range headings {
-		if strings.HasPrefix(strings.ToLower(docs.Slugify(h.Text)), al+"-") {
+		if strings.HasPrefix(strings.ToLower(h.Slug), al+"-") {
 			return i
 		}
 	}

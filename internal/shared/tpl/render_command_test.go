@@ -23,11 +23,56 @@ func TestCompileVarSyntax_noOp(t *testing.T) {
 	}
 }
 
-func TestCompileVarSyntax_simpleVar(t *testing.T) {
-	got := CompileVarSyntax("${name}")
-	want := `{{ resolve .Raw "name" }}`
+// A head-only ${...} is a shell variable that happens to be spelled like a
+// namespace, not a reference: every namespace form in the authoring contract is
+// dotted. Rewriting it resolved a whole config sub-map into the command text
+// (or erased it to "" when no root key matched) — silently, and now that
+// pipeline cmd: strings render, in commands that never opted into templating.
+// ${args} is the one bare form the contract defines and keeps its rewrite.
+func TestCompileVarSyntax_headOnlyIsLiteral(t *testing.T) {
+	for _, in := range []string{
+		"${project}",
+		"${services}",
+		"${vars}",
+		"${host}",
+		"${files}",
+		"${param}",
+		"${state}",
+		"for f in ${files}; do echo $f; done",
+	} {
+		if got := CompileVarSyntax(in); got != in {
+			t.Errorf("CompileVarSyntax(%q) = %q, want unchanged", in, got)
+		}
+	}
+}
+
+// The head-only rule must not leak into a dotted reference sharing the string.
+func TestCompileVarSyntax_headOnlyBesideDotPath(t *testing.T) {
+	got := CompileVarSyntax("curl http://${host}:${services.app.ports.http}/")
+	want := `curl http://${host}:{{ resolve .Raw "services.app.ports.http" }}/`
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestIsVarNamespaceRef(t *testing.T) {
+	cases := map[string]bool{
+		"vars.db.host": true,
+		"project.name": true,
+		"host.uid":     true,
+		"args":         true, // the one bare form the contract defines
+		"args.0":       true,
+		"project":      false,
+		"files":        false,
+		"host":         false,
+		"HOME":         false,
+		"CONTAINER":    false,
+		"__configPath": false,
+	}
+	for inner, want := range cases {
+		if got := IsVarNamespaceRef(inner); got != want {
+			t.Errorf("IsVarNamespaceRef(%q) = %v, want %v", inner, got, want)
+		}
 	}
 }
 
@@ -98,6 +143,65 @@ func TestCompileVarSyntax_goTemplatePreserved(t *testing.T) {
 	}
 	if !strings.Contains(got, `{{ resolve .Raw "project.name" }}`) {
 		t.Errorf("dollar var not compiled in %q", got)
+	}
+}
+
+// ---- Unknown head whitelist (Task 1) ----
+
+func TestCompileVarSyntax_knownHeadsCompile(t *testing.T) {
+	cases := map[string]string{
+		"${vars.x}":                  `{{ resolve .Raw "vars.x" }}`,
+		"${services.app.ports.http}": `{{ resolve .Raw "services.app.ports.http" }}`,
+		"${project.name}":            `{{ resolve .Raw "project.name" }}`,
+	}
+	for in, want := range cases {
+		if got := CompileVarSyntax(in); got != want {
+			t.Errorf("CompileVarSyntax(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCompileVarSyntax_unknownHeadsSurviveLiteral(t *testing.T) {
+	cases := []string{"${HOME}", "${PATH}", "${UNKNOWN_THING}"}
+	for _, in := range cases {
+		if got := CompileVarSyntax(in); got != in {
+			t.Errorf("CompileVarSyntax(%q) = %q, want unchanged", in, got)
+		}
+	}
+}
+
+func TestCompileVarSyntax_unknownDottedHeadSurvivesLiteral(t *testing.T) {
+	in := "${FOO.bar}"
+	if got := CompileVarSyntax(in); got != in {
+		t.Errorf("CompileVarSyntax(%q) = %q, want unchanged", in, got)
+	}
+}
+
+// TestCompileVarSyntax_configPathExcluded pins the decision that
+// __configPath (an internal key the config loader injects, not part of the
+// authoring contract) is deliberately NOT in KnownVarHeads — a reference to
+// it renders as a literal rather than leaking loader internals.
+func TestCompileVarSyntax_configPathExcluded(t *testing.T) {
+	in := "${__configPath}"
+	if got := CompileVarSyntax(in); got != in {
+		t.Errorf("CompileVarSyntax(%q) = %q, want unchanged (excluded from KnownVarHeads)", in, got)
+	}
+}
+
+// TestRenderCommand_knownHeadUnknownSubkey pins that a KNOWN head with an
+// unresolvable sub-key still resolves to "" (lenient, like every other
+// ${...} resolver) rather than surviving literal — only the HEAD gates
+// whitelisting, not the full path.
+func TestRenderCommand_knownHeadUnknownSubkey(t *testing.T) {
+	cases := []string{"${host.bogus}", "${args.0}"}
+	for _, expr := range cases {
+		got, err := RenderCommand(expr, &RenderContext{})
+		if err != nil {
+			t.Fatalf("RenderCommand(%q): %v", expr, err)
+		}
+		if got != "" {
+			t.Errorf("RenderCommand(%q) = %q, want empty string", expr, got)
+		}
 	}
 }
 
@@ -191,11 +295,11 @@ func TestRenderCommand_missingRawPath(t *testing.T) {
 	ctx := &RenderContext{
 		Raw: map[string]any{},
 	}
-	got, err := RenderCommand("${missing.key}", ctx)
+	got, err := RenderCommand("${vars.missing.key}", ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// missing path resolves to empty string
+	// known head, missing path resolves to empty string
 	if got != "" {
 		t.Errorf("got %q, want empty string for missing path", got)
 	}
@@ -756,12 +860,12 @@ func TestRenderCommand_servicesInjectedSubset(t *testing.T) {
 func TestRenderCommand_generatedCoexistsWithNamespaces(t *testing.T) {
 	ctx := &RenderContext{
 		Raw: map[string]any{
-			"databases": map[string]any{"magento": "magentodb"},
+			"vars": map[string]any{"databases": map[string]any{"magento": "magentodb"}},
 		},
 		Generated: map[string]string{"crypt_key": "241f4fa6"},
 		Host:      HostInfo{UID: "1000", GID: "1000"},
 	}
-	expr := "db=${databases.magento} key=${generated.crypt_key} uid=${host.uid}"
+	expr := "db=${vars.databases.magento} key=${generated.crypt_key} uid=${host.uid}"
 	got, err := RenderCommand(expr, ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -781,5 +885,43 @@ func TestEvalCommandCondition_typoOnBuiltinVerb(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown builtin predicate") {
 		t.Errorf("error should mention unknown predicate, got %q", err.Error())
+	}
+}
+
+func TestValidateRawScope(t *testing.T) {
+	tests := []struct {
+		name    string
+		expr    string
+		wantErr bool
+	}{
+		{"param", "git checkout ${param.branch}", true},
+		{"context", "echo ${context.env}", true},
+		{"files", "cat ${files.dump.path}", true},
+		{"generated", "echo ${generated.app_key}", true},
+		{"args", "go test ${args}", true},
+		{"raw head", "clone ${vars.source.repo} ${project.name}", false},
+		{"host", "chown ${host.uid}:${host.gid} .", false},
+		{"unknown head", "echo ${HOME}", false},
+		// Head-only tokens are shell variables, not references — a deploy step
+		// iterating over a `files` shell var must not be rejected as a use of
+		// the files namespace. ${args} is the contract's one bare form and stays
+		// rejected: it genuinely has no source on this path.
+		{"head-only files", "for f in ${files}; do echo $f; done", false},
+		{"head-only param", "echo ${param}", false},
+		{"head-only generated", "echo ${generated}", false},
+		{"snapshot stays validateSnapshotScope's", "tar ${snapshot.path}", false},
+		{"no reference", "docker inspect -f '{{.State.Status}}' app", false},
+		{"empty", "", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRawScope(tc.expr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ValidateRawScope(%q) = %v, wantErr %v", tc.expr, err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "has no source here") {
+				t.Errorf("error should explain the namespace is unavailable, got %q", err.Error())
+			}
+		})
 	}
 }

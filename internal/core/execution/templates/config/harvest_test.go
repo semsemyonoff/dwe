@@ -121,6 +121,61 @@ func TestHarvestGenerated_writeIfAbsent(t *testing.T) {
 	if got := store.Get("main", "app_key"); got != "existing-value" {
 		t.Errorf("store value = %q, want preserved existing-value", got)
 	}
+	// The file on disk holds a different value and is never consulted: a stored
+	// field short-circuits before the read. Reporting the disk value here would
+	// name a string the store does not hold and the deploy will not use.
+	if got := res.Fields[0].Value; got != "existing-value" {
+		t.Errorf("reported Value = %q, want the stored value", got)
+	}
+}
+
+// TestHarvestGenerated_StoredFieldSurvivesMissingFile is the regression for the
+// reset→deploy sequence. `dwe reset run` (without --clear-generated) keeps the
+// store and wipes the service hub, so on the next deploy the minted file is gone
+// while its value is still authoritative: the mint step skips on its closed
+// `generated-missing` gate, and an unconditional harvest used to fail the whole
+// deploy over a value it already had. The documented pipeline shape gates only
+// the mint step, so this had to be fixed here rather than by asking every
+// project to duplicate the gate.
+func TestHarvestGenerated_StoredFieldSurvivesMissingFile(t *testing.T) {
+	root := t.TempDir()
+	// Note: no writeServiceFile — the hub was wiped, the file does not exist.
+	cfg := cfgWithGenerated("main", "services/main", map[string]projectconfig.GeneratedField{
+		"app_key": {File: ".secrets/app.env", Pattern: `^APP_KEY=(.*)$`},
+	})
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "minted-on-a-previous-deploy")
+
+	res, err := HarvestGenerated(root, cfg, "main", store)
+	if err != nil {
+		t.Fatalf("HarvestGenerated must not fail for an already-stored field: %v", err)
+	}
+	if len(res.Fields) != 1 {
+		t.Fatalf("Fields = %+v, want one entry", res.Fields)
+	}
+	if res.Fields[0].Wrote {
+		t.Errorf("expected Wrote=false, got %+v", res.Fields[0])
+	}
+	if got := store.Get("main", "app_key"); got != "minted-on-a-previous-deploy" {
+		t.Errorf("store value = %q, want the previously minted value", got)
+	}
+}
+
+// TestHarvestGenerated_MixedStoredAndMissing pins that the skip is per field:
+// one field already stored must not excuse a second field whose source file is
+// genuinely absent, or a half-minted secret would slip through silently.
+func TestHarvestGenerated_MixedStoredAndMissing(t *testing.T) {
+	root := t.TempDir()
+	cfg := cfgWithGenerated("main", "services/main", map[string]projectconfig.GeneratedField{
+		"app_key":    {File: ".secrets/app.env", Pattern: `^APP_KEY=(.*)$`},
+		"jwt_secret": {File: ".secrets/jwt.env", Pattern: `^JWT_SECRET=(.*)$`},
+	})
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "already-here")
+
+	if _, err := HarvestGenerated(root, cfg, "main", store); err == nil {
+		t.Fatal("expected an error for the unstored field with a missing file, got nil")
+	}
 }
 
 func TestHarvestGenerated_multiField(t *testing.T) {

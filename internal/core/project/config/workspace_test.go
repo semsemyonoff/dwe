@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // sampleWorkspaceYML reflects the lean workspace.yml (project identity only, schema_version silently ignored).
@@ -5581,6 +5582,25 @@ parallel:
 
 func yamlUnmarshalForTest(src string, out any) error {
 	return yaml.Unmarshal([]byte(src), out)
+}
+
+// TestAllowedRootKeysSubsetOfKnownVarHeads pins the cross-package contract
+// between the strict-root allowlist here and tpl.KnownVarHeads: every key a
+// project config layer may legally declare at its root must also be
+// resolvable through ${...} template syntax. tpl is a leaf and must not
+// import this package, so the two lists are independently maintained; this
+// test is the only thing standing between a new root key and templates that
+// silently stop rendering it.
+func TestAllowedRootKeysSubsetOfKnownVarHeads(t *testing.T) {
+	known := make(map[string]struct{}, len(tpl.KnownVarHeads))
+	for _, h := range tpl.KnownVarHeads {
+		known[h] = struct{}{}
+	}
+	for _, k := range allowedRootKeys {
+		if _, ok := known[k]; !ok {
+			t.Errorf("allowedRootKeys contains %q, which is missing from tpl.KnownVarHeads", k)
+		}
+	}
 }
 
 // Tests below this point were heavily tied to the legacy tools.yml /

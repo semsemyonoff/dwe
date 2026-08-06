@@ -1,6 +1,7 @@
 package docstui
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -140,18 +141,26 @@ func TestIsExternalHref(t *testing.T) {
 }
 
 func TestHeadingIndexForAnchor(t *testing.T) {
-	headings := []docs.Heading{
-		{Level: 2, Text: "Getting Started"},
-		{Level: 3, Text: "Vars block"},
-		{Level: 2, Text: "Advanced Usage"},
-	}
+	// Built through docs.ParseDoc rather than by hand: the anchor a link names
+	// is docs.Heading.Slug, and a hand-filled fixture can populate Text without
+	// it — a state production cannot produce, and one that hid the bug where
+	// this function slugged Text itself and so never matched an underscore.
+	_, headings := docs.ParseDoc([]byte(strings.Join([]string{
+		"# Title",
+		"## Getting Started",
+		"### Vars block",
+		"## Advanced Usage",
+		"### `service_dirs_ensure`",
+	}, "\n")))
+
 	cases := map[string]int{
-		"getting-started": 0,
-		"vars-block":      1,
-		"advanced-usage":  2,
-		"VARS-BLOCK":      1, // case-insensitive tier
-		"advanced":        2, // slug-prefix tier ("advanced-usage")
-		"missing":         -1,
+		"getting-started":     0,
+		"vars-block":          1,
+		"advanced-usage":      2,
+		"VARS-BLOCK":          1, // case-insensitive tier
+		"advanced":            2, // slug-prefix tier ("advanced-usage")
+		"service_dirs_ensure": 3, // underscores survive into the anchor
+		"missing":             -1,
 	}
 	for anchor, want := range cases {
 		if got := headingIndexForAnchor(headings, anchor); got != want {

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
@@ -40,8 +41,8 @@ func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, dweBin string)
 			if rs.Phase.Description != "" {
 				phaseLine += ": " + rs.Phase.Description
 			}
-			if rs.Phase.When != nil {
-				phaseLine += " [when: " + FormatCondition(rs.Phase.When) + "]"
+			if when := rs.DisplayPhaseWhen(); when != nil {
+				phaseLine += " [when: " + FormatCondition(when) + "]"
 			}
 			indent := ""
 			if rs.Service != "" {
@@ -119,6 +120,9 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 	}
 	if cmd != "" {
 		_, _ = fmt.Fprintln(out, detailIndent+cmd)
+		if refs := UnresolvedTemplateRefs(cmd); len(refs) > 0 {
+			_, _ = fmt.Fprintln(out, detailIndent+"[unresolved: "+strings.Join(refs, ", ")+"]")
+		}
 	}
 	if rs.RuntimeWhen != nil {
 		_, _ = fmt.Fprintln(out, detailIndent+"[when: "+FormatCondition(rs.RuntimeWhen)+"]")
@@ -126,8 +130,8 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 	if rs.FilesGate != nil {
 		_, _ = fmt.Fprintln(out, detailIndent+"["+FormatFilesGate(rs.FilesGate)+"]")
 	}
-	if rs.Step.Check != nil {
-		_, _ = fmt.Fprintln(out, detailIndent+"[check: "+FormatAction(rs.Step.Check)+"]")
+	if check := rs.DisplayCheck(); check != "" {
+		_, _ = fmt.Fprintln(out, detailIndent+"[check: "+check+"]")
 	}
 	if rs.Step.ContinueOnError {
 		_, _ = fmt.Fprintln(out, detailIndent+"[continue_on_error]")

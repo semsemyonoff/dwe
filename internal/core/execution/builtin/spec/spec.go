@@ -67,6 +67,20 @@ const (
 	KindInternal
 )
 
+// String returns the stable lowercase label used in documentation output
+// (the llms.txt inventory). It is display metadata, not a parse target.
+func (k Kind) String() string {
+	switch k {
+	case KindAction:
+		return "action"
+	case KindPredicate:
+		return "predicate"
+	case KindInternal:
+		return "internal"
+	}
+	return "unknown"
+}
+
 // CallerContext identifies who is invoking a builtin, used for kind/context gating.
 type CallerContext int
 
@@ -89,4 +103,10 @@ const (
 type Entry struct {
 	Impl Builtin
 	Kind Kind
+	// Summary is a static one-line purpose, independent of any invocation's
+	// with: parameters (unlike Builtin.Describe). It lives on Entry rather
+	// than on the Builtin interface so metadata stays in one place and adding
+	// a builtin stays a single-map edit. Required: a registry-wide test
+	// rejects an empty Summary.
+	Summary string
 }

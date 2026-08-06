@@ -142,6 +142,57 @@ func TestNewCompose_DockerYmlProjectNameWins(t *testing.T) {
 	}
 }
 
+// TestNewCompose_ProjectNameIsNormalized pins the -p value to the SAME
+// normalization config.ComposeProjectName applies. Compose v2 rejects an
+// uppercase project name outright, and every compose-bypass path (status,
+// per-service stop/restart, reset --service, the bridge overlay, the
+// config.container_name validator) derives "<project>-<container>" from the
+// normalized name — so a raw -p here would scope compose's own resources under
+// a project name no label lookup ever asks for.
+func TestNewCompose_ProjectNameIsNormalized(t *testing.T) {
+	tests := []struct {
+		name      string
+		prefix    string
+		project   string
+		dockerCfg *config.DockerConfig
+		want      string
+	}{
+		{
+			name:      "FullName fallback is lowercased",
+			prefix:    "dwe",
+			project:   "cueBreaker",
+			dockerCfg: &config.DockerConfig{},
+			want:      "dwe-cuebreaker",
+		},
+		{
+			name:      "docker.yml project_name is lowercased",
+			prefix:    "dwe",
+			project:   "laravel",
+			dockerCfg: &config.DockerConfig{ProjectName: "MyApp"},
+			want:      "myapp",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.DweConfig{Compose: config.ComposeConfig{Base: "compose.yaml"}}
+			cfg.Project.Prefix = tt.prefix
+			cfg.Project.Name = tt.project
+
+			c := NewCompose(cfg, tt.dockerCfg, "")
+			if c.ProjectName != tt.want {
+				t.Errorf("ProjectName = %q, want %q", c.ProjectName, tt.want)
+			}
+			if got := config.ComposeProjectName(tt.dockerCfg, cfg); got != c.ProjectName {
+				t.Errorf("ProjectName = %q diverges from config.ComposeProjectName = %q", c.ProjectName, got)
+			}
+			args := c.BuildArgs("up")
+			if len(args) < 3 || args[1] != "-p" || args[2] != tt.want {
+				t.Errorf("BuildArgs should pass -p %s, got %v", tt.want, args)
+			}
+		})
+	}
+}
+
 func TestBuildArgs_FullPipeline(t *testing.T) {
 	c := &Compose{
 		ProjectName: "myproject",

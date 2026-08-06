@@ -1,0 +1,107 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/varsusage"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+)
+
+// templateRefsValidator warns on a ${head.path} reference whose head is a
+// KNOWN root key (i.e. it actually lives in cfg.Raw — the same set
+// CompileVarSyntax accepts, internal/core/project/config's allowedRootKeys)
+// but the remaining path does not resolve. That combination is almost always
+// a typo: vars: is the one root key with fully free-form content, so
+// ${vars.opechatka} where only vars.source.repo was declared renders to a
+// literal "${vars.opechatka}" today with no error until the step runs.
+//
+// Deliberately silent on everything else: an unknown head (shell-style
+// ${HOME}, a stray dollar sign) and the special namespaces that never live
+// in Raw (param, context, files, host, snapshot, args, generated — see
+// Technical Details in the plan) are not this validator's concern. Both
+// exclusions come from gating on config.IsAllowedRootKey. A head-only
+// ${state} / ${vars} is excluded too, by tpl.IsVarNamespaceRef — see the gate.
+//
+// The gate is the root-key ALLOWLIST, not "head present in cfg.Raw": the
+// strict root makes Raw's keys a subset of allowedRootKeys, not an equal set,
+// so a Raw-presence probe goes silent on exactly the case that matters most —
+// a project with no vars: block at all, where every ${vars.*} reference is
+// unresolvable and renders to "".
+type templateRefsValidator struct{}
+
+var _ validate.Validator = (*templateRefsValidator)(nil)
+
+func (v *templateRefsValidator) ID() string     { return "template_refs" }
+func (v *templateRefsValidator) Domain() string { return "config" }
+
+func (v *templateRefsValidator) Run(ctx validate.Context) []validate.Diagnostic {
+	if ctx.Cfg == nil {
+		return nil
+	}
+
+	usages, err := varsusage.EnumerateAllUsages(ctx.ProjectRoot)
+	if err != nil {
+		// A malformed project is surfaced elsewhere (workspace/parse
+		// validators); this validator has nothing useful to add.
+		return nil
+	}
+
+	var diags []validate.Diagnostic
+	for _, u := range usages {
+		// A known head is only a reference when it carries a tail:
+		// CompileVarSyntax leaves a head-only ${state} / ${update} / ${vars}
+		// literal (it is a lowercase shell variable colliding with a namespace
+		// name, rife in pipeline cmd: strings), so warning that it "does not
+		// resolve" would flag exactly what the whitelist deliberately keeps
+		// out of the engine. The tail rule is asked of tpl, never re-derived.
+		if !tpl.IsVarNamespaceRef(u.Ref) {
+			continue
+		}
+		head, _, _ := strings.Cut(u.Ref, ".")
+		if !config.IsAllowedRootKey(head) {
+			continue
+		}
+		if resolvesInRaw(ctx.Cfg.Raw, u.Ref) {
+			continue
+		}
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityWarning,
+			Domain:   "config",
+			Target:   "config.template_refs",
+			File:     u.File,
+			Line:     u.Line,
+			Message: fmt.Sprintf(
+				"${%s} does not resolve — no such path under %s:",
+				u.Ref, head,
+			),
+			Hint: fmt.Sprintf("check for a typo in %q, or declare the missing path under %s:", u.Ref, head),
+		})
+	}
+	return diags
+}
+
+// resolvesInRaw walks a dot-separated path in a nested map, mirroring
+// tpl.resolveMapPath's semantics (that helper is unexported, so this is a
+// deliberate small duplication rather than exporting a private of a leaf
+// package for one caller).
+func resolvesInRaw(raw map[string]any, path string) bool {
+	if raw == nil {
+		return false
+	}
+	head, rest, hasRest := strings.Cut(path, ".")
+	v, ok := raw[head]
+	if !ok {
+		return false
+	}
+	if !hasRest {
+		return true
+	}
+	sub, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	return resolvesInRaw(sub, rest)
+}

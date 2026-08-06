@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ 1effd1e726b4
+> Translated from: reference/config/commands/index.md @ 055fe21afec8
 
 # commands/
 
@@ -284,7 +284,7 @@ db.start:
 ## Связанные команды
 
 - `dwe commands list` — перечислить все публичные команды, сгруппированные по файлам
-- `dwe commands <id> [--set k=v] [--yes]` — выполнить команду (псевдоним: `dwe cmd <id>`)
+- `dwe commands <id> [--set k=v] [--yes] [-- <args>]` — выполнить команду (псевдоним: `dwe cmd <id>`). Всё, что после `--`, предлагается команде как `${args}` — включается для каждой команды отдельно, см. [директивы § Сквозные аргументы](directives.md#сквозные-аргументы)
 - `dwe commands --inspect <id>` (или `-i`) — показать разрешённое определение (params, context, env, runner)
 - `dwe docs generate` — перегенерировать справочник по командам в `docs/reference/commands/`
 

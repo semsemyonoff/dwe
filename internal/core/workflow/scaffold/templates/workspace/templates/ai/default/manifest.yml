@@ -1,0 +1,21 @@
+# workspace/templates/ai/default/manifest.yml — AI template pack (ACTIVE).
+#
+# `dwe render ai` renders this pack into each app service's HUB directory
+# (services/<name>/, gitignored and absent until the first clone). `default` is
+# the last link of the implicit resolution chain, so it applies to every service
+# that has no pack of its own; add workspace/templates/ai/<service>/ to give one
+# service a different pack.
+#
+# A manifest is strict-decoded and must declare at least one entry — unlike the
+# pipeline mirrors, this file cannot ship commented.
+#
+# Schema and template variables: `dwe docs show render/ai`
+
+render:
+  - from: AGENTS.md.tmpl
+    to: AGENTS.md
+
+# The hub CLAUDE.md mirrors the hub AGENTS.md, exactly as the project root does.
+symlinks:
+  - link: CLAUDE.md
+    to: AGENTS.md

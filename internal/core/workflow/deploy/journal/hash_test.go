@@ -3,6 +3,7 @@ package journal
 import (
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 
@@ -138,7 +139,7 @@ func TestServiceConfigHash(t *testing.T) {
 	}
 
 	// Test with nil deploy config
-	hash1 := ServiceConfigHash(svc, nil)
+	hash1 := ServiceConfigHash(svc, nil, nil)
 	assert.Len(t, hash1, 64)
 
 	// Test with deploy config
@@ -151,13 +152,39 @@ func TestServiceConfigHash(t *testing.T) {
 			},
 		},
 	}
-	hash2 := ServiceConfigHash(svc, deployCfg)
+	hash2 := ServiceConfigHash(svc, deployCfg, nil)
 	assert.Len(t, hash2, 64)
 	assert.NotEqual(t, hash1, hash2, "Adding deploy config should change hash")
 
 	// Test stability
-	hash3 := ServiceConfigHash(svc, deployCfg)
+	hash3 := ServiceConfigHash(svc, deployCfg, nil)
 	assert.Equal(t, hash2, hash3)
+}
+
+// TestServiceConfigHashVarsChange verifies that changing the vars block changes
+// the service config hash, so a scoped (--service) deploy re-runs when a var
+// referenced only by that service's deploy.yml changes.
+func TestServiceConfigHashVarsChange(t *testing.T) {
+	svc := config.ServiceConfig{
+		Type:      "app",
+		Container: "main",
+	}
+
+	vars1 := map[string]any{"source": map[string]any{"branch": "main"}}
+	vars2 := map[string]any{"source": map[string]any{"branch": "dev"}}
+
+	hash1 := ServiceConfigHash(svc, nil, vars1)
+	hash2 := ServiceConfigHash(svc, nil, vars2)
+	assert.NotEqual(t, hash1, hash2, "Changing vars should change the service config hash")
+
+	// Stability with the same vars
+	hash3 := ServiceConfigHash(svc, nil, vars1)
+	assert.Equal(t, hash1, hash3)
+
+	// nil vars vs empty vars must hash identically (both mean "no vars")
+	hashNil := ServiceConfigHash(svc, nil, nil)
+	hashEmpty := ServiceConfigHash(svc, nil, map[string]any{})
+	assert.Equal(t, hashNil, hashEmpty)
 }
 
 // TestProjectConfigHash verifies the project config hash with tracked services.
@@ -194,6 +221,40 @@ func TestProjectConfigHash(t *testing.T) {
 	// Hash should change if we add "debug" to tracked services
 	hash3 := ProjectConfigHash(cfg, deployCfg, svcDeploys, []string{"main", "debug"})
 	assert.NotEqual(t, hash1, hash3)
+}
+
+// TestProjectConfigHashVarsChange verifies that changing the project's vars
+// block changes the project config hash, so a whole-project deploy re-runs
+// steps whose rendered cmd/with/check depend on a changed ${vars.*} value.
+func TestProjectConfigHashVarsChange(t *testing.T) {
+	baseServices := map[string]config.ServiceConfig{
+		"main": {Type: "app", Container: "main"},
+	}
+	cfg1 := &config.DweConfig{
+		Services: baseServices,
+		Vars:     map[string]any{"source": map[string]any{"branch": "main"}},
+	}
+	cfg2 := &config.DweConfig{
+		Services: baseServices,
+		Vars:     map[string]any{"source": map[string]any{"branch": "dev"}},
+	}
+
+	deployCfg := &config.ProjectDeployConfig{}
+	svcDeploys := map[string]*config.ServiceDeployConfig{"main": nil}
+	trackedServices := []string{"main"}
+
+	hash1 := ProjectConfigHash(cfg1, deployCfg, svcDeploys, trackedServices)
+	hash2 := ProjectConfigHash(cfg2, deployCfg, svcDeploys, trackedServices)
+	assert.NotEqual(t, hash1, hash2, "Changing vars should change the project config hash")
+
+	// An unrelated vars entry also invalidates — accepted cost of hashing the
+	// whole block rather than only referenced paths.
+	cfg3 := &config.DweConfig{
+		Services: baseServices,
+		Vars:     map[string]any{"unrelated": "value"},
+	}
+	hash3 := ProjectConfigHash(cfg3, deployCfg, svcDeploys, trackedServices)
+	assert.NotEqual(t, hash1, hash3, "Any vars change invalidates the project hash, even unrelated entries")
 }
 
 // TestProjectConfigHashIgnoresUntracked verifies that changes to untracked
@@ -284,7 +345,7 @@ func TestHashesNotEmptyOnEmptyInput(t *testing.T) {
 	assert.NotEmpty(t, hash)
 
 	emptySvc := config.ServiceConfig{}
-	svcHash := ServiceConfigHash(emptySvc, nil)
+	svcHash := ServiceConfigHash(emptySvc, nil, nil)
 	assert.Len(t, svcHash, 64)
 	assert.NotEmpty(t, svcHash)
 
@@ -326,6 +387,56 @@ func TestStepHashNilFilesGateEqualsActionHash(t *testing.T) {
 	actionHash := ActionHash(step.Action())
 
 	assert.Equal(t, stepHash, actionHash, "StepHash with nil FilesGate should equal ActionHash(Action)")
+}
+
+// TestConfigHashAutoCheckMigration pins the honest cost of migrating a step
+// from an explicitly written inverse check to `check: auto`. StepHash covers
+// the action and files_gate only, so per-step hashes do not move — but
+// deployStepToMap feeds the raw check value into phasesToMap and therefore
+// into Service/ProjectConfigHash, where makeSkipDecider turns any mismatch
+// into journal.Run for every step in scope. Migration costs exactly one
+// re-run, and this test is what makes that a decision rather than a surprise.
+func TestConfigHashAutoCheckMigration(t *testing.T) {
+	stepWith := func(check *config.Action) config.DeployStep {
+		return config.DeployStep{
+			Name:  "clone",
+			Type:  "shell",
+			Cmd:   "git clone repo src",
+			When:  &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e src/.git ]"},
+			Check: check,
+		}
+	}
+	// The hand-written inverse the auto form replaces, byte-for-byte as
+	// pipeline.ResolveAutoCheck would build it.
+	explicit := stepWith(&config.Action{
+		Type: "builtin",
+		Cmd:  "shell",
+		With: map[string]any{"cmd": "! (\n[ ! -e src/.git ]\n)", "timeout": "0"},
+	})
+	auto := stepWith(&config.Action{Type: config.AutoCheckType})
+	none := stepWith(nil)
+
+	// Per-step hashes are untouched: StepHash never reads Check.
+	assert.Equal(t, StepHash(explicit), StepHash(auto), "StepHash must not depend on check:")
+	assert.Equal(t, StepHash(explicit), StepHash(none), "StepHash must not depend on check:")
+
+	hashOf := func(step config.DeployStep) string {
+		return ProjectConfigHash(
+			&config.DweConfig{Services: map[string]config.ServiceConfig{"main": {Type: "app", Container: "main"}}},
+			&config.ProjectDeployConfig{Phases: []config.DeployPhase{{Name: "init", Steps: []config.DeployStep{step}}}},
+			map[string]*config.ServiceDeployConfig{"main": nil},
+			[]string{"main"},
+		)
+	}
+
+	assert.NotEqual(t, hashOf(explicit), hashOf(auto),
+		"migrating an explicit inverse check to `check: auto` must shift the project config hash (one-time re-run)")
+	assert.NotEqual(t, hashOf(none), hashOf(auto),
+		"adding `check: auto` to a step that had no check must shift the project config hash")
+	// The sentinel is hashed as itself, not as its derived form: the raw
+	// config is what ProjectConfigHash sees, and it must hash stably.
+	assert.Equal(t, hashOf(auto), hashOf(stepWith(&config.Action{Type: config.AutoCheckType})),
+		"the auto sentinel must hash stably")
 }
 
 // TestStepHashFilesGateChange verifies that changing FilesGate.State changes the hash.

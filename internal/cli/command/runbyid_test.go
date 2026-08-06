@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -918,5 +919,67 @@ func TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved(t *testing.T) {
 	}
 	if s.runRC.NonInteractive {
 		t.Errorf("rctx.NonInteractive must be false to preserve the non-TTY Y/n fallback")
+	}
+}
+
+// --- pass-through arguments ----------------------------------------------
+
+// TestRunCommandByID_PassThroughArgsReachRenderContext pins the one line that
+// joins the CLI's `--` split to the runtime: rctx.Render.Args is where the
+// caller's arguments become the command's arguments. Every unit below it
+// (ArgsSpec.Resolve, RenderShellCommand, normalizeRenderContext) is tested in
+// isolation, so a break here — a dropped assignment, a nil Render guard that
+// starts firing — would otherwise pass CI with everything else green.
+func TestRunCommandByID_PassThroughArgsReachRenderContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     *usercommands.ArgsSpec
+		passed   []string
+		wantArgs []string
+	}{
+		{
+			name:     "prefix is inserted before the caller's args",
+			args:     &usercommands.ArgsSpec{Prefix: []string{"--"}},
+			passed:   []string{"-v"},
+			wantArgs: []string{"--", "-v"},
+		},
+		{
+			name:     "default applies when the caller passes none",
+			args:     &usercommands.ArgsSpec{Default: []string{"--run"}},
+			passed:   nil,
+			wantArgs: []string{"--run"},
+		},
+		{
+			name:     "no args block passes the caller's args through verbatim",
+			args:     nil,
+			passed:   []string{"a", "b"},
+			wantArgs: []string{"a", "b"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := stubOrchestratorSeams(t)
+			s.installRunner()
+			def := &usercommands.CommandDef{
+				ID: "site.test", LocalName: "test", Group: "site",
+				Type: usercommands.CommandTypeShell, Cmd: "npm test ${args}",
+				Args: tt.args,
+			}
+			reg := newTestRegistry(def)
+			err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+				newCfg(), reg, t.TempDir(), "site.test", runOpts{PassThroughArgs: tt.passed})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if s.runCalls != 1 {
+				t.Fatalf("runner should be invoked once; got %d", s.runCalls)
+			}
+			if s.runRC.Render == nil {
+				t.Fatal("rctx.Render is nil — pass-through args would be silently dropped")
+			}
+			if !reflect.DeepEqual(s.runRC.Render.Args, tt.wantArgs) {
+				t.Errorf("Render.Args = %v, want %v", s.runRC.Render.Args, tt.wantArgs)
+			}
+		})
 	}
 }

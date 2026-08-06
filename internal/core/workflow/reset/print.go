@@ -15,8 +15,11 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, dweBin string) {
 	lastPhaseKey := ""
 	for _, rs := range steps {
 		if rs.Phase.Name != lastPhaseKey {
-			if rs.Phase.When != nil {
-				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, pipeline.FormatCondition(rs.Phase.When))
+			// DisplayPhaseWhen, not the raw Phase.When: the raw form still
+			// carries the literal ${vars.*} text, while the phase actually
+			// runs the rendered command.
+			if when := rs.DisplayPhaseWhen(); when != nil {
+				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, pipeline.FormatCondition(when))
 			}
 			lastPhaseKey = rs.Phase.Name
 		}
@@ -33,8 +36,8 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, dweBin string) {
 		default:
 			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, dweBin))
 		}
-		if rs.Step.Check != nil {
-			_, _ = fmt.Fprintf(w, "# check: %s\n", pipeline.FormatAction(rs.Step.Check))
+		if check := rs.DisplayCheck(); check != "" {
+			_, _ = fmt.Fprintf(w, "# check: %s\n", check)
 		}
 	}
 }

@@ -60,6 +60,32 @@ func IsRuntime(expr string) bool {
 	return kind == KindBuiltin || kind == KindCmd
 }
 
+// PredicateEntry is one `when:` predicate verb's static metadata. This registry
+// is disjoint from the `type: builtin` step registry (internal/core/execution/
+// builtin) despite the shared spelling: a verb listed here is rejected in a
+// check:/step body, and a step builtin is rejected in a when:.
+type PredicateEntry struct {
+	Name    string
+	Args    string
+	Summary string
+}
+
+// Predicates returns every `when:` predicate verb, sorted by name. It is the
+// enumeration surface for documentation generators (dwe docs llms-txt); the
+// EvalBuiltin switch below stays the evaluator, and a test pins the two lists
+// to each other so a new verb cannot land undocumented.
+func Predicates() []PredicateEntry {
+	return []PredicateEntry{
+		{Name: "dir-empty", Args: "<path>", Summary: "path is missing or is an empty directory"},
+		{Name: "dir-exists", Args: "<path>", Summary: "path is an existing directory"},
+		{Name: "dir-missing", Args: "<path>", Summary: "path does not exist or is not a directory"},
+		{Name: "dir-not-empty", Args: "<path>", Summary: "path is a directory with at least one entry"},
+		{Name: "file-exists", Args: "<path>", Summary: "path is an existing file"},
+		{Name: "file-missing", Args: "<path>", Summary: "path does not exist or is not a regular file"},
+		{Name: "generated-missing", Args: "<svc> <field>", Summary: "the field is absent from .dwe/generated.yml (gates a first-deploy generate step)"},
+	}
+}
+
 // EvalBuiltin evaluates a builtin predicate string against the filesystem.
 // projectRoot is used as the base for relative paths.
 //

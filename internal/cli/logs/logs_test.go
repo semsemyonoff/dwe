@@ -595,12 +595,16 @@ func TestLogsCmd_JSONMode_TextModeNoTimestamps(t *testing.T) {
 // all records emitted before the signal are present in the NDJSON output.
 func TestLogsCmd_Follow_JSONMode_CancellationClean(t *testing.T) {
 	dir := t.TempDir()
-	// Fake docker: emit 3 timestamped lines then block until killed.
+	// Fake docker: emit 3 timestamped lines, drop a marker file, then block
+	// until killed. The marker is what makes the cancellation point
+	// observable — see the wait loop below.
+	emitted := filepath.Join(dir, "emitted.marker")
 	fakeBin := makeFakeDocker(t, dir, "docker",
 		"#!/bin/sh\n"+
 			"echo '2026-05-29T07:30:00.000000000Z first-line'\n"+
 			"echo '2026-05-29T07:30:01.000000000Z second-line'\n"+
 			"echo '2026-05-29T07:30:02.000000000Z third-line'\n"+
+			"touch "+emitted+"\n"+
 			"sleep 30\n")
 	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
 	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
@@ -616,11 +620,23 @@ func TestLogsCmd_Follow_JSONMode_CancellationClean(t *testing.T) {
 		done <- result{stdout, err}
 	}()
 
-	// Give the fake docker enough time to start and emit its 3 lines before we
-	// cancel. A short window flakes under heavy parallel load (the fake process
-	// may not be scheduled in time); 2s leaves ample headroom — the fake holds
-	// the stream open with `sleep 30`, so the extra wait only adds slack.
-	time.Sleep(2 * time.Second)
+	// Wait for the fake docker to actually finish emitting rather than
+	// guessing at a duration: a fixed sleep flakes under heavy parallel load,
+	// because the fake process may not be scheduled in time. The fake holds
+	// the stream open with `sleep 30`, so waiting longer costs nothing. The
+	// short settle after the marker covers the remaining hop — bytes in the
+	// pipe → scanner → NDJSON writer — which the marker itself cannot observe.
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		if _, err := os.Stat(emitted); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("fake docker never emitted its lines within 20s")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(500 * time.Millisecond)
 	proc, findErr := os.FindProcess(os.Getpid())
 	if findErr != nil {
 		t.Fatalf("os.FindProcess: %v", findErr)

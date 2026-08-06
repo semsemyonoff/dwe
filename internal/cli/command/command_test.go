@@ -422,6 +422,71 @@ func TestPrintCommandInspect_withMessages(t *testing.T) {
 	}
 }
 
+// TestPrintCommandInspect_argsSection covers the "Args (pass-through after
+// `--`)" section — the documented recovery path checkPassThroughArgs points a
+// caller at after rejecting `dwe cmd <id> -- …`, so a dropped prefix/default
+// line or a wrong label would strand exactly the caller it exists to help.
+func TestPrintCommandInspect_argsSection(t *testing.T) {
+	t.Run("with an args policy", func(t *testing.T) {
+		def := &usercommands.CommandDef{
+			ID:   "site.test",
+			Type: usercommands.CommandTypeShell,
+			Cmd:  "npm test ${args}",
+			Args: &usercommands.ArgsSpec{
+				Prefix:  []string{"--"},
+				Default: []string{"--run"},
+			},
+		}
+		buf := &testBuf{}
+		printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "", "")
+		out := buf.String()
+		for _, want := range []string{
+			"Args (pass-through after `--`)",
+			"accepts",
+			"dwe cmd site.test -- <args>",
+			"prefix",
+			"default",
+			"--run",
+		} {
+			if !contains(out, want) {
+				t.Errorf("output missing %q: %s", want, out)
+			}
+		}
+	})
+
+	t.Run("referenced with no args block", func(t *testing.T) {
+		// The section must render on the ${args} reference alone: "does this
+		// accept arguments" must not depend on the author declaring a policy.
+		def := &usercommands.CommandDef{
+			ID:   "site.lint",
+			Type: usercommands.CommandTypeShell,
+			Cmd:  "npm run lint ${args}",
+		}
+		buf := &testBuf{}
+		printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "", "")
+		out := buf.String()
+		if !contains(out, "Args (pass-through after `--`)") {
+			t.Errorf("output missing Args section: %s", out)
+		}
+		if contains(out, "prefix") || contains(out, "default") {
+			t.Errorf("output should carry no prefix/default line without an args block: %s", out)
+		}
+	})
+
+	t.Run("no ${args} reference renders nothing", func(t *testing.T) {
+		def := &usercommands.CommandDef{
+			ID:   "site.build",
+			Type: usercommands.CommandTypeShell,
+			Cmd:  "npm run build",
+		}
+		buf := &testBuf{}
+		printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "", "")
+		if out := buf.String(); contains(out, "Args (pass-through") {
+			t.Errorf("output should have no Args section: %s", out)
+		}
+	})
+}
+
 func TestPrintCommandInspect_daemonStart_derivedFromLine(t *testing.T) {
 	autoRemove := true
 	def := &usercommands.CommandDef{
@@ -874,6 +939,28 @@ func TestCommandCmd_InspectWithoutID_Error(t *testing.T) {
 		t.Fatal("expected error when --inspect is set without an id")
 	}
 	if !contains(err.Error(), "id required with --inspect") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestCommandCmd_InspectRejectsPassThroughArgs pins the inspect route's own
+// pass-through guard. The run route rejects unsupported extra arguments
+// per-command via checkPassThroughArgs, but inspect never reaches that call —
+// without this check `dwe cmd -i site.test -- --run x` would print the
+// definition and drop `--run x` on the floor, which is exactly the silent
+// discard the `--` contract exists to prevent.
+func TestCommandCmd_InspectRejectsPassThroughArgs(t *testing.T) {
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
+	parent := &cobra.Command{Use: "test"}
+	parent.AddCommand(NewCmd("", flags))
+	parent.SetArgs([]string{"commands", "--inspect", "site.test", "--", "--run", "x"})
+	parent.SetOut(&testBuf{})
+	parent.SetErr(&testBuf{})
+	err := parent.Execute()
+	if err == nil {
+		t.Fatal("expected an error for --inspect with pass-through args")
+	}
+	if !contains(err.Error(), "takes no arguments after `--`") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1384,5 +1471,44 @@ func TestMergeAnswers_SkippedFieldPreservesDefault(t *testing.T) {
 	out := mergeAnswers(res, defs, prev)
 	if out["env"] != "staging" {
 		t.Errorf("expected env=staging preserved from prev, got %q", out["env"])
+	}
+}
+
+func TestPrintCommandInspect_argvAppendFrom(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		def  *usercommands.CommandDef
+	}{
+		{
+			name: "shell",
+			def: &usercommands.CommandDef{
+				ID:             "quality.staged",
+				Type:           usercommands.CommandTypeShell,
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+		{
+			name: "service_exec",
+			def: &usercommands.CommandDef{
+				ID:             "app.staged",
+				Type:           usercommands.CommandTypeServiceExec,
+				Service:        "app",
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &testBuf{}
+			printInspect(buf, tc.def, nil, nil, i18n.NopTranslator{}, "", "")
+			out := buf.String()
+			if !contains(out, "argv_append_from") {
+				t.Errorf("output should name the field:\n%s", out)
+			}
+			if !contains(out, "git diff --name-only --cached") {
+				t.Errorf("output should contain the expression:\n%s", out)
+			}
+		})
 	}
 }

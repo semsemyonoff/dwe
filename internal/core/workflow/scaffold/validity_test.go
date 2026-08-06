@@ -7,6 +7,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	validatecfg "github.com/semsemyonoff/dwe/internal/core/validate/config"
+	validatetpl "github.com/semsemyonoff/dwe/internal/core/validate/templates"
 )
 
 // defaultValidityOptions mirrors the defaults a real `dwe init` produces: a
@@ -26,10 +27,17 @@ func defaultValidityOptions(target string) Options {
 	}
 }
 
-// runConfigValidators runs every config-domain validator over a scaffolded
-// project and returns any error-severity diagnostics. This is the load-bearing
-// guard: it proves the active-minimal service.yml and the fully-commented inert
-// files (deploy/lifecycle/info/docker) load and validate clean on first run.
+// runConfigValidators runs every config-domain and templates-domain validator
+// over a scaffolded project and returns every warning- or error-severity
+// diagnostic. This is the load-bearing guard: it proves the active service.yml
+// (hub triplet, icon, info.title) and the fully-commented inert files
+// (deploy/lifecycle/info/docker) load and validate clean on first run.
+//
+// The criterion is zero config + templates diagnostics, not merely zero
+// errors — a fresh scaffold that warns is exactly the noise this branch is
+// removing. The env domain is deliberately excluded: it checks the HOST (a
+// declared port that happens to be busy is a legitimate error), so including
+// it would make the check host-dependent.
 func runConfigValidators(t *testing.T, dir string, cfg *config.DweConfig) []validate.Diagnostic {
 	t.Helper()
 	ctx := validate.Context{
@@ -37,15 +45,16 @@ func runConfigValidators(t *testing.T, dir string, cfg *config.DweConfig) []vali
 		ConfigPath:  filepath.Join(dir, "workspace.yml"),
 		Cfg:         cfg,
 	}
-	var errs []validate.Diagnostic
-	for _, v := range validatecfg.All() {
+	validators := append(validatecfg.All(), validatetpl.All()...)
+	var found []validate.Diagnostic
+	for _, v := range validators {
 		for _, d := range v.Run(ctx) {
-			if d.Severity == validate.SeverityError {
-				errs = append(errs, d)
+			if d.Severity == validate.SeverityError || d.Severity == validate.SeverityWarning {
+				found = append(found, d)
 			}
 		}
 	}
-	return errs
+	return found
 }
 
 // TestScaffold_FreshProjectLoads is the integration guard from the plan: a

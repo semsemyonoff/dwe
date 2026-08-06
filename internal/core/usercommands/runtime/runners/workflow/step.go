@@ -81,6 +81,10 @@ func (r *Runner) runCommandStep(ctx context.Context, rc spec.RunContext, stepIdx
 			rc.Cmd.ID, stepIdx, step.Command, err)
 	}
 
+	// Args is deliberately not set here: this context is handed to RunCommand
+	// with subCtx.Cmd = cmd, and RunCommand normalizes ${args} defaults for
+	// every dispatcher in one place. A workflow step never supplies
+	// pass-through arguments of its own.
 	renderCtx := &tpl.RenderContext{
 		Params:  resolvedParams,
 		Context: resolvedCtx,

@@ -79,6 +79,7 @@ When the docs say *"command template space"* this is the set of expressions avai
 | `${param.<name>}` | Resolved param |
 | `${context.<name>}` | Resolved context value |
 | `${files.<id>.path}` | Absolute path of a file artefact |
+| `${args}` | Pass-through arguments the caller wrote after `--` — see [Pass-through arguments](directives.md#pass-through-arguments). Valid in `cmd:`/`argv:` of `shell` / `dwe` / `service_exec` / `service_run` |
 | `${host.uid}` / `${host.gid}` | Effective UID/GID for container `--user` |
 | `{{ .Raw.x.y }}` | Direct dot access on the merged config |
 | `{{ .Params.<name> }}` | Direct dot access on params |

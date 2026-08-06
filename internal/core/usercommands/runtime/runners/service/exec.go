@@ -42,16 +42,11 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 		mode = model.DefaultExecMode
 	}
 
-	argv, err := buildServiceArgv(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
-	if err != nil {
-		return nil, err
-	}
-
+	// The container probe runs BEFORE the argv is built, because building it may
+	// execute the command's argv_append_from expression — a host side effect,
+	// and one whose empty-output result short-circuits with
+	// spec.ErrArgvAppendEmpty ("skipped: nothing to process"). Probing second
+	// would report a stopped service as a clean skip and exit 0.
 	useExec := true
 	switch mode {
 	case model.ExecModeRun:
@@ -73,6 +68,16 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 		if !running {
 			render.NewWriter(runio.StderrOf(rc)).Warning(fmt.Sprintf("service %q is not running — falling back to ephemeral `docker compose run --rm`; state will not persist between invocations", svc))
 		}
+	}
+
+	argv, err := buildServiceArgv(ctx, rc)
+	if err != nil {
+		return nil, err
+	}
+
+	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
+	if err != nil {
+		return nil, err
 	}
 
 	composeArgs, err := buildRenderedComposeArgs(rc)
@@ -204,24 +209,25 @@ func buildRenderedComposeArgs(ctx spec.RunContext) ([]string, error) {
 
 // buildServiceArgv renders the cmd/argv fields of the command and returns the
 // argument slice.
-func buildServiceArgv(ctx spec.RunContext) ([]string, error) {
-	cmd := ctx.Cmd
+//
+// ctx is the cancellation context rather than a decoration: an argv_append_from
+// expression is executed here, on the host, and must die with the invocation.
+func buildServiceArgv(ctx context.Context, rc spec.RunContext) ([]string, error) {
+	cmd := rc.Cmd
 	if cmd.Cmd != "" {
-		rendered, err := tpl.RenderCommand(cmd.Cmd, ctx.Render)
+		script, positional, err := runio.RenderShellCommand(cmd.Cmd, rc.Render)
 		if err != nil {
-			return nil, fmt.Errorf("render cmd: %w", err)
+			return nil, err
 		}
-		return []string{config.ShellBin(ctx.Config), "-c", rendered}, nil
+		// positional is nil unless the template has a ${args} slot; the shell
+		// then binds them to "$@" without them ever entering the program text.
+		return append([]string{config.ShellBin(rc.Config), "-c", script}, positional...), nil
 	}
-	rendered := make([]string, len(cmd.Argv))
-	for i, arg := range cmd.Argv {
-		r, err := tpl.RenderCommand(arg, ctx.Render)
-		if err != nil {
-			return nil, fmt.Errorf("render argv[%d]: %w", i, err)
-		}
-		rendered[i] = r
+	argv, err := runio.RenderArgvWithArgs(cmd.Argv, rc.Render)
+	if err != nil {
+		return nil, err
 	}
-	return rendered, nil
+	return runio.AppendArgvFrom(ctx, rc, argv)
 }
 
 // buildDockerComposeCmd assembles the full docker compose exec/run command.

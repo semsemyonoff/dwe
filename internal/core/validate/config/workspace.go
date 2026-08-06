@@ -738,7 +738,7 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
-	infoCfg, err := config.LoadInfoConfig(infoPath)
+	infoCfg, infoState, err := config.LoadInfoConfigWithState(infoPath)
 	if err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
@@ -750,14 +750,38 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	// Only emit OK when the file actually exists (missing file already emitted Info above)
+	// A present file can decode to one of three states (mirroring the fallback
+	// LoadInfoConfig applies): all-comment/empty (the built-in dashboard is
+	// silently active, same as an absent file — this must NOT read as "OK", an
+	// agent that sees SeverityOK has no reason to look further), a deliberate
+	// `sections: []` (dashboard intentionally empty), or an authored dashboard
+	// (the only state that actually earns OK).
 	if fileExists {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityOK,
-			Domain:   "config",
-			Target:   "config.info",
-			File:     relPath(ctx.ProjectRoot, infoPath),
-		})
+		switch infoState {
+		case config.InfoStateDefaultFallback:
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+				Message:  "info.yml has no active content (all comments or empty) — built-in dashboard is active",
+			})
+		case config.InfoStateDeliberatelyEmpty:
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+				Message:  "info.yml has active keys but declares no sections — dashboard is deliberately empty",
+			})
+		default:
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityOK,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+			})
+		}
 	}
 
 	// Validate auto-block rules that need cfg.Services
@@ -1193,13 +1217,10 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityInfo,
-				Domain:   "config",
-				Target:   "config.reset",
-				File:     relPath(ctx.ProjectRoot, resetPath),
-				Message:  "no reset.yml",
-			})
+			// Unlike deploy.yml/lifecycle.yml, reset.yml is never shipped by the
+			// scaffold — its absence is the universal default state, not a
+			// deliberate opt-out, so reporting it here would be pure noise on
+			// nearly every project.
 		} else {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,

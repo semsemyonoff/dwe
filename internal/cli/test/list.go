@@ -16,7 +16,18 @@ func newTestListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "List available integration test scenarios",
 		Long: `List every scenario file under workspace/tests/*.yml with its description.
 
-An absent workspace/tests/ directory is not an error — it simply lists nothing.`,
+An absent workspace/tests/ directory is not an error — it simply lists nothing.
+
+With --output json every scenario also carries a cost_profile: enabled service
+count (after the scenario's env.services overlay), compose services that build,
+external images to pull, the largest healthcheck start_period, shared volumes,
+non-blocking compose isolation findings, and the number of steps the scenario
+would run project-authored code with on the host, outside the container sandbox
+(type: shell, the shell builtin, a type: command resolving to a host command, a
+type: dwe re-entering a pipeline, and shell when: / check: conditions). Facts
+only — no cheap/expensive verdict; and it reports whether there IS a build, not
+what the build costs (layer-cache warmth is not modelled). The profile is
+omitted when the project config does not load.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -30,6 +41,11 @@ An absent workspace/tests/ directory is not an error — it simply lists nothing
 type testListEntryJSON struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	// CostProfile is omitted when the project state it needs is unavailable
+	// (config, docker.yml or a deploy pipeline that does not load). `list`
+	// must keep working on a broken config, so an absent profile is never an
+	// error — see newCostProfiler.
+	CostProfile *testCostProfileJSON `json:"cost_profile,omitempty"`
 }
 
 // testListJSON is the JSON payload for `dwe test list --output json`.
@@ -44,6 +60,13 @@ func runTestList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		return cmdctx.ErrWrap("scenario_list_failed", err)
 	}
 
+	// The cost profile is a JSON-only payload, so the text path keeps `list`'s
+	// original shape exactly: no config load, no docker.yml, no pipeline load.
+	var profiler *costProfiler
+	if flags.Output == "json" && len(names) > 0 {
+		profiler = newCostProfiler(baseDir, flags.ConfigPath)
+	}
+
 	entries := make([]testListEntryJSON, 0, len(names))
 	for _, name := range names {
 		path, err := envtest.ScenarioPath(baseDir, name)
@@ -54,7 +77,11 @@ func runTestList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		if err != nil {
 			return cmdctx.ErrWrap("scenario_load_failed", err).WithDetail("scenario", name)
 		}
-		entries = append(entries, testListEntryJSON{Name: name, Description: scn.Description})
+		entries = append(entries, testListEntryJSON{
+			Name:        name,
+			Description: scn.Description,
+			CostProfile: profiler.profile(scn),
+		})
 	}
 
 	color := writerIsTTY(cmd.OutOrStdout())

@@ -92,6 +92,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, projectRoot string) []validate.Diagnostic {
 	services := cfg.Services
 	var diags []validate.Diagnostic
+	_, gitExplicit := svc.GitRenderEnabledExplicit()
 
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
@@ -125,14 +126,23 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 		}}
 	}
 	if !found {
+		if !gitExplicit {
+			// Implicit default (app type, no render.git key) + absent pack: the
+			// scaffold ships with no template pack, so this is expected, not
+			// broken. Warn only once the user has opted in explicitly.
+			return nil
+		}
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
+			// Top-level render: — see the same note in ai.go: service.yml's
+			// strict per-type field allowlist rejects a `services` key, so the
+			// qualified path would break the project if pasted verbatim.
 			Hint: fmt.Sprintf(
 				"create workspace/templates/git/%s or workspace/templates/git/default\n"+
-					"or set services.%s.render.git.enabled: false in services.yml",
+					"or set render.git.enabled: false in workspace/services/%s/service.yml",
 				name, name,
 			),
 		}}
@@ -210,13 +220,19 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 			Hint:     "render git will fail; check for unsupported symlinks in the service directory",
 		})
 	case status == git.DirMissing:
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityInfo,
-			Domain:   "templates",
-			Target:   fmt.Sprintf("templates.git:%s", name),
-			Message:  "no src/.git in service dir; render will be skipped",
-			Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove render.git.enabled",
-		})
+		// Implicit default (app type, no render.git key) + no src/.git yet: the
+		// repo may still be populated by the deploy pipeline (e.g. a clone step)
+		// before render ever runs, so flagging it here is premature. Report only
+		// once the user has opted in explicitly.
+		if gitExplicit {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "templates",
+				Target:   fmt.Sprintf("templates.git:%s", name),
+				Message:  "no src/.git in service dir; render will be skipped",
+				Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove render.git.enabled",
+			})
+		}
 	case status == git.DirWorktree:
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityInfo,

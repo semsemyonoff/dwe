@@ -344,7 +344,11 @@ When `workspace/info.yml` does not exist, a built-in default configuration is us
 
 This allows projects without an `info.yml` to immediately see a sensible dashboard showing all services' connectivity, constructed entirely from the service definitions in `workspace/services/*/service.yml`. Services contribute details via their `info:` blocks (title, paths, host/port keys). No `info.yml` editing is required to get started.
 
-To customize the dashboard, create a `workspace/info.yml` with your own `sections` and `items`. The built-in default is not used if the file exists, even if it contains no `auto-urls` or `auto-hosts` items.
+An **empty or all-comment** `workspace/info.yml` — one that decodes no top-level keys at all — is treated exactly like an absent file, so the built-in default stays active. This is what the scaffolded (fully commented) `info.yml` relies on.
+
+To customize the dashboard, create a `workspace/info.yml` with your own `sections` and `items`. Once the file decodes any top-level key it is treated as authored and the built-in default is not used: a deliberate `sections: []` renders an empty dashboard rather than restoring the default, and a file carrying only `footer: true` is honoured as written.
+
+`dwe validate` reports these three states separately under `config.info` — inert (default silently active) and `sections: []` at `Info` severity, an authored dashboard with real content at `OK`.
 
 ## Example: full info.yml
 

@@ -86,7 +86,7 @@ phases:
           type: builtin|shell|template
           cmd: <string>            # for builtin/shell
           expr: <string>           # for template
-        check:                     # optional: post-condition (typed action)
+        check:                     # optional: post-condition (typed action, or the scalar `auto`)
           type: shell|dwe|command|builtin
           cmd: <value>
           with:                    # optional: parameters
@@ -139,7 +139,7 @@ phases:
 | `cmd` | string | Command payload (required); content depends on `type` |
 | `with` | mapping | Parameters passed to command or builtin (optional; required for most builtins) |
 | `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy. See [Conditions](conditions.md). |
-| `check` | typed action | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. See [Conditions](conditions.md). |
+| `check` | typed action, or the scalar `auto` | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. See [Conditions](conditions.md). |
 | `files_gate` | typed gate | Pre-condition based on file existence/absence from a command's `files:` block. Step skipped if unsatisfied. See [`files_gate:`](conditions.md#files_gate-pre-condition-for-files). |
 | `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](../lifecycle.md). When the step body succeeds but `check:` fails and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
 | `skip_confirm` | bool | When `true`, bypasses confirmation prompts for this step only — equivalent to a per-step `-y` / `--yes`. Propagates to the step body and its `check:` action. ORed with the pipeline-wide skip-confirm flag, so the step is non-interactive whenever either is set. Useful when most of the pipeline is interactive but one step (e.g. a `confirm` builtin guarding an idempotent action, or a command that re-prompts internally) should always proceed. |
@@ -147,6 +147,27 @@ phases:
 | `timeout` | duration string | Optional wall-clock budget for this step's body, e.g. `30s`, `2m`. **Opt-in — no implicit default anywhere**: absent or `timeout: 0` is unbounded, exactly as if the field didn't exist. A positive value bounds only this one step (or, inside a `parallel:` group, this one substep) via `context.WithTimeout` around the step body; the `check:` action is not bounded by it. The timeout enforces through context cancellation, so it only bounds a body that honors `ctx` — `type: shell`/`type: dwe` subprocesses (terminated with SIGTERM, then force-killed after a grace period), ctx-aware builtins (`http_check`, `docker_wait_healthy`, `tcp_reachable`, …), and `type: command` steps whose own work honors `ctx`. A body blocked on interactive input (e.g. a `confirm` builtin waiting on stdin) is **not** force-interrupted — the deadline fires but the goroutine stays blocked until input arrives; a timeout on a human prompt is meaningless anyway, so this is an accepted limitation, not a bug. A negative duration (`"-1s"`) is rejected during pipeline resolution. General engine field: honored the same way in `deploy.yml`, `reset.yml`, `lifecycle.yml`, and `workspace/tests/*.yml` scenario steps. |
 
 A step may also declare a `parallel:` block instead of leaf body fields (`type` / `cmd`). See [Parallel step groups](examples.md#parallel-step-groups).
+
+## Templates in step fields
+
+`cmd`, the string leaves of `with`, `check`, `timeout`, and shell `when:` are rendered at plan-resolution time — before the step is displayed or executed. A `${...}` reference with a known head (`vars`, `services`, `project`, …) is substituted with its actual value; `dwe deploy plan` therefore prints what will actually run, not the literal `${vars.*}` text from `deploy.yml`. A `${...}` with an unknown head (a shell-style `${HOME}`, a typo) — or a head-only one with no dot-path, such as a `${host}` / `${files}` shell variable — is left as a literal and, if it survives into the plan output, is called out with a trailing `[unresolved: ${...}]` annotation (also carried as the `unresolved` field in `--output json`) — that annotation is a display-only hint and is never added to `--format shell`, which must stay directly executable.
+
+**A step field carrying a known-head `${...}` must not also contain a literal `{{ }}`.** Substitution runs the field through the same Go-template engine the `${...}` shorthand compiles down to, so a `docker` format string in the same command — `cmd: 'docker inspect -f "{{.State.Status}}" ${vars.container}'` — is evaluated as a template and fails the resolve with `can't evaluate field State`. The whole `dwe deploy plan` / `dwe deploy run` stops there. Either keep the two apart (put the format string in a script, or the `${vars.*}` value in a shell variable), or escape the braces as `{{"{{"}}`. A `cmd`, `check`, `timeout` or `when:` field with **no** known-head reference never enters the engine at all, so a plain `docker inspect -f "{{.State.Status}}" app` — or one using only a shell variable like `${CONTAINER}` — is passed through untouched.
+
+The string leaves of `with:` are the one exception, and only where the value ends up in a user command: a `type: command` step or action, a `files_gate:`'s own `with:`, and the step's `with:` when a `files_gate:` declares none of its own (the gate then inherits the step's map as its parameters). There a leaf is rendered whenever it carries a known-head `${...}` **or** a literal `{{`, because that `with:` value has always been passed through this template engine before reaching the command. So `with: {host: '{{ resolve .Raw "vars.db.host" }}'}` still resolves, and the mixed-form restriction above applies to those leaves too.
+
+A `type: builtin` `with:` map keeps the narrow gate — a known-head `${...}` is substituted, a literal `{{ }}` is passed through untouched. That holds even when a `files_gate:` inherits the map: the widening above applies to every other step type, never to a builtin's parameters. Builtins consume their `with:` values raw and some render them against a *different* template space: `message` renders its `text` as a Go template over `DweConfig` (`{{ .Project.Name }}`), and the `shell` predicate takes `docker inspect -f "{{.State.Status}}"` format strings. Both keep working unchanged.
+
+**Only project-config paths and `${host.uid}` / `${host.gid}` resolve in a pipeline step.** The namespaces that belong to a user command or a config render pass — `${param.*}`, `${context.*}`, `${files.*}`, `${generated.*}` and `${args}` — have no source here, so referencing one is a resolve error naming the namespace, not a silent empty substitution:
+
+```
+step "checkout": cmd: template uses ${param.branch}: the "param" namespace has no source here
+(only project config paths and ${host.*} resolve on this path)
+```
+
+`${snapshot.*}` fails the same way outside a snapshot workflow. To pass a value into a step, put it in `vars:` and reference `${vars.*}`; to give a `type: command` step its parameters, use the step's own `with:` map — that map *supplies* the target command's `${param.*}`, it cannot read them. The same rule applies to `workspace/tests/*.yml` scenario steps, which render through the identical substrate.
+
+Because a rendered step's actual text now depends on the `vars:` block, the whole `vars:` block is included in both the project and per-service config hash, so changing a referenced value re-runs the steps that use it instead of the deploy reporting a stale `already up-to-date`. **One-time consequence on upgrade**: this changes the project config hash for every existing project, so the first `dwe deploy run` after upgrading to a dwe version carrying this change re-runs every step once, even without any `vars:` change of your own. The steps are expected to be idempotent and gated, so this is safe, just visible — do not be alarmed if a deploy that has been "up-to-date" for weeks suddenly re-runs everything one time.
 
 ## Post-deploy semantics
 
@@ -211,7 +232,7 @@ See [state/index.md](../state/index.md) for full details on hashing, skip decisi
 
 ## Related commands
 
-- `dwe deploy plan` — show resolved pipeline (with inlined service phases)
+- `dwe deploy plan` — show resolved pipeline (with inlined service phases). `--format table` (default) / `--format shell`, or `--output json` for the machine-readable form: `{service?, phases[]}`, each phase carrying `name` / `service` / `description` / `when` and an ordered `steps[]` of `{name, type, cmd, unresolved[], description, when, files_gate, check, continue_on_error, untracked, parallel{max_concurrent, fail_fast, steps[]}}`. `--output json` supersedes `--format`.
 - `dwe deploy run` — execute deploy pipeline with state tracking
 - `dwe deploy state show` — inspect deploy state journal
 - `dwe deploy state clear` — reset deploy state

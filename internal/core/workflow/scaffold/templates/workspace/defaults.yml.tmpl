@@ -29,6 +29,11 @@ services:
 
 # Declarative .env export rules. Each rule maps a dot-path in the merged config
 # to an environment variable. See `dwe docs show config/workspace`.
+#
+# This is the second half of the port pair: a port declared in
+# workspace/services/<name>/service.yml is display-only until a rule here
+# exports it, so compose.yaml can bind it. Uncomment both together.
+# PROJECT, UID and GID are injected automatically and must not be redeclared.
 # exports:
 #   env:
 #     - name: APP_PORT

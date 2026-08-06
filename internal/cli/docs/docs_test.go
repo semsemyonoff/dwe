@@ -7,6 +7,8 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 
+	"github.com/spf13/cobra"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,6 +62,58 @@ func TestDocsRootWithArgs(t *testing.T) {
 	}
 }
 
+// TestDocsTopicWithoutShow pins the recovery path for the most common wrong
+// guess — `dwe docs <topic>` instead of `dwe docs show <topic>`. dwe's own
+// scaffolded AGENTS.md advertised the wrong form, so this is the shape agents
+// actually type. The `--lang` variant is the load-bearing case: without a --lang
+// flag on the parent, cobra fails flag parsing first and reports "Unknown flag:
+// --lang", blaming the flag instead of the missing subcommand.
+func TestDocsTopicWithoutShow(t *testing.T) {
+	newCmd := func() *cobra.Command {
+		return NewCmd("", &cmdctx.RootFlags{Locale: "en"})
+	}
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"bare topic", []string{"config/workspace"}},
+		{"topic with --lang", []string{"config/workspace", "--lang", "en"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(tc.args)
+
+			err := cmd.Execute()
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), `unknown docs subcommand "config/workspace"`)
+			require.Contains(t, err.Error(), "dwe docs show config/workspace",
+				"the error must name the exact command that works")
+			require.Contains(t, err.Error(), "dwe docs list")
+			require.NotContains(t, err.Error(), "Unknown flag",
+				"the flag must not preempt the subcommand diagnosis")
+		})
+	}
+
+	t.Run("lists real subcommands so a typo is recoverable too", func(t *testing.T) {
+		cmd := newCmd()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"serch"})
+
+		err := cmd.Execute()
+
+		require.Error(t, err)
+		for _, name := range []string{"show", "list", "search", "llms-txt"} {
+			require.Contains(t, err.Error(), name)
+		}
+	})
+}
+
 func TestDocsRootStructure(t *testing.T) {
 	// Test that the docs command is properly configured
 	cmd := NewCmd("", &cmdctx.RootFlags{
@@ -72,7 +126,8 @@ func TestDocsRootStructure(t *testing.T) {
 	require.NotNil(t, cmd)
 	require.Equal(t, "docs", cmd.Use)
 	require.NotNil(t, cmd.RunE)
-	// Verify Args are set to NoArgs by checking that the command accepts no arguments
+	// Args is docsNoTopicArgs — a NoArgs equivalent that diagnoses a bare
+	// `dwe docs <topic>` in the user's terms (see TestDocsTopicWithoutShow).
 	require.NotNil(t, cmd.Args)
 }
 

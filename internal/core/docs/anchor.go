@@ -1,7 +1,6 @@
 package docs
 
 import (
-	"bufio"
 	"bytes"
 	"sort"
 	"strings"
@@ -16,6 +15,9 @@ import (
 // slug to `on_enable-and-...`, so we cannot use stripInlineMarkdown which
 // strips `_` as emphasis); markdown links and backtick code spans are
 // flattened to their inner text before the character pass.
+//
+// Feed it the RAW heading text. Callers inside this package should not call it
+// directly at all — use parseHeadingSlugLabel, which owns that rule.
 func Slugify(s string) string {
 	s = mdLinkRE.ReplaceAllString(s, "$1")
 	s = mdCodeRE.ReplaceAllString(s, "$1")
@@ -65,12 +67,10 @@ func ParseHeadingSlugs(content []byte) []HeadingInfo {
 		if inFence {
 			continue
 		}
-		lvl, text := parseHeadingLine(stripEOL(line))
+		lvl, slug, text := parseHeadingSlugLabel(stripEOL(line))
 		if lvl < 2 || lvl > 3 {
 			continue
 		}
-		text = stripInlineMarkdown(text)
-		slug := Slugify(text)
 		if slug == "" {
 			continue
 		}
@@ -115,12 +115,8 @@ func SliceByAnchor(content []byte, anchor string) (sliced []byte, matchedSlug st
 		if inFence {
 			continue
 		}
-		lvl, text := parseHeadingLine(stripEOL(line))
-		if lvl == 0 {
-			continue
-		}
-		slug := Slugify(text)
-		if slug == "" {
+		lvl, slug, _ := parseHeadingSlugLabel(stripEOL(line))
+		if lvl == 0 || slug == "" {
 			continue
 		}
 		headings = append(headings, heading{level: lvl, slug: slug, lineIdx: i, startOff: lineStart})
@@ -227,29 +223,36 @@ func sliceSection(content []byte, start, end int) []byte {
 // splitLinesKeepEOL returns the input split into lines, each retaining its
 // trailing newline (if any). The concatenation of the returned slices equals
 // the input exactly — this is what lets sliceSection use raw byte offsets.
+//
+// Deliberately not bufio.Scanner: the content is already fully in memory, and a
+// Scanner silently STOPS at the first line longer than its buffer cap (the
+// error only shows up in scanner.Err(), which is easy to forget). Project docs
+// are user-owned markdown, so one minified or base64 line would have truncated
+// the document — breaking the concatenation invariant above, and silently
+// dropping every later heading/match for the callers that share this splitter.
 func splitLinesKeepEOL(b []byte) []string {
-	scanner := bufio.NewScanner(bytes.NewReader(b))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	// Default ScanLines drops the newline; use a custom splitter that keeps it.
-	scanner.Split(scanLinesKeepEOL)
 	lines := make([]string, 0, 64)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	for len(b) > 0 {
+		i := bytes.IndexByte(b, '\n')
+		if i < 0 {
+			lines = append(lines, string(b))
+			break
+		}
+		lines = append(lines, string(b[:i+1]))
+		b = b[i+1:]
 	}
 	return lines
 }
 
-func scanLinesKeepEOL(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
+// splitLines is splitLinesKeepEOL with the line terminator removed, matching
+// bufio.ScanLines' semantics (trailing "\n", and a "\r" immediately before it,
+// are dropped) minus the token size limit.
+func splitLines(b []byte) []string {
+	lines := splitLinesKeepEOL(b)
+	for i, l := range lines {
+		lines[i] = stripEOL(l)
 	}
-	if i := bytes.IndexByte(data, '\n'); i >= 0 {
-		return i + 1, data[:i+1], nil
-	}
-	if atEOF {
-		return len(data), data, nil
-	}
-	return 0, nil, nil
+	return lines
 }
 
 func stripEOL(s string) string {

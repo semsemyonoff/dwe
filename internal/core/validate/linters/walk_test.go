@@ -355,3 +355,26 @@ func slicesEqual(a, b []string) bool {
 	}
 	return true
 }
+
+// TestCollectFilesDweRuntimeDirSkipped pins that dwe's own runtime state is not
+// linted. A kept `dwe test` environment holds a full second copy of the project
+// under .dwe/tests/runs/<scenario>/, which put the cloned service sources back
+// in scope through a path the root-`services/` rule cannot match — an observed
+// `dwe validate` run reported hadolint findings against
+// .dwe/tests/runs/smoke/services/backend/src/Dockerfile.
+func TestCollectFilesDweRuntimeDirSkipped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".dwe", "tests", "runs", "smoke", "services", "backend", "src", "Dockerfile"), "FROM scratch\n")
+	writeFile(t, filepath.Join(root, "images", "api", "Dockerfile"), "FROM scratch\n")
+
+	files, _, err := collectFiles(root, []string{"."}, nil, []string{"Dockerfile"}, true)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	got := relNames(t, root, files)
+	want := []string{"images/api/Dockerfile"}
+	if !slicesEqual(got, want) {
+		t.Errorf("files: want %v (.dwe skipped), got %v", want, got)
+	}
+}

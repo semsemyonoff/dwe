@@ -66,7 +66,15 @@ func ResolvePhaseSteps(cfg *config.DweConfig, reg *registry.Registry, phase conf
 	var phaseRuntimeWhen *condition.Condition
 	if phase.When != nil {
 		if phase.When.IsRuntime() {
-			phaseRuntimeWhen = phase.When
+			rendered, err := renderWhen(phase.When, renderContextFor(cfg))
+			if err != nil {
+				prefix := phase.Name
+				if service != "" {
+					prefix = service + "/" + prefix
+				}
+				return nil, fmt.Errorf("phase %s: rendering when: %w", prefix, err)
+			}
+			phaseRuntimeWhen = rendered
 		} else if phase.When.Type == condition.TypeTemplate {
 			ok, err := tpl.EvalCondition(phase.When.Expr, cfg)
 			if err != nil {
@@ -117,12 +125,40 @@ func ResolvePhaseSteps(cfg *config.DweConfig, reg *registry.Registry, phase conf
 // resolveLeafStep resolves a single leaf-style DeployStep. Returns ok=false when
 // the step's template `when:` evaluates to false (step is filtered out).
 func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (ResolvedStep, bool, error) {
+	prefix := stepPrefix(phase, service, step.Name)
+	// Render cmd/with/check/files_gate/timeout into a copy before anything
+	// else reads them — builtin.Validate, spec.Validate and parseStepTimeout
+	// below must all see the substituted values, and a RenderCommand error
+	// here fails the resolve rather than reaching sh -c as a literal
+	// "Bad substitution" at runtime.
+	rendered, err := renderStepFields(step, renderContextFor(cfg))
+	if err != nil {
+		return ResolvedStep{}, false, fmt.Errorf("step %s: rendering template: %w", prefix, err)
+	}
+	step = rendered
+
 	stepRuntimeWhen, keep, err := resolveStepWhen(cfg, step, stepPrefix(phase, service, step.Name))
 	if err != nil {
 		return ResolvedStep{}, false, err
 	}
 	if !keep {
 		return ResolvedStep{}, false, nil
+	}
+	// Rewrite the `check: auto` sentinel into a real action before the builtin
+	// validation below — otherwise "auto" would either reach the builtin
+	// registry as a name or skip validation of the derived check entirely. It
+	// must also come after the render above and after resolveStepWhen, so the
+	// inverse is built from the very string the runtime when: evaluation sees.
+	// step is a local copy, so assigning a fresh pointer here never mutates the
+	// loaded config (a second resolve over the same config must not produce
+	// "! ( ! ( ... ) )", and ProjectConfigHash must not depend on deploy scope).
+	autoCheck := config.IsAutoCheck(step.Check)
+	if autoCheck {
+		derived, derr := ResolveAutoCheck(stepRuntimeWhen)
+		if derr != nil {
+			return ResolvedStep{}, false, fmt.Errorf("step %s: %w", prefix, derr)
+		}
+		step.Check = derived
 	}
 	if step.Type == "builtin" {
 		// Engine-synthetic phases (underscore-prefixed) may use KindInternal builtins.
@@ -168,6 +204,7 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 		PhaseWhen:   phaseRuntimeWhen,
 		FilesGate:   step.FilesGate,
 		Timeout:     timeout,
+		AutoCheck:   autoCheck,
 	}, true, nil
 }
 
@@ -274,17 +311,23 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 }
 
 // resolveStepWhen evaluates a step's `when:` at plan time. A runtime condition
-// is returned as runtimeWhen (to attach to the resolved step) with keep=true; a
-// template condition is evaluated immediately and keep reports whether the step
-// survives filtering (keep=false when it evaluates to false). prefix names the
-// step for error messages. when: nil or a non-template/non-runtime condition
-// yields (nil, true, nil).
+// is rendered into a copy (Task 2b: ${...} in a shell/builtin when.cmd is
+// substituted the same as cmd/with/check) and returned as runtimeWhen (to
+// attach to the resolved step) with keep=true; a template condition is
+// evaluated immediately and keep reports whether the step survives filtering
+// (keep=false when it evaluates to false). prefix names the step for error
+// messages. when: nil or a non-template/non-runtime condition yields
+// (nil, true, nil).
 func resolveStepWhen(cfg *config.DweConfig, step config.DeployStep, prefix string) (runtimeWhen *condition.Condition, keep bool, err error) {
 	if step.When == nil {
 		return nil, true, nil
 	}
 	if step.When.IsRuntime() {
-		return step.When, true, nil
+		rendered, rerr := renderWhen(step.When, renderContextFor(cfg))
+		if rerr != nil {
+			return nil, false, fmt.Errorf("step %s: rendering when: %w", prefix, rerr)
+		}
+		return rendered, true, nil
 	}
 	if step.When.Type == condition.TypeTemplate {
 		ok, evalErr := tpl.EvalCondition(step.When.Expr, cfg)

@@ -34,6 +34,7 @@ type FileCandidate = model.FileCandidate
 type FileSpec = model.FileSpec
 type GroupMeta = model.GroupMeta
 type ParamDef = model.ParamDef
+type ArgsSpec = model.ArgsSpec
 type ContextDef = model.ContextDef
 type ScriptDef = model.ScriptDef
 type WorkflowStep = model.WorkflowStep
@@ -246,6 +247,20 @@ func BuildRunContext(
 	workDir string,
 ) (RunContext, error) {
 	return runtime.BuildRunContext(cfg, reg, def, with, workDir)
+}
+
+// BuildPreRenderedRunContext is BuildRunContext for a with: map that has
+// already been rendered through tpl.RenderCommand — the pipeline, which
+// renders step cmd/with/check leaves once at resolve time. See
+// runtime.BuildPreRenderedRunContext for why the second render must not run.
+func BuildPreRenderedRunContext(
+	cfg *config.DweConfig,
+	reg *Registry,
+	def *CommandDef,
+	with map[string]any,
+	workDir string,
+) (RunContext, error) {
+	return runtime.BuildPreRenderedRunContext(cfg, reg, def, with, workDir)
 }
 
 // ComputeFilePathsProbe probes a subset of files to check for existence without

@@ -22,9 +22,9 @@ type Layer struct {
 // LoadLayers reads the project config layers in precedence order (lowest
 // first): workspace.yml (required) then the optional workspace/defaults.yml and
 // workspace/local.yml. Absent optional layers are skipped; a present-but-empty
-// file yields a nil Data map. The returned slice always begins with the
-// workspace.yml layer. Error wording matches LoadConfig's historical reads so
-// the two stay byte-identical.
+// file yields an empty (non-nil) Data map. The returned slice always begins
+// with the workspace.yml layer. Error wording matches LoadConfig's historical
+// reads so the two stay byte-identical.
 func LoadLayers(workspacePath string) ([]Layer, error) {
 	baseDir := filepath.Dir(workspacePath)
 	var layers []Layer

@@ -24,10 +24,21 @@ type Usage struct {
 	Kind string
 	// Text is the trimmed source line containing the reference.
 	Text string
+	// Ref is the full referenced dot-path (e.g. "vars.db.host"). It is set ONLY
+	// by EnumerateAllUsages, whose consumer (the config.template_refs
+	// validator) resolves each distinct reference. The query-driven ScanUsages
+	// leaves it empty on purpose: Ref participates in the dedupe key, so
+	// populating it there would split one source line carrying two refs that
+	// both match the query (`${vars.db.host} ${vars.db.port}` under
+	// `dwe vars inspect vars.db`) into two byte-identical rows — Ref is not
+	// rendered anywhere, so the user would see the same line twice and an
+	// inflated "Usages (N)" count.
+	Ref string
 }
 
 // ScanResult is the ordered set of usages for a queried var. It is sorted by
-// file then line then kind, and de-duplicated on (File, Line, Kind, Text).
+// file then line then kind then text, and de-duplicated on the whole Usage
+// (Ref is empty on this path, so effectively on File/Line/Kind/Text).
 type ScanResult struct {
 	Usages []Usage
 }
@@ -50,8 +61,10 @@ type ScanResult struct {
 //     those fields render through tpl.Render (the Go-template engine), where a
 //     ${...} literal is inert. Matching both is the safe direction for a
 //     "where is this used" check (over-report, never miss a real reference).
-//     cmd / text / value / title / project_name / confirm: direct scalar fields.
+//     cmd / text / value / title / project_name / confirm / timeout / command /
+//     argv_append_from: direct scalar fields.
 //     env / with: mappings whose *values* are templated.
+//     argv / compose_args: sequences whose *elements* are templated.
 //     when (scalar form only): command/workflow when supports ${...}.
 //   - structuralKeys — from / default_from: the value IS a config dot-path; a
 //     "vars." prefix is a reference (no ${...} wrapper).
@@ -84,11 +97,34 @@ var (
 		"project_name": true,
 		"confirm":      true,
 		"when":         true, // scalar form only; mapping form handled separately
+		// timeout / command are pipeline step fields the resolve-time renderer
+		// substitutes alongside cmd (pipeline.renderStepFields: step.Timeout and
+		// files_gate.command). Leaving them out let a ${vars.typo} there render
+		// to "" with nothing reporting it — a silently unbounded step, or a gate
+		// silently falling back to probing the step's own cmd.
+		"timeout": true,
+		"command": true,
+		// argv_append_from is a command-file scalar rendered through the same
+		// ${...} substrate as cmd (runio.RenderArgvAppendFrom). A ${vars.typo}
+		// there renders to "" and silently changes which items the expression
+		// computes, so it has to be enumerated like every other rendered field.
+		"argv_append_from": true,
 	}
 	// templatedMapKeys are mappings whose every value scalar is templated.
 	templatedMapKeys = map[string]bool{
 		"env":  true,
 		"with": true,
+	}
+	// templatedSeqKeys are sequences whose every element scalar is templated.
+	// argv elements render through tpl.RenderCommand one by one
+	// (runio.RenderArgvWithArgs) and compose_args the same way
+	// (service.buildRenderedComposeArgs), so a ${vars.typo} in either renders to
+	// "" exactly like one in cmd: — silently dropping an argument or a compose
+	// flag. Enumerating them is what lets config.template_refs and
+	// `dwe vars inspect` see those references at all.
+	templatedSeqKeys = map[string]bool{
+		"argv":         true,
+		"compose_args": true,
 	}
 	structuralKeys = map[string]bool{
 		"from":         true,
@@ -120,32 +156,65 @@ func ScanUsages(projectRoot, queryPath string) (ScanResult, error) {
 	if queryPath == "" || !strings.HasPrefix(queryPath, VarsPrefix) {
 		return res, nil
 	}
+	usages, err := scanProject(projectRoot, queryPath, false)
+	if err != nil {
+		return res, err
+	}
+	res.Usages = usages
+	return res, nil
+}
 
+// EnumerateAllUsages walks a project's workspace tree and returns every static
+// ${head.path} shorthand reference (internal/shared/tpl.VarPattern) across the
+// fields the runtime actually renders (cmd, argv, compose_args,
+// argv_append_from, with, env, text, value, title, project_name, confirm,
+// timeout, command, scalar when) — regardless of head namespace — with the
+// referenced path recorded in Usage.Ref.
+//
+// This is an enumeration primitive, not a filter widening of ScanUsages:
+// ScanUsages is query-driven (it looks for one known path and does not carry
+// the referenced path on Usage), while a validator checking resolvability of
+// arbitrary references needs the inverse — every reference, with its path.
+//
+// Only the ${...} shorthand is enumerated. The structural from:/default_from:
+// dot-path and the Go-template bare `vars.x` token form (e.g.
+// {{ resolve .Raw "vars.x" }}) are intentionally out of scope: they are
+// vars-specific idioms ScanUsages already covers for the query-driven case,
+// and CompileVarSyntax (what Task 2's pipeline rendering actually invokes)
+// only ever rewrites the ${...} shorthand.
+func EnumerateAllUsages(projectRoot string) ([]Usage, error) {
+	return scanProject(projectRoot, "", true)
+}
+
+// scanProject is the shared walk behind ScanUsages (matchAll=false, filtered
+// to queryPath) and EnumerateAllUsages (matchAll=true, every ${...} shorthand
+// reference regardless of head).
+func scanProject(projectRoot, queryPath string, matchAll bool) ([]Usage, error) {
 	workspace := filepath.Join(projectRoot, "workspace")
 
 	// 1. YAML files under workspace/ — node-walk the templated/structural fields.
 	yamlFiles, err := collectYAMLFiles(workspace)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
+	var usages []Usage
 	for _, f := range yamlFiles {
-		hits, err := scanYAMLFile(projectRoot, f, queryPath)
+		hits, err := scanYAMLFile(projectRoot, f, queryPath, matchAll)
 		if err != nil {
 			// A malformed YAML file is not fatal to the whole scan — skip it.
 			continue
 		}
-		res.Usages = append(res.Usages, hits...)
+		usages = append(usages, hits...)
 	}
 
 	// 2. Config render templates under workspace/templates/config/** — raw text.
-	renderHits, err := scanConfigTemplates(projectRoot, workspace, queryPath)
+	renderHits, err := scanConfigTemplates(projectRoot, workspace, queryPath, matchAll)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
-	res.Usages = append(res.Usages, renderHits...)
+	usages = append(usages, renderHits...)
 
-	res.Usages = dedupeAndSort(res.Usages)
-	return res, nil
+	return dedupeAndSort(usages), nil
 }
 
 // collectYAMLFiles returns every *.yml/*.yaml file under the workspace tree.
@@ -153,6 +222,12 @@ func ScanUsages(projectRoot, queryPath string) (ScanResult, error) {
 // their from:/to: values are template filenames, never vars.* dot-paths, so
 // they never produce a false structural hit; the *.tmpl bodies under those
 // packs are non-YAML and scanned separately as raw text (scanConfigTemplates).
+//
+// Each service's src/ hub is skipped: it is the application's own git checkout
+// (dwe only ever writes RENDERED output into it, never templates), so walking
+// it costs a full node_modules/vendor traversal and can only produce hits in
+// files dwe does not own. That matters because config.template_refs runs this
+// walk on every `dwe validate`, not just on an explicit `dwe vars inspect`.
 func collectYAMLFiles(workspace string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(workspace, func(path string, d os.DirEntry, err error) error {
@@ -163,6 +238,9 @@ func collectYAMLFiles(workspace string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
+			if skipScanDir(workspace, path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		switch strings.ToLower(filepath.Ext(path)) {
@@ -177,7 +255,20 @@ func collectYAMLFiles(workspace string) ([]string, error) {
 	return out, err
 }
 
-func scanYAMLFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
+// skipScanDir reports whether the walk should skip dir entirely. The one rule
+// is the per-service source hub, workspace/services/<name>/src — matched on
+// path shape rather than by loading the config, since the scan is a static
+// leaf that takes a project root and nothing else.
+func skipScanDir(workspace, dir string) bool {
+	rel, err := filepath.Rel(workspace, dir)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	return len(parts) == 3 && parts[0] == "services" && parts[2] == "src"
+}
+
+func scanYAMLFile(projectRoot, absPath, queryPath string, matchAll bool) ([]Usage, error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, err
@@ -194,7 +285,7 @@ func scanYAMLFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
 
 	var hits []Usage
 	visit := func(keyName string, valNode *yaml.Node) {
-		hits = append(hits, hitsForField(keyName, valNode, queryPath, rel, lines)...)
+		hits = append(hits, hitsForField(keyName, valNode, queryPath, rel, lines, matchAll)...)
 	}
 	root := doc.Content[0]
 	// Skip the top-level vars: sandbox subtree. Its values are config DATA,
@@ -238,23 +329,26 @@ func walkYAML(n *yaml.Node, fn func(keyName string, valNode *yaml.Node)) {
 	}
 }
 
-func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines []string) []Usage {
+func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines []string, matchAll bool) []Usage {
 	var hits []Usage
 
 	switch {
-	case structuralKeys[keyName] && val.Kind == yaml.ScalarNode:
+	case !matchAll && structuralKeys[keyName] && val.Kind == yaml.ScalarNode:
 		// from:/default_from: value IS a dot-path; a vars.* prefix is a reference.
+		// Out of scope for matchAll: it is a bare dot-path, never a ${...}
+		// shorthand, and EnumerateAllUsages exists to enumerate the latter only.
 		if refMatches(val.Value, queryPath) {
 			hits = append(hits, Usage{File: rel, Line: val.Line, Kind: keyName, Text: lineText(lines, val.Line)})
 		}
 
-	case keyName == "when" && val.Kind == yaml.MappingNode:
+	case !matchAll && keyName == "when" && val.Kind == yaml.MappingNode:
 		// Typed condition: a bare vars.x token is a real reference only inside a
 		// Go-template {{ }} action (KindTemplate, evaluated against DweConfig).
 		// Outside one — in a cmd: string or a builtin predicate (file-exists,
 		// generated-missing, …) — vars.x is inert literal text the runtime never
 		// resolves. Mirror templateHits and scan only the {{ }} blocks so literal
-		// text is not misreported as a usage.
+		// text is not misreported as a usage. Out of scope for matchAll (bare
+		// token form, not the ${...} shorthand).
 		if expr := mappingScalar(val, "expr"); expr != nil {
 			for _, block := range goTemplateBlock.FindAllString(expr.Value, -1) {
 				for _, ref := range varDotPath.FindAllString(block, -1) {
@@ -266,14 +360,37 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 		}
 
 	case templatedKeys[keyName] && val.Kind == yaml.ScalarNode:
-		hits = append(hits, templateHits(val, queryPath, rel, lines)...)
+		hits = append(hits, templateHits(val, queryPath, rel, lines, matchAll)...)
 
 	case templatedMapKeys[keyName] && val.Kind == yaml.MappingNode:
-		for i := 0; i+1 < len(val.Content); i += 2 {
-			v := val.Content[i+1]
-			if v.Kind == yaml.ScalarNode {
-				hits = append(hits, templateHits(v, queryPath, rel, lines)...)
-			}
+		// with:/env: are mappings whose values may themselves be nested maps or
+		// sequences (e.g. with: {opts: {branch: "${vars.x}"}}); recurse to reach
+		// every scalar leaf, not only the direct children.
+		hits = append(hits, templatedScalarHits(val, queryPath, rel, lines, matchAll)...)
+
+	case templatedSeqKeys[keyName] && val.Kind == yaml.SequenceNode:
+		// argv:/compose_args: are flat sequences of templated scalars; the same
+		// leaf recursion applies.
+		hits = append(hits, templatedScalarHits(val, queryPath, rel, lines, matchAll)...)
+	}
+	return hits
+}
+
+// templatedScalarHits recurses through a mapping/sequence node (the value of a
+// with:/env: field) collecting templateHits from every scalar leaf reached,
+// at any depth.
+func templatedScalarHits(n *yaml.Node, queryPath, rel string, lines []string, matchAll bool) []Usage {
+	var hits []Usage
+	switch n.Kind {
+	case yaml.ScalarNode:
+		hits = append(hits, templateHits(n, queryPath, rel, lines, matchAll)...)
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			hits = append(hits, templatedScalarHits(n.Content[i+1], queryPath, rel, lines, matchAll)...)
+		}
+	case yaml.SequenceNode:
+		for _, c := range n.Content {
+			hits = append(hits, templatedScalarHits(c, queryPath, rel, lines, matchAll)...)
 		}
 	}
 	return hits
@@ -282,27 +399,41 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 // templateHits matches vars references inside a templated scalar value, in both
 // engines: the ${vars.x} shorthand and the bare vars.x token form inside a
 // Go-template {{ }} block (e.g. {{ resolve .Raw "vars.x" }}). A given field may
-// render through either engine, so both forms are checked.
-func templateHits(val *yaml.Node, queryPath, rel string, lines []string) []Usage {
+// render through either engine, so both forms are checked — except in matchAll
+// mode, which enumerates the ${...} shorthand only (see EnumerateAllUsages).
+func templateHits(val *yaml.Node, queryPath, rel string, lines []string, matchAll bool) []Usage {
 	var hits []Usage
-	add := func() {
-		hits = append(hits, Usage{File: rel, Line: val.Line, Kind: "template", Text: lineText(lines, val.Line)})
+	// Ref is set only in matchAll mode — see the Usage.Ref doc for why the
+	// query path must leave it empty.
+	add := func(ref string) {
+		u := Usage{File: rel, Line: val.Line, Kind: "template", Text: lineText(lines, val.Line)}
+		if matchAll {
+			u.Ref = ref
+		}
+		hits = append(hits, u)
 	}
-	// (a) ${vars.x} shorthand.
+	// (a) ${...} shorthand — any head when matchAll, else vars.* only.
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(val.Value, -1) {
 		inner := m[1]
+		if matchAll {
+			add(inner)
+			continue
+		}
 		if head, _, _ := strings.Cut(inner, "."); head != VarsPrefix {
 			continue
 		}
 		if refMatches(inner, queryPath) {
-			add()
+			add(inner)
 		}
+	}
+	if matchAll {
+		return hits
 	}
 	// (b) bare vars.x tokens inside Go-template {{ }} blocks.
 	for _, block := range goTemplateBlock.FindAllString(val.Value, -1) {
 		for _, ref := range varDotPath.FindAllString(block, -1) {
 			if refMatches(ref, queryPath) {
-				add()
+				add(ref)
 			}
 		}
 	}
@@ -319,7 +450,7 @@ func templateHits(val *yaml.Node, queryPath, rel string, lines []string) []Usage
 // tpl.RenderCommand REGARDLESS of extension, so a YAML-bodied output (e.g. a pack
 // rendering `from: config.yaml`) is scanned too — a blanket .yml/.yaml skip would
 // miss real ${vars.x} references inside such templates.
-func scanConfigTemplates(projectRoot, workspace, queryPath string) ([]Usage, error) {
+func scanConfigTemplates(projectRoot, workspace, queryPath string, matchAll bool) ([]Usage, error) {
 	configDir := filepath.Join(workspace, "templates", "config")
 	var hits []Usage
 	walkErr := filepath.WalkDir(configDir, func(path string, d os.DirEntry, err error) error {
@@ -336,7 +467,7 @@ func scanConfigTemplates(projectRoot, workspace, queryPath string) ([]Usage, err
 		case "manifest.yml", "manifest.yaml":
 			return nil // pack manifest: structured fields handled by the YAML walk
 		}
-		fileHits, err := scanRawTextFile(projectRoot, path, queryPath)
+		fileHits, err := scanRawTextFile(projectRoot, path, queryPath, matchAll)
 		if err != nil {
 			return nil
 		}
@@ -352,8 +483,10 @@ func scanConfigTemplates(projectRoot, workspace, queryPath string) ([]Usage, err
 // scanRawTextFile scans a non-YAML template body line by line, matching both
 // reference forms a config template can render: the ${vars.x} shorthand and
 // bare vars.x tokens inside a Go-template {{ }} block (e.g.
-// {{ resolve .Raw "vars.x" }}).
-func scanRawTextFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
+// {{ resolve .Raw "vars.x" }}) — except in matchAll mode, which enumerates the
+// ${...} shorthand only, one Usage per distinct reference on the line (see
+// EnumerateAllUsages).
+func scanRawTextFile(projectRoot, absPath, queryPath string, matchAll bool) ([]Usage, error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, err
@@ -362,9 +495,14 @@ func scanRawTextFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
 	var hits []Usage
 	for i, line := range strings.Split(string(data), "\n") {
 		matched := false
+		var allRefs []string
 		// (a) ${vars.x} shorthand.
 		for _, m := range tpl.VarPattern.FindAllStringSubmatch(line, -1) {
 			inner := m[1]
+			if matchAll {
+				allRefs = append(allRefs, inner)
+				continue
+			}
 			if head, _, _ := strings.Cut(inner, "."); head != VarsPrefix {
 				continue
 			}
@@ -372,13 +510,21 @@ func scanRawTextFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
 				matched = true
 			}
 		}
-		// (b) bare vars.x tokens inside Go-template {{ }} blocks.
-		for _, block := range goTemplateBlock.FindAllString(line, -1) {
-			for _, ref := range varDotPath.FindAllString(block, -1) {
-				if refMatches(ref, queryPath) {
-					matched = true
+		if !matchAll {
+			// (b) bare vars.x tokens inside Go-template {{ }} blocks.
+			for _, block := range goTemplateBlock.FindAllString(line, -1) {
+				for _, ref := range varDotPath.FindAllString(block, -1) {
+					if refMatches(ref, queryPath) {
+						matched = true
+					}
 				}
 			}
+		}
+		if matchAll {
+			for _, ref := range allRefs {
+				hits = append(hits, Usage{File: rel, Line: i + 1, Kind: "template", Text: strings.TrimSpace(line), Ref: ref})
+			}
+			continue
 		}
 		if matched {
 			hits = append(hits, Usage{File: rel, Line: i + 1, Kind: "template", Text: strings.TrimSpace(line)})
@@ -447,7 +593,14 @@ func dedupeAndSort(in []Usage) []Usage {
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind
 		}
-		return a.Text < b.Text
+		if a.Text != b.Text {
+			return a.Text < b.Text
+		}
+		// Ref is the final tiebreaker: in enumeration mode one line can carry
+		// several distinct references, which are identical in every other
+		// field. Without this, sort.Slice (not stable) orders them arbitrarily
+		// and the resulting `dwe validate` diagnostics flap between runs.
+		return a.Ref < b.Ref
 	})
 	return out
 }

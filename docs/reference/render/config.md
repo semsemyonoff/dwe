@@ -50,13 +50,16 @@ This is a deliberate divergence justified by config-file ergonomics: config
 authors expect `${...}` parity with the values they reference.
 
 `${X}` compiles to `{{ resolve .Raw "X" }}`, so the dot-path is looked up in the
-merged config (`cfg.Raw`) with **no `raw.` prefix**:
+merged config (`cfg.Raw`) with **no `raw.` prefix** — but only when `X`'s head
+is a known namespace (a merged-config root key, or one of the special
+namespaces below); an unrecognized head is left as a literal `${...}` instead
+of silently rendering `""`:
 
 ```bash
 # workspace/templates/config/laravel/env.tmpl
 APP_URL=${services.main.hosts.web}
-DB_HOST=${databases.main.host}
-DB_DATABASE=${databases.main.name}
+DB_HOST=${vars.databases.main.host}
+DB_DATABASE=${vars.databases.main.name}
 APP_KEY=${generated.app_key}
 ```
 
@@ -66,8 +69,11 @@ APP_KEY=${generated.app_key}
   `ports` / `hosts` / … — **not** `render` / `generated` / arbitrary merged
   fields. An omitted or uninjected field renders `""` (all `${...}` resolvers are
   lenient — a missing path is the empty string, never an error).
-- **Top-level config** uses the bare dot-path (`${databases.main}`,
-  `${project.name}`, …).
+- **Free-form values** live under `vars:` — reference them as
+  `${vars.<path>}` (e.g. `${vars.databases.main}`). A bare top-level dot-path
+  with no `vars.` prefix does not resolve: the merged config root is a strict
+  allowlist (`project`, `services`, `vars`, …), so an arbitrary key like
+  `databases` can never appear there directly.
 - **Generated values** use `${generated.<name>}` (see below).
 
 There is no singular current-service `${service....}` binding — reference the
@@ -279,8 +285,18 @@ phases:
 service mints `APP_KEY=base64:…` → harvest captures it.
 
 **Subsequent deploys:** render replays the stored value → gate closed → generate
-skipped → harvest is a no-op (write-if-absent). The render re-runs every deploy
-via its `check:`. Invariant: **store empty for a key ⟺ value re-minted**.
+skipped → harvest is a no-op. The render re-runs every deploy via its `check:`.
+Invariant: **store empty for a key ⟺ value re-minted**.
+
+Note that the harvest step is deliberately **not** gated: `service_generated_harvest`
+skips any field the store already holds, without reading its file. That is what
+makes it a no-op above, and it is load-bearing rather than an optimisation —
+`dwe reset run` (without `--clear-generated`) keeps the store while wiping the
+service hub, so on the next deploy the minted file is gone while the value it
+produced is still authoritative. A harvest that insisted on re-reading it would
+fail the whole deploy over a value it already has. The strict errors below
+(missing file, no match, empty capture) therefore apply only to a field that is
+**not** yet stored — which is exactly when a bad read could pollute the store.
 
 The `generated-missing <svc> <field>` predicate (see
 [conditions](../config/conditions.md#type-builtin--predicates)) reads

@@ -25,22 +25,98 @@ func stdioInteractive() bool {
 	return ttyDetector(os.Stdin) && ttyDetector(os.Stdout)
 }
 
-// dockerExecTTYFlags returns ["-i", "-t"] when interactive, else ["-i"].
-// Stdin is always wired so piped input still reaches the child.
-func dockerExecTTYFlags() []string {
-	if stdioInteractive() {
-		return []string{"-i", "-t"}
+// ttyMode is the resolved --tty / --no-tty selection. The zero value is the
+// historical auto-detect behaviour, so an unset mode changes nothing.
+type ttyMode int
+
+const (
+	// ttyAuto allocates a PTY only when both host stdin and stdout are TTYs.
+	ttyAuto ttyMode = iota
+	// ttyOn forces a PTY (--tty).
+	ttyOn
+	// ttyOff suppresses the PTY (--no-tty).
+	ttyOff
+)
+
+// wantTTY reports whether a pseudo-TTY should be requested.
+func (m ttyMode) wantTTY() bool {
+	switch m {
+	case ttyOn:
+		return true
+	case ttyOff:
+		return false
+	default:
+		return stdioInteractive()
 	}
-	return []string{"-i"}
+}
+
+// dockerExecTTYFlags returns the stdin/TTY flag vector for `docker exec`.
+//
+//	auto  → ["-i","-t"] when both host stdio are TTYs, else ["-i"]
+//	--tty → ["-i","-t"] with a terminal stdin, else ["-t"]
+//	--no-tty → ["-i"]
+//
+// The dropped -i under --tty is load-bearing, not an optimisation: `docker exec
+// -i -t` hard-fails when host stdin is not a terminal — "cannot attach stdin to
+// a TTY-enabled container because stdin is not a terminal" — which is exactly
+// the situation a forced TTY exists for (an agent or script whose stdio are
+// pipes). Dropping -i keeps the PTY, at the cost of the child not reading host
+// stdin; a caller that needs to pipe input in should not be forcing a TTY.
+func dockerExecTTYFlags(mode ttyMode) []string {
+	if !mode.wantTTY() {
+		return []string{"-i"}
+	}
+	if !ttyDetector(os.Stdin) {
+		return []string{"-t"}
+	}
+	return []string{"-i", "-t"}
 }
 
 // composeRunTTYFlags returns the TTY flag vector for `docker compose run`.
 // Compose allocates a TTY by default; -T disables it. Stdin stays wired.
-func composeRunTTYFlags() []string {
-	if stdioInteractive() {
+//
+// --tty cannot be honoured here when host stdin is not a terminal: compose
+// refuses outright (`--no-tty=false` errors with "cannot attach stdin to a
+// TTY-enabled container because stdin is not a terminal") and its permissive
+// spellings silently hand the child a pipe anyway. Verified against Docker
+// 29.6. So the forced case degrades to the non-TTY vector, and the caller
+// warns — see warnComposeTTYUnavailable.
+func composeRunTTYFlags(mode ttyMode) []string {
+	if mode.wantTTY() && ttyDetector(os.Stdin) {
 		return []string{"-i"}
 	}
 	return []string{"-i", "-T"}
+}
+
+// oneShotTTYMode collapses the auto default onto the one-shot (`-c`) path.
+//
+// One-shot has never allocated a PTY regardless of host stdio — it is the
+// scripting entry point and its stdout must stay byte-clean — so auto means off
+// here, unlike the interactive path where auto follows the terminal. An explicit
+// --tty / --no-tty still wins.
+func oneShotTTYMode(mode ttyMode) ttyMode {
+	if mode == ttyAuto {
+		return ttyOff
+	}
+	return mode
+}
+
+// composeTTYUnavailable reports a --tty that the compose path cannot deliver,
+// so the caller can say so instead of leaving the user to wonder why output is
+// still block-buffered.
+func composeTTYUnavailable(mode ttyMode) bool {
+	return mode == ttyOn && !ttyDetector(os.Stdin)
+}
+
+// warnComposeTTYUnavailable writes the one-line explanation to stderr. stdout
+// stays clean — callers on this path may be piping the child's output.
+func warnComposeTTYUnavailable(serviceName string) {
+	render.NewWriter(os.Stderr).Warning(fmt.Sprintf(
+		"--tty ignored for %s: it starts a new container via `docker compose run`, "+
+			"which cannot allocate a PTY while stdin is not a terminal. "+
+			"Start the service first so the shell can `docker exec` into it.",
+		serviceName,
+	))
 }
 
 // appendUserWorkdirEnvArgs appends the shared -u / -w / -e flags onto a docker
@@ -346,22 +422,80 @@ func serviceContainerState(projectName, service string, processEnv []string, doc
 
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
 // processEnv is the OS-level environment for the docker process itself (e.g. DOCKER_CLI_HINTS=false).
-func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string, dockerBin string) error {
+func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string, dockerBin string, tty ttyMode) error {
 	args := []string{"exec"}
-	args = append(args, dockerExecTTYFlags()...)
+	args = append(args, dockerExecTTYFlags(tty)...)
 	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, containerName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("exec → %s", containerName))
 	// docker exec does not read compose files, so cwd is irrelevant — inherit parent's.
-	return runInteractive(processEnv, "", dockerBin, args...)
+	err := runInteractive(processEnv, "", dockerBin, args...)
+	hintMissingContainerShell(err, containerName, shell, processEnv, dockerBin)
+	return err
+}
+
+// shellNotInvokableCodes are the exit codes a shell (and docker exec, which
+// mirrors them) uses when it could not invoke the requested program: 127 "not
+// found", 126 "found but not executable".
+var shellNotInvokableCodes = map[int]struct{}{126: {}, 127: {}}
+
+// probeContainerHasShell reports whether `shell` is resolvable inside the
+// container. Exposed as a package variable so tests can drive both answers
+// without a live daemon.
+var probeContainerHasShell = func(containerName, shell string, processEnv []string, dockerBin string) bool {
+	cmd := exec.Command(dockerBin, "exec", containerName, "sh", "-c", "command -v "+shell)
+	cmd.Env = processEnv
+	return cmd.Run() == nil
+}
+
+// hintMissingContainerShell writes one stderr line when a docker exec failed
+// because the container has no such shell.
+//
+// The raw failure is entirely opaque:
+//
+//	OCI runtime exec failed: exec: "bash": executable file not found in $PATH
+//
+// It names neither the service, nor the fact that `bash` is DWE's built-in
+// default rather than something the project chose, nor either knob that fixes
+// it. Alpine-based images have no bash and are unremarkable in dev stacks, so
+// this is a common first contact with `dwe shell` — measured cost in an observed
+// session: two failed invocations before the operator went to --help.
+//
+// Gated on an actual probe, not on the exit code alone: a one-shot `-c` command
+// that itself exits 127 (a typo inside the container) produces the same code,
+// and blaming cli.shell for that would be a lie. The probe runs only after a
+// failure, so the happy path pays nothing. If the probe cannot answer (no `sh`
+// either, daemon gone), it reports "found" and the hint stays silent — a missing
+// hint is cheaper than a misleading one.
+func hintMissingContainerShell(err error, containerName, shell string, processEnv []string, dockerBin string) {
+	if err == nil || containerName == "" || shell == "" {
+		return
+	}
+	exitErr, ok := errors.AsType[*exec.ExitError](err)
+	if !ok {
+		return
+	}
+	if _, relevant := shellNotInvokableCodes[exitErr.ExitCode()]; !relevant {
+		return
+	}
+	if probeContainerHasShell(containerName, shell, processEnv, dockerBin) {
+		return
+	}
+	render.NewWriter(os.Stderr).Info(fmt.Sprintf(
+		"container %s has no %q (DWE's default shell). Set `cli.shell` in the service's service.yml, or pass --shell <sh|ash|...>.",
+		containerName, shell,
+	))
 }
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
 // It uses the shared Compose struct for project name, file list, and global args.
-func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error {
+func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, tty ttyMode) error {
+	if composeTTYUnavailable(tty) {
+		warnComposeTTYUnavailable(serviceName)
+	}
 	args := composeRunArgv(compose)
-	args = append(args, composeRunTTYFlags()...)
+	args = append(args, composeRunTTYFlags(tty)...)
 	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, serviceName, shell)
 
@@ -391,20 +525,32 @@ var runInteractive = func(processEnv []string, workDir, name string, args ...str
 // `docker exec -i [-u u] [-w workDir] [-e K=V ...] <container> <shell> -c "<command>"`
 // and exits without printing a banner. On *exec.ExitError, the error is wrapped
 // as *shellCommandExitError so main.go can preserve the child's exit code.
-// No PTY is allocated (-t omitted) so stdout stays clean for piping.
-func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]string, command string, processEnv []string, dockerBin string) error {
-	args := []string{"exec", "-i"}
+//
+// No PTY by default (-t omitted) so stdout stays clean for piping — a PTY makes
+// docker translate \n to \r\n, which corrupts strict downstream parsers. The
+// cost of that default is that the child sees a pipe on stdout and therefore
+// switches to block buffering, so a long-running command looks hung until it
+// exits; --tty opts into a PTY to get incremental output back.
+func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]string, command string, processEnv []string, dockerBin string, tty ttyMode) error {
+	args := []string{"exec"}
+	args = append(args, dockerExecTTYFlags(oneShotTTYMode(tty))...)
 	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, containerName, shell, "-c", command)
 	// Silent: no render.Stdout().Info — script stdout must stay clean.
-	return wrapExitError(runInteractive(processEnv, "", dockerBin, args...))
+	err := runInteractive(processEnv, "", dockerBin, args...)
+	// The hint goes to stderr, so stdout stays clean for piping either way.
+	hintMissingContainerShell(err, containerName, shell, processEnv, dockerBin)
+	return wrapExitError(err)
 }
 
 // composeRunOneShot starts a fresh container via `docker compose run --rm` and
 // runs `<shell> -c "<command>"` inside it, silently.
-func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, command string) error {
+func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, command string, tty ttyMode) error {
+	if composeTTYUnavailable(tty) {
+		warnComposeTTYUnavailable(serviceName)
+	}
 	args := composeRunArgv(compose)
-	args = append(args, "-i", "-T") // never allocate a PTY for one-shot commands
+	args = append(args, composeRunTTYFlags(oneShotTTYMode(tty))...)
 	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, serviceName, shell, "-c", command)
 	// Silent: no render.Stdout().Info.
@@ -427,14 +573,20 @@ func dispatchShell(
 	}
 	if flags.command != "" {
 		execOneFn := func(c, sh, u, w string, env map[string]string, cmd string) error {
-			return dockerExecOneShot(c, sh, u, w, env, cmd, processEnv, dockerBin)
+			return dockerExecOneShot(c, sh, u, w, env, cmd, processEnv, dockerBin, flags.tty)
 		}
-		return runOneShotCommand(cfg, compose, serviceName, flags, probeFn, execOneFn, composeRunOneShot)
+		runOneFn := func(cp *docker.Compose, svc, sh, u, w string, env map[string]string, cmd string) error {
+			return composeRunOneShot(cp, svc, sh, u, w, env, cmd, flags.tty)
+		}
+		return runOneShotCommand(cfg, compose, serviceName, flags, probeFn, execOneFn, runOneFn)
 	}
 	execFn := func(c, sh, u, w string, env map[string]string) error {
-		return dockerExecCLI(c, sh, u, w, env, processEnv, dockerBin)
+		return dockerExecCLI(c, sh, u, w, env, processEnv, dockerBin, flags.tty)
 	}
-	return runServicesCLI(cfg, compose, serviceName, flags, probeFn, execFn, composeRunCLI)
+	runFn := func(cp *docker.Compose, svc, sh, u, w string, env map[string]string) error {
+		return composeRunCLI(cp, svc, sh, u, w, env, flags.tty)
+	}
+	return runServicesCLI(cfg, compose, serviceName, flags, probeFn, execFn, runFn)
 }
 
 // oneShotExecFunc executes a single command in a running container.

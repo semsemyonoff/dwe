@@ -282,7 +282,7 @@ db.start:
 ## Related commands
 
 - `dwe commands list` — list all public commands grouped by file
-- `dwe commands <id> [--set k=v] [--yes]` — execute a command (alias: `dwe cmd <id>`)
+- `dwe commands <id> [--set k=v] [--yes] [-- <args>]` — execute a command (alias: `dwe cmd <id>`). Everything after `--` is offered to the command as `${args}`, opt-in per command — see [directives § Pass-through arguments](directives.md#pass-through-arguments)
 - `dwe commands --inspect <id>` (or `-i`) — show the resolved definition (params, context, env, runner)
 - `dwe docs generate` — regenerate the per-command reference under `docs/reference/commands/`
 

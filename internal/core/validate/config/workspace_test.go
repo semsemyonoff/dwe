@@ -925,6 +925,29 @@ func TestStylesValidator_NoFile(t *testing.T) {
 	}
 }
 
+// TestResetValidator_NoFileIsSilent pins that an absent reset.yml produces no
+// diagnostic at all. Unlike deploy.yml/lifecycle.yml, reset.yml is never
+// shipped by the scaffold, so its absence is the universal default state on
+// every project — not a deliberate opt-out worth reporting.
+func TestResetValidator_NoFileIsSilent(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	diags := (&resetValidator{}).Run(validate.Context{ProjectRoot: root})
+	require.Empty(t, diags, "expected no diagnostic for absent reset.yml; got %+v", diags)
+}
+
+// TestResetValidator_FileExistsStillReportsOK confirms silencing the
+// not-exist branch didn't silence the validator wholesale: a project that
+// deliberately authored reset.yml still gets its OK diagnostic.
+func TestResetValidator_FileExistsStillReportsOK(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "reset.yml"), []byte(`phases: []
+`), 0o644))
+	diags := (&resetValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityOK, "")
+}
+
 func TestServicesValidator_InfoTitleWithControlChars(t *testing.T) {
 	t.Parallel()
 	body := `
@@ -1211,6 +1234,97 @@ sections:
 	})
 	// Should have OK diagnostic
 	hasDiag(t, diags, validate.SeverityOK, "")
+}
+
+// TestInfoValidator_decodeStates pins the honest verdict for the same four
+// decode states config.LoadInfoConfig pins in TestLoadInfoConfig_fallbackStates:
+// the all-comment/empty file and the deliberate `sections: []` must no longer
+// read as SeverityOK — only an authored dashboard earns that.
+func TestInfoValidator_decodeStates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		body       string
+		wantSev    validate.Severity
+		wantSubstr string
+	}{
+		{
+			name: "fully commented",
+			body: `# workspace/info.yml — inert mirror.
+# sections:
+#   - id: project
+#     items: []
+# footer: true
+`,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "built-in dashboard is active",
+		},
+		{
+			name:       "empty file",
+			body:       ``,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "built-in dashboard is active",
+		},
+		{
+			name: "deliberate empty sections",
+			body: `sections: []
+`,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "deliberately empty",
+		},
+		{
+			// Same state, reached without a `sections:` key at all. The message
+			// must not claim the file declared `sections: []` — the reader
+			// would grep for a line that is not there.
+			name: "active key but no sections key",
+			body: `footer: true
+`,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "declares no sections",
+		},
+		{
+			name: "one real section",
+			body: `sections:
+  - id: custom
+    items:
+      - type: separator
+`,
+			wantSev:    validate.SeverityOK,
+			wantSubstr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := writeInfoYML(t, tt.body)
+			cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
+			diags := (&infoValidator{}).Run(validate.Context{
+				ProjectRoot: root,
+				Cfg:         cfg,
+			})
+			hasDiag(t, diags, tt.wantSev, tt.wantSubstr)
+		})
+	}
+}
+
+// TestInfoValidator_absentFileStaysInformational confirms Task 10 left the
+// missing-file case untouched — only the present-file verdict was inverted.
+func TestInfoValidator_absentFileStaysInformational(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	workspaceDir := filepath.Join(root, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	workspaceYML := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspaceYML, []byte("project:\n  name: test\n"), 0o644))
+
+	cfg, _ := devconfig.LoadConfig(workspaceYML)
+	diags := (&infoValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+	hasDiag(t, diags, validate.SeverityInfo, "no info.yml")
 }
 
 func writeInfoYML(t *testing.T, content string) string {

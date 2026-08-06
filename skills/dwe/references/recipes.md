@@ -4,8 +4,10 @@ Task-to-command mappings for common DWE workflows. Load this file when the user'
 
 Rules that apply to every recipe:
 
-- Read commands — run freely without asking: `status`, `logs`, `validate` (incl. `validate tests`), `test list`, `test clean --dry-run`, and `docs show` / `docs search` / `docs list` / `docs llms-txt`.
-- Mutating commands — **never run yourself**; prepare the change, then show the user the exact command and wait for them to run it: `deploy run`, `run`, `stop`, `restart`, `reset run`, `services enable/disable`, `test run` / `test clean` (isolated/disposable copies, but a `test run` is a full slow Docker deploy — propose only for substantial changes, run only on explicit ask), AND the writing `docs` subcommands: `docs generate` (rewrites `docs/reference/`), `docs export` (writes to a target dir), `docs cache clear` (deletes cached diagrams).
+- Read commands — run freely without asking: `status`, `logs`, `validate` (incl. `validate tests`), `info`, `services list`, `commands list` / `cmd -i <id>`, `vars get|list|inspect`, `test list`, `test clean --dry-run`, and `docs show` / `docs search` / `docs list` / `docs llms-txt`.
+- Mutating commands — **never run yourself**; prepare the change, then show the user the exact command and wait for them to run it: `deploy run`, `run`, `stop`, `restart`, `reset run`, `services enable/disable`, `vars set`, `render env|config|ide|ai|git`, `snapshot create|restore|rollback|remove|pack|unpack`, `bridge start|stop`, `test clean`, AND the writing `docs` subcommands: `docs generate` (rewrites `docs/reference/`), `docs export` (writes to a target dir), `docs cache clear` (deletes cached diagrams).
+- `test run` is the **one conditional** entry: it deploys a throwaway copy, so it may be run unattended when that scenario's `cost_profile` (from `dwe test list --output json`) shows no `isolation_findings`, `shared_volumes: 0` and `host_steps: 0` **and** you can account for the build/pull cost. Any hard stop set, or any doubt → hand it over. Propose it only for substantial changes. Full rule: the `dwe test run` gate in `SKILL.md`, detail in `integration-tests.md` § 1.
+- `dwe cmd <id>` and `dwe shell <service> -c '…'` are **transports** — judge the task they carry, not the verb. Verifying tasks (tests, linters, type-checks, in-container inspection) run freely; anything that changes project or data state (migrations, seeds, resets, installs) is a handoff. `dwe cmd -i <id>` shows a command's `confirmation:` flag — a declared one means ask. See the boundary section in `SKILL.md`.
 - Pick the apply command by what changed:
   - **Service config** (`workspace/services/<name>/service.yml`, that service's `deploy.yml`, `configs`, `dirs`, `render` blocks) → `dwe deploy run`. The deploy pipeline installs / configures / migrates the service and ends with `docker up --wait`. The scoped form `dwe deploy run --service <name>` exists, but it only works if the service has its own `deploy.yml` and it skips the final `docker up --wait` — recommend it only when the user explicitly wants to re-run a single service's provisioning steps.
   - **Deploy orchestrator** (`workspace/deploy.yml`) → `dwe deploy run`.
@@ -16,7 +18,9 @@ Rules that apply to every recipe:
 
 ## Reference-file index
 
-This file holds the quick daily/inspection recipes. For an authoring task, jump straight to the matching reference file:
+This file holds the quick daily/inspection recipes — start with **Run a project
+task** and **Run a one-off command in a service container**, which cover most
+day-to-day work. For an authoring task, jump straight to the matching reference file:
 
 - **Populate a fresh / `init`'d repo from git URL(s)** → `populate-init-repo.md`
 - **Add an app / tool / infra service** → `add-service-and-tools.md`
@@ -25,6 +29,56 @@ This file holds the quick daily/inspection recipes. For an authoring task, jump 
 - **Author a pipeline** (deploy / lifecycle / reset / setup / validate / info / styles) → `pipelines-and-orchestration.md`
 - **Author / run an integration test** (`workspace/tests/*.yml`, `dwe test run|list|clean`, `dwe validate tests`) → `integration-tests.md`
 - **Snapshots, reset, and the read-only triage trio** → `snapshots-reset-troubleshoot.md`
+
+## Run a project task (tests, lint, type-check, migrate)
+
+The most common thing you will do in an existing project. Prefer a declared
+command over an ad-hoc one — it carries the right service, workdir, user and env,
+so it behaves the same for you, the user, and CI.
+
+1. Find the ID (one call, greppable — `<group>.<cmd>  [type]  — description`):
+   ```shell
+   dwe commands list
+   dwe commands list | grep -E '<service>\.(test|lint|check)'
+   ```
+2. Read it before running anything unfamiliar. This also tells you whether it
+   takes `--set key=value` params or `${args}` pass-through — do **not** open the
+   YAML to find out:
+   ```shell
+   dwe cmd -i <id>
+   ```
+3. Run it:
+   ```shell
+   dwe cmd site.test                          # whole suite
+   dwe cmd site.test -- --run src/x.test.ts   # narrowed, if it declares ${args}
+   dwe cmd backend.migrate --set action=up    # params go through --set
+   ```
+
+If the command rejects extra arguments, its definition has no `${args}` slot.
+The error names the one-line change that adds one; adding it is usually better
+than working around it, because the next agent hits the same wall.
+
+## Run a one-off command in a service container
+
+For anything the project does not declare:
+
+```shell
+dwe shell <service> -c '<command>'
+dwe shell site -c 'npx vitest run src/x.test.ts'
+dwe shell backend -c 'make generate' --tty     # --tty for long-running output
+```
+
+- Check `dwe commands list` first — a declared command is better when one exists.
+- **`--tty` for anything long-running.** Without it the child's stdout is a pipe,
+  so it block-buffers and prints nothing until it exits; that reads as a hang and
+  has cost real debugging time. Leave it off when parsing output — a PTY turns
+  `\n` into `\r\n`.
+- **Never `docker exec` / `docker compose exec` instead.** `dwe shell` resolves
+  the container from the service name and applies the service's `cli:` block.
+  Reaching for `docker ps | grep <name>` to find a container is the tell that you
+  wanted `dwe status` or `dwe shell`.
+- Running the same gate this way repeatedly means it should be a declared command
+  (`references/authoring-commands.md`). Say so rather than running it a third time.
 
 ## Add a new service
 

@@ -12,6 +12,8 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 - [Notifications](#notifications)
 - [Params](#params)
 - [Param widgets](#param-widgets)
+- [Pass-through arguments](#pass-through-arguments)
+- [Computed arguments (`argv_append_from`)](#computed-arguments-argv_append_from)
 - [Context](#context)
 - [Env](#env)
 - [Files](#files)
@@ -289,6 +291,203 @@ Validation:
 - For `select` or `multiselect`, the `options` field must be present and non-empty (either static or resolvable from config).
 - A `default_from` or `default` value must exist in the resolved options list, or the command will error when you try to run it.
 - `--set key=value` with an invalid choice (not in options) will error unless `options` resolved empty — in that case, you can bypass validation to supply an explicit override.
+
+## Pass-through arguments
+
+Everything a caller writes after `--` is offered to the command as `${args}`:
+
+```sh
+dwe cmd site.test -- --run src/map/engine.test.ts
+```
+
+This is **opt-in per command**. A command reaches the arguments only by naming
+`${args}` in its `cmd:` or `argv:`; one that does not is rejected with an error
+naming the command and the one-line change that grants them. There is no safe
+default placement to guess at — `npm test <files>` needs a `--` that npm would
+otherwise eat, `go test -race ./... <pkg>` would name two package sets, and a
+multi-line shell script would get the arguments stapled onto its last line.
+
+Valid for `shell`, `dwe`, `service_exec` and `service_run` — the types that
+have a `cmd:`/`argv:` to substitute into. A `script`, `workflow`, `builtin` or
+`daemon` command has neither, so it cannot take pass-through arguments.
+
+### Placement
+
+In a `cmd:` string the `${args}` slot becomes **`"$@"`**, and the arguments are
+handed to the shell as positional parameters. They never appear in the shell
+program itself, so nothing in an argument can change the command's structure: a
+filename containing a space stays one argument, and `;`, backticks or `$(…)`
+stay literal text.
+
+Write the slot **unquoted** — `${args}`, not `"${args}"` or `'${args}'`. It
+already expands to a correctly-quoted `"$@"`, so a wrapping pair of your own
+nests badly, and both spellings are **rejected at load time**:
+
+| You write | It would render to | What that does |
+| --- | --- | --- |
+| `'${args}'` | `'"$@"'` | one literal four-character argument; every caller argument is dropped |
+| `"${args}"` | `""$@""` | `$@` ends up *unquoted*: arguments split on whitespace and one containing `*` or `?` is glob-expanded (`-- '*.txt'` arrives as the matching filenames, not the pattern). With no arguments at all it collapses to a single empty argument — `npm test ""` is not `npm test`. |
+
+The check looks for a wrapping pair around the slot itself; quotes elsewhere in
+the command are untouched (`printf "%s\n" ${args}` is fine). A slot placed
+inside a longer quoted span cannot be detected textually and stays your
+responsibility.
+
+Two placements silently lose the arguments, because `"$@"` is scoped to the
+shell's current positional parameters:
+
+- **inside a shell function body** — there `$@` is the *function's* arguments, so
+  a slot written inside the body renders empty. Either keep the slot in the
+  top-level scope, or forward explicitly: write `"$@"` yourself at the call site
+  and place the slot outside the function (`f() { … "$@"; }; f ${args}`).
+- **after `set --`** — that statement replaces the positional parameters, so a
+  slot placed later in the script gets the script's own values instead. Put the
+  slot before any `set --`.
+
+Neither can execute anything — the failure mode is a missing argument, not an
+injected one — but neither is reported, so a multi-line `cmd:` that uses either
+construct should place the slot deliberately.
+
+```yaml
+test:
+  type: service_exec
+  service: site
+  cmd: "npm test ${args}"
+```
+
+In an `argv:` vector an element that is **exactly** `${args}` is spliced
+element-wise — the arguments are already separate entries there and must not be
+re-quoted. An empty set splices to nothing, so the element vanishes rather than
+leaving an empty-string argument behind:
+
+```yaml
+test:
+  type: service_exec
+  service: backend
+  argv: [go, test, -count=1, -race, "${args}"]
+```
+
+An element that merely *embeds* the token (`--filter=${args}`) is **rejected at
+load time**: nothing re-splits an argv element, so it could only ever produce a
+single mangled argument.
+
+### The `args:` block
+
+Optional, and only meaningful alongside a `${args}` reference — declaring it
+without one is reported as inert.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `default` | list | Substituted when the caller passed **no** arguments |
+| `prefix` | list | Inserted immediately before the caller's arguments, and **only** when there are some |
+
+The asymmetry is deliberate. `default` exists for a command whose argument slot
+is not optional — `argv: [go, test, -race, "${args}"]` must fall back to
+`./...` or it would test the current directory instead of the module. `prefix`
+carries the separator a wrapper needs to forward flags to the tool underneath,
+and is not emitted for `default` (a bare call should not produce `npm test --`).
+
+```yaml
+# site: npm eats a bare --run, so the caller's flags need their own --
+test:
+  cmd: "npm test ${args}"
+  args:
+    prefix: ["--"]
+
+# backend: the package list is required, so an empty call needs a fallback
+test:
+  argv: [go, test, -count=1, -race, "${args}"]
+  args:
+    default: ["./..."]
+```
+
+```sh
+dwe cmd site.test -- --run x.test.ts   # → npm test -- --run x.test.ts
+dwe cmd site.test                      # → npm test
+dwe cmd backend.test -- ./internal/api # → go test -count=1 -race ./internal/api
+dwe cmd backend.test                   # → go test -count=1 -race ./...
+```
+
+`dwe cmd -i <id>` reports whether a command accepts pass-through arguments and
+which prefix/default apply.
+
+## Computed arguments (`argv_append_from`)
+
+`argv_append_from` is a shell expression whose **stdout lines are appended to
+`argv:` as individual elements**, one per line. It is how a command derives its
+own argument list — the staged-files list for a linter, the changed packages for
+a test run — without rebuilding the runner around it.
+
+```yaml
+quality.staged:
+  type: service_exec
+  service: backend
+  argv: [ruff, check]
+  argv_append_from: "git diff --cached --name-only --diff-filter=ACM -- '*.py'"
+```
+
+`dwe cmd quality.staged` then runs `ruff check a.py b.py` inside the container.
+Without the field this is ~40 lines of bash reassembling `docker compose exec`
+by hand, because the file list has to be computed on the host and the command
+has to run in the container.
+
+**Where the expression runs.** On the **host**, via the project's configured
+shell (`binaries.shell`), even for a `service_exec` / `service_run` command
+whose body runs in a container. It computes the argument list; it is not part
+of the work done in the container. Its working directory is the **project
+root** — not `workdir:`, which for a service command names a path inside the
+container — so relative paths mean the same thing regardless of where `dwe` was
+invoked from.
+
+**Output is data, never program text.** stdout is split on newlines and each
+line becomes one argv element byte-for-byte: a filename containing spaces,
+quotes or `$(…)` stays a single argument and is never re-parsed by a shell.
+A trailing newline is ignored (no empty final element), and blank lines are
+dropped — no argument this field carries is the empty string, while a stray `""`
+in an argv silently changes what a tool does. stdout is captured; **stderr
+streams to the user**, so a failing expression explains itself. stdin is not
+wired: the expression must never consume the user's input.
+
+**The expression must exit 0 when the list is legitimately empty.** A non-zero
+exit is a broken expression and fails the command — it is deliberately not read
+as "nothing to do", because a typo'd command must not look like a clean skip.
+This matters when filtering with `grep`, which exits 1 on no match: prefer a
+pathspec (`git diff … -- '*.py'`, exit 0 on an empty result) or append `|| true`.
+
+**Empty output skips the command** — nothing runs, exit 0, and a note is printed
+to stderr. This is deliberate rather than "run with no extra arguments":
+`ruff check` with an empty file list lints the whole tree, the exact opposite of
+the intent. A skipped command emits no `messages.success` and no desktop
+notification, and its declared file effects are rolled back exactly as on the
+error path.
+
+> Used as a pipeline `type: command` step, a skip journals as **success** — so
+> the next deploy would be hash-skipped even if the list is no longer empty.
+> Give such a step a `files_gate:` or a `check:` (see
+> [deploy/conditions.md](../deploy/conditions.md)).
+
+**Ordering with `${args}`.** The declared `argv:` comes first with `${args}`
+already spliced in place, then the computed items:
+
+```yaml
+# argv: [ruff, check, "${args}"] + `-- --fix` + two changed files
+#   → ruff check --fix a.py b.py
+```
+
+**Field rules** (all enforced at load time):
+
+| Rule | Reason |
+|---|---|
+| Valid only for `shell`, `service_exec`, `service_run` | the types that build an argument vector |
+| Requires `argv:`; rejected together with `cmd:` | appending to a shell string would splice the computed values into program text |
+| Rejected for `type: daemon` | daemon expands its `argv` into the synthetic `.start` command, where "empty → skip" would read as silently failing to start the daemon |
+| A literal `${args}` in the expression is rejected | the pass-through arguments travel as positional parameters and are deliberately invisible here; reference them from `argv:` instead |
+
+`${param.*}`, `${vars.*}`, `${files.*}` and the rest of the command template
+space render in the expression exactly as they do in `cmd:`.
+
+`dwe cmd -i <id>` reports the field, and so do the generated command docs
+(`dwe docs generate`).
 
 ## Context
 

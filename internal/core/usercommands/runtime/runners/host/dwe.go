@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
-	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // DweRunner executes type=dwe commands by invoking the current dwe
@@ -24,12 +22,15 @@ func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 		bin = config.DweBin(rc.Config)
 	}
 
-	rendered, err := tpl.RenderCommand(rc.Cmd.Cmd, rc.Render)
+	script, positional, err := runio.RenderShellCommand(rc.Cmd.Cmd, rc.Render)
 	if err != nil {
-		return fmt.Errorf("render cmd: %w", err)
+		return err
 	}
 
-	cmd := exec.CommandContext(ctx, config.ShellBin(rc.Config), "-c", shellQuote(bin)+" "+rendered) //nolint:gosec
+	// positional is nil unless the template has a ${args} slot; the shell then
+	// binds them to "$@" without them ever entering the program text.
+	shellArgs := append([]string{"-c", shellQuote(bin) + " " + script}, positional...)
+	cmd := exec.CommandContext(ctx, config.ShellBin(rc.Config), shellArgs...) //nolint:gosec
 	runio.BindCancel(cmd)
 	if rc.ProjectRoot != "" {
 		cmd.Dir = rc.ProjectRoot

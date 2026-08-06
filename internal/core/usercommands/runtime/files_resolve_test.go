@@ -999,7 +999,7 @@ func TestComputeFilePaths_DumpDeployIntegration(t *testing.T) {
 		Env: map[string]string{
 			"DB_NAME":        "${param.database}",
 			"TARGET_DB_NAME": "${param.target_database}",
-			"DB_USER":        "${db.user}",
+			"DB_USER":        "${vars.db.user}",
 			"DUMP_LOCATION":  "${files.dump.path}",
 		},
 	}
@@ -1009,9 +1009,11 @@ func TestComputeFilePaths_DumpDeployIntegration(t *testing.T) {
 		ProjectRoot: tmpdir,
 		Render: &tpl.RenderContext{
 			Raw: map[string]any{
-				"db": map[string]any{
-					"user":     "root",
-					"password": "secret",
+				"vars": map[string]any{
+					"db": map[string]any{
+						"user":     "root",
+						"password": "secret",
+					},
 				},
 			},
 			Params: map[string]any{

@@ -5,8 +5,10 @@
 ## Usage
 
 ```bash
-dwe docs
+dwe docs [--lang <code>]
 ```
+
+`--lang` preselects the locale the browser opens in (default: active locale or `en`); `L` still cycles languages in-session.
 
 ## Requirements
 

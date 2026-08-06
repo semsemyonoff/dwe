@@ -28,6 +28,7 @@ import (
 	valtests "github.com/semsemyonoff/dwe/internal/core/validate/tests"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/setup"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -39,10 +40,11 @@ type validateJSON struct {
 }
 
 type validateSummaryJSON struct {
-	Ok      int `json:"ok"`
-	Info    int `json:"info"`
-	Warning int `json:"warning"`
-	Error   int `json:"error"`
+	Scope   string `json:"scope"`
+	Ok      int    `json:"ok"`
+	Info    int    `json:"info"`
+	Warning int    `json:"warning"`
+	Error   int    `json:"error"`
 }
 
 type diagnosticJSON struct {
@@ -125,6 +127,58 @@ func completeLevels(_ *cobra.Command, _ []string, toComplete string) ([]string, 
 	return out, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
 }
 
+// filterHintThreshold is the number of rendered diagnostic rows above which a
+// run counts as "long" and earns the trailing --level/--quiet hint. Roughly one
+// screenful: below it the table is readable as-is and the hint is pure noise.
+const filterHintThreshold = 20
+
+// shouldEmitFilterHint decides whether a human-mode run is long enough — and
+// narrowable enough — to warrant naming the filter flags.
+//
+// Three suppressions beyond the threshold itself, all guarding the same thing:
+// never name a flag that would not actually improve the output.
+//   - the user is already filtering (--quiet or --level), so they know the flags;
+//   - every displayed row is already an error, in which case both flags would
+//     remove nothing;
+//   - nothing worth keeping survives either flag. A clean project is long
+//     precisely because it renders one ok row per check, and both suggested
+//     flags then empty the table completely — which is what a freshly
+//     scaffolded project does (21 rows, 0 errors, 0 warnings), i.e. the single
+//     most common way to meet the threshold.
+func shouldEmitFilterHint(rows, errors, warnings int, quiet bool, levelRaw string) bool {
+	if quiet || strings.TrimSpace(levelRaw) != "" {
+		return false
+	}
+	if rows <= filterHintThreshold {
+		return false
+	}
+	if errors == 0 && warnings == 0 {
+		return false
+	}
+	return rows > errors
+}
+
+// emitFilterHint writes a single info line to stderr after a long diagnostics
+// table, naming the two flags that shrink it. The output-narrowing flags have
+// existed since May and were used zero times across the sessions this hint was
+// added for — a table that scrolls past a screen is exactly the point of need.
+//
+// Same shape and constraints as cmdctx.EmitDefaultNotice: stderr only (stdout
+// stays the parseable surface), no-op in JSON mode where the consumer filters
+// the array itself.
+func emitFilterHint(cmd *cobra.Command, flags *cmdctx.RootFlags, rows int, summary validate.Summary, quiet bool, levelRaw string) {
+	if flags.Output == "json" {
+		return
+	}
+	if !shouldEmitFilterHint(rows, summary.Errors, summary.Warnings, quiet, levelRaw) {
+		return
+	}
+	sharedrender.NewWriter(cmd.ErrOrStderr()).Info(fmt.Sprintf(
+		"Showing %d diagnostics. Narrow the output with --level error (or --level error,warning), or --quiet to drop the ok/info rows.",
+		rows,
+	))
+}
+
 // severityString converts a validate.Severity to its JSON string representation.
 func severityString(s validate.Severity) string {
 	switch s {
@@ -141,8 +195,23 @@ func severityString(s validate.Severity) string {
 	}
 }
 
+// canonicalScope renders scope as the machine-identifiable "domain" or
+// "domain/id" form (or "all" for an unscoped run), so a narrowed run like
+// `dwe validate config services` is distinguishable from `dwe validate
+// config` by more than the raw diagnostic count. This is deliberately
+// separate from validateScopeLabel, which produces prose for the header.
+func canonicalScope(scope []string) string {
+	if len(scope) == 0 {
+		return "all"
+	}
+	if len(scope) == 1 {
+		return scope[0]
+	}
+	return scope[0] + "/" + scope[1]
+}
+
 // buildValidateData converts diagnostics and summary into the JSON DTO.
-func buildValidateData(diags []validate.Diagnostic, summary validate.Summary) validateJSON {
+func buildValidateData(diags []validate.Diagnostic, summary validate.Summary, scope []string) validateJSON {
 	diagnostics := make([]diagnosticJSON, 0, len(diags))
 	for _, d := range diags {
 		// d.Target is a display-oriented label and may carry multi-line
@@ -169,6 +238,7 @@ func buildValidateData(diags []validate.Diagnostic, summary validate.Summary) va
 	}
 	return validateJSON{
 		Summary: validateSummaryJSON{
+			Scope:   canonicalScope(scope),
 			Ok:      summary.OKs,
 			Info:    summary.Infos,
 			Warning: summary.Warnings,
@@ -534,7 +604,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	// Diagnostics ARE the data — no error envelope is emitted for validation
 	// failures (the exit code conveys severity; the envelope would be redundant).
 	if flags.Output == "json" {
-		data := buildValidateData(displayDiags, summary)
+		data := buildValidateData(displayDiags, summary, scope)
 		if err := cmdctx.WriteJSON(flags, cmd, data); err != nil {
 			return err
 		}
@@ -551,11 +621,13 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	if len(rows) > 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.DiagnosticsByDomain(rows))
 	}
-	summaryLine := render.FormatSummary(summary)
+	summaryLine := render.FormatSummary(summary) + fmt.Sprintf(" (scope: %s)", canonicalScope(scope))
 	if partialLoadErr != nil {
 		summaryLine += " (main config did not load; some validations skipped)"
 	}
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), summaryLine)
+
+	emitFilterHint(cmd, flags, len(rows), summary, quiet, levelRaw)
 
 	// Check if validation failed.
 	if validate.ExitCode(summary, strict) != 0 {

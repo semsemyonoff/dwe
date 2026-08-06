@@ -61,6 +61,19 @@ var allowedRootKeySet = func() map[string]struct{} {
 	return m
 }()
 
+// IsAllowedRootKey reports whether key is a permitted top-level config key.
+//
+// Callers outside this package must ask through here rather than probing
+// cfg.Raw for the key: the strict root guarantees Raw's keys are a SUBSET of
+// allowedRootKeys, not an equal set. A project that never declared vars: has
+// no "vars" key in Raw at all, so a Raw-presence probe silently treats every
+// ${vars.*} reference as none of its business — which is exactly the case the
+// config.template_refs validator exists to catch.
+func IsAllowedRootKey(key string) bool {
+	_, ok := allowedRootKeySet[key]
+	return ok
+}
+
 // binOverride returns the user-configured override for the named binary, or
 // def when cfg is nil, cfg.userConfig is nil, or no override is present.
 func binOverride(cfg *DweConfig, key, def string) string {
@@ -3197,6 +3210,9 @@ func validateStepShape(step *DeployStep, phaseName string) error {
 		if err := step.Check.Validate(); err != nil {
 			return fmt.Errorf("step %q (phase %q) check: %w", step.Name, phaseName, err)
 		}
+		if err := validateAutoCheck(step, phaseName); err != nil {
+			return err
+		}
 	}
 	if step.When != nil {
 		if err := step.When.Validate(); err != nil {
@@ -3204,6 +3220,34 @@ func validateStepShape(step *DeployStep, phaseName string) error {
 		}
 	}
 	return nil
+}
+
+// validateAutoCheck enforces the three rules of the `check: auto` sentinel.
+// They are exhaustive: condition.Type has exactly three values, and only
+// type: shell can be inverted.
+//
+// A non-sentinel check is a no-op here. An unknown when: type is left to
+// When.Validate(), which reports it with its own message.
+func validateAutoCheck(step *DeployStep, phaseName string) error {
+	if !IsAutoCheck(step.Check) {
+		return nil
+	}
+	if step.When == nil {
+		return fmt.Errorf("step %q (phase %q): check: auto has no when: to invert — add a when: {type: shell, ...} or write the check out explicitly",
+			step.Name, phaseName)
+	}
+	switch step.When.Type {
+	case condition.TypeShell:
+		return nil
+	case condition.TypeBuiltin:
+		return fmt.Errorf("step %q (phase %q): check: auto requires when: {type: shell}, got when: {type: builtin} — the when: and check: builtin registries are disjoint, so there is no check predicate expressing NOT %q; write the check out explicitly",
+			step.Name, phaseName, step.When.Cmd)
+	case condition.TypeTemplate:
+		return fmt.Errorf("step %q (phase %q): check: auto requires when: {type: shell}, got when: {type: template} — template conditions are evaluated at plan time, so any step that reaches execution had when: true and its inverse would always fail",
+			step.Name, phaseName)
+	default:
+		return nil
+	}
 }
 
 // ValidateDeploySteps runs the full step-shape validation (required type/cmd,
@@ -3405,6 +3449,11 @@ func ResolvePath(m map[string]any, path string) (any, bool) {
 
 // loadRawYAML reads a YAML file into a raw map. Returns os.ErrNotExist when
 // the file does not exist so callers can treat it as optional.
+//
+// An empty or all-comment document yields a non-nil EMPTY map, never nil: the
+// map is a deepMerge destination at several call sites (docker.yml + its
+// docker.local.yml override) and assigning into a nil map panics. The scaffold
+// ships workspace/docker.yml fully commented, so this is the ordinary case.
 func loadRawYAML(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -3413,6 +3462,9 @@ func loadRawYAML(path string) (map[string]any, error) {
 	var m map[string]any
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if m == nil {
+		m = make(map[string]any)
 	}
 	return m, nil
 }

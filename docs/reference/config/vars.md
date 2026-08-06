@@ -197,7 +197,9 @@ fields) and false negatives (references in structural keys). Two reference
 syntaxes are tracked:
 
 1. **`${vars.x}` template references** — in fields rendered via the `${...}`
-   engine (declarative command `cmd` / `env` / `with`, `info.yml` `text` /
+   engine (declarative command `cmd` / `argv` / `compose_args` /
+   `argv_append_from` / `env` / `with`, pipeline step `timeout` /
+   `files_gate.command`, `info.yml` `text` /
    `value`, scalar `when:`, `docker.yml` `project_name`, confirm prompts) and in
    config render templates under `workspace/templates/config/**` (arbitrary text
    → line scan for both `${vars.x}` and `{{ resolve .Raw "vars.x" }}`). These are
@@ -276,6 +278,19 @@ boundary, **not** naive prefix matching:
 
 An empty or absent `vars_writable` list means **no container writes** — the safe
 default. Malformed patterns fail closed (deny).
+
+**What allowlisting a var actually grants.** Pipeline step fields (`cmd:`,
+`when.cmd`, `check.cmd`, `timeout:`) are rendered through the `${...}`
+substrate, and a rendered `cmd:` is handed to the **host's** `sh -c` as program
+text — substitution is textual, never shell-quoted (see
+[Templates in step fields](deploy/index.md)). So a var that is both
+container-writable **and** referenced from a pipeline command lets the container
+choose part of a host command line: a value of `x; some-command` runs
+`some-command` on the host at the next `dwe deploy run`. That is the natural
+combination — a container usually wants to write a var precisely because a
+pipeline reads it — so treat `vars_writable` as delegating host-shell input to
+whoever can reach the container, and keep the list to vars that are consumed as
+data (config renders, `exports.env`) rather than spliced into commands.
 
 ### `render config` from a container
 

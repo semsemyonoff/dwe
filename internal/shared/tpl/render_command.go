@@ -38,6 +38,27 @@ type RenderContext struct {
 	// from the generated-value store (.dwe/generated.yml). Absent keys
 	// resolve to "" — consistent with all other ${...} resolvers.
 	Generated map[string]string
+	// Args holds the pass-through arguments a user supplied after `--`
+	// (`dwe cmd site.test -- --run x.test.ts`), already merged with the
+	// command's args.default / args.prefix policy. Referenced as ${args}.
+	//
+	// The EXECUTION paths never read this field through the template engine.
+	// A `cmd:` template has its ${args} slot rewritten to "$@" and the arguments
+	// handed to `sh -c` as positional parameters; an `argv:` element equal to
+	// ${args} is spliced element-wise. Both render with Args cleared, so a raw
+	// `{{ .Args }}` cannot interpolate caller bytes into a command — see
+	// runio.RenderShellCommand / RenderArgvWithArgs.
+	//
+	// What renderArgs (the ${args} resolver) serves is the remaining, non-executing
+	// references of a command that already opted in through `cmd:`/`argv:` — a
+	// `messages.*` line, an `env:` value, a `workdir` — where the value lands in
+	// display text or a single exec argument with no shell to re-parse it, and a
+	// plain space-joined form is correct. Those fields never grant access to the
+	// arguments on their own: the opt-in gate is `cmd:`/`argv:` alone
+	// (model.CommandDef.ReferencesArgs), so a command naming ${args} only in a
+	// secondary field renders it against empty Args. Empty Args renders as the
+	// empty string.
+	Args []string
 	// SnapshotScope governs which ${snapshot.*} keys are allowed at compile
 	// time. Zero value (SnapshotScopeNone) makes any ${snapshot.*} reference
 	// a compile error.
@@ -97,12 +118,142 @@ var varPattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`)
 // renderer actually rewrites — no internal whitespace, no leading digit.
 var VarPattern = varPattern
 
+// KnownVarHeads is the set of ${...} head namespaces CompileVarSyntax will
+// rewrite into a template call. It is the union of the merged-config root
+// keys (mirroring internal/core/project/config's allowedRootKeys — kept in
+// sync by a cross-check test in that package, since tpl must not import
+// config) and the special namespaces switched on below (files, host, param,
+// context, snapshot, generated, args). A ${...} whose head is NOT in this set
+// is left as a literal string instead of being rewritten — see the
+// unknown-head branch of CompileVarSyntax for why.
+//
+// __configPath is deliberately excluded: it is an internal key the config
+// loader injects, not part of the authoring contract, so a reference to it
+// renders as a literal rather than leaking loader internals.
+var KnownVarHeads = []string{
+	// mirrors config.allowedRootKeys
+	"schema_version",
+	"project",
+	"runtime",
+	"state",
+	"exports",
+	"compose",
+	"ui",
+	"docs",
+	"services",
+	"vars",
+	"update",
+	"bridge",
+	"stop",
+	// special namespaces CompileVarSyntax switches on directly
+	"files",
+	"host",
+	"param",
+	"context",
+	"snapshot",
+	"generated",
+	"args",
+}
+
+// contextOnlyVarHeads is the subset of KnownVarHeads that resolves from a
+// caller-populated RenderContext field rather than from Raw/Host: Params,
+// Context, Files, Generated, Args. Every one of those resolvers is lenient by
+// contract — an absent map yields "" — which is right where the namespace has
+// a source and the key is simply missing, and wrong where the namespace has no
+// source at all: the reference silently erases instead of failing.
+//
+// snapshot is deliberately absent: validateSnapshotScope already rejects it
+// out of scope, with a message naming the workflow it belongs to.
+var contextOnlyVarHeads = map[string]struct{}{
+	"param":     {},
+	"context":   {},
+	"files":     {},
+	"generated": {},
+	"args":      {},
+}
+
+// ValidateRawScope rejects ${...} references whose namespace cannot resolve on
+// a Raw/Host-only render path — the pipeline step renderer and the scenario
+// renderer, neither of which has command params, resolved files, or harvested
+// generated values to offer.
+//
+// Those namespaces are known heads, so CompileVarSyntax rewrites them into a
+// template call and the lenient resolver behind it renders them to "": without
+// this pre-scan `cmd: "git checkout ${param.branch}"` becomes `git checkout `
+// in `dwe deploy plan` and at run time, with nothing downstream to flag it
+// (UnresolvedTemplateRefs skips namespace references by construction). Callers
+// run it before RenderCommand and fail the resolve on error — the same call
+// shape, and the same reasoning, as validateSnapshotScope.
+//
+// The membership test goes through IsVarNamespaceRef, so a bare shell variable
+// that happens to be spelled like a namespace (`for f in ${files}`) is not a
+// reference and is left alone — see there.
+func ValidateRawScope(expr string) error {
+	for _, m := range varPattern.FindAllStringSubmatch(expr, -1) {
+		inner := m[1]
+		head, _, _ := strings.Cut(inner, ".")
+		if !IsVarNamespaceRef(inner) {
+			continue
+		}
+		if _, ok := contextOnlyVarHeads[head]; ok {
+			return fmt.Errorf("template uses ${%s}: the %q namespace has no source here (only project config paths and ${host.*} resolve on this path)", inner, head)
+		}
+	}
+	return nil
+}
+
+// knownVarHeadSet is the membership index over KnownVarHeads.
+var knownVarHeadSet = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(KnownVarHeads))
+	for _, h := range KnownVarHeads {
+		m[h] = struct{}{}
+	}
+	return m
+}()
+
+// IsKnownVarHead reports whether head is a namespace CompileVarSyntax rewrites
+// into a template call. Callers outside this package (the pipeline resolve gate
+// and its unresolved-reference reporter) must ask through here rather than
+// re-indexing the exported KnownVarHeads slice, so there is exactly one
+// membership index and it cannot drift from the rewrite itself.
+func IsKnownVarHead(head string) bool {
+	_, ok := knownVarHeadSet[head]
+	return ok
+}
+
+// IsVarNamespaceRef reports whether inner (the dot-path inside a ${...}) is a
+// dwe namespace reference rather than an unrelated $-braced token. It is the
+// head test plus one rule: the reference must carry a tail.
+//
+// Every namespace form in the authoring contract is dotted — ${vars.db.host},
+// ${project.name}, ${host.uid}, ${files.id.path}. A head-only ${host} /
+// ${files} / ${services} is not one of them; it is a lowercase shell variable
+// that happens to collide with a namespace name, and pipeline `cmd:` strings
+// (rendered since resolve-time rendering landed) are full of those. Treating it
+// as a reference resolved it against .Raw, where it either erased to "" (no
+// matching root key) or interpolated a whole config sub-map as Go's map[...]
+// text — both silent, and both the exact failure mode the known-head whitelist
+// exists to prevent. ${args} is the one bare form the contract defines, so it
+// stays a reference.
+//
+// Callers outside this package must ask through here (or IsKnownVarHead for the
+// head alone) rather than re-deriving the rule, so the gate, the scope check,
+// the unresolved-reference reporter and CompileVarSyntax cannot drift apart.
+func IsVarNamespaceRef(inner string) bool {
+	head, _, hasTail := strings.Cut(inner, ".")
+	if !IsKnownVarHead(head) {
+		return false
+	}
+	return hasTail || head == "args"
+}
+
 // CompileVarSyntax rewrites ${...} expressions into Go template calls.
 //
-// Simple vars and dot-paths are rewritten using the resolve helper:
+// Vars and dot-paths whose head is in KnownVarHeads are rewritten using the
+// resolve helper:
 //
 //	${project.name}  →  {{ resolve .Raw "project.name" }}
-//	${name}          →  {{ resolve .Raw "name" }}
+//	${vars.db.user}  →  {{ resolve .Raw "vars.db.user" }}
 //
 // The special namespaces "param" and "context" are routed to their maps:
 //
@@ -122,6 +273,10 @@ var VarPattern = varPattern
 // the current service (config render pass):
 //
 //	${generated.app_key} → {{ resolveGenerated .Generated "app_key" }}
+//
+// A ${...} whose head is NOT in KnownVarHeads (a shell-style ${HOME}, a typo,
+// an unrelated $-braced token) is left unchanged rather than collapsing to
+// "" — the correctness argument for this is documented on KnownVarHeads.
 //
 // Literal Go template expressions ({{ }}) are left unchanged.
 // A literal dollar sign can be written as $$ (passed through as-is, not rewritten).
@@ -172,10 +327,26 @@ func CompileVarSyntax(input string) string {
 			if hasTail {
 				return fmt.Sprintf(`{{ resolveGenerated .Generated %q }}`, tail)
 			}
+		case "args":
+			// ${args} is a whole-namespace reference with no sub-key — there is
+			// nothing to index into. Anything with a tail (${args.0}) falls
+			// through to the generic .Raw resolve — "args" has no matching key
+			// in .Raw, so it yields "".
+			if !hasTail {
+				return "{{ renderArgs .Args }}"
+			}
 		}
 
-		// Default: resolve against .Raw config map
-		return fmt.Sprintf(`{{ resolve .Raw %q }}`, inner)
+		// Default: resolve against .Raw config map, but only when the head is
+		// a known namespace AND the reference carries a tail. An unknown head
+		// (a shell-style ${VAR}, a typo, or a stale top-level dot-path from
+		// before the strict root landed) is left as a literal ${...} instead of
+		// silently collapsing to "" — see KnownVarHeads. A head-only reference
+		// is left literal for the same reason — see IsVarNamespaceRef.
+		if IsVarNamespaceRef(inner) {
+			return fmt.Sprintf(`{{ resolve .Raw %q }}`, inner)
+		}
+		return match
 	})
 }
 
@@ -263,7 +434,27 @@ func commandFuncMap() template.FuncMap {
 	fm["resolveMap"] = resolveMap
 	fm["resolveFile"] = resolveFile
 	fm["resolveGenerated"] = resolveGenerated
+	fm["renderArgs"] = renderArgs
 	return fm
+}
+
+// renderArgs joins pass-through arguments for the ${args} references that do
+// NOT drive process execution — a `messages.success` line, an `env:` value, a
+// `workdir`. Those land in a display string or a single exec argument, with no
+// shell to re-parse them, so a plain space-joined form is both correct and safe.
+//
+// The execution paths never reach this function. A `cmd:` template has its
+// ${args} slot rewritten to "$@" before rendering, with the arguments passed as
+// positional parameters (runio.RenderShellCommand); an `argv:` element equal to
+// ${args} is spliced element-wise (runio.RenderArgvWithArgs). That split is the
+// security boundary: shell-quoting the arguments and interpolating them into the
+// program text — what this function used to do — is safe only in an unquoted
+// argument position, and a command author writing `"${args}"` (the natural shell
+// habit) reopened command substitution.
+//
+// Empty args render as the empty string.
+func renderArgs(args []string) string {
+	return strings.Join(args, " ")
 }
 
 // resolveRaw resolves a dot-path in a raw config map.

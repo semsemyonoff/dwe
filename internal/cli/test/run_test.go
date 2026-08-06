@@ -933,3 +933,59 @@ func TestNewTestRunCmd_TimeoutParseError(t *testing.T) {
 		t.Fatal("expected a flag-parse error for an invalid --timeout value")
 	}
 }
+
+// TestRunTest_Seq_KeepFailed_PointsAtLiveEvidence pins the second kept-run
+// line. A failed --keep run collects no report by design; without this line the
+// absence reads as an omission and sends the reader hunting for a report
+// directory that will never exist.
+func TestRunTest_Seq_KeepFailed_PointsAtLiveEvidence(t *testing.T) {
+	baseDir := t.TempDir()
+	writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+
+	f := &fakeRunner{results: map[string]*envtest.ScenarioResult{
+		"smoke": {
+			Name:           "smoke",
+			Status:         envtest.StatusFailed,
+			FailedStep:     "tests/frontend answers",
+			ComposeProject: "proj-t-smoke-abc123",
+			CopyPath:       "/tmp/copy",
+		},
+	}}
+	withFakeRunner(t, f)
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	_ = runTest(cmd, flags, nil, true, 0, false, 1)
+
+	got := out.String()
+	if !strings.Contains(got, "no report collected under --keep") {
+		t.Errorf("missing live-evidence note:\n%s", got)
+	}
+	if !strings.Contains(got, "/tmp/copy/.dwe/logs/") {
+		t.Errorf("note must name the copy's log directory:\n%s", got)
+	}
+	if !strings.Contains(got, "docker compose -p proj-t-smoke-abc123 logs") {
+		t.Errorf("note must name the compose logs command:\n%s", got)
+	}
+}
+
+// TestRunTest_Seq_KeepPassed_NoEvidenceNote keeps the passing --keep output
+// byte-identical: there is nothing to debug, so the extra line would be noise.
+func TestRunTest_Seq_KeepPassed_NoEvidenceNote(t *testing.T) {
+	baseDir := t.TempDir()
+	writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+
+	f := &fakeRunner{results: map[string]*envtest.ScenarioResult{
+		"smoke": {Name: "smoke", Status: envtest.StatusPassed, ComposeProject: "p", CopyPath: "/tmp/copy"},
+	}}
+	withFakeRunner(t, f)
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	if err := runTest(cmd, flags, nil, true, 0, false, 1); err != nil {
+		t.Fatalf("runTest: %v", err)
+	}
+	if strings.Contains(out.String(), "no report collected") {
+		t.Errorf("passing run must not carry the evidence note:\n%s", out.String())
+	}
+}

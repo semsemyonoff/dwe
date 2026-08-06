@@ -672,7 +672,7 @@ func TestRenderConfigsForRun_RendersAndReplays(t *testing.T) {
 	root := t.TempDir()
 	writeConfigPackFixture(t, root, "default",
 		"render:\n  - from: env.tmpl\n    to: src/.env\n",
-		map[string]string{"env.tmpl": "DB=${databases.magento}\nAPP_KEY=${generated.app_key}\n"})
+		map[string]string{"env.tmpl": "DB=${vars.databases.magento}\nAPP_KEY=${generated.app_key}\n"})
 
 	store := generatedstore.New()
 	store.SetIfAbsent("main", "app_key", "base64:secret==")
@@ -681,7 +681,7 @@ func TestRenderConfigsForRun_RendersAndReplays(t *testing.T) {
 	}
 
 	cfg := appServiceCfg(
-		map[string]any{"databases": map[string]any{"magento": "pgsql"}},
+		map[string]any{"vars": map[string]any{"databases": map[string]any{"magento": "pgsql"}}},
 		map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}},
 	)
 	buf := &bytes.Buffer{}
@@ -833,10 +833,10 @@ func TestRenderConfigsForRun_SkipsNonAppServices(t *testing.T) {
 	root := t.TempDir()
 	writeConfigPackFixture(t, root, "default",
 		"render:\n  - from: env.tmpl\n    to: src/.env\n",
-		map[string]string{"env.tmpl": "DB=${databases.magento}\n"})
+		map[string]string{"env.tmpl": "DB=${vars.databases.magento}\n"})
 
 	cfg := &config.DweConfig{
-		Raw: map[string]any{"databases": map[string]any{"magento": "pgsql"}},
+		Raw: map[string]any{"vars": map[string]any{"databases": map[string]any{"magento": "pgsql"}}},
 		Services: map[string]config.ServiceConfig{
 			"main": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main"},
 			// Tool/infra services have no Dir; iterating them would resolve the

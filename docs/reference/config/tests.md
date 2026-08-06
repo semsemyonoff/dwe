@@ -20,6 +20,7 @@ Declarative integration-test scenarios (`dwe test`).
 - [`dwe test run`](#dwe-test-run)
   - [`--parallel N`](#--parallel-n)
 - [`dwe test list`](#dwe-test-list)
+  - [Cost profile (`--output json`)](#cost-profile---output-json)
 - [`dwe test clean`](#dwe-test-clean)
 - [`dwe validate tests`](#dwe-validate-tests)
 - [Compose isolation scanner](#compose-isolation-scanner)
@@ -138,7 +139,9 @@ Any `KindPredicate` builtin (`file_exists`, `executable_in_path`, `tcp_reachable
 
 See the [builtins reference](deploy/builtins.md#http_check) for the full parameter list and retry semantics.
 
-**`${...}` rendering is a scenario-loader concern, not an engine change.** The pipeline engine passes builtin `with:` params and shell `cmd:` verbatim — only individual builtins render their own fields. The scenario loader renders `${...}` in step `with:`/`cmd:` against the copy's resolved config **before** the steps run (the same `${...}` substrate user commands and config templates use), so `${vars.app.http_port}` resolves to the concrete allocated port. Paths in builtin params (e.g. `file_exists` `path:`) resolve relative to the copy's root — assertions always inspect the test environment, never the original tree.
+**`${...}` rendering happens in the pipeline engine, exactly once.** Scenario steps resolve through the same path as `deploy.yml` steps, so `cmd`, the string leaves of `with`, `check`, `timeout` and a shell `when:` are rendered at resolve time against the copy's resolved config — `${vars.app.http_port}` resolves to the concrete allocated port. There is no scenario-local pre-pass: rendering is not idempotent, and a second one would double-expand a var whose value is itself a `${...}` reference, so a scenario would test something the deploy pipeline never runs.
+
+The same rules as [deploy steps](deploy/index.md) therefore apply here: an unrecognized head (`${HOME}`, a typo) is left as a literal `${...}` rather than collapsing to an empty string, and `${param.*}` / `${context.*}` / `${files.*}` / `${generated.*}` / `${args}` have no source on this path — using one fails the scenario at resolve time with a message naming it. Paths in builtin params (e.g. `file_exists` `path:`) resolve relative to the copy's root — assertions always inspect the test environment, never the original tree.
 
 A failing step fails the scenario; remaining steps are skipped.
 
@@ -195,6 +198,8 @@ The manifest (`scenario`, `run_id`, `compose_project`, `copy_path`, `bridge_dir`
 Runs by default after every scenario (pass/fail/timeout/Ctrl+C), driven only by the manifest, in order: `docker compose down --remove-orphans` (**never `-v`**, and the copy's `args.down` policy is bypassed so a project that sets `args.down: ["-v"]` cannot delete a shared cache volume referenced as a plain named volume in a raw compose file) → reap any remaining containers labelled with the manifest's exact `com.docker.compose.project` value → remove the test project's own volumes (prefix-filtered by compose project name; `shared:` volumes survive, same semantics as `dwe reset`) → stop any bridge daemon the deploy started in the copy → remove the copy directory → delete the manifest → release the flock. Each step is best-effort — a failure is logged and later steps still run.
 
 `--keep` skips every step above, leaves the manifest and copy in place, and prints the compose project name, the copy path, and a cleanup hint. A subsequent `dwe test run` of the **same** scenario name fails fast (a kept run's manifest still exists) rather than silently deleting the kept environment out from under you — clean it up manually, or run [`dwe test clean`](#dwe-test-clean).
+
+A **non-passing** `--keep` run prints a second line naming where the evidence actually is — `<copy>/.dwe/logs/` and `docker compose -p <project> logs`. No [failure report](#failure-reports) is collected under `--keep` (the environment is still alive, so a snapshot of it would be redundant), and without that line the absence reads as an omission rather than a deliberate trade.
 
 ## Failure reports
 
@@ -254,6 +259,47 @@ dwe test list
 ```
 
 Lists every scenario under `workspace/tests/*.yml` with its `description:`, verbatim. An absent `workspace/tests/` directory lists nothing and is not an error.
+
+### Cost profile (`--output json`)
+
+`dwe test list --output json` carries a `cost_profile` object per scenario — what running that scenario would cost, and how far its isolation reaches:
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "redis-off",
+      "description": "Deploy with redis disabled",
+      "cost_profile": {
+        "enabled_services": 3,
+        "build_services": ["app"],
+        "external_images": ["postgres:16", "redis:7"],
+        "max_start_period_seconds": 30,
+        "shared_volumes": 1,
+        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache"}],
+        "host_steps": 2
+      }
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `enabled_services` | dwe services enabled **after this scenario's `env.services` overlay** — the number that actually differs between two scenarios of the same project. A `required: true` service stays enabled even when a scenario disables it, exactly as the config loader resolves the generated `local.yml`. |
+| `build_services` | Compose services declaring `build:` in the enabled chain, sorted. |
+| `external_images` | Distinct `image:` references of compose services that do **not** build locally, sorted — what a cold run would have to pull. A service that builds carries a local tag (`image: myproject-app:dev`), which is not something to pull and is therefore excluded. |
+| `max_start_period_seconds` | The largest healthcheck `start_period` in the enabled chain. **Max, not sum**: `docker compose up --wait` waits in parallel, so a sum over-estimates the more services a project has. A disabled or unparseable healthcheck contributes nothing. |
+| `shared_volumes` | Count of `docker.yml` volumes declared `shared: true`. These resolve to their verbatim names and are written into by a test run. |
+| `isolation_findings` | The **non-blocking** findings of the [compose isolation scanner](#compose-isolation-scanner) — `named_volume` / `external_volume` / `named_network` / `external_network`, i.e. resources shared with the working environment. The blocking kinds (`container_name`, `raw_host_port`) are omitted: they abort the scenario before deploy anyway. Full messages come from `dwe validate tests`. |
+| `host_steps` | Steps this scenario would run **on the host**, outside the container sandbox: its own steps, the deploy pipeline it triggers (project-wide plus the enabled services'), and the [`workspace/validate.yml`](validate.md) checks the run's `dwe validate` and `dwe deploy run` preflight execute in the copy — a check counts when it is `type: builtin` with `cmd: shell` or a `type: command` (the loader restricts those to `shell` / `script` user commands), subject to the same `services:` gate the checks loader applies. Pipeline steps are counted descending into `parallel:` groups. The counted step forms are `type: shell`, `type: builtin` with `cmd: shell`, a `type: dwe` whose subcommand re-enters project-authored code (`cmd`, `run`, `restart`, `deploy`, `reset`, `test`), a `type: command` whose command resolves to a host-executing one, and any step carrying a shell `when:` or a host-executing `check:` (including `check: auto`). A referenced command counts as host-executing when it declares `argv_append_from:` (the expression runs on the host even for a container command), or — absent that — when it is neither `service_exec` nor `service_run`, applying the same `type: dwe` / `type: builtin` rules recursively and, for a `workflow`, counting a sub-step that is itself host-executing or carries a `cmd:` `when:`. dwe's own subcommands (`docker up --wait`, `info`, `render …` — the whole built-in default pipeline) are **not** counted: they are dwe machinery acting on the disposable copy, which is what the scenario exists to run. A step is counted once however many of those it uses, and a phase-level shell `when:` counts as one. A `type: command` reference that does not resolve counts as a host step — the field gates an unattended run, so the unknown case closes the gate. Host side effects are [not sandboxed](#documented-limitations). |
+
+Two properties are deliberate:
+
+- **Facts only — there is no `cheap`/`expensive` verdict field.** What counts as cheap enough to run unattended is a policy that belongs to the caller (for AI agents, the dwe skill states the rule), not to the CLI.
+- **It reports whether there *is* a build, not what the build costs.** The dominant factor — whether the Docker layer cache is warm, seconds versus many minutes — has no static source and is not modelled.
+
+The profile is **omitted** (not empty, not an error) when the project state it needs does not load: `dwe test list` takes no locks, touches no Docker, and requires no loadable config — it is the command you reach for while the config is mid-edit, and it keeps working there. The plain-text listing never computes a profile at all.
 
 ## `dwe test clean`
 
@@ -351,6 +397,8 @@ dwe test list --output json
 ```
 
 `status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario, a `--keep` run, or when collection could not create the report directory. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
+
+`dwe test list --output json` additionally carries a per-scenario [cost profile](#cost-profile---output-json).
 
 ## Documented limitations
 

@@ -27,6 +27,7 @@ type commandInspectJSON struct {
 	DerivedFrom      string            `json:"derived_from,omitempty"`
 	Cmd              string            `json:"cmd,omitempty"`
 	Argv             []string          `json:"argv,omitempty"`
+	ArgvAppendFrom   string            `json:"argv_append_from,omitempty"`
 	Service          string            `json:"service,omitempty"`
 	User             string            `json:"user,omitempty"`
 	Workdir          string            `json:"workdir,omitempty"`
@@ -38,8 +39,19 @@ type commandInspectJSON struct {
 	With             map[string]any    `json:"with,omitempty"`
 	DaemonSpec       *daemonSpecJSON   `json:"daemon_spec,omitempty"`
 	Params           []paramEntryJSON  `json:"params,omitempty"`
+	Args             *argsJSON         `json:"args,omitempty"`
 	Env              map[string]string `json:"env,omitempty"`
 	Messages         *messagesJSON     `json:"messages,omitempty"`
+}
+
+// argsJSON mirrors the text inspect's "Args (pass-through after `--`)" section.
+// Present whenever cmd/argv references ${args} — an agent parsing inspect must
+// be able to answer "does this take arguments" without re-reading the YAML,
+// which is the whole reason the text section exists.
+type argsJSON struct {
+	Accepts bool     `json:"accepts"`
+	Prefix  []string `json:"prefix,omitempty"`
+	Default []string `json:"default,omitempty"`
 }
 
 type scriptDefJSON struct {
@@ -109,10 +121,19 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		}
 	}
 
+	if def.ReferencesArgs() {
+		data.Args = &argsJSON{Accepts: true}
+		if def.Args != nil {
+			data.Args.Prefix = def.Args.Prefix
+			data.Args.Default = def.Args.Default
+		}
+	}
+
 	switch def.Type {
 	case usercommands.CommandTypeShell, usercommands.CommandTypeDwe:
 		data.Cmd = def.Cmd
 		data.Argv = def.Argv
+		data.ArgvAppendFrom = def.ArgvAppendFrom
 		data.Workdir = def.Workdir
 	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
 		data.Service = def.Service
@@ -123,6 +144,7 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		data.ComposeArgs = def.ComposeArgs
 		data.Cmd = def.Cmd
 		data.Argv = def.Argv
+		data.ArgvAppendFrom = def.ArgvAppendFrom
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
 			data.Script = &scriptDefJSON{
@@ -282,6 +304,9 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
 		}
+		if def.ArgvAppendFrom != "" {
+			def2("argv_append_from", def.ArgvAppendFrom, 2)
+		}
 		if def.Workdir != "" {
 			def2("workdir", def.Workdir, 2)
 		}
@@ -312,6 +337,9 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		}
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
+		}
+		if def.ArgvAppendFrom != "" {
+			def2("argv_append_from", def.ArgvAppendFrom, 2)
 		}
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
@@ -351,6 +379,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		inspectWorkflowSteps(def2, sub, def, reg, translator, locale)
 	}
 
+	inspectArgsSection(def2, sub, def)
 	inspectDaemonSection(def2, sub, def, cfg, baseDir)
 	inspectParamsSection(def2, sub, def, translator, locale)
 	inspectContextSection(def2, sub, def)
@@ -421,6 +450,30 @@ func inspectWorkflowSteps(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 	}
 }
 
+// inspectArgsSection reports whether the command takes pass-through arguments
+// after `--`, and how they are placed.
+//
+// It renders whenever cmd/argv references ${args} — including with no args:
+// block at all — because "does this accept arguments" is the question a caller
+// has when `dwe cmd <id> -- …` was just rejected, and the answer must not depend
+// on whether the author happened to declare a policy.
+func inspectArgsSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef) {
+	if !def.ReferencesArgs() {
+		return
+	}
+	sub("Args (pass-through after `--`)")
+	def2("accepts", "yes — dwe cmd "+def.ID+" -- <args>", 4)
+	if def.Args == nil {
+		return
+	}
+	if len(def.Args.Prefix) > 0 {
+		def2("prefix", strings.Join(def.Args.Prefix, " ")+"  (inserted before your args)", 4)
+	}
+	if len(def.Args.Default) > 0 {
+		def2("default", strings.Join(def.Args.Default, " ")+"  (used when you pass none)", 4)
+	}
+}
+
 // inspectDaemonSection renders the Daemon (and resolved Container) section for a
 // synthetic daemon-derived command.
 func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, cfg *config.DweConfig, baseDir string) {
@@ -487,10 +540,13 @@ func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 		if err == nil {
 			// Honor docker.yml project_name so the displayed name matches the
 			// container the daemon builtins actually create. baseDir == "" (or a
-			// template-resolution error) degrades to FullName().
+			// template-resolution error) degrades to the normalized FullName().
 			projectName, perr := config.ResolveComposeProjectName(baseDir, cfg)
 			if perr != nil {
-				projectName = cfg.Project.FullName()
+				// Normalized fallback (ComposeProjectName(nil, cfg)), not the
+				// raw FullName(): the displayed name must match what compose
+				// stamps even on the docker.yml-unreadable path.
+				projectName = config.ComposeProjectName(nil, cfg)
 			}
 			name, err := daemon.ResolveContainerName(projectName, rendered)
 			if err == nil {

@@ -11,38 +11,78 @@ Run this once to load a project-aware index of services, commands, and docs:
 dwe docs llms-txt --lang en
 ```
 
-It emits a compact llms.txt snapshot (project context, services, commands, and
+It emits a compact llms.txt briefing (project context, services, commands, the
+pipeline builtin inventory, the diagnostic flags, the template-syntax map, and
 pointers into the built-in docs subsystem) designed to be loaded once and then
-navigated on demand.
+navigated on demand. The generic part stays under 12 KB; read it in full rather
+than grepping it.
 
 ## Conventions for AI agents
 
 - **Docs in English.** Pass `--lang en` to every `dwe docs …` command (`llms-txt`,
   `show`, `search`, `list`) — translated docs can lag behind the English source.
 - **Data as JSON.** For any command whose output you parse — `dwe status`,
-  `dwe validate`, `dwe info`, `dwe services`, `dwe vars …` — add `--output json`
-  (alias `-o json`); the default table output is formatted for humans. **Exception:**
-  never pass `-o json` to `dwe docs …` — those emit markdown, and for
-  `dwe docs llms-txt` / `dwe docs show` the `--output` flag is a *file path*, so
-  `-o json` would write a file literally named `json`.
+  `dwe validate`, `dwe info`, `dwe services list`, `dwe commands list`,
+  `dwe docs list`, `dwe docs search`, `dwe vars …` — add `--output json`
+  (alias `-o json`); the default table output is formatted for humans.
+  **Exception:** never pass `-o json` to `dwe docs llms-txt` or `dwe docs show`.
+  Those emit markdown, and there `--output` is a *file path*, so `-o json` would
+  write a file literally named `json`.
 
 ## Useful commands
 
+Day-to-day work goes through the first two — they cover most of what an agent needs:
+
+- `dwe commands list` — list this project's declared dev commands (tests, linters,
+  migrations, …); `dwe cmd <id>` runs one, `dwe cmd -i <id>` shows its definition
+  (type, service, workdir, the underlying command, its params)
+- `dwe shell <service> -c '<cmd>'` — run a one-off command inside a service
+  container, for anything not covered by a declared command
+
+Inspecting the environment:
+
 - `dwe` — project dashboard / header
+- `dwe status` — stack health, per-service state and container names
 - `dwe info` — environment summary (URLs, hosts, ports)
+- `dwe logs [service]` — stream container logs
 - `dwe validate` — static project-config validation
-- `dwe deploy` — bring the stack up
-- `dwe docs <topic> --lang en` — built-in reference (config schemas, guides)
+
+Lifecycle and reference:
+
+- `dwe deploy run` — run the deploy pipeline (first-time provisioning, image
+  builds, migrations); `dwe run` starts an already-provisioned stack
+- `dwe docs show <topic> --lang en` — built-in reference (config schemas, guides);
+  `dwe docs list --lang en` enumerates topics, `dwe docs search <substring> --lang en`
+  searches them
 
 ## Config layout
 
 - `workspace.yml` — project identity (name, prefix)
-- `workspace/defaults.yml` — versioned defaults (service toggles, exports)
+- `workspace/defaults.yml` — versioned defaults (service toggles, exports, `vars:`)
 - `workspace/styles.yml` — CLI branding and palette
-- `workspace/services/<name>/service.yml` — per-service definitions
-- `workspace/{deploy,lifecycle,info,docker}.yml` — optional overrides. They ship
-  fully commented; the built-in defaults stay active until you uncomment. An
-  active override **replaces** the whole built-in pipeline, so edit them whole.
+- `workspace/services/<name>/service.yml` — per-service definitions; the folder
+  name **is** the service key (there is no `name:` field)
+- `workspace/services/<name>/deploy.yml` — that service's provisioning pipeline
+- `workspace/templates/{config,ide,ai,git}/` — render packs
+- `workspace/tests/<scenario>.yml` — isolated integration-test scenarios
+  (`dwe test list`, `dwe validate tests`)
+- `workspace/{deploy,lifecycle,info}.yml` — optional pipeline overrides. They ship
+  fully commented; the built-in defaults stay active until you uncomment, and an
+  active section **replaces** the whole built-in one — copy every phase you still
+  want, don't uncomment a fragment.
+- `workspace/docker.yml` — compose policy. Unlike the pipelines above, overriding
+  here is **per key**: an uncommented key replaces just that key's default.
 
-> `CLAUDE.md` is a symlink to this file (a copy on platforms without symlinks).
-> Edit `AGENTS.md`.
+## The two `AGENTS.md` files
+
+- **This file** (project root) is scaffolded once by `dwe init` and then
+  hand-maintained. Edit it — it is where project-specific facts belong.
+- A service hub (`services/<name>/`) gets a **generated** `AGENTS.md` from the
+  `ai` render pack. `dwe render ai` writes it; a `dwe deploy run` refreshes it
+  only once the service's `deploy.yml` declares a `render ai` step (the
+  scaffolded one has it, commented) — the built-in default pipeline has none.
+  Never edit the generated file; edit `workspace/templates/ai/<pack>/` instead.
+  It appears only after the hub directory exists (i.e. after the first clone).
+
+> `CLAUDE.md` next to this file is a symlink to it (a copy on platforms without
+> symlinks). Edit `AGENTS.md`.

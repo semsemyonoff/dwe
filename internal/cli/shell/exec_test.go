@@ -69,11 +69,97 @@ func TestDockerExecTTYFlags(t *testing.T) {
 		name := fmt.Sprintf("stdin=%v_stdout=%v", tc.stdin, tc.stdout)
 		t.Run(name, func(t *testing.T) {
 			withTTYDetector(t, tc.stdin, tc.stdout)
-			got := dockerExecTTYFlags()
+			got := dockerExecTTYFlags(ttyAuto)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("dockerExecTTYFlags: got %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestDockerExecTTYFlagsForced covers --tty / --no-tty. The load-bearing case is
+// forcing a TTY with a non-terminal stdin: `docker exec -i -t` hard-fails there
+// ("cannot attach stdin to a TTY-enabled container because stdin is not a
+// terminal", verified against Docker 29.6), so the vector must drop -i and keep
+// -t. Getting this wrong ships a flag that always errors under an agent — which
+// is the only place it is useful.
+func TestDockerExecTTYFlagsForced(t *testing.T) {
+	cases := []struct {
+		name          string
+		mode          ttyMode
+		stdin, stdout bool
+		want          []string
+	}{
+		{"force with pipes drops -i to keep the PTY", ttyOn, false, false, []string{"-t"}},
+		{"force with piped stdout only", ttyOn, false, true, []string{"-t"}},
+		{"force with a real terminal keeps -i", ttyOn, true, true, []string{"-i", "-t"}},
+		{"force with terminal stdin but piped stdout keeps -i", ttyOn, true, false, []string{"-i", "-t"}},
+		{"off on a real terminal suppresses the PTY", ttyOff, true, true, []string{"-i"}},
+		{"off with pipes matches the auto default", ttyOff, false, false, []string{"-i"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withTTYDetector(t, tc.stdin, tc.stdout)
+			got := dockerExecTTYFlags(tc.mode)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("dockerExecTTYFlags(%v): got %v, want %v", tc.mode, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOneShotTTYMode: the `-c` path has never allocated a PTY regardless of host
+// stdio, so auto collapses to off there. An explicit flag still wins — that is
+// the whole point of the flag.
+func TestOneShotTTYMode(t *testing.T) {
+	for _, tc := range []struct {
+		in, want ttyMode
+	}{
+		{ttyAuto, ttyOff},
+		{ttyOn, ttyOn},
+		{ttyOff, ttyOff},
+	} {
+		if got := oneShotTTYMode(tc.in); got != tc.want {
+			t.Errorf("oneShotTTYMode(%v): got %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestComposeTTYUnavailable pins the honest-limitation signal: compose cannot
+// allocate a PTY while stdin is not a terminal (every flag spelling was probed
+// against Docker 29.6 — `--no-tty=false` errors outright, the permissive ones
+// hand the child a pipe anyway), so a forced TTY on that path must be reported
+// rather than silently dropped.
+func TestComposeTTYUnavailable(t *testing.T) {
+	withTTYDetector(t, false, false)
+	if !composeTTYUnavailable(ttyOn) {
+		t.Error("forced TTY with a piped stdin must be reported as unavailable on the compose path")
+	}
+	if composeTTYUnavailable(ttyAuto) || composeTTYUnavailable(ttyOff) {
+		t.Error("only an explicit --tty can be unavailable; auto/off must stay quiet")
+	}
+
+	withTTYDetector(t, true, true)
+	if composeTTYUnavailable(ttyOn) {
+		t.Error("with a terminal stdin compose can allocate a PTY; nothing to warn about")
+	}
+}
+
+func TestResolveTTYMode(t *testing.T) {
+	for _, tc := range []struct {
+		force, off bool
+		want       ttyMode
+	}{
+		{false, false, ttyAuto},
+		{true, false, ttyOn},
+		{false, true, ttyOff},
+		// Contradictory flags never reach here — cobra rejects them at parse
+		// time (see TestNewCmd_ttyFlags). Pinned so the helper stays total.
+		{true, true, ttyOn},
+	} {
+		if got := resolveTTYMode(tc.force, tc.off); got != tc.want {
+			t.Errorf("resolveTTYMode(%v,%v): got %v, want %v", tc.force, tc.off, got, tc.want)
+		}
 	}
 }
 
@@ -91,7 +177,7 @@ func TestComposeRunTTYFlags(t *testing.T) {
 		name := fmt.Sprintf("stdin=%v_stdout=%v", tc.stdin, tc.stdout)
 		t.Run(name, func(t *testing.T) {
 			withTTYDetector(t, tc.stdin, tc.stdout)
-			got := composeRunTTYFlags()
+			got := composeRunTTYFlags(ttyAuto)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("composeRunTTYFlags: got %v, want %v", got, tc.want)
 			}
@@ -222,7 +308,7 @@ func TestDockerExecOneShot_argv_and_silence(t *testing.T) {
 	calls := withFakeRunInteractive(t, nil)
 
 	env := map[string]string{"FOO": "1", "BAR": "2"}
-	if err := dockerExecOneShot("dwe-main", "bash", "deploy", "/app", env, "echo hi", []string{"DOCKER_HOST=tcp://x"}, "/usr/bin/docker"); err != nil {
+	if err := dockerExecOneShot("dwe-main", "bash", "deploy", "/app", env, "echo hi", []string{"DOCKER_HOST=tcp://x"}, "/usr/bin/docker", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -260,7 +346,7 @@ func TestDockerExecOneShot_neverAllocatesPTY(t *testing.T) {
 	// (-t omitted) so stdout stays clean for piping.
 	withTTYDetector(t, true, true)
 	calls := withFakeRunInteractive(t, nil)
-	if err := dockerExecOneShot("c", "bash", "", "", nil, "x", nil, "docker"); err != nil {
+	if err := dockerExecOneShot("c", "bash", "", "", nil, "x", nil, "docker", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	c := (*calls)[0]
@@ -284,7 +370,7 @@ func TestDockerExecOneShot_neverAllocatesPTY(t *testing.T) {
 func TestDockerExecOneShot_wrapsExitError(t *testing.T) {
 	withTTYDetector(t, false, false)
 	withFakeRunInteractive(t, mustExitError(t, 7))
-	err := dockerExecOneShot("c", "bash", "", "", nil, "exit 7", nil, "docker")
+	err := dockerExecOneShot("c", "bash", "", "", nil, "exit 7", nil, "docker", ttyAuto)
 	var ec interface{ ExitCode() int }
 	if !errors.As(err, &ec) {
 		t.Fatalf("expected ExitCode-bearing error, got %T: %v", err, err)
@@ -318,7 +404,7 @@ func TestComposeRunOneShot_argv_and_silence(t *testing.T) {
 	}
 
 	env := map[string]string{"AAA": "1"}
-	if err := composeRunOneShot(cmp, "main", "sh", "1000", "/srv", env, "ls -la"); err != nil {
+	if err := composeRunOneShot(cmp, "main", "sh", "1000", "/srv", env, "ls -la", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -356,7 +442,7 @@ func TestComposeRunOneShot_wrapsExitError(t *testing.T) {
 	withTTYDetector(t, false, false)
 	withFakeRunInteractive(t, mustExitError(t, 13))
 	cmp := &docker.Compose{ProjectName: "p"}
-	err := composeRunOneShot(cmp, "main", "bash", "", "", nil, "exit 13")
+	err := composeRunOneShot(cmp, "main", "bash", "", "", nil, "exit 13", ttyAuto)
 	var ec interface{ ExitCode() int }
 	if !errors.As(err, &ec) {
 		t.Fatalf("expected ExitCode-bearing error, got %T: %v", err, err)
@@ -372,7 +458,7 @@ func TestComposeRunOneShot_neverAllocatesPTY(t *testing.T) {
 	withTTYDetector(t, true, true)
 	calls := withFakeRunInteractive(t, nil)
 	cmp := &docker.Compose{ProjectName: "p"}
-	if err := composeRunOneShot(cmp, "main", "sh", "", "", nil, "echo hi"); err != nil {
+	if err := composeRunOneShot(cmp, "main", "sh", "", "", nil, "echo hi", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(*calls) != 1 {
@@ -673,5 +759,122 @@ func TestDispatchShell_nonExitErrorBypassesWrapping(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "docker daemon unreachable") {
 		t.Errorf("error should pass through verbatim, got %q", err.Error())
+	}
+}
+
+// exitErrorWithCode produces a real *exec.ExitError carrying the given status,
+// which is the only honest way to exercise the exit-code branches — the struct
+// has no exported constructor and its code lives in an opaque ProcessState.
+func exitErrorWithCode(t *testing.T, code int) error {
+	t.Helper()
+	err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", code)).Run()
+	if err == nil {
+		t.Fatalf("sh -c 'exit %d' unexpectedly succeeded", code)
+	}
+	return err
+}
+
+// withFakeShellProbe stubs the container shell probe. found=true means the
+// shell exists, i.e. the failure came from something else.
+func withFakeShellProbe(t *testing.T, found bool) *int {
+	t.Helper()
+	prev := probeContainerHasShell
+	calls := 0
+	probeContainerHasShell = func(_, _ string, _ []string, _ string) bool {
+		calls++
+		return found
+	}
+	t.Cleanup(func() { probeContainerHasShell = prev })
+	return &calls
+}
+
+// captureStderr swaps os.Stderr for a pipe and returns what was written to it.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	prev := os.Stderr
+	os.Stderr = w
+	fn()
+	os.Stderr = prev
+	_ = w.Close()
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+// TestHintMissingContainerShell pins the diagnostic added for the opaque
+// `exec: "bash": executable file not found in $PATH` failure. The hint must be
+// truthful: it fires only when the shell is genuinely absent, never merely
+// because the exit code says 126/127 — a one-shot command that itself exits 127
+// produces the same code and has nothing to do with cli.shell.
+func TestHintMissingContainerShell(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		shellFound bool
+		wantHint   bool
+		wantProbe  bool
+	}{
+		{name: "shell absent, exit 127", err: exitErrorWithCode(t, 127), shellFound: false, wantHint: true, wantProbe: true},
+		{name: "shell absent, exit 126", err: exitErrorWithCode(t, 126), shellFound: false, wantHint: true, wantProbe: true},
+		{name: "shell present, command inside it was the typo", err: exitErrorWithCode(t, 127), shellFound: true, wantHint: false, wantProbe: true},
+		{name: "ordinary command failure", err: exitErrorWithCode(t, 1), shellFound: false, wantHint: false, wantProbe: false},
+		{name: "success", err: nil, shellFound: false, wantHint: false, wantProbe: false},
+		{name: "not an exit error", err: errors.New("docker not found"), shellFound: false, wantHint: false, wantProbe: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			probes := withFakeShellProbe(t, tt.shellFound)
+			out := captureStderr(t, func() {
+				hintMissingContainerShell(tt.err, "dwe-main", "bash", nil, "/usr/bin/docker")
+			})
+
+			gotHint := strings.Contains(out, "cli.shell")
+			if gotHint != tt.wantHint {
+				t.Errorf("hint emitted = %v, want %v (stderr: %q)", gotHint, tt.wantHint, out)
+			}
+			if tt.wantHint {
+				if !strings.Contains(out, "dwe-main") || !strings.Contains(out, "bash") {
+					t.Errorf("hint must name the container and the shell, got %q", out)
+				}
+				if !strings.Contains(out, "--shell") {
+					t.Errorf("hint must name the --shell escape hatch, got %q", out)
+				}
+			}
+			if gotProbe := *probes > 0; gotProbe != tt.wantProbe {
+				t.Errorf("probe called = %v, want %v — the probe must never run on the happy path", gotProbe, tt.wantProbe)
+			}
+		})
+	}
+}
+
+// TestDockerExecOneShot_HintDoesNotDisturbExitCode pins that the diagnostic is
+// additive: stdout stays clean and the child's exit code still reaches main.go
+// through *shellCommandExitError.
+func TestDockerExecOneShot_HintDoesNotDisturbExitCode(t *testing.T) {
+	withTTYDetector(t, false, false)
+	withFakeShellProbe(t, false)
+
+	prev := runInteractive
+	runInteractive = func(_ []string, _, _ string, _ ...string) error { return exitErrorWithCode(t, 127) }
+	t.Cleanup(func() { runInteractive = prev })
+
+	var err error
+	out := captureStderr(t, func() {
+		err = dockerExecOneShot("dwe-main", "bash", "", "", nil, "true", nil, "/usr/bin/docker", ttyAuto)
+	})
+
+	if !strings.Contains(out, "cli.shell") {
+		t.Errorf("expected the hint on stderr, got %q", out)
+	}
+	var codeErr *shellCommandExitError
+	if !errors.As(err, &codeErr) {
+		t.Fatalf("expected *shellCommandExitError, got %T (%v)", err, err)
+	}
+	if codeErr.ExitCode() != 127 {
+		t.Errorf("exit code = %d, want 127 — the hint must not replace the child's status", codeErr.ExitCode())
 	}
 }

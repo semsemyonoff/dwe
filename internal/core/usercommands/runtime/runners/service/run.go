@@ -20,7 +20,7 @@ func (r *RunRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compos
 		return nil, err
 	}
 
-	argv, err := buildServiceArgv(rc)
+	argv, err := buildServiceArgv(ctx, rc)
 	if err != nil {
 		return nil, err
 	}

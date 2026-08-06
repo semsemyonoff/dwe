@@ -1,0 +1,210 @@
+package model
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+// TestArgsSpecResolve pins the two asymmetries that make the block useful:
+// default applies only when the caller passed nothing, and prefix applies only
+// when they passed something.
+func TestArgsSpecResolve(t *testing.T) {
+	cases := []struct {
+		name string
+		spec *ArgsSpec
+		user []string
+		want []string
+	}{
+		{"nil spec passes args through", nil, []string{"-v"}, []string{"-v"}},
+		{"nil spec with no args yields nothing", nil, nil, nil},
+
+		// `argv: [go, test, -race, "${args}"]` must fall back to ./... or it
+		// would test the current directory instead of the module.
+		{"default fills an empty call", &ArgsSpec{Default: []string{"./..."}}, nil, []string{"./..."}},
+		{"default yields to real args", &ArgsSpec{Default: []string{"./..."}}, []string{"./internal"}, []string{"./internal"}},
+
+		// `cmd: "npm test ${args}"` needs the -- that npm would otherwise eat.
+		{"prefix precedes real args", &ArgsSpec{Prefix: []string{"--"}}, []string{"--run", "x"}, []string{"--", "--run", "x"}},
+
+		// The prefix is a separator for caller arguments, not part of the
+		// default: emitting `npm test --` for a bare call would be noise.
+		{"prefix is not emitted for an empty call", &ArgsSpec{Prefix: []string{"--"}}, nil, nil},
+		{"prefix is not applied to the default", &ArgsSpec{Prefix: []string{"--"}, Default: []string{"all"}}, nil, []string{"all"}},
+
+		{"both, with args", &ArgsSpec{Prefix: []string{"--"}, Default: []string{"all"}}, []string{"x"}, []string{"--", "x"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, tc.spec.Resolve(tc.user))
+		})
+	}
+}
+
+// TestReferencesArgs guards the opt-in gate. A command that does not name
+// ${args} has no defined slot for them, and appending blindly would be a guess —
+// so the reference is what grants pass-through, not the presence of an args:
+// block.
+func TestReferencesArgs(t *testing.T) {
+	cases := []struct {
+		name string
+		def  *CommandDef
+		want bool
+	}{
+		{"nil def", nil, false},
+		{"plain cmd", &CommandDef{Cmd: "npm test"}, false},
+		{"plain argv", &CommandDef{Argv: []string{"go", "test", "./..."}}, false},
+		{"cmd references args", &CommandDef{Cmd: "npm test ${args}"}, true},
+		{"argv element is exactly args", &CommandDef{Argv: []string{"go", "test", "${args}"}}, true},
+		{"argv element contains args", &CommandDef{Argv: []string{"go", "test", "--filter=${args}"}}, true},
+
+		// An args: block alone is inert — the runner has nowhere to substitute.
+		// checkPassThroughArgs calls this out explicitly.
+		{"args block without a reference", &CommandDef{Cmd: "npm test", Args: &ArgsSpec{Prefix: []string{"--"}}}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, tc.def.ReferencesArgs())
+		})
+	}
+}
+
+// TestArgsFieldAllowed: `args` is only meaningful where cmd/argv exist. The
+// strict decoder rejects unknown fields, so a type that accepts cmd/argv but not
+// args would hard-fail an otherwise reasonable definition.
+func TestArgsFieldAllowed(t *testing.T) {
+	for _, tc := range []struct {
+		typ  CommandType
+		want bool
+	}{
+		{CommandTypeShell, true},
+		{CommandTypeServiceExec, true},
+		{CommandTypeServiceRun, true},
+		{CommandTypeDwe, true},
+		{CommandTypeWorkflow, false},
+		{CommandTypeScript, false},
+		{CommandTypeBuiltin, false},
+	} {
+		t.Run(string(tc.typ), func(t *testing.T) {
+			require.Equal(t, tc.want, allowedFieldsFor(tc.typ)["args"])
+		})
+	}
+}
+
+// TestArgsBlockWithoutReferenceIsRejected: an args: block only takes effect
+// through a ${args} reference, so one without a reference is inert. Catching it
+// at load beats letting the author discover much later that their prefix or
+// default never applied.
+func TestArgsBlockWithoutReferenceIsRejected(t *testing.T) {
+	t.Run("rejected when nothing references ${args}", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Cmd:  "npm test",
+			Args: &ArgsSpec{Prefix: []string{"--"}},
+		}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "${args}")
+		require.Contains(t, err.Error(), "no effect")
+	})
+
+	t.Run("accepted when cmd references it", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Cmd:  "npm test ${args}",
+			Args: &ArgsSpec{Prefix: []string{"--"}},
+		}
+		require.NoError(t, def.Validate())
+	})
+
+	t.Run("accepted when argv references it", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Argv: []string{"go", "test", "${args}"},
+			Args: &ArgsSpec{Default: []string{"./..."}},
+		}
+		require.NoError(t, def.Validate())
+	})
+
+	t.Run("no args block is always fine", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: "npm test"}
+		require.NoError(t, def.Validate())
+	})
+}
+
+// TestArgvArgsMustBeWholeElement: in argv the token is only meaningful as a
+// whole element — the arguments are spliced in as separate entries and nothing
+// re-splits an embedded one, so `--filter=${args}` could only ever produce one
+// mangled argument. Rejecting it beats defining a broken rendering.
+func TestArgvArgsMustBeWholeElement(t *testing.T) {
+	t.Run("embedded token is rejected", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Argv: []string{"tool", "--filter=${args}"},
+		}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "argv[1]")
+		require.Contains(t, err.Error(), "whole element")
+	})
+
+	t.Run("exact element is accepted", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Argv: []string{"tool", "${args}"},
+		}
+		require.NoError(t, def.Validate())
+	})
+
+	// cmd: is a shell string, so an embedded token is the normal form there.
+	t.Run("embedding in cmd stays legal", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: "npm test ${args}"}
+		require.NoError(t, def.Validate())
+	})
+}
+
+// TestCmdArgsSlotMustBeUnquoted covers the two wrappings a shell-literate author
+// writes by reflex. Both render to something that silently loses or mangles the
+// arguments, so both are load-time errors rather than runtime surprises.
+func TestCmdArgsSlotMustBeUnquoted(t *testing.T) {
+	// '"$@"' is one literal argument, so every caller argument disappears.
+	t.Run("single-quoted slot is rejected", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `ruff check '${args}'`}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "single quotes")
+		require.Contains(t, err.Error(), "${args}")
+	})
+
+	// ""$@"" leaves $@ unquoted: arguments split on whitespace, `*` globs, and
+	// an empty call collapses to one empty argument.
+	t.Run("double-quoted slot is rejected", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `npm test "${args}"`}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "double quotes")
+	})
+
+	t.Run("unquoted slot is accepted", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `npm test ${args}`}
+		require.NoError(t, def.Validate())
+	})
+
+	// The rule is about a wrapping PAIR, not about quotes appearing anywhere in
+	// the command — a slot next to an unrelated quoted word stays legal.
+	t.Run("quotes elsewhere in the command stay legal", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `printf "%s\n" ${args}`}
+		require.NoError(t, def.Validate())
+	})
+
+	// argv elements are not shell text — the quotes there would be literal
+	// bytes, and the whole-element rule already rejects them.
+	t.Run("argv is governed by the whole-element rule instead", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Argv: []string{"tool", `"${args}"`}}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "whole element")
+	})
+}

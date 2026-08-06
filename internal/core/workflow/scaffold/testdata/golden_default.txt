@@ -98,41 +98,81 @@ Run this once to load a project-aware index of services, commands, and docs:
 dwe docs llms-txt --lang en
 ```
 
-It emits a compact llms.txt snapshot (project context, services, commands, and
+It emits a compact llms.txt briefing (project context, services, commands, the
+pipeline builtin inventory, the diagnostic flags, the template-syntax map, and
 pointers into the built-in docs subsystem) designed to be loaded once and then
-navigated on demand.
+navigated on demand. The generic part stays under 12 KB; read it in full rather
+than grepping it.
 
 ## Conventions for AI agents
 
 - **Docs in English.** Pass `--lang en` to every `dwe docs …` command (`llms-txt`,
   `show`, `search`, `list`) — translated docs can lag behind the English source.
 - **Data as JSON.** For any command whose output you parse — `dwe status`,
-  `dwe validate`, `dwe info`, `dwe services`, `dwe vars …` — add `--output json`
-  (alias `-o json`); the default table output is formatted for humans. **Exception:**
-  never pass `-o json` to `dwe docs …` — those emit markdown, and for
-  `dwe docs llms-txt` / `dwe docs show` the `--output` flag is a *file path*, so
-  `-o json` would write a file literally named `json`.
+  `dwe validate`, `dwe info`, `dwe services list`, `dwe commands list`,
+  `dwe docs list`, `dwe docs search`, `dwe vars …` — add `--output json`
+  (alias `-o json`); the default table output is formatted for humans.
+  **Exception:** never pass `-o json` to `dwe docs llms-txt` or `dwe docs show`.
+  Those emit markdown, and there `--output` is a *file path*, so `-o json` would
+  write a file literally named `json`.
 
 ## Useful commands
 
+Day-to-day work goes through the first two — they cover most of what an agent needs:
+
+- `dwe commands list` — list this project's declared dev commands (tests, linters,
+  migrations, …); `dwe cmd <id>` runs one, `dwe cmd -i <id>` shows its definition
+  (type, service, workdir, the underlying command, its params)
+- `dwe shell <service> -c '<cmd>'` — run a one-off command inside a service
+  container, for anything not covered by a declared command
+
+Inspecting the environment:
+
 - `dwe` — project dashboard / header
+- `dwe status` — stack health, per-service state and container names
 - `dwe info` — environment summary (URLs, hosts, ports)
+- `dwe logs [service]` — stream container logs
 - `dwe validate` — static project-config validation
-- `dwe deploy` — bring the stack up
-- `dwe docs <topic> --lang en` — built-in reference (config schemas, guides)
+
+Lifecycle and reference:
+
+- `dwe deploy run` — run the deploy pipeline (first-time provisioning, image
+  builds, migrations); `dwe run` starts an already-provisioned stack
+- `dwe docs show <topic> --lang en` — built-in reference (config schemas, guides);
+  `dwe docs list --lang en` enumerates topics, `dwe docs search <substring> --lang en`
+  searches them
 
 ## Config layout
 
 - `workspace.yml` — project identity (name, prefix)
-- `workspace/defaults.yml` — versioned defaults (service toggles, exports)
+- `workspace/defaults.yml` — versioned defaults (service toggles, exports, `vars:`)
 - `workspace/styles.yml` — CLI branding and palette
-- `workspace/services/<name>/service.yml` — per-service definitions
-- `workspace/{deploy,lifecycle,info,docker}.yml` — optional overrides. They ship
-  fully commented; the built-in defaults stay active until you uncomment. An
-  active override **replaces** the whole built-in pipeline, so edit them whole.
+- `workspace/services/<name>/service.yml` — per-service definitions; the folder
+  name **is** the service key (there is no `name:` field)
+- `workspace/services/<name>/deploy.yml` — that service's provisioning pipeline
+- `workspace/templates/{config,ide,ai,git}/` — render packs
+- `workspace/tests/<scenario>.yml` — isolated integration-test scenarios
+  (`dwe test list`, `dwe validate tests`)
+- `workspace/{deploy,lifecycle,info}.yml` — optional pipeline overrides. They ship
+  fully commented; the built-in defaults stay active until you uncomment, and an
+  active section **replaces** the whole built-in one — copy every phase you still
+  want, don't uncomment a fragment.
+- `workspace/docker.yml` — compose policy. Unlike the pipelines above, overriding
+  here is **per key**: an uncommented key replaces just that key's default.
 
-> `CLAUDE.md` is a symlink to this file (a copy on platforms without symlinks).
-> Edit `AGENTS.md`.
+## The two `AGENTS.md` files
+
+- **This file** (project root) is scaffolded once by `dwe init` and then
+  hand-maintained. Edit it — it is where project-specific facts belong.
+- A service hub (`services/<name>/`) gets a **generated** `AGENTS.md` from the
+  `ai` render pack. `dwe render ai` writes it; a `dwe deploy run` refreshes it
+  only once the service's `deploy.yml` declares a `render ai` step (the
+  scaffolded one has it, commented) — the built-in default pipeline has none.
+  Never edit the generated file; edit `workspace/templates/ai/<pack>/` instead.
+  It appears only after the hub directory exists (i.e. after the first clone).
+
+> `CLAUDE.md` next to this file is a symlink to it (a copy on platforms without
+> symlinks). Edit `AGENTS.md`.
 
 --------
 === compose.yaml ===
@@ -185,6 +225,11 @@ services:
 
 # Declarative .env export rules. Each rule maps a dot-path in the merged config
 # to an environment variable. See `dwe docs show config/workspace`.
+#
+# This is the second half of the port pair: a port declared in
+# workspace/services/<name>/service.yml is display-only until a rule here
+# exports it, so compose.yaml can bind it. Uncomment both together.
+# PROJECT, UID and GID are injected automatically and must not be redeclared.
 # exports:
 #   env:
 #     - name: APP_PORT
@@ -238,8 +283,10 @@ services:
 #
 # This file controls how `dwe docker` builds and runs `docker compose` commands
 # (project name, per-subcommand args, process env). It is shipped fully
-# commented; with no docker.yml the built-in policy applies. Uncomment to
-# override — an active docker.yml replaces the built-in policy.
+# commented; with no docker.yml the built-in policy applies. Overriding is
+# per-key, not whole-file: uncommenting one key replaces only that key, and
+# every key you leave commented keeps its built-in default (up, logs, run and
+# down carry defaults; the other args keys default to empty).
 #
 # Per-developer overrides go in workspace/docker.local.yml (gitignored), which
 # is deep-merged on top of this file.
@@ -250,6 +297,7 @@ services:
 # args:
 #   global: ["--ansi", "always", "--progress", "tty"]
 #   up: ["-d", "--remove-orphans"]
+#   down: ["--remove-orphans"]
 #   logs: ["-f"]
 #   run: ["--rm"]
 #   pull: []
@@ -305,9 +353,11 @@ services:
 #   (internal/core/workflow/lifecycle/defaults.go)
 # Schema and field reference: `dwe docs show config/lifecycle`
 #
+# The self-update probe is NOT configured here — it moved to the top-level
+# `update:` block (workspace.yml / local.yml). See
+# `dwe docs show config/workspace` § "The update: block".
+#
 # run:
-#   update:
-#     mode: "off"
 #   show_info: true
 #   final_message: "Project is ready for work!"
 #   phases:
@@ -331,27 +381,115 @@ services:
 #           description: "Stop all containers"
 
 --------
+=== workspace/services/app/deploy.yml ===
+# workspace/services/app/deploy.yml — per-service deploy pipeline (INERT MIRROR).
+#
+# Inlined by the orchestrator wherever workspace/deploy.yml declares a
+# `deploy_services: true` phase (the built-in default does). A service without
+# this file is silently skipped, so the whole skeleton below is shipped
+# commented and nothing runs until you uncomment it.
+#
+# The phase shape is the one every DWE app service converges on:
+#
+#   source     — materialise the hub (clone once, never touch it again)
+#   image      — build the container image
+#   bootstrap  — first-run setup inside the container
+#   render     — write hub-level artefacts (agent docs, IDE config)
+#
+# Schema and field reference: `dwe docs show config/deploy/index`
+# Builtin inventory (name, kind, purpose): `dwe docs llms-txt --lang en`
+#
+# phases:
+#   - name: source
+#     description: "Materialise the source hub"
+#     steps:
+#       - name: clone
+#         type: builtin
+#         cmd: source_clone
+#         description: "Clone the application source into the hub"
+#         with:
+#           # `repo` usually comes from vars: (`vars.app.repo` in
+#           # workspace.yml), so a fork can be pointed at in local.yml.
+#           repo: "git@example.com:acme/app.git"
+#           dir: "services/app/src"
+#           # branch: main
+#
+#   - name: image
+#     description: "Build the service image"
+#     steps:
+#       - name: build
+#         type: dwe
+#         cmd: "docker build app"
+#         description: "Build the app image"
+#
+#   - name: bootstrap
+#     description: "First-run setup inside the container"
+#     steps:
+#       - name: deps
+#         # Once the project declares this as a user command, dispatch it with
+#         # `type: command` + `cmd: <id>` instead — one definition, and the
+#         # command carries the service/workdir/user/env. Never paste the bare
+#         # `docker compose …` line into a `type: shell` step: it runs on the
+#         # HOST, bypasses dwe's -p/-f chain (so it lands in a different compose
+#         # project and misses the service's overlays), and every host step
+#         # counts against the `host_steps` gate on unattended `dwe test run`.
+#         type: dwe
+#         cmd: "docker run --rm app -- npm ci"
+#         description: "Install dependencies on first deploy"
+#         # `check: auto` derives the post-condition from `when:` by negating
+#         # it: run while the marker is missing, then assert it now exists.
+#         # It is only valid together with a `when:` of type shell — which is
+#         # host execution, so uncommenting this phase moves the project's
+#         # `host_steps` (dwe test list -o json) above zero.
+#         when:
+#           type: shell
+#           cmd: "test ! -d services/app/src/node_modules"
+#         check: auto
+#
+#   - name: render
+#     description: "Render hub-level artefacts"
+#     steps:
+#       - name: agent-docs
+#         type: dwe
+#         cmd: "render ai app"
+#         description: "Render AGENTS.md into the service hub"
+
+--------
 === workspace/services/app/service.yml ===
 # workspace/services/app/service.yml — the "app" starter service.
 #
-# type + container are active; every other field is an optional, commented
-# example. The folder name (app) is the service's map key — there is
-# no `name:` field. Run `dwe docs show config/services/index`.
+# The folder name (app) is the service's map key — there is no `name:`
+# field. Run `dwe docs show config/services/index` for the full schema.
 
 type: app
 container: "app"
 
+# Source hub: `dir` is the host directory holding this app's checkout (created
+# by the deploy pipeline, gitignored), mounted at `dir_internal` inside the
+# container. Mount the whole hub, not just the sources — build artefacts,
+# caches and tooling state live next to `src/`. `work_dir_internal` is where
+# `dwe cmd` / bridged commands run.
+dir: "./services/app"
+dir_internal: /workspace
+work_dir_internal: /workspace/src
+
+icon: "📦"
+
+info:
+  title: "app"
+
 # required: true              # always-on; removes the enable/disable toggle
-# dir: "./app"            # host source directory for this app
 # depends_on: []
+
+# Ports are DISPLAY-ONLY on their own: `dwe status` and info blocks read them,
+# but nothing binds them. To bind one, uncomment the pair — the port here AND
+# the matching `exports.env` rule in workspace/defaults.yml that turns it into
+# an environment variable your compose.yaml can reference.
 # ports:
 #   http: 8080
+
 # hosts:
 #   web: "app.localhost"
-# icon: "📦"
-# render:
-#   ide:
-#     enabled: true
 
 --------
 === workspace/styles.yml ===
@@ -379,6 +517,100 @@ colors:
 # separator: "·"
 
 --------
+=== workspace/templates/ai/default/AGENTS.md.tmpl ===
+# {{ .Resolved }} — source hub of the {{ .Project.Name }} DWE project
+
+This directory is the **hub** of the `{{ .Resolved }}` service: the checkout plus
+everything that lives next to it (build artefacts, caches, tooling state). It is
+mounted into the container at `{{ .ServiceCfg.DirInternal }}`; commands run in
+`{{ .ServiceCfg.WorkDirInternal }}`.
+
+The environment around it is managed by the `dwe` CLI from the **project root**
+(the parent of `services/`). Run `dwe` commands there, not here.
+
+## Orientation
+
+```
+dwe docs llms-txt --lang en
+```
+
+Loads a project-aware index of services, commands, pipeline builtins, diagnostic
+flags and docs pointers. Read it once, then navigate on demand.
+
+## Working on this service
+
+- `dwe commands list` — this project's declared dev commands; `dwe cmd <id>` runs one
+- `dwe shell {{ .Resolved }} -c '<cmd>'` — a one-off command inside the container
+- `dwe logs {{ .Resolved }}` — stream this service's logs
+- `dwe status` — stack health and container names
+
+> This file is **generated** by `dwe render ai` from
+> `workspace/templates/ai/default/AGENTS.md.tmpl` in the project root. Edit the
+> template, not this file. `CLAUDE.md` next to it is a symlink to this file.
+>
+> The project root has its own `AGENTS.md` — that one is scaffolded once and is
+> meant to be edited by hand.
+
+--------
+=== workspace/templates/ai/default/manifest.yml ===
+# workspace/templates/ai/default/manifest.yml — AI template pack (ACTIVE).
+#
+# `dwe render ai` renders this pack into each app service's HUB directory
+# (services/<name>/, gitignored and absent until the first clone). `default` is
+# the last link of the implicit resolution chain, so it applies to every service
+# that has no pack of its own; add workspace/templates/ai/<service>/ to give one
+# service a different pack.
+#
+# A manifest is strict-decoded and must declare at least one entry — unlike the
+# pipeline mirrors, this file cannot ship commented.
+#
+# Schema and template variables: `dwe docs show render/ai`
+
+render:
+  - from: AGENTS.md.tmpl
+    to: AGENTS.md
+
+# The hub CLAUDE.md mirrors the hub AGENTS.md, exactly as the project root does.
+symlinks:
+  - link: CLAUDE.md
+    to: AGENTS.md
+
+--------
+=== workspace/tests/smoke.yml ===
+# workspace/tests/smoke.yml — starter integration-test scenario.
+#
+# `dwe test run smoke` copies the project into a disposable directory, gives the
+# copy its own compose project name and freshly allocated host ports, deploys it
+# from a clean slate, runs the steps below, then tears the copy down.
+#
+# This is the ONE scaffold file that ships ACTIVE rather than fully commented:
+# the scenario loader is strict and rejects an empty document, so there is
+# nothing here to uncomment.
+#
+# It is also deliberately free of assertions: on a fresh scaffold compose.yaml
+# declares no services, so the deploy the scenario wraps fails at `start/up`
+# with "empty compose file" and `dwe test run smoke` reports a failure. The
+# scenario becomes meaningful once app exists in compose.yaml — then
+# add steps here; an `http_check` builtin against the service's exported port is
+# the usual first assertion.
+#
+# Schema and step reference: `dwe docs show config/tests`
+
+description: "Smoke test: the stack deploys from a clean slate"
+
+# timeout: 15m
+
+# Per-scenario overrides applied to the copy only. `auto` is the one magic
+# value: it allocates a free host port before the copy is deployed.
+# env:
+#   services:
+#     enable: ["app"]
+#   vars:
+#     app.port: auto
+
+steps: []
+
+--------
 DIR .dwe
 --------
 DIR workspace
@@ -386,5 +618,13 @@ DIR workspace
 DIR workspace/services
 --------
 DIR workspace/services/app
+--------
+DIR workspace/templates
+--------
+DIR workspace/templates/ai
+--------
+DIR workspace/templates/ai/default
+--------
+DIR workspace/tests
 --------
 SYMLINK CLAUDE.md -> AGENTS.md

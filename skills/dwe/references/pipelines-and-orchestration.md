@@ -45,11 +45,15 @@ Optional per-step keys: `name`, `description`, `when:`, `check:`, `continue_on_e
 
 `when:` and `check:` are themselves typed:
 
-- `type: builtin` + `cmd:` a **condition predicate**: `dir-empty` · `dir-not-empty` · `dir-exists` · `dir-missing` · `file-exists` · `file-missing` · `generated-missing <svc> <field>` · `containers_running`.
+- `type: builtin` + `cmd:` a **condition predicate**: `dir-empty` · `dir-not-empty` · `dir-exists` · `dir-missing` · `file-exists` · `file-missing` · `generated-missing <svc> <field>`. **That list is the whole registry** — every verb takes arguments in the `cmd:` string (`"file-missing <path>"`), and anything else is `unknown builtin predicate` at eval time.
 - `type: shell` + `cmd: "<sh test>"`.
 - `type: template` + `expr: '{{ ne .Raw.vars.x "" }}'`.
 
-Engine **builtins** (as a step `cmd:`): `service_dirs_ensure` · `service_configs_render` · `service_configs_render_check` · `service_generated_harvest` · `containers_running` · `docker_wait_healthy` · `docker_remove_project_volumes` · `docker_stop_remove_container` · `daemons_reap` · `message` · `http_check` (assert an HTTP endpoint returns an expected status / body substring, with retries — complements a `tcp_reachable` check for web stacks).
+**The two `type: builtin` registries are disjoint — this is the single most common authoring mistake.** The hyphenated verbs above belong to `when:` **only**; the underscored engine builtins below (`service_configs_render`, `containers_running`, `http_check`, …) belong to a step **body** and `check:` **only**. Neither side accepts the other's names: `check: {type: builtin, cmd: dir-not-empty}` and `when: {type: builtin, cmd: containers_running}` both fail. Need a `when:` the predicate registry doesn't cover? Write it as `type: shell`. Need the inverse of a shell `when:` as a `check:`? Write `check: auto`. Both registries are enumerated in full — names, kinds, one-line summaries — under **§ Builtins** of `dwe docs llms-txt --lang en`; read them there rather than guessing a verb.
+
+**`check: auto`** — the scalar form of `check:`, resolving to the logical inverse of the step's own `when:`. Write it instead of spelling the negation out a second time (`when: "[ ! -e X ]"` + `check: "test -e X"` is one predicate written twice, and the two drift). It requires a `when: {type: shell}`; `auto` with no `when:`, with a `type: builtin` `when:` (the predicate and check-builtin registries are disjoint), or with a `type: template` `when:` (would always fail — a false template `when:` already removed the step) is a **load-time error**. Journal behaviour is identical to an explicit check (the step re-runs every deploy); migrating a step from a hand-written inverse to `check: auto` shifts the config hash and costs a one-time re-run. `dwe docs show config/deploy/conditions#check-auto-the-inverse-of-when --lang en`.
+
+Engine **builtins** (as a step `cmd:`): `service_dirs_ensure` · `service_configs_render` · `service_configs_render_check` · `service_generated_harvest` · `source_clone` (clone a git repo into a project-relative `dir:`, **idempotent by construction** — needs no `when:`/`check:` pair; see the skeleton below) · `containers_running` · `docker_wait_healthy` · `docker_remove_project_volumes` · `docker_stop_remove_container` · `daemons_reap` · `message` · `http_check` (assert an HTTP endpoint returns an expected status / body substring, with retries — complements a `tcp_reachable` check for web stacks).
 
 **Predicate builtins as step bodies = assertions.** A predicate builtin (`file_exists`, `executable_in_path`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` predicate) may be used directly as a step **body**, not only inside `check:`/`when:`. As a body it is an **assertion**: `false` fails the step with the predicate's own message, `true` succeeds — and such a step **always re-runs** (exempt from deploy's up-to-date/action-hash skip, same as a `check:` step). General across deploy/reset/lifecycle. `dwe docs show config/deploy/builtins#predicate-builtins-as-step-bodies-assertion-semantics --lang en`.
 
@@ -68,12 +72,13 @@ phases:
         type: builtin
         cmd: service_dirs_ensure
         with: { service: <name> }
-      - name: clone               # gate clone so a re-deploy never clobbers src
-        type: shell
-        when:
-          type: builtin
-          cmd: "dir-empty services/<name>/src"
-        cmd: "git clone --branch ${vars.source.branch} ${vars.source.repo} services/<name>/src"
+      - name: clone               # builtin gate: never clobbers an existing checkout
+        type: builtin
+        cmd: source_clone
+        with:
+          repo: "${vars.source.repo}"
+          dir: services/<name>/src
+          branch: "${vars.source.branch}"
       - name: render-configs
         type: builtin
         cmd: service_configs_render
@@ -111,10 +116,24 @@ phases:
         cmd: "render ide <name>"
 ```
 
+**One definition — reuse the command, don't retype it as a shell step.** When a phase needs
+something the project already declares in `workspace/commands/**`, dispatch it with
+`type: command` + `cmd: <id>` (as `install` does above). Pasting the equivalent `php artisan
+…` / `npm ci` line into `deploy.yml` as `type: shell` compiles fine and passes validation,
+but the two copies drift, and only the command carries the service, workdir, user, env and
+compose flags — the shell step always runs on the **host**, while a service-scoped command
+runs in its container. If a step is worth having in the deploy, it is worth being a command
+the developer can also run by hand. (It also shows up: every step that executes on the host —
+a `type: shell` step, and a `type: command` whose command is not service-scoped — is counted
+in the `host_steps` field that gates unattended `dwe test run` — see `integration-tests.md`
+§ 1.)
+
 Two render-gate idioms:
 
 - **Re-render every deploy** → pair `service_configs_render` with `check: service_configs_render_check` (template / vars edits, a cleared store, always apply).
 - **Render once** → drop the check and gate the render step with `when: { type: builtin, cmd: "file-missing <path>" }`.
+
+For a step that genuinely is "run it until the thing exists", write the predicate once as `when:` and add `check: auto` rather than repeating its negation — e.g. `when: { type: shell, cmd: "[ ! -e services/<name>/src/vendor/autoload.php ]" }` + `check: auto`.
 
 `workspace/deploy.yml` phase shortcut: a phase carrying `deploy_services: true` inlines every enabled per-service `deploy.yml` in dependency order. Use it only when you genuinely need a project-level orchestrator.
 

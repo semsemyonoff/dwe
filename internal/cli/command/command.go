@@ -2,7 +2,9 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -51,6 +53,11 @@ type runOpts struct {
 	// own huh form entirely and uses these values directly. nil = build/prompt
 	// the form here as usual (every non-browser path leaves it nil).
 	PrefilledParams map[string]string
+	// PassThroughArgs carries everything the caller wrote after `--`
+	// (`dwe cmd site.test -- --run x.test.ts`). It reaches the command only
+	// through ${args}; a command that does not reference it rejects a non-empty
+	// slice — see checkPassThroughArgs.
+	PassThroughArgs []string
 }
 
 // NewCmd builds the `dwe commands` command tree.
@@ -81,7 +88,13 @@ Without an id, an interactive selector lists public commands. With a group prefi
   dwe commands db.up --set env=local
   dwe commands -i db.up
   dwe cmd db.up --yes`,
-		Args:         cobra.MaximumNArgs(1),
+		// One positional id, plus anything after `--` for a command that
+		// declares ${args}. Everything past the dash is the caller's, so the
+		// count is only checked on the near side; the far side is validated
+		// per-command by checkPassThroughArgs, which can name the command and
+		// the fix. cobra's stock MaximumNArgs(1) reported "Accepts at most 1
+		// arg(s), received 3" here and left the caller nowhere to go.
+		Args:         commandIDArgs,
 		SilenceUsage: true,
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			// Cobra parses flags before invoking ValidArgsFunction, so --inspect
@@ -91,6 +104,14 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			return registryIDCompletion(flags, inspect)(cmd, args, toComplete)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Split at `--` immediately: everything past the dash belongs to the
+			// target command, and every id/group/selector decision below counts
+			// positional args. Leaving them merged would make `dwe cmd site.test
+			// -- --run x` look like a three-argument invocation and fall through
+			// to the interactive selector instead of running site.test.
+			through := passThroughArgs(cmd, args)
+			args = nearArgs(cmd, args)
+
 			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return cmdctx.ErrWrap("command_registry_invalid", err)
@@ -100,6 +121,17 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			if inspectFlag {
 				if len(args) == 0 {
 					return cmdctx.Err("usage_error", "id required with --inspect")
+				}
+				// Inspect prints a definition, it does not run one, so there is
+				// nothing for pass-through arguments to reach. Rejecting here
+				// keeps the "extra arguments are opt-in and refused loudly"
+				// contract whole — the run route enforces it per-command via
+				// checkPassThroughArgs, which this route never reaches.
+				if len(through) > 0 {
+					return cmdctx.Err("usage_error",
+						"--inspect prints a command's definition rather than running it, so it takes no arguments after `--`\n\n"+
+							"Drop the `--` part to inspect:      dwe cmd -i "+args[0]+"\n"+
+							"Or drop --inspect to run it:        dwe cmd "+args[0]+" -- ...")
 				}
 				// Best-effort cfg load — inspect tolerates malformed configs so users
 				// can still introspect command definitions when the project is broken.
@@ -160,6 +192,20 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					if len(args) == 1 {
 						groupFilter = args[0]
 					}
+					// Reaching the selector means the near argument was a group
+					// prefix, not an exact id — there is no command to hand the
+					// pass-through arguments to, and this branch would otherwise
+					// print the list and exit 0, discarding them. Same contract as
+					// the `dwe cmd -- <args>` guard in commandIDArgs.
+					if len(through) > 0 {
+						return "", cmdctx.Err("usage_error", fmt.Sprintf(
+							"arguments after `--` need an exact command id, got the group %q (%s)\n\n"+
+								"There is no picker in non-interactive mode, so the arguments have "+
+								"nowhere to go. Name the command:\n"+
+								"  dwe cmd <id> -- %s\n\n"+
+								"List the ids in this group with:  dwe commands list %s",
+							groupFilter, strings.Join(through, " "), strings.Join(through, " "), groupFilter))
+					}
 					if err := writeCommandsList(cmd, flags, reg, groupFilter, false); err != nil {
 						return "", err
 					}
@@ -185,6 +231,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					Translator:      i18n.TranslatorOrNop(flags.I18n),
 					Locale:          flags.Locale,
 					PrefilledParams: prefilledFromTUI,
+					PassThroughArgs: through,
 				},
 			)
 		},

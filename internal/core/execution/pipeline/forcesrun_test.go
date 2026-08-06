@@ -3,8 +3,21 @@ package pipeline
 import (
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
+
+// mustResolveAutoCheck builds the check a `check: auto` step carries after
+// ResolvePhaseSteps has rewritten the sentinel, so the force-run lever is
+// tested against the shape production actually produces.
+func mustResolveAutoCheck(t *testing.T, whenCmd string) *config.Action {
+	t.Helper()
+	action, err := ResolveAutoCheck(&condition.Condition{Type: condition.TypeShell, Cmd: whenCmd})
+	if err != nil {
+		t.Fatalf("ResolveAutoCheck: %v", err)
+	}
+	return action
+}
 
 func TestStepForcesRun(t *testing.T) {
 	tests := []struct {
@@ -94,6 +107,61 @@ func TestStepForcesRun(t *testing.T) {
 				}},
 			},
 			want: true,
+		},
+		{
+			// The load-time sentinel is a real Check, so the lever fires even
+			// before the resolver rewrites it into a builtin shell action.
+			name: "auto check sentinel forces run",
+			rs: ResolvedStep{Step: config.DeployStep{
+				Name:  "clone",
+				Type:  "shell",
+				Cmd:   "git clone repo src",
+				When:  &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e src/.git ]"},
+				Check: &config.Action{Type: config.AutoCheckType},
+			}},
+			want: true,
+		},
+		{
+			name: "derived auto check forces run",
+			rs: ResolvedStep{Step: config.DeployStep{
+				Name:  "clone",
+				Type:  "shell",
+				Cmd:   "git clone repo src",
+				Check: mustResolveAutoCheck(t, "[ ! -e src/.git ]"),
+			}},
+			want: true,
+		},
+		{
+			name: "parallel substep with a derived auto check forces run",
+			rs: ResolvedStep{
+				Step: config.DeployStep{Name: "group"},
+				Parallel: &ResolvedParallel{Steps: []ResolvedStep{
+					{Step: config.DeployStep{Name: "a", Type: "shell", Cmd: "true"}},
+					{Step: config.DeployStep{
+						Name:  "b",
+						Type:  "shell",
+						Cmd:   "git clone repo src",
+						Check: mustResolveAutoCheck(t, "[ ! -e src/.git ]"),
+					}},
+				}},
+			},
+			want: true,
+		},
+		{
+			// The 5 observed steps that carry a when: and deliberately no
+			// check: must keep their journal skip — when: stays a pure
+			// conditional, and check: auto is opt-in precisely because of them.
+			name: "when without check does not force run",
+			rs: ResolvedStep{
+				Step: config.DeployStep{
+					Name: "seed",
+					Type: "shell",
+					Cmd:  "make seed",
+					When: &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e .seeded ]"},
+				},
+				RuntimeWhen: &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e .seeded ]"},
+			},
+			want: false,
 		},
 		{
 			name: "parallel group with only action substeps does not force run",

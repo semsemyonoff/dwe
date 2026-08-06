@@ -1,10 +1,15 @@
 package scaffold
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // inertFiles are the shipped-commented override mirrors. Their built-in defaults
@@ -15,6 +20,7 @@ var inertFiles = []string{
 	"workspace/lifecycle.yml",
 	"workspace/info.yml",
 	"workspace/docker.yml",
+	"workspace/services/app/deploy.yml",
 }
 
 // yamlOutputs are the rendered output paths that must parse as YAML.
@@ -28,6 +34,9 @@ var yamlOutputs = []string{
 	"workspace/info.yml",
 	"workspace/docker.yml",
 	"workspace/services/app/service.yml",
+	"workspace/services/app/deploy.yml",
+	"workspace/templates/ai/default/manifest.yml",
+	"workspace/tests/smoke.yml",
 }
 
 func TestEmbeddedTemplates_RenderForRepresentativeOptions(t *testing.T) {
@@ -94,6 +103,119 @@ func TestEmbeddedTemplates_InertFilesAreAllComments(t *testing.T) {
 	}
 }
 
+// bodyKeyLine matches a de-commented top-level YAML key line: lowercase,
+// snake_case, no leading whitespace, immediately followed by ':'. Real config
+// keys in the inert mirrors are all lowercase (run, log, phases, sections,
+// project_name, ...); the prose header above them is sentence-cased prose, so
+// this reliably locates where the commented-out YAML body begins without
+// hardcoding a per-file line offset.
+var bodyKeyLine = regexp.MustCompile(`^[a-z][a-z0-9_-]*:(\s|$)`)
+
+// uncommentInertBody finds the trailing commented-out YAML block in an inert
+// scaffold mirror and strips its "# " comment prefix, leaving the prose
+// header above it untouched. It simulates exactly what the file's own
+// "uncomment to override" instruction tells the user to do.
+func uncommentInertBody(t *testing.T, data []byte) []byte {
+	t.Helper()
+	lines := strings.Split(string(data), "\n")
+	start := -1
+	for i, line := range lines {
+		rest, isComment := strings.CutPrefix(line, "#")
+		if !isComment {
+			continue
+		}
+		rest = strings.TrimPrefix(rest, " ")
+		if bodyKeyLine.MatchString(rest) {
+			start = i
+			break
+		}
+	}
+	if start == -1 {
+		t.Fatalf("could not locate a top-level YAML key in inert file:\n%s", data)
+	}
+	for i := start; i < len(lines); i++ {
+		rest, isComment := strings.CutPrefix(lines[i], "#")
+		if !isComment {
+			continue
+		}
+		lines[i] = strings.TrimPrefix(rest, " ")
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
+// TestEmbeddedTemplates_InertBodyUncommentsCleanly proves the "uncomment to
+// override" instruction each inert mirror carries actually works: taking the
+// commented-out YAML body literally and stripping only the comment markers
+// must load through the same strict decoder the real file goes through. This
+// is the regression guard for the class of defect fixed in task 11 (a
+// commented example referencing a field the schema no longer has).
+func TestEmbeddedTemplates_InertBodyUncommentsCleanly(t *testing.T) {
+	cases := []struct {
+		name string
+		rel  string
+		load func(t *testing.T, dir string)
+	}{
+		{
+			name: "lifecycle.yml",
+			rel:  filepath.Join("workspace", "lifecycle.yml"),
+			load: func(t *testing.T, dir string) {
+				if _, err := config.LoadLifecycleConfig(filepath.Join(dir, "workspace", "lifecycle.yml")); err != nil {
+					t.Errorf("LoadLifecycleConfig: %v", err)
+				}
+			},
+		},
+		{
+			name: "deploy.yml",
+			rel:  filepath.Join("workspace", "deploy.yml"),
+			load: func(t *testing.T, dir string) {
+				if _, err := config.LoadProjectDeployConfig(filepath.Join(dir, "workspace", "deploy.yml")); err != nil {
+					t.Errorf("LoadProjectDeployConfig: %v", err)
+				}
+			},
+		},
+		{
+			name: "info.yml",
+			rel:  filepath.Join("workspace", "info.yml"),
+			load: func(t *testing.T, dir string) {
+				if _, err := config.LoadInfoConfig(filepath.Join(dir, "workspace", "info.yml")); err != nil {
+					t.Errorf("LoadInfoConfig: %v", err)
+				}
+			},
+		},
+		{
+			name: "docker.yml",
+			rel:  filepath.Join("workspace", "docker.yml"),
+			load: func(t *testing.T, dir string) {
+				cfg, err := config.LoadConfig(filepath.Join(dir, "workspace.yml"))
+				if err != nil {
+					t.Fatalf("LoadConfig: %v", err)
+				}
+				if _, err := config.LoadDockerConfig(dir, cfg); err != nil {
+					t.Errorf("LoadDockerConfig: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if _, err := Scaffold(defaultValidityOptions(dir)); err != nil {
+				t.Fatalf("Scaffold: %v", err)
+			}
+			path := filepath.Join(dir, tc.rel)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			if err := os.WriteFile(path, uncommentInertBody(t, data), 0o644); err != nil {
+				t.Fatalf("write %s: %v", path, err)
+			}
+			tc.load(t, dir)
+		})
+	}
+}
+
 func TestEmbeddedTemplates_StylesRendersNestedBranding(t *testing.T) {
 	opts := newTestOptions()
 	plan, err := renderPlan(opts)
@@ -146,21 +268,86 @@ func TestEmbeddedTemplates_ServiceTogglePresentOnlyWhenNamed(t *testing.T) {
 	}
 }
 
-func TestEmbeddedTemplates_StarterServiceKeepsTypeAndContainerActive(t *testing.T) {
+// TestEmbeddedTemplates_StarterServiceActiveKeys pins the class-1 set the
+// starter service ships active: the identity pair, the hub triplet (identical
+// across every surveyed app service), and the two display fields every service
+// fills anyway. Everything else stays a commented example.
+//
+// `ports` in particular MUST stay commented: the scaffolded compose.yaml has no
+// services block, so an active port binds nothing, and it would make
+// `dwe validate` depend on whether that host port happens to be busy
+// (portsFreeValidator emits SeverityError), turning the deterministic
+// scaffold-validates-clean guard into a host-dependent one.
+func TestEmbeddedTemplates_StarterServiceActiveKeys(t *testing.T) {
 	svc := mustRender(t, newTestOptions())["workspace/services/app/service.yml"]
 	var parsed map[string]any
 	if err := yaml.Unmarshal(svc, &parsed); err != nil {
 		t.Fatalf("parse service.yml: %v", err)
 	}
-	if parsed["type"] != "app" {
-		t.Errorf("service.yml type = %v, want app", parsed["type"])
+	want := map[string]any{
+		"type":              "app",
+		"container":         "app",
+		"dir":               "./services/app",
+		"dir_internal":      "/workspace",
+		"work_dir_internal": "/workspace/src",
+		"icon":              "📦",
+		"info":              map[string]any{"title": "app"},
 	}
-	if parsed["container"] != "app" {
-		t.Errorf("service.yml container = %v, want app", parsed["container"])
+	for key, wantVal := range want {
+		got, ok := parsed[key]
+		if !ok {
+			t.Errorf("service.yml missing active key %q", key)
+			continue
+		}
+		if gotMap, isMap := got.(map[string]any); isMap {
+			wantMap, _ := wantVal.(map[string]any)
+			if len(gotMap) != len(wantMap) {
+				t.Errorf("service.yml %q = %v, want %v", key, got, wantVal)
+				continue
+			}
+			for k, v := range wantMap {
+				if gotMap[k] != v {
+					t.Errorf("service.yml %s.%s = %v, want %v", key, k, gotMap[k], v)
+				}
+			}
+			continue
+		}
+		if got != wantVal {
+			t.Errorf("service.yml %q = %v, want %v", key, got, wantVal)
+		}
 	}
-	// Only the two active keys — everything else is commented.
-	if len(parsed) != 2 {
-		t.Errorf("service.yml has %d active keys %v, want exactly type+container", len(parsed), parsed)
+	for key := range parsed {
+		if _, ok := want[key]; !ok {
+			t.Errorf("service.yml has unexpected active key %q = %v", key, parsed[key])
+		}
+	}
+	for _, commented := range []string{"ports", "hosts", "required", "depends_on"} {
+		if _, ok := parsed[commented]; ok {
+			t.Errorf("service.yml key %q is active; it must stay a commented example", commented)
+		}
+	}
+}
+
+// TestEmbeddedTemplates_PortPairIsDocumentedOnBothSides guards the one class-1
+// rule the scaffold can only teach in prose: a port is display-only until a
+// matching exports.env rule exports it. Both halves ship commented, so the
+// pairing has to be stated in each file or the reader sees only one side.
+func TestEmbeddedTemplates_PortPairIsDocumentedOnBothSides(t *testing.T) {
+	plan := mustRender(t, newTestOptions())
+	svc := string(plan["workspace/services/app/service.yml"])
+	if !strings.Contains(svc, "exports.env") {
+		t.Errorf("service.yml does not mention the paired exports.env rule:\n%s", svc)
+	}
+	defaults := string(plan["workspace/defaults.yml"])
+	if !strings.Contains(defaults, "display-only") {
+		t.Errorf("defaults.yml does not state the display-only rule:\n%s", defaults)
+	}
+	// The reserved auto-injected names are a documented trap (they are rejected
+	// as user rule names), and exports.env is the only place they surface.
+	for _, name := range config.ReservedExportNames {
+		if !strings.Contains(defaults, name) {
+			t.Errorf("defaults.yml does not name the reserved export %q", name)
+		}
 	}
 }
 

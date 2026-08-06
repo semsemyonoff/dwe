@@ -417,7 +417,7 @@ func mutateAndPlan(
 	if stackEverDeployed {
 		ops := buildPendingOpsFromContributors(contributors)
 		svc := cfgNew.Services[name]
-		configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
+		configHash := journal.ServiceConfigHash(svc, svcDeploys[name], cfgNew.Vars)
 		if err := singleToggleAddPendingOps(statePath, ops, configHash); err != nil {
 			rollback()
 			return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
@@ -437,7 +437,7 @@ func batchServiceConfigHash(cfg *config.DweConfig, svcDeploys map[string]*config
 	parts := make([]string, len(sorted))
 	for i, name := range sorted {
 		svc := cfg.Services[name]
-		parts[i] = journal.ServiceConfigHash(svc, svcDeploys[name])
+		parts[i] = journal.ServiceConfigHash(svc, svcDeploys[name], cfg.Vars)
 	}
 	return strings.Join(parts, ":")
 }

@@ -83,7 +83,9 @@ build:
 project_name: "${project.prefix}-${project.name}"
 ```
 
-The Docker Compose project name passed as `-p <name>` to every compose invocation. Supports `${dot.path}` lookups into the merged DWE config (see [Templates](../templates.md) — `${...}` namespaces). Default resolves to `dwe-laravel`.
+The Docker Compose project name passed as `-p <name>` to every compose invocation. Supports `${dot.path}` lookups into the merged DWE config (see [Templates](../templates.md) — `${...}` namespaces), resolved with its own stricter rule: **any** dot-path into `Raw` resolves here (no namespace whitelist), but an unresolved path is a hard **error** rather than a literal `${...}` — a broken project name must fail loudly instead of silently reaching `docker compose -p ${...}`. Default resolves to `dwe-laravel`.
+
+**The resolved name is lowercased.** Docker Compose requires a project name matching `[a-z0-9][a-z0-9_-]*` and rejects uppercase outright, while `project.name`, `project.prefix`, and this field are all free-form user text — so `project.name: cueBreaker` resolves to `dwe-cuebreaker`, and `project_name: "MyApp"` to `myapp`. The lowercased form is what `docker compose -p` receives, what `dwe docker project-name` prints, and what every derived name follows: container names (`<project>-<service>`), the non-shared volume prefix `<project_name>_`, and the `com.docker.compose.project` label filter used by status, per-service stop/restart, and reset. A project that previously ran under a name carrying uppercase should stop its stack with the older dwe version first — compose treats the old containers and volumes as belonging to a different project, so they would otherwise be left behind.
 
 Override locally:
 ```yaml
