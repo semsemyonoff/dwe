@@ -197,41 +197,41 @@ func wideTabSnapshot() tabSnapshot {
 }
 
 // sectionTitleBarRe matches the decorative "── Title ──…" rule line
-// render.SectionTitle (used by stack's wrapSection) renders above every
-// table. That helper is pre-existing, package-wide infrastructure shared far
-// beyond render/'s tables — it always falls back to styles.TermWidth() (the
-// real terminal probe) rather than the panel width passed to renderTab, so
-// its bar can legitimately be wider than the panel. That gap predates this
-// plan (wrapSection predates the responsive-tables branch entirely) and is
-// out of scope here, which is strictly about tableView's own shrink/record
-// mechanism — so width assertions below skip these lines rather than
-// asserting on them.
+// render.SectionTitleAt (used by stack's wrapSection and by renderGitTab)
+// renders above every table. It is asserted on, not skipped: the bar is sized
+// from the same panel width the table body is fitted to, so a regression that
+// drops the width on the title path — leaving it to fall back to the ambient
+// styles.TermWidth() probe — must fail here. The regexp only guards that such
+// a line still exists in the rendered tabs, so the assertion below cannot
+// silently degrade to "no titles were rendered at all".
 var sectionTitleBarRe = regexp.MustCompile(`^── .+ ─+$`)
 
-// TestTabs_RenderedWidthNeverExceedsBudget verifies every rendered *table*
-// line (excluding the pre-existing, non-width-aware SectionTitle bar — see
-// sectionTitleBarRe) of every width-dependent tab stays within the given
-// budget at the narrow buckets the status TUI panel can realistically end up
-// at (panel inner width = outer − 4 per Frame.renderBody). This is the
+// TestTabs_RenderedWidthNeverExceedsBudget verifies every rendered line —
+// section title bars included — of every width-dependent tab stays within the
+// given budget at the narrow buckets the status TUI panel can realistically
+// end up at (panel inner width = outer − 4 per Frame.renderBody). This is the
 // render-time counterpart to the render/ package's own fitRows tests: it
 // confirms renderTab actually threads the width down to
 // stack.RenderAppsRows / RenderDeployStatusRows / render.GitWorkspaceAt /
 // stack.RenderDaemonsAt rather than dropping it.
 func TestTabs_RenderedWidthNeverExceedsBudget(t *testing.T) {
 	snap := wideTabSnapshot()
+	sawTitleBar := false
 	for _, w := range []int{60, 79, 80} {
 		for idx, name := range widthDependentTabIndex {
 			body, _ := renderTab(snap, idx, w)
 			for lineNo, line := range strings.Split(body, "\n") {
-				plain := ansi.Strip(line)
-				if sectionTitleBarRe.MatchString(plain) {
-					continue
+				if sectionTitleBarRe.MatchString(ansi.Strip(line)) {
+					sawTitleBar = true
 				}
 				if got := lipgloss.Width(line); got > w {
 					t.Errorf("tab %s width=%d line %d exceeds budget: got %d\nline: %q", name, w, lineNo, got, line)
 				}
 			}
 		}
+	}
+	if !sawTitleBar {
+		t.Error("no section title bar found in any rendered tab — the width assertion above no longer covers the title path")
 	}
 }
 

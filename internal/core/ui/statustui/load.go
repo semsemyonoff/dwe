@@ -259,7 +259,7 @@ func renderTopologyTab(snap tabSnapshot) string {
 // renderGitTab composes the Git Workspace section title, warning prefix (for
 // rows with a per-repo error), and table.
 func renderGitTab(snap tabSnapshot, width int) string {
-	title := render.SectionTitle("Git Workspace")
+	title := render.SectionTitleAt("Git Workspace", width)
 	if len(snap.gitRows) == 0 {
 		return joinNonEmpty(title, "no git workspace tracked")
 	}

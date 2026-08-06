@@ -48,7 +48,7 @@ func RenderDeployStatusRows(rows []render.DeployStatusRow, width int) string {
 	if len(rows) == 0 {
 		return ""
 	}
-	return wrapSection("Deploy Status", render.DeployStatusAt(rows, width))
+	return wrapSection("Deploy Status", render.DeployStatusAt(rows, width), width)
 }
 
 // DeployStatus returns the Deploy Status section title + table as a
@@ -62,7 +62,7 @@ func DeployStatus(in StatusInput) string {
 	if in.Width > 0 {
 		return RenderDeployStatusRows(rows, in.Width)
 	}
-	return wrapSection("Deploy Status", render.DeployStatus(rows))
+	return wrapSection("Deploy Status", render.DeployStatus(rows), 0)
 }
 
 // BuildDeployStatusView assembles a view model joining current config hashes

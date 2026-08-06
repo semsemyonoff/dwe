@@ -274,7 +274,7 @@ func TestDeployStatus_ExplicitWidthUsesDeployStatusAt(t *testing.T) {
 	// looking for "main": a Contains check passes even if in.Width is
 	// dropped and the table renders unbounded, which is exactly the
 	// regression this test exists to catch.
-	want := wrapSection("Deploy Status", render.DeployStatusAt(CollectDeployStatus(in), 20))
+	want := wrapSection("Deploy Status", render.DeployStatusAt(CollectDeployStatus(in), 20), 20)
 	assert.Equal(t, want, DeployStatus(in))
 
 	unbounded := in

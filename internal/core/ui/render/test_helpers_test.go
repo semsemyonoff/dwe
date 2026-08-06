@@ -80,6 +80,11 @@ func pinGoldenPalette(t *testing.T) {
 	t.Cleanup(func() {
 		lipgloss.SetColorProfile(savedProfile)
 		lipgloss.SetHasDarkBackground(savedDark)
+		// resetStyles again once the profile is back: the styles package
+		// resolves its palette at ApplyStyles time, so leaving the values
+		// computed under the pinned TrueColor/dark profile would leak into
+		// whatever test runs next.
+		resetStyles()
 	})
 	resetStyles()
 }

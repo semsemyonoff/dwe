@@ -128,7 +128,7 @@ func renderServiceSectionAt(sec ServiceSection, title string, withDirCol bool, w
 	if len(sec.Rows) == 0 {
 		return ""
 	}
-	return wrapSection(title, render.ServicesTableAt(sec.Rows, sec.ExtraCols, withDirCol, width))
+	return wrapSection(title, render.ServicesTableAt(sec.Rows, sec.ExtraCols, withDirCol, width), width)
 }
 
 // RenderApps returns the Apps section (services with type=app) title + table.
@@ -156,17 +156,24 @@ func renderTypeSection(in StatusInput, t config.ServiceType, title string, withD
 		return "", errs
 	}
 	if in.Width > 0 {
-		return wrapSection(title, render.ServicesTableAt(sec.Rows, sec.ExtraCols, withDirCol, in.Width)), errs
+		return wrapSection(title, render.ServicesTableAt(sec.Rows, sec.ExtraCols, withDirCol, in.Width), in.Width), errs
 	}
-	return wrapSection(title, render.ServicesTable(sec.Rows, sec.ExtraCols, withDirCol)), errs
+	return wrapSection(title, render.ServicesTable(sec.Rows, sec.ExtraCols, withDirCol), 0), errs
 }
 
 // wrapSection renders a status section as a SectionTitle line followed by the
 // body, each terminated with a newline. It is the shared envelope used by the
 // services / topology / deploy / daemons section renderers.
-func wrapSection(title, body string) string {
+//
+// width is the same budget the body was rendered at (0 = resolve the title bar
+// from the terminal, matching the sink-probing body renderers). Passing it on
+// is what keeps the "── Title ──…" rule inside a fixed sub-region such as a
+// status-TUI panel: render.SectionTitle alone always sizes the bar from the
+// ambient terminal, so a narrow panel would carry a title wider than its own
+// viewport.
+func wrapSection(title, body string, width int) string {
 	var b strings.Builder
-	b.WriteString(render.SectionTitle(title))
+	b.WriteString(render.SectionTitleAt(title, width))
 	b.WriteByte('\n')
 	b.WriteString(body)
 	b.WriteByte('\n')
@@ -184,7 +191,10 @@ func RenderTopology(in StatusInput) string {
 	if rendered == "" {
 		return ""
 	}
-	return wrapSection("Topology", rendered)
+	// Width 0 on purpose: render.Topology draws an indented dependency tree,
+	// not a width-aware table, so there is no panel budget the body honors and
+	// none for the title to match either.
+	return wrapSection("Topology", rendered, 0)
 }
 
 // buildServiceTemplateData prepares the template data map for a service row's

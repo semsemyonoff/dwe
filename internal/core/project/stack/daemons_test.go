@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
@@ -181,6 +182,21 @@ func TestRenderDaemonsAt_NarrowWidthStillContainsContent(t *testing.T) {
 	body, errs := RenderDaemonsAt(rows, 20)
 	if len(errs) != 0 {
 		t.Errorf("unexpected errs: %v", errs)
+	}
+
+	// Byte-compare against the explicit-width renderer rather than merely
+	// looking for the daemon ID: a Contains check passes even when the width
+	// argument is dropped and the section renders unbounded, which is exactly
+	// the regression this test exists to catch.
+	want := wrapSection("Daemons", render.DaemonTableAt([]render.DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default,extra=value,more=stuff", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}, 20), 20)
+	if body != want {
+		t.Errorf("RenderDaemonsAt(rows, 20) = %q, want the DaemonTableAt(…, 20) rendering %q", body, want)
+	}
+
+	if unbounded, _ := RenderDaemonsAt(rows, 0); unbounded == body {
+		t.Error("width 20 did not change the rendering; this test cannot detect a dropped width argument")
 	}
 	if !strings.Contains(body, "services.main.queue") {
 		t.Errorf("expected daemon ID to survive narrow rendering: %q", body)

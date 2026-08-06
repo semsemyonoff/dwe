@@ -65,7 +65,17 @@ func TestRenderDaemonTableAt_NarrowWidthTriggersRecordMode(t *testing.T) {
 	rows := []DaemonTableRow{
 		{ID: "services.main.queue", Params: "name=default,extra=an unusually long parameter value", Container: "proj-php_queue_default", Uptime: "5m0s"},
 	}
-	got := stripANSI(DaemonTableAt(rows, 20))
+	out := DaemonTableAt(rows, 20)
+	got := stripANSI(out)
+	// The name promises record mode, so assert it — plus one of the record
+	// field labels: a Contains check on the ID alone passes even when the
+	// width argument is dropped and the table renders unbounded.
+	if isTableMode(out) {
+		t.Errorf("expected record mode at width 20, got a table: %q", got)
+	}
+	if !strings.Contains(got, "container  proj-php_queue_default") {
+		t.Errorf("expected an aligned record field line for the container: %q", got)
+	}
 	if !strings.Contains(got, "services.main.queue") {
 		t.Errorf("expected daemon ID to survive narrow rendering: %q", got)
 	}
@@ -248,7 +258,14 @@ func TestRenderServicesTableAt_NarrowWidthTriggersRecordMode(t *testing.T) {
 			Extras: map[string]string{"ENDPOINT": longURL},
 		},
 	}
-	got := stripANSI(ServicesTableAt(rows, []string{"ENDPOINT"}, true, 60))
+	out := ServicesTableAt(rows, []string{"ENDPOINT"}, true, 60)
+	got := stripANSI(out)
+	// Assert the mode the name promises, not just the URL: the URL is kept
+	// whole in table mode too, so a Contains check alone passes even when the
+	// width argument is dropped and the table renders unbounded.
+	if isTableMode(out) {
+		t.Errorf("expected record mode at width 60, got a table:\n%s", got)
+	}
 	if !strings.Contains(got, longURL) {
 		t.Errorf("expected long URL to stay intact in record mode:\n%s", got)
 	}
@@ -434,9 +451,17 @@ func TestRenderDeployStatusAt_NarrowWidthTriggersWrap(t *testing.T) {
 			LastFailedPhase: "setup", LastFailedStep: "a very long step name that should wrap under pressure",
 		},
 	}
-	got := stripANSI(DeployStatusAt(rows, 40))
+	out := DeployStatusAt(rows, 40)
+	got := stripANSI(out)
 	if !strings.Contains(got, "main") {
 		t.Errorf("expected service name to survive narrow rendering: %q", got)
+	}
+	// The point of the width argument is that the long step name wraps rather
+	// than running past the budget — assert both, or this test passes when
+	// the width is dropped and the row renders unbounded.
+	assertLinesWithinBudget(t, out, 40)
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "under pressure") {
+		t.Errorf("expected the long failed-step value to wrap across lines: %q", got)
 	}
 }
 

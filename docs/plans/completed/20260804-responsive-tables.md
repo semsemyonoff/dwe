@@ -208,8 +208,9 @@ declaration, not a guess made at render time.
 panel's inner width, so it is threaded in:
 
 - `stack.StatusInput` gains a `Width int` field, consumed by `RenderApps` / `RenderTools` /
-  `RenderInfra` / `DeployStatus` / `RenderTopology`. `cli/status` leaves it `0` and falls back to the
-  stdout probe. **No signature changes.**
+  `RenderInfra` / `DeployStatus`. `cli/status` leaves it `0` and falls back to the stdout probe.
+  **No signature changes.** (`RenderTopology` is deliberately *not* in that list — it renders a
+  dependency tree rather than a responsive table and takes no width; see the Task 9 note below.)
 - `render.GitWorkspaceAt(rows, width)` and `stack.RenderDaemonsAt(rows, width)` are added alongside
   their existing forms for the two calls that take rows directly rather than a `StatusInput`, following
   the package's existing `SectionTitleAt` / `DefinitionAt` naming.
@@ -907,7 +908,10 @@ byte-identical claim would then hold only under the non-TTY test seams, not in a
       only box-drawing glyphs in ru guides/reference are static directory-tree diagrams in prose, not
       rendered CLI table output, so nothing there is affected by this plan)
 - [x] leave `docs/reference/` untouched: this is presentation, not configuration, and no `styles.yml`
-      knob is introduced (confirmed: `git diff --stat docs/reference/` is empty)
+      knob is introduced (held at the time of writing; superseded during review — a "Terminal width"
+      section was added to `docs/reference/config/validate.md`, with its `docs/i18n/ru/` mirror
+      re-stamped, because the diagnostics table's narrow-terminal behavior is user-visible in
+      `dwe validate` and readers had no reference for it. Still no `styles.yml` knob.)
 - [x] run `make build` to re-sync the embedded docs tree, then `make test` and `make lint`
       (`make build` and `make lint` clean; `make test` / `go test ./internal/cli/...` fail only on
       `internal/cli/deploy` and `internal/cli/lifecycle` due to the sandbox's unreachable Docker daemon

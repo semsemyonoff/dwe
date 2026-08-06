@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -196,12 +197,17 @@ func TestDiagnosticsByDomain_SingleDomain_MatchesDirectRender(t *testing.T) {
 	}
 
 	for _, budget := range []int{0, 200, 20} {
-		t.Run("", func(t *testing.T) {
+		t.Run(fmt.Sprintf("budget=%d", budget), func(t *testing.T) {
 			resetStyles()
 			withTermWidth(t, budget)
 
 			got := DiagnosticsByDomain(rows)
-			want := domainTitle("linters", rows) + "\n" + diagnosticsTableView(rows, false).Render(stderrBudget())
+			// stdoutBudget, not stderrBudget: it is the budget
+			// DiagnosticsByDomain itself resolves. withTermWidth reports the
+			// same width for every stream, so the two agree here — building
+			// the oracle from the wrong one would silently stop catching a
+			// regression to the sibling DiagnosticsTable's stderr sink.
+			want := domainTitle("linters", rows) + "\n" + diagnosticsTableView(rows, false).Render(stdoutBudget())
 
 			if got != want {
 				t.Errorf("budget %d: DiagnosticsByDomain diverged from direct single-domain render\ngot:\n%s\nwant:\n%s",

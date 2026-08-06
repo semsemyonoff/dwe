@@ -349,7 +349,7 @@ func TestRenderTypeSection_ExplicitWidthUsesServicesTableAt(t *testing.T) {
 	}
 
 	sec, _ := CollectApps(in)
-	want := wrapSection("Apps", render.ServicesTableAt(sec.Rows, sec.ExtraCols, true, 20))
+	want := wrapSection("Apps", render.ServicesTableAt(sec.Rows, sec.ExtraCols, true, 20), 20)
 	if out != want {
 		t.Errorf("RenderApps(Width: 20) = %q, want the ServicesTableAt(…, 20) rendering %q", out, want)
 	}
