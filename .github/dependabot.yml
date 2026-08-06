@@ -47,12 +47,21 @@ updates:
   #   * update PRs — `ignore: "*"` below suppresses Dependabot update PRs
   #     (routine version bumps AND security-fix PRs) for the whole /web stack.
   #   * alerts — `ignore` does NOT silence Dependabot ALERTS; those scan the
-  #     dependency graph regardless of this file. Instead, every web/ dep lives
-  #     under `devDependencies` (web/package.json), so the graph scopes them and
-  #     their transitives (esbuild, vite, …) as *development*, and GitHub
-  #     auto-dismisses low/medium-severity dev-only advisories by default. A
-  #     genuinely serious, production-reachable advisory still surfaces as an
-  #     alert to triage by hand.
+  #     dependency graph regardless of this file, and nothing in this file can
+  #     turn them off. What this file does contribute is the *scope*: every
+  #     web/ dep lives under `devDependencies` (web/package.json), so the graph
+  #     classifies them and their transitives (esbuild, vite, …) as
+  #     `development` rather than `runtime`.
+  #
+  #     Acting on that scope is a repo setting, NOT a default — see Settings →
+  #     Code security → Dependabot → Auto-triage rules, where a custom rule
+  #     (ecosystem `npm` + scope `development` → dismiss) closes them. There is
+  #     no REST API for those rules, so they cannot live in this repo; if the
+  #     alert list starts filling up with web/ entries again, the rule is gone.
+  #     Do not assume GitHub dismisses dev-scoped advisories on its own: it
+  #     ships a curated preset that covers only low/medium severity, and it is
+  #     opt-in. Eleven web/ alerts — five of them high — sat open under an
+  #     earlier version of this comment that claimed otherwise.
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
