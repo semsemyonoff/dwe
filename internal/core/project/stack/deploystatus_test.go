@@ -207,6 +207,82 @@ func TestRenderServiceDeployDetail(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCollectRenderDeployStatus_RoundTrip(t *testing.T) {
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services: map[string]*journal.ServiceState{
+			"main": {Status: journal.StatusDeployed, ConfigHash: "abc123def456"},
+		},
+	}
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"main": {Enabled: true},
+		},
+	}
+	in := StatusInput{
+		Cfg:        cfg,
+		State:      state,
+		SvcDeploys: map[string]*config.ServiceDeployConfig{"main": nil},
+		Tracked:    []string{"main"},
+	}
+
+	rows := CollectDeployStatus(in)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	got := RenderDeployStatusRows(rows, 0)
+	want := DeployStatus(in)
+	if got != want {
+		t.Errorf("collect+render split diverged from DeployStatus:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestCollectDeployStatus_NilState(t *testing.T) {
+	if rows := CollectDeployStatus(StatusInput{}); rows != nil {
+		t.Errorf("expected nil rows for nil state, got %v", rows)
+	}
+}
+
+func TestRenderDeployStatusRows_Empty(t *testing.T) {
+	if out := RenderDeployStatusRows(nil, 20); out != "" {
+		t.Errorf("expected empty output, got %q", out)
+	}
+}
+
+func TestDeployStatus_ExplicitWidthUsesDeployStatusAt(t *testing.T) {
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services: map[string]*journal.ServiceState{
+			"main": {Status: journal.StatusDeployed, ConfigHash: "abc123def456"},
+		},
+	}
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"main": {Enabled: true},
+		},
+	}
+	in := StatusInput{
+		Cfg:        cfg,
+		State:      state,
+		SvcDeploys: map[string]*config.ServiceDeployConfig{"main": nil},
+		Tracked:    []string{"main"},
+		Width:      20,
+	}
+	// Byte-compare against the explicit-width renderer rather than merely
+	// looking for "main": a Contains check passes even if in.Width is
+	// dropped and the table renders unbounded, which is exactly the
+	// regression this test exists to catch.
+	want := wrapSection("Deploy Status", render.DeployStatusAt(CollectDeployStatus(in), 20), 20)
+	assert.Equal(t, want, DeployStatus(in))
+
+	unbounded := in
+	unbounded.Width = 0
+	assert.NotEqual(t, DeployStatus(unbounded), DeployStatus(in),
+		"width 20 must change the rendering; otherwise this test cannot detect a dropped in.Width")
+}
+
 func TestRenderDeployStatusEmpty(t *testing.T) {
 	state := &journal.ProjectState{
 		SchemaVersion: "1",

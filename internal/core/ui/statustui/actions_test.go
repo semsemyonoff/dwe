@@ -107,9 +107,10 @@ func TestActions_TabRebindAndBuiltins(t *testing.T) {
 func newActionTestPlugin(t *testing.T) *plugin {
 	t.Helper()
 	p, _ := newTestPlugin(t)
-	p.m.tabs = goldenTabs()
+	p.m.snap = tabSnapshot{}
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
 	p.m.loading = false
-	p.m.viewport.SetContent(p.m.tabs[0].content)
 	return p
 }
 
@@ -169,9 +170,12 @@ func TestHandleAction_TabJump(t *testing.T) {
 	}
 }
 
-func TestHandleAction_TabJump_OutOfRangeIgnored(t *testing.T) {
-	p := newActionTestPlugin(t)
-	p.m.tabs = p.m.tabs[:2] // only Tab1/Tab2 valid
+func TestHandleAction_TabJump_NoopBeforeTabsLoaded(t *testing.T) {
+	// The tab count is fixed at 5 once loaded (buildTabs always collects all
+	// five sections), so a direct tab-jump action can only be out-of-range
+	// relative to tabTitles before the first load completes — setActiveTab's
+	// !m.loaded guard covers that case.
+	p, _ := newTestPlugin(t) // loading, no snapshot assigned yet
 	p.m.active = 1
 
 	_, handled := p.HandleAction(actionTab5)
@@ -179,7 +183,7 @@ func TestHandleAction_TabJump_OutOfRangeIgnored(t *testing.T) {
 		t.Fatalf("HandleAction(actionTab5) handled = false, want true")
 	}
 	if p.m.active != 1 {
-		t.Errorf("active = %d, want unchanged 1 (out-of-range jump ignored)", p.m.active)
+		t.Errorf("active = %d, want unchanged 1 (jump before load ignored)", p.m.active)
 	}
 }
 

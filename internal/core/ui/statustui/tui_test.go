@@ -20,20 +20,14 @@ func TestNewModel_Defaults(t *testing.T) {
 	require.Same(t, deps.Cfg, m.deps.Cfg)
 	require.True(t, m.loading, "loading should be true initially")
 	require.Equal(t, 0, m.active, "active tab should be 0 initially")
-	require.Empty(t, m.tabs, "tabs should be empty initially")
+	require.False(t, m.loaded, "loaded should be false initially")
 }
 
 func TestRenderTabStrip(t *testing.T) {
 	ctx := context.Background()
 	deps := Deps{}
 	m := newModel(deps, ctx)
-	m.tabs = []tab{
-		{"Services", "content1"},
-		{"Deploy", "content2"},
-		{"Topology", "content3"},
-		{"Git", "content4"},
-		{"Daemons", "content5"},
-	}
+	m.loaded = true
 
 	tests := []struct {
 		activeTab   int
@@ -50,11 +44,11 @@ func TestRenderTabStrip(t *testing.T) {
 			tabStrip := m.renderTabStrip()
 
 			// Active tab should be present
-			require.Contains(t, tabStrip, m.tabs[tt.activeTab].title)
+			require.Contains(t, tabStrip, tabTitles[tt.activeTab])
 
 			// All tabs should be present
-			for _, tab := range m.tabs {
-				require.Contains(t, tabStrip, tab.title)
+			for _, title := range tabTitles {
+				require.Contains(t, tabStrip, title)
 			}
 
 			// Check for active tab styling markers
@@ -88,22 +82,18 @@ func TestInit_BumpsLoadGen(t *testing.T) {
 	require.NotNil(t, cmd, "Init should return a command")
 }
 
-// Test setActiveTab ignores out-of-range indices, preserving the per-key guard
-// the explicit Tab1–Tab5 blocks used to carry (e.g. Tab5 with only 3 tabs).
+// Test setActiveTab ignores out-of-range indices (relative to the fixed
+// tabTitles) and any switch attempted before the first load completes.
 func TestSetActiveTab_OutOfRangeNoop(t *testing.T) {
 	ctx := context.Background()
 	m := newModel(Deps{}, ctx)
-	m.tabs = []tab{
-		{"Services", "content1"},
-		{"Deploy", "content2"},
-		{"Topology", "content3"},
-	}
+	m.loaded = true
 	m.active = 1
 	m.reloadGen = 7
 	m.loading = false
 
-	// Index past the tab count is ignored: active and reloadGen unchanged.
-	m.setActiveTab(4)
+	// Index past len(tabTitles) is ignored: active and reloadGen unchanged.
+	m.setActiveTab(len(tabTitles))
 	require.Equal(t, 1, m.active, "out-of-range index should not change active")
 	require.Equal(t, uint64(7), m.reloadGen, "out-of-range index should leave reloadGen untouched")
 
@@ -115,4 +105,15 @@ func TestSetActiveTab_OutOfRangeNoop(t *testing.T) {
 	m.setActiveTab(2)
 	require.Equal(t, 2, m.active)
 	require.Equal(t, uint64(0), m.reloadGen, "valid switch should reset reloadGen")
+}
+
+// TestSetActiveTab_NoopBeforeLoaded verifies the switch is ignored entirely
+// until the first tabsLoadedMsg has been applied, even for an in-range index.
+func TestSetActiveTab_NoopBeforeLoaded(t *testing.T) {
+	ctx := context.Background()
+	m := newModel(Deps{}, ctx)
+	m.active = 0
+
+	m.setActiveTab(2)
+	require.Equal(t, 0, m.active, "switch before load should be ignored")
 }
