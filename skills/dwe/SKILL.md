@@ -97,7 +97,7 @@ pass validation either way, and are the ones a fresh project gets wrong.
 | Read logs | `dwe logs <service> --output json` |
 | Diagnose configuration | `dwe validate --output json` |
 | Search docs / read one topic | `dwe docs search <term> --lang en` · `dwe docs show <topic> --lang en` |
-| Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` |
+| Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` — that writes `local.yml` (this dev only). Hand-edit `defaults.yml` **only** when the new value is right for everyone who clones the repo; a machine-local one there breaks every clean deploy. |
 | **Populate a fresh repo from git URL(s)** | `references/populate-init-repo.md` (ends in user-run `dwe deploy run`) |
 | **Add a service / tool / infra** | `references/add-service-and-tools.md` |
 | **Author a command or background daemon** | `references/authoring-commands.md` |
@@ -172,16 +172,26 @@ whatever they carry, so a blanket rule on the verb gets it backwards. Verifying 
 change with `dwe cmd site.test` is not a mutation; `dwe shell db -c 'psql -c
 "DROP …"'` is, and no verb-level rule catches that.
 
-- **Run without asking** when the task only reads or verifies **in place**: the
-  project's own test suites, linters, type-checks, formatters in check mode,
-  status/inspection commands inside a container.
+- **Run without asking** when the task only reads or verifies **in place**:
+  linters, type-checks, formatters in check mode, status/inspection commands
+  inside a container, and a test suite that talks to nothing stateful.
 - **Ask first** when it changes project or data state: migrations, seeds, resets,
   dependency installs, anything writing outside a build cache — and anything you
   are unsure about.
+- **A test suite that reaches the project's database or any other stateful
+  service belongs in the second group, not the first.** Integration suites
+  routinely truncate and re-seed the schema they run against, and pointed at the
+  live stack they destroy the developer's working data — observed: one
+  `npx nx test` run through `dwe shell` replaced every row of a dev database with
+  its own fixtures, silently, and nobody noticed for two tasks. Check what the
+  suite connects to before running it; when it needs the stack, the isolated way
+  is a `workspace/tests/` scenario via `dwe test run` (a throwaway copy with its
+  own volumes), gated as below.
 - **The registry already marks the dangerous ones.** `dwe cmd -i <id>` shows a
   command's `confirmation:` flag and the underlying command; a declared
   `confirmation:` means ask. When `-i` leaves you unsure, ask.
-- Being asked to "run the tests" is permission to run the tests.
+- Being asked to "run the tests" is permission to run the tests — not permission
+  to run them **against the live stack** when they write to it.
 
 #### The `dwe test run` gate — cheap AND isolated, or ask
 

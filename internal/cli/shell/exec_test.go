@@ -761,3 +761,120 @@ func TestDispatchShell_nonExitErrorBypassesWrapping(t *testing.T) {
 		t.Errorf("error should pass through verbatim, got %q", err.Error())
 	}
 }
+
+// exitErrorWithCode produces a real *exec.ExitError carrying the given status,
+// which is the only honest way to exercise the exit-code branches — the struct
+// has no exported constructor and its code lives in an opaque ProcessState.
+func exitErrorWithCode(t *testing.T, code int) error {
+	t.Helper()
+	err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", code)).Run()
+	if err == nil {
+		t.Fatalf("sh -c 'exit %d' unexpectedly succeeded", code)
+	}
+	return err
+}
+
+// withFakeShellProbe stubs the container shell probe. found=true means the
+// shell exists, i.e. the failure came from something else.
+func withFakeShellProbe(t *testing.T, found bool) *int {
+	t.Helper()
+	prev := probeContainerHasShell
+	calls := 0
+	probeContainerHasShell = func(_, _ string, _ []string, _ string) bool {
+		calls++
+		return found
+	}
+	t.Cleanup(func() { probeContainerHasShell = prev })
+	return &calls
+}
+
+// captureStderr swaps os.Stderr for a pipe and returns what was written to it.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	prev := os.Stderr
+	os.Stderr = w
+	fn()
+	os.Stderr = prev
+	_ = w.Close()
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+// TestHintMissingContainerShell pins the diagnostic added for the opaque
+// `exec: "bash": executable file not found in $PATH` failure. The hint must be
+// truthful: it fires only when the shell is genuinely absent, never merely
+// because the exit code says 126/127 — a one-shot command that itself exits 127
+// produces the same code and has nothing to do with cli.shell.
+func TestHintMissingContainerShell(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		shellFound bool
+		wantHint   bool
+		wantProbe  bool
+	}{
+		{name: "shell absent, exit 127", err: exitErrorWithCode(t, 127), shellFound: false, wantHint: true, wantProbe: true},
+		{name: "shell absent, exit 126", err: exitErrorWithCode(t, 126), shellFound: false, wantHint: true, wantProbe: true},
+		{name: "shell present, command inside it was the typo", err: exitErrorWithCode(t, 127), shellFound: true, wantHint: false, wantProbe: true},
+		{name: "ordinary command failure", err: exitErrorWithCode(t, 1), shellFound: false, wantHint: false, wantProbe: false},
+		{name: "success", err: nil, shellFound: false, wantHint: false, wantProbe: false},
+		{name: "not an exit error", err: errors.New("docker not found"), shellFound: false, wantHint: false, wantProbe: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			probes := withFakeShellProbe(t, tt.shellFound)
+			out := captureStderr(t, func() {
+				hintMissingContainerShell(tt.err, "dwe-main", "bash", nil, "/usr/bin/docker")
+			})
+
+			gotHint := strings.Contains(out, "cli.shell")
+			if gotHint != tt.wantHint {
+				t.Errorf("hint emitted = %v, want %v (stderr: %q)", gotHint, tt.wantHint, out)
+			}
+			if tt.wantHint {
+				if !strings.Contains(out, "dwe-main") || !strings.Contains(out, "bash") {
+					t.Errorf("hint must name the container and the shell, got %q", out)
+				}
+				if !strings.Contains(out, "--shell") {
+					t.Errorf("hint must name the --shell escape hatch, got %q", out)
+				}
+			}
+			if gotProbe := *probes > 0; gotProbe != tt.wantProbe {
+				t.Errorf("probe called = %v, want %v — the probe must never run on the happy path", gotProbe, tt.wantProbe)
+			}
+		})
+	}
+}
+
+// TestDockerExecOneShot_HintDoesNotDisturbExitCode pins that the diagnostic is
+// additive: stdout stays clean and the child's exit code still reaches main.go
+// through *shellCommandExitError.
+func TestDockerExecOneShot_HintDoesNotDisturbExitCode(t *testing.T) {
+	withTTYDetector(t, false, false)
+	withFakeShellProbe(t, false)
+
+	prev := runInteractive
+	runInteractive = func(_ []string, _, _ string, _ ...string) error { return exitErrorWithCode(t, 127) }
+	t.Cleanup(func() { runInteractive = prev })
+
+	var err error
+	out := captureStderr(t, func() {
+		err = dockerExecOneShot("dwe-main", "bash", "", "", nil, "true", nil, "/usr/bin/docker", ttyAuto)
+	})
+
+	if !strings.Contains(out, "cli.shell") {
+		t.Errorf("expected the hint on stderr, got %q", out)
+	}
+	var codeErr *shellCommandExitError
+	if !errors.As(err, &codeErr) {
+		t.Fatalf("expected *shellCommandExitError, got %T (%v)", err, err)
+	}
+	if codeErr.ExitCode() != 127 {
+		t.Errorf("exit code = %d, want 127 — the hint must not replace the child's status", codeErr.ExitCode())
+	}
+}

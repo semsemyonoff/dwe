@@ -121,7 +121,11 @@ Schema: `dwe docs show config/vars --lang en`.
 
 ## 5. `vars set` is a handoff
 
-`vars set` mutates `local.yml` — never run it. Edit the var in `defaults.yml` yourself when it's a project default; for a per-dev override, hand the user the command. **Coercion is load-bearing** (a var is always a single scalar leaf):
+`vars set` mutates `local.yml` — never run it. Edit the var in `defaults.yml` yourself when it's a project default; for a per-dev override, hand the user the command.
+
+**The layer is a decision, not a formality: ask "is this value true for everyone who clones the repo?"** If not, it is a per-dev override and belongs in `local.yml` via the handed-off `vars set` — putting it in `defaults.yml` changes the tracked project default for the whole team. The failure is silent and `dwe validate` does not catch it: a `vars.source.<svc>.branch` pointed at a branch that exists only on this machine passed validation clean while every clean clone — a teammate, CI, and the project's own `dwe test run` — would fail at `source_clone`. Do not edit `defaults.yml` "for consistency" after changing something locally; a working checkout and the clone coordinates that provision it are deliberately independent (`source_clone` is idempotent and branch-blind — it never re-points an existing checkout).
+
+**Coercion is load-bearing** (a var is always a single scalar leaf):
 
 - bare `42` → int, `true` → bool, `1.5` → float
 - quote to force a string: `'"42"'`

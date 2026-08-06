@@ -19,8 +19,19 @@ import (
 // services/.../vendor/laravel/sail/runtimes/. A user who genuinely wants to
 // lint one of these dirs can still name it directly in paths:, which bypasses
 // the descent guard.
+//
+// `.dwe` is dwe's own gitignored runtime state and belongs here for a stronger
+// reason than the rest: it is not third-party, it is *ours*. A kept `dwe test`
+// environment parks a full second copy of the project — cloned sources included
+// — under .dwe/tests/runs/<scenario>/, so without this entry `dwe validate`
+// lints its own disposable copy and reports diagnostics against paths the user
+// cannot act on and did not write. Note this is also what re-admitted the files
+// the root-`services/` rule below already excludes on purpose: inside the copy
+// the checkout sits at .dwe/tests/runs/<scenario>/services/..., where that
+// depth-1 rule no longer matches.
 var skipDirs = map[string]struct{}{
 	".git":         {},
+	".dwe":         {},
 	"vendor":       {},
 	"node_modules": {},
 }

@@ -430,7 +430,62 @@ func dockerExecCLI(containerName, shell, u, workDir string, env map[string]strin
 
 	render.Stdout().Info(fmt.Sprintf("exec → %s", containerName))
 	// docker exec does not read compose files, so cwd is irrelevant — inherit parent's.
-	return runInteractive(processEnv, "", dockerBin, args...)
+	err := runInteractive(processEnv, "", dockerBin, args...)
+	hintMissingContainerShell(err, containerName, shell, processEnv, dockerBin)
+	return err
+}
+
+// shellNotInvokableCodes are the exit codes a shell (and docker exec, which
+// mirrors them) uses when it could not invoke the requested program: 127 "not
+// found", 126 "found but not executable".
+var shellNotInvokableCodes = map[int]struct{}{126: {}, 127: {}}
+
+// probeContainerHasShell reports whether `shell` is resolvable inside the
+// container. Exposed as a package variable so tests can drive both answers
+// without a live daemon.
+var probeContainerHasShell = func(containerName, shell string, processEnv []string, dockerBin string) bool {
+	cmd := exec.Command(dockerBin, "exec", containerName, "sh", "-c", "command -v "+shell)
+	cmd.Env = processEnv
+	return cmd.Run() == nil
+}
+
+// hintMissingContainerShell writes one stderr line when a docker exec failed
+// because the container has no such shell.
+//
+// The raw failure is entirely opaque:
+//
+//	OCI runtime exec failed: exec: "bash": executable file not found in $PATH
+//
+// It names neither the service, nor the fact that `bash` is DWE's built-in
+// default rather than something the project chose, nor either knob that fixes
+// it. Alpine-based images have no bash and are unremarkable in dev stacks, so
+// this is a common first contact with `dwe shell` — measured cost in an observed
+// session: two failed invocations before the operator went to --help.
+//
+// Gated on an actual probe, not on the exit code alone: a one-shot `-c` command
+// that itself exits 127 (a typo inside the container) produces the same code,
+// and blaming cli.shell for that would be a lie. The probe runs only after a
+// failure, so the happy path pays nothing. If the probe cannot answer (no `sh`
+// either, daemon gone), it reports "found" and the hint stays silent — a missing
+// hint is cheaper than a misleading one.
+func hintMissingContainerShell(err error, containerName, shell string, processEnv []string, dockerBin string) {
+	if err == nil || containerName == "" || shell == "" {
+		return
+	}
+	exitErr, ok := errors.AsType[*exec.ExitError](err)
+	if !ok {
+		return
+	}
+	if _, relevant := shellNotInvokableCodes[exitErr.ExitCode()]; !relevant {
+		return
+	}
+	if probeContainerHasShell(containerName, shell, processEnv, dockerBin) {
+		return
+	}
+	render.NewWriter(os.Stderr).Info(fmt.Sprintf(
+		"container %s has no %q (DWE's default shell). Set `cli.shell` in the service's service.yml, or pass --shell <sh|ash|...>.",
+		containerName, shell,
+	))
 }
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
@@ -482,7 +537,10 @@ func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]s
 	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, containerName, shell, "-c", command)
 	// Silent: no render.Stdout().Info — script stdout must stay clean.
-	return wrapExitError(runInteractive(processEnv, "", dockerBin, args...))
+	err := runInteractive(processEnv, "", dockerBin, args...)
+	// The hint goes to stderr, so stdout stays clean for piping either way.
+	hintMissingContainerShell(err, containerName, shell, processEnv, dockerBin)
+	return wrapExitError(err)
 }
 
 // composeRunOneShot starts a fresh container via `docker compose run --rm` and
