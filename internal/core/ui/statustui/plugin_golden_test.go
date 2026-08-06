@@ -2,6 +2,7 @@ package statustui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,31 +34,51 @@ var goldenRunOpts = tui.RunOptions{
 	Locale:     "en",
 }
 
-// goldenTabs is a deterministic tab set used by golden tests, avoiding any
-// docker/git calls that buildTabsCmd would otherwise perform.
-func goldenTabs() []tab {
-	return []tab{
-		{"Services", "Services\n\nweb    running\ndb     running"},
-		{"Deploy", "Deploy Status\n\nlast run: success"},
-		{"Topology", "Topology\n\nweb -> db"},
-		{"Git", "Git Workspace\n\nno git workspace tracked"},
-		{"Daemons", "Daemons\n\nno daemons running"},
+// goldenBodies is deterministic canned content for the five tabs, indexed by
+// tab position. Golden frame tests wire it through a renderTabFn stub
+// (below) rather than a realistic tabSnapshot — these tests pin frame/chrome
+// layout, not real table-rendering output, so plain canned text keeps them
+// independent of the render package's table shape.
+func goldenBodies() [5]string {
+	return [5]string{
+		"Services\n\nweb    running\ndb     running",
+		"Deploy Status\n\nlast run: success",
+		"Topology\n\nweb -> db",
+		"Git Workspace\n\nno git workspace tracked",
+		"Daemons\n\nno daemons running",
 	}
 }
 
-// newGoldenPlugin builds a deterministic plugin for golden frame tests: tabs
-// are assigned directly (bypassing buildTabsCmd) and loading is cleared, so
-// rendering is fully deterministic with no docker/git calls.
+// stubRenderTab returns a renderTabFn replacement that ignores the snapshot
+// entirely and returns canned bodies[index] with no anchors.
+func stubRenderTab(bodies [5]string) func(tabSnapshot, int, int) (string, []int) {
+	return func(_ tabSnapshot, index, _ int) (string, []int) {
+		if index < 0 || index >= len(bodies) {
+			return "", nil
+		}
+		return bodies[index], nil
+	}
+}
+
+// newGoldenPlugin builds a deterministic plugin for golden frame tests: a
+// snapshot is assigned directly (bypassing buildTabsCmd) and renderTabFn is
+// stubbed to canned bodies, so rendering is fully deterministic with no
+// docker/git calls and no dependency on real table-rendering output.
 func newGoldenPlugin(t *testing.T, loading bool) *plugin {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
+	origRenderTab := renderTabFn
+	t.Cleanup(func() { renderTabFn = origRenderTab })
+	renderTabFn = stubRenderTab(goldenBodies())
+
 	m := newModel(Deps{Cfg: &config.DweConfig{Project: config.ProjectConfig{Name: "demo"}}}, ctx)
 	m.loading = loading
 	if !loading {
-		m.tabs = goldenTabs()
-		m.viewport.SetContent(m.tabs[m.active].content)
+		m.snap = tabSnapshot{}
+		m.loaded = true
+		m.sectionAnchors = make([][]int, len(tabTitles))
 	}
 	return newPlugin(m, cancel)
 }
@@ -192,7 +213,7 @@ func TestStatus_AsyncTabsLoadedMsgPreservationThroughFrame(t *testing.T) {
 
 	msg := tabsLoadedMsg{
 		gen:             1,
-		tabs:            goldenTabs(),
+		snap:            tabSnapshot{},
 		loadedAt:        time.Now(),
 		healthIndicator: "●",
 	}
@@ -206,11 +227,101 @@ func TestStatus_AsyncTabsLoadedMsgPreservationThroughFrame(t *testing.T) {
 	if p.m.loading {
 		t.Errorf("loading after tabsLoadedMsg via Frame = true, want false")
 	}
-	if len(p.m.tabs) != len(goldenTabs()) {
-		t.Errorf("tabs after tabsLoadedMsg via Frame = %d, want %d", len(p.m.tabs), len(goldenTabs()))
+	if !p.m.loaded {
+		t.Errorf("loaded after tabsLoadedMsg via Frame = false, want true")
 	}
 	if !strings.Contains(plain, "Services") {
 		t.Errorf("frame missing loaded tab content after tabsLoadedMsg via Frame:\n%s", plain)
+	}
+}
+
+// TestStatus_ReloadRestoresYOffsetThroughFrame drives a reload end-to-end
+// through the Frame — HandleAction(ActionReload) followed by the
+// tabsLoadedMsg it implies arriving via the Frame's Update loop — and
+// asserts the restored scroll position through the RENDERED frame text
+// (which lines are visible), not by inspecting m.viewport.YOffset()
+// directly. This is the render-time counterpart to
+// TestPlugin_Update_PreservesYOffsetOnReload_SameTab, which asserts the same
+// invariant against the internal field.
+func TestStatus_ReloadRestoresYOffsetThroughFrame(t *testing.T) {
+	p := newGoldenPlugin(t, false)
+
+	var tallLines []string
+	for i := range 100 {
+		tallLines = append(tallLines, fmt.Sprintf("line%02d", i))
+	}
+	tallContent := strings.Join(tallLines, "\n")
+	renderTabFn = func(_ tabSnapshot, _, _ int) (string, []int) { return tallContent, nil }
+
+	// First render sizes the viewport against real frame geometry so a
+	// later SetYOffset clamps against the real content height.
+	if _, err := tui.RenderFrame(p, goldenRunOpts, 80, goldenFrameHeight); err != nil {
+		t.Fatalf("RenderFrame (initial): %v", err)
+	}
+	p.m.viewport.SetYOffset(5)
+	p.m.loadGen = 1
+
+	cmd, handled := p.HandleAction(tui.ActionReload)
+	if !handled || cmd == nil {
+		t.Fatalf("HandleAction(ActionReload) = (%v, %v), want (non-nil, true)", cmd, handled)
+	}
+	gen := p.m.loadGen
+
+	msg := tabsLoadedMsg{gen: gen, snap: tabSnapshot{}, loadedAt: time.Now(), healthIndicator: "●"}
+	content, err := tui.RenderFrameAfterSetup(p, goldenRunOpts, 80, goldenFrameHeight, msg)
+	if err != nil {
+		t.Fatalf("RenderFrameAfterSetup: %v", err)
+	}
+	plain := ansi.Strip(content)
+
+	if !strings.Contains(plain, "line05") {
+		t.Errorf("frame after reload missing %q — YOffset was not restored:\n%s", "line05", plain)
+	}
+	if strings.Contains(plain, "line00") {
+		t.Errorf("frame after reload unexpectedly shows %q — YOffset was reset to top instead of restored:\n%s", "line00", plain)
+	}
+}
+
+// TestStatus_ViewPanelNeverProbesIsRunning is a spy test proving IsRunning
+// (the Docker probe) is never called from renderTab / ViewPanel — only from
+// buildTabs, which runs once per load/reload in the async goroutine. If a
+// later change accidentally moved the probe into the render path, this test
+// catches it via a call-count assertion rather than relying on inspection.
+func TestStatus_ViewPanelNeverProbesIsRunning(t *testing.T) {
+	stubCollectors(t)
+	calls := 0
+	deps := characterizationDeps()
+	deps.IsRunning = func(container string) bool {
+		calls++
+		return container == "web"
+	}
+
+	snap, health := buildTabs(context.Background(), deps)
+	if calls == 0 {
+		t.Fatalf("buildTabs() made 0 IsRunning calls, want at least 1 (sanity check on the spy)")
+	}
+	afterLoad := calls
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	m := newModel(deps, ctx)
+	m.loading = false
+	m.loaded = true
+	m.snap = snap
+	m.healthIndicator = health
+	m.sectionAnchors = make([][]int, len(tabTitles))
+	p := newPlugin(m, cancel)
+
+	for range 5 {
+		p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
+	}
+	for i := range len(tabTitles) {
+		p.m.active = i
+		p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
+	}
+
+	if calls != afterLoad {
+		t.Errorf("IsRunning calls after %d ViewPanel renders = %d, want unchanged %d (renderTab/ViewPanel must never probe Docker)", 5+len(tabTitles), calls, afterLoad)
 	}
 }
 

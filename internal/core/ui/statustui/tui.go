@@ -39,11 +39,11 @@ type Deps struct {
 	Locale     string
 }
 
-// tab represents one rendered section of the status view.
-type tab struct {
-	title   string
-	content string
-}
+// tabTitles are the five fixed tab labels, in display order. The tab count
+// never varies — buildTabs always collects all five sections (empty ones
+// render a placeholder) — so titles are a static array rather than data
+// carried in the snapshot.
+var tabTitles = [...]string{"Services", "Deploy", "Topology", "Git", "Daemons"}
 
 // model holds the status dashboard's state: five tabs (Services, Deploy,
 // Topology, Git, Daemons) with a shared viewport, spinner, and reload
@@ -52,7 +52,8 @@ type tab struct {
 type model struct {
 	deps            Deps
 	ctx             context.Context
-	tabs            []tab
+	snap            tabSnapshot
+	loaded          bool    // true once the first tabsLoadedMsg has been applied
 	sectionAnchors  [][]int // per-tab 0-based line offsets of stacked sub-tables
 	active          int
 	viewport        viewport.Model
@@ -65,6 +66,20 @@ type model struct {
 	reloading       bool
 	reloadAt        time.Time
 	healthIndicator string // cached; recomputed only on tab reload
+
+	// renderCache memoises the last renderTabFn call so repeated View()
+	// calls with an unchanged (loadGen, active, width) do not re-render the
+	// active tab's tables on every frame. Valid only while renderCacheValid:
+	// tab switches change active and a resize changes width, but a reload
+	// needs the explicit renderCacheValid = false in the tabsLoadedMsg branch
+	// — loadGen is bumped when the reload starts, not when its snapshot
+	// arrives, so the key tuple alone would keep serving pre-reload content.
+	renderCacheValid   bool
+	renderCacheGen     uint64
+	renderCacheTab     int
+	renderCacheWidth   int
+	renderCacheBody    string
+	renderCacheAnchors []int
 }
 
 // newModel creates a new status dashboard model. It initializes the viewport
@@ -78,7 +93,6 @@ func newModel(d Deps, ctx context.Context) *model {
 	return &model{
 		deps:     d,
 		ctx:      ctx,
-		tabs:     []tab{},
 		active:   0,
 		viewport: vp,
 		spinner:  sp,
@@ -92,16 +106,18 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, buildTabsCmd(m.ctx, m.deps, m.loadGen))
 }
 
-// setActiveTab switches to the tab at idx, resets the pending-reload generation,
-// and scrolls the viewport to the top. Out-of-range indices are ignored, which
-// preserves the per-key guard the explicit tab-switch blocks used to carry.
+// setActiveTab switches to the tab at idx, resets the pending-reload
+// generation, and scrolls the viewport to the top. Out-of-range indices, and
+// any switch before the first load completes, are ignored — preserving the
+// per-key guard the explicit tab-switch blocks used to carry. Content is not
+// set here: renderBody recomputes the active tab's body on the next render
+// via renderTab.
 func (m *model) setActiveTab(idx int) {
-	if idx < 0 || idx >= len(m.tabs) {
+	if !m.loaded || idx < 0 || idx >= len(tabTitles) {
 		return
 	}
 	m.active = idx
 	m.reloadGen = 0
-	m.viewport.SetContent(m.tabs[m.active].content)
 	m.viewport.GotoTop()
 }
 
@@ -162,23 +178,23 @@ func tabActiveDecoWidth() int {
 // tabs are dimmed. Layout constants are shared with mouse.go's tabHitZones, so
 // click hit-zones match what is drawn here.
 func (m *model) renderTabStrip() string {
-	if len(m.tabs) == 0 {
+	if !m.loaded {
 		return ""
 	}
 
 	var parts []string
-	for i, t := range m.tabs {
+	for i, title := range tabTitles {
 		if i == m.active {
 			// Active tab with accent corners
 			parts = append(parts, lipgloss.NewStyle().
 				Foreground(lipgloss.Color(styles.ColorAccent())).
 				Bold(true).
-				Render(tabActiveLeft+t.title+tabActiveRight))
+				Render(tabActiveLeft+title+tabActiveRight))
 		} else {
 			// Inactive tab, dimmed
 			parts = append(parts, lipgloss.NewStyle().
 				Foreground(lipgloss.Color(styles.ColorMuted())).
-				Render(t.title))
+				Render(title))
 		}
 	}
 

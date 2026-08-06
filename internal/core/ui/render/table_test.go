@@ -50,6 +50,37 @@ func TestRenderDaemonTable_RendersRows(t *testing.T) {
 	}
 }
 
+func TestRenderDaemonTableAt_ZeroWidthMatchesDaemonTable(t *testing.T) {
+	resetStyles()
+	rows := []DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}
+	if got, want := DaemonTableAt(rows, 0), DaemonTable(rows); got != want {
+		t.Errorf("DaemonTableAt(rows, 0) diverged from DaemonTable:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderDaemonTableAt_NarrowWidthTriggersRecordMode(t *testing.T) {
+	resetStyles()
+	rows := []DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default,extra=an unusually long parameter value", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}
+	out := DaemonTableAt(rows, 20)
+	got := stripANSI(out)
+	// The name promises record mode, so assert it — plus one of the record
+	// field labels: a Contains check on the ID alone passes even when the
+	// width argument is dropped and the table renders unbounded.
+	if isTableMode(out) {
+		t.Errorf("expected record mode at width 20, got a table: %q", got)
+	}
+	if !strings.Contains(got, "container  proj-php_queue_default") {
+		t.Errorf("expected an aligned record field line for the container: %q", got)
+	}
+	if !strings.Contains(got, "services.main.queue") {
+		t.Errorf("expected daemon ID to survive narrow rendering: %q", got)
+	}
+}
+
 func TestRenderDaemonTable_EmptyNameFallback(t *testing.T) {
 	resetStyles()
 	out := DaemonTable([]DaemonTableRow{
@@ -207,6 +238,39 @@ func TestRenderServicesTable_WithDirCol(t *testing.T) {
 	}
 }
 
+func TestRenderServicesTableAt_ZeroWidthMatchesServicesTable(t *testing.T) {
+	resetStyles()
+	rows := []ServiceTableRow{
+		{Name: "main", Dir: "./services/main", Container: "app-main", Mandatory: true, Running: true},
+	}
+	if got, want := ServicesTableAt(rows, nil, true, 0), ServicesTable(rows, nil, true); got != want {
+		t.Errorf("ServicesTableAt(rows, nil, true, 0) diverged from ServicesTable:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderServicesTableAt_NarrowWidthTriggersRecordMode(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/some/very/long/path/that/should/not/be/split/because/urls/stay/whole"
+	rows := []ServiceTableRow{
+		{
+			Name: "main", Dir: "very/long/nested/service/directory/path/that/wont/fit/narrow", Container: "app-main",
+			Mandatory: true, Running: true,
+			Extras: map[string]string{"ENDPOINT": longURL},
+		},
+	}
+	out := ServicesTableAt(rows, []string{"ENDPOINT"}, true, 60)
+	got := stripANSI(out)
+	// Assert the mode the name promises, not just the URL: the URL is kept
+	// whole in table mode too, so a Contains check alone passes even when the
+	// width argument is dropped and the table renders unbounded.
+	if isTableMode(out) {
+		t.Errorf("expected record mode at width 60, got a table:\n%s", got)
+	}
+	if !strings.Contains(got, longURL) {
+		t.Errorf("expected long URL to stay intact in record mode:\n%s", got)
+	}
+}
+
 func TestRenderServicesTable_Empty(t *testing.T) {
 	resetStyles()
 	out := ServicesTable(nil, nil, false)
@@ -262,6 +326,76 @@ func TestRenderServicesTable_ExtraCols_MissingKey(t *testing.T) {
 	}
 }
 
+func TestRenderServicesTable_RecordMode_WithDirCol(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/some/very/long/path/that/should/not/be/split/because/urls/stay/whole"
+	longTag := "a very long custom tag value that should wrap across several lines when narrow"
+	rows := []ServiceTableRow{
+		{
+			Name: "main", Dir: "very/long/nested/service/directory/path/that/wont/fit/narrow", Container: "app-main",
+			Mandatory: true, Running: true,
+			Extras: map[string]string{"TAG": longTag, "ENDPOINT": longURL},
+		},
+	}
+	v := servicesTableView(rows, []string{"TAG", "ENDPOINT"}, true)
+	const budget = 60
+	if fitsAt(v, budget) {
+		t.Fatalf("test setup: expected columns not to fit at budget %d, forcing record mode", budget)
+	}
+	got := stripANSI(v.Render(budget))
+
+	if !strings.Contains(got, "main") {
+		t.Errorf("record mode: expected NAME (record title) in output:\n%s", got)
+	}
+	for _, label := range []string{"dir", "container", "hosts", "ports", "state", "running", "tag", "endpoint"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("record mode: expected field label %q in output:\n%s", label, got)
+		}
+	}
+	if !strings.Contains(got, longURL) {
+		t.Errorf("record mode: expected long URL to stay intact on one unbroken line:\n%s", got)
+	}
+	if strings.Contains(got, longTag) {
+		t.Errorf("record mode: expected long non-URL TAG value to wrap across lines, found it unwrapped:\n%s", got)
+	}
+}
+
+func TestRenderServicesTable_RecordMode_NoDirCol(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/some/very/long/path/that/should/not/be/split/because/urls/stay/whole"
+	longTag := "a very long custom tag value that should wrap across several lines when narrow"
+	rows := []ServiceTableRow{
+		{
+			Name: "worker", Container: "app-worker", Enabled: true, Running: false,
+			Extras: map[string]string{"TAG": longTag, "ENDPOINT": longURL},
+		},
+	}
+	v := servicesTableView(rows, []string{"TAG", "ENDPOINT"}, false)
+	const budget = 60
+	if fitsAt(v, budget) {
+		t.Fatalf("test setup: expected columns not to fit at budget %d, forcing record mode", budget)
+	}
+	got := stripANSI(v.Render(budget))
+
+	if strings.Contains(got, "dir") {
+		t.Errorf("record mode: withDirCol=false should NOT include a dir field:\n%s", got)
+	}
+	if !strings.Contains(got, "worker") {
+		t.Errorf("record mode: expected NAME (record title) in output:\n%s", got)
+	}
+	for _, label := range []string{"container", "hosts", "ports", "state", "running", "tag", "endpoint"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("record mode: expected field label %q in output:\n%s", label, got)
+		}
+	}
+	if !strings.Contains(got, longURL) {
+		t.Errorf("record mode: expected long URL to stay intact on one unbroken line:\n%s", got)
+	}
+	if strings.Contains(got, longTag) {
+		t.Errorf("record mode: expected long non-URL TAG value to wrap across lines, found it unwrapped:\n%s", got)
+	}
+}
+
 func TestRenderDeployStatus_Basic(t *testing.T) {
 	resetStyles()
 	rows := []DeployStatusRow{
@@ -295,6 +429,39 @@ func TestRenderDeployStatus_Basic(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
 		}
+	}
+}
+
+func TestRenderDeployStatusAt_ZeroWidthMatchesDeployStatus(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{Service: "main", Status: "deployed", ConfigDelta: "ok", PrevHashShort: "abc12345", CurrHashShort: "abc12345"},
+	}
+	if got, want := DeployStatusAt(rows, 0), DeployStatus(rows); got != want {
+		t.Errorf("DeployStatusAt(rows, 0) diverged from DeployStatus:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderDeployStatusAt_NarrowWidthTriggersWrap(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{
+			Service: "main", Status: "failed", ConfigDelta: "changed",
+			PrevHashShort: "abc12345", CurrHashShort: "def12345",
+			LastFailedPhase: "setup", LastFailedStep: "a very long step name that should wrap under pressure",
+		},
+	}
+	out := DeployStatusAt(rows, 40)
+	got := stripANSI(out)
+	if !strings.Contains(got, "main") {
+		t.Errorf("expected service name to survive narrow rendering: %q", got)
+	}
+	// The point of the width argument is that the long step name wraps rather
+	// than running past the budget — assert both, or this test passes when
+	// the width is dropped and the row renders unbounded.
+	assertLinesWithinBudget(t, out, 40)
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "under pressure") {
+		t.Errorf("expected the long failed-step value to wrap across lines: %q", got)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
@@ -147,6 +148,68 @@ func TestRenderDaemons_TableContents(t *testing.T) {
 	}
 	if !strings.Contains(body, "5m0s") {
 		t.Errorf("uptime missing: %q", body)
+	}
+}
+
+// TestRenderDaemonsAt_ExplicitWidthMatchesRenderDaemons pins that the two
+// entry points share one conversion + section envelope.
+//
+// They are NOT the same contract: RenderDaemons routes through the
+// sink-probing render.DaemonTable, while RenderDaemonsAt(rows, 0) means
+// literally unbounded. The two agree here only because `go test` runs with a
+// non-TTY stdout, where the probe also resolves to 0 — so this asserts the
+// shared plumbing, not that width 0 and "probe the sink" are interchangeable.
+// The probe itself is covered on the render side
+// (TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords).
+func TestRenderDaemonsAt_ExplicitWidthMatchesRenderDaemons(t *testing.T) {
+	rows := []statusview.DaemonRow{
+		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
+	}
+	want, wantErrs := RenderDaemons(rows)
+	got, gotErrs := RenderDaemonsAt(rows, 0)
+	if got != want {
+		t.Errorf("RenderDaemonsAt(rows, 0) diverged from RenderDaemons:\ngot:  %q\nwant: %q", got, want)
+	}
+	if len(gotErrs) != len(wantErrs) {
+		t.Errorf("error count mismatch: got %v want %v", gotErrs, wantErrs)
+	}
+}
+
+func TestRenderDaemonsAt_NarrowWidthStillContainsContent(t *testing.T) {
+	rows := []statusview.DaemonRow{
+		{ID: "services.main.queue", Params: "name=default,extra=value,more=stuff", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
+	}
+	body, errs := RenderDaemonsAt(rows, 20)
+	if len(errs) != 0 {
+		t.Errorf("unexpected errs: %v", errs)
+	}
+
+	// Byte-compare against the explicit-width renderer rather than merely
+	// looking for the daemon ID: a Contains check passes even when the width
+	// argument is dropped and the section renders unbounded, which is exactly
+	// the regression this test exists to catch.
+	want := wrapSection("Daemons", render.DaemonTableAt([]render.DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default,extra=value,more=stuff", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}, 20), 20)
+	if body != want {
+		t.Errorf("RenderDaemonsAt(rows, 20) = %q, want the DaemonTableAt(…, 20) rendering %q", body, want)
+	}
+
+	if unbounded, _ := RenderDaemonsAt(rows, 0); unbounded == body {
+		t.Error("width 20 did not change the rendering; this test cannot detect a dropped width argument")
+	}
+	if !strings.Contains(body, "services.main.queue") {
+		t.Errorf("expected daemon ID to survive narrow rendering: %q", body)
+	}
+}
+
+func TestRenderDaemonsAt_EmptyHidesSection(t *testing.T) {
+	body, errs := RenderDaemonsAt(nil, 20)
+	if body != "" {
+		t.Errorf("expected empty body, got %q", body)
+	}
+	if len(errs) != 0 {
+		t.Errorf("expected no errs, got %v", errs)
 	}
 }
 
