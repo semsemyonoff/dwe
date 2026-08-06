@@ -14,11 +14,15 @@ on:
       - 'web/**'
       - '.github/workflows/docs.yml'
   # PRs build (and run the link validator) but do not deploy — catches broken
-  # docs links before merge.
+  # docs links before merge. The workflow file itself is in the path list so a
+  # change to the build (action versions, node version, sync step) is exercised
+  # on the PR rather than first running on main, where a failure takes the Pages
+  # deploy down with it.
   pull_request:
     paths:
       - 'docs/**'
       - 'web/**'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
