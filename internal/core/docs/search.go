@@ -207,8 +207,8 @@ func searchInDoc(content []byte, tokens []string) []sectionStats {
 		if IsFenceLine(trim) {
 			inFence = !inFence
 		} else if !inFence {
-			if lvl, text := parseHeadingLine(line); lvl == 2 || lvl == 3 {
-				if slug := Slugify(stripInlineMarkdown(text)); slug != "" {
+			if lvl, slug, _ := parseHeadingSlugLabel(line); lvl == 2 || lvl == 3 {
+				if slug != "" {
 					currentSlug = slug
 				}
 			}

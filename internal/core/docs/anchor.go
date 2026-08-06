@@ -15,6 +15,9 @@ import (
 // slug to `on_enable-and-...`, so we cannot use stripInlineMarkdown which
 // strips `_` as emphasis); markdown links and backtick code spans are
 // flattened to their inner text before the character pass.
+//
+// Feed it the RAW heading text. Callers inside this package should not call it
+// directly at all — use parseHeadingSlugLabel, which owns that rule.
 func Slugify(s string) string {
 	s = mdLinkRE.ReplaceAllString(s, "$1")
 	s = mdCodeRE.ReplaceAllString(s, "$1")
@@ -64,12 +67,10 @@ func ParseHeadingSlugs(content []byte) []HeadingInfo {
 		if inFence {
 			continue
 		}
-		lvl, text := parseHeadingLine(stripEOL(line))
+		lvl, slug, text := parseHeadingSlugLabel(stripEOL(line))
 		if lvl < 2 || lvl > 3 {
 			continue
 		}
-		text = stripInlineMarkdown(text)
-		slug := Slugify(text)
 		if slug == "" {
 			continue
 		}
@@ -114,12 +115,8 @@ func SliceByAnchor(content []byte, anchor string) (sliced []byte, matchedSlug st
 		if inFence {
 			continue
 		}
-		lvl, text := parseHeadingLine(stripEOL(line))
-		if lvl == 0 {
-			continue
-		}
-		slug := Slugify(text)
-		if slug == "" {
+		lvl, slug, _ := parseHeadingSlugLabel(stripEOL(line))
+		if lvl == 0 || slug == "" {
 			continue
 		}
 		headings = append(headings, heading{level: lvl, slug: slug, lineIdx: i, startOff: lineStart})

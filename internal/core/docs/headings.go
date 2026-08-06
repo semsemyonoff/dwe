@@ -7,10 +7,16 @@ import (
 )
 
 // Heading is a parsed markdown heading. Level is 1..6, Text is the inline
-// heading content with markdown syntax stripped.
+// heading content with markdown syntax stripped, and Slug is the anchor that
+// addresses it (`topic#slug`).
+//
+// Slug is carried on the struct rather than recomputed from Text by consumers:
+// Text is lossy by design (see stripInlineMarkdown) and slugging it produces an
+// anchor nothing can resolve — see parseHeadingSlugLabel.
 type Heading struct {
 	Level int
 	Text  string
+	Slug  string
 }
 
 // ParseDoc extracts the first H1 as the document title and returns all H2/H3
@@ -34,12 +40,8 @@ func ParseDoc(content []byte) (title string, headings []Heading) {
 			continue
 		}
 
-		level, text := parseHeadingLine(line)
-		if level == 0 {
-			continue
-		}
-		text = stripInlineMarkdown(text)
-		if text == "" {
+		level, slug, text := parseHeadingSlugLabel(line)
+		if level == 0 || text == "" {
 			continue
 		}
 		switch {
@@ -49,6 +51,7 @@ func ParseDoc(content []byte) (title string, headings []Heading) {
 			headings = append(headings, Heading{
 				Level: level,
 				Text:  text,
+				Slug:  slug,
 			})
 		}
 	}
@@ -75,6 +78,31 @@ func parseHeadingLine(line string) (int, string) {
 	return i, text
 }
 
+// parseHeadingSlugLabel parses one heading line into its level, anchor slug and
+// display label. It is the SINGLE derivation of a heading's anchor: every
+// surface that advertises one (`docs show --anchors`/`--toc`, `docs search`
+// rows, the docs TUI's link jumps) and the resolver that consumes it
+// (SliceByAnchor) must go through here, or they drift apart and the tool hands
+// out anchors it then rejects.
+//
+// The asymmetry is load-bearing: the slug comes from the RAW heading text and
+// the label from the markdown-stripped one. stripInlineMarkdown ends in
+// stripEmphasis, which drops `_` as an emphasis marker — correct for a display
+// label, fatal for an anchor, since it turns the heading "`service_dirs_ensure`"
+// into the slug `servicedirsensure` while the resolver (slugging raw text, where
+// Slugify preserves `_`) still answers to `service_dirs_ensure`. Every builtin
+// name and every snake_case config key is such a heading.
+//
+// Returns (0, "", "") for non-heading lines. Callers filter on whichever of slug
+// or label they actually need; the two can be empty independently.
+func parseHeadingSlugLabel(line string) (level int, slug, label string) {
+	level, raw := parseHeadingLine(line)
+	if level == 0 {
+		return 0, "", ""
+	}
+	return level, Slugify(raw), stripInlineMarkdown(raw)
+}
+
 var (
 	mdLinkRE = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	mdCodeRE = regexp.MustCompile("`([^`]+)`")
@@ -92,17 +120,45 @@ func stripInlineMarkdown(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// stripEmphasis removes ** __ * _ markers around words. Markers are dropped
-// indiscriminately — heading text rarely contains literal asterisks or
-// underscores, and a stray one would only affect the tree label, not the
-// rendered document.
+// stripEmphasis removes ** __ * _ markers around words.
+//
+// Asterisks are dropped indiscriminately — a literal `*` in heading text is
+// vanishingly rare, and a stray one would only affect a label. Underscores are
+// not: they follow CommonMark's intra-word rule, where a `_` run flanked by
+// alphanumerics on both sides is literal text rather than an emphasis marker.
+//
+// The distinction is not pedantry in this doc set. Dropping `_` wholesale
+// rewrote every builtin name and snake_case config key wherever a label is
+// shown — `env_file` rendered as `envfile` in the docs TUI tree and in the text
+// column of `docs show --toc`, naming a key that does not exist.
 func stripEmphasis(s string) string {
-	s = strings.ReplaceAll(s, "**", "")
-	s = strings.ReplaceAll(s, "__", "")
-	s = strings.ReplaceAll(s, "*", "")
-	s = strings.ReplaceAll(s, "_", "")
-	return s
+	return stripUnderscoreEmphasis(strings.ReplaceAll(s, "*", ""))
 }
+
+func stripUnderscoreEmphasis(s string) string {
+	r := []rune(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(r); {
+		if r[i] != '_' {
+			b.WriteRune(r[i])
+			i++
+			continue
+		}
+		// Consume the whole run so `__bold__` is judged as one marker.
+		j := i
+		for j < len(r) && r[j] == '_' {
+			j++
+		}
+		if i > 0 && j < len(r) && isAlnum(r[i-1]) && isAlnum(r[j]) {
+			b.WriteString(string(r[i:j]))
+		}
+		i = j
+	}
+	return b.String()
+}
+
+func isAlnum(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 // TitleOrFallback returns title if non-empty, otherwise a humanised version
 // of filename (extension stripped, separators turned into spaces). Used by

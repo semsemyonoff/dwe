@@ -199,6 +199,8 @@ Runs by default after every scenario (pass/fail/timeout/Ctrl+C), driven only by 
 
 `--keep` skips every step above, leaves the manifest and copy in place, and prints the compose project name, the copy path, and a cleanup hint. A subsequent `dwe test run` of the **same** scenario name fails fast (a kept run's manifest still exists) rather than silently deleting the kept environment out from under you — clean it up manually, or run [`dwe test clean`](#dwe-test-clean).
 
+A **non-passing** `--keep` run prints a second line naming where the evidence actually is — `<copy>/.dwe/logs/` and `docker compose -p <project> logs`. No [failure report](#failure-reports) is collected under `--keep` (the environment is still alive, so a snapshot of it would be redundant), and without that line the absence reads as an omission rather than a deliberate trade.
+
 ## Failure reports
 
 When a scenario does **not** pass (deploy failure, step failure, or timeout) and `--keep` was not used, the runner **attempts to collect** a failure report into `.dwe/tests/reports/<scenario>/` **before** teardown destroys the environment — so the debugging material survives. The directory is cleared and rewritten on every non-passing run (the latest failure is what you debug); a passing scenario or a `--keep` run never touches it.

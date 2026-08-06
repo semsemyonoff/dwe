@@ -21,9 +21,12 @@ dwe docs show <topic> [--lang <code>] [--raw] [--source all|dwe|project] [--anch
 - `--anchors` — Print every anchor slug for the topic (one per line) and exit. Useful for shell completion of `topic#anchor` forms.
 - `--toc` — Print the topic's table of contents as TSV (`level\tslug\ttext`, one heading per line) and exit. Agent-friendly outline of the page.
 
+Anchors printed by `--anchors` / `--toc` are exactly the strings `topic#anchor` accepts — including the underscores in every builtin name and snake_case key (`config/deploy/builtins#service_dirs_ensure`). Take them from that listing rather than deriving them from the rendered heading text.
+
 **Output:**
 - **TTY:** Glamour-rendered markdown with syntax highlighting. Mermaid diagrams are rendered to PNG and cached; inline display on capable terminals (kitty, ghostty, wezterm), system viewer fallback on others.
 - **Pipe or `--raw`:** Raw markdown, no ANSI escapes.
+- **stderr:** when a *whole* long document (≥ 120 lines and ≥ 4 sections) is piped or captured rather than shown on a terminal, one note names `--toc` and the `topic#anchor` form. It is silent on a TTY, when an anchor was requested, and under `--anchors`/`--toc`. It goes to stderr so that `dwe docs show <topic> | head` — the case it addresses — still receives it.
 
 **Examples:**
 ```bash

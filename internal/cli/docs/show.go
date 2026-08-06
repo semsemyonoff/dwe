@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
@@ -233,6 +235,8 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	isInteractive := term.IsTerminal(os.Stdout.Fd())
 	shouldRender := isInteractive && !df.raw
 
+	emitLongDocHint(cmd, resolved.Path, content, anchor, isInteractive)
+
 	if !shouldRender {
 		// Output raw markdown (no rendering)
 		_, _ = cmd.OutOrStdout().Write(contentWithBanners)
@@ -256,6 +260,53 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	_, _ = cmd.OutOrStdout().Write(result.Output)
 
 	return nil
+}
+
+// Thresholds for emitLongDocHint. Deliberately high: the hint must read as a
+// property of *this* document being large, not as a banner on every read.
+const (
+	longDocMinLines    = 120
+	longDocMinSections = 4
+)
+
+// emitLongDocHint writes a one-line stderr note when a whole long document is
+// piped somewhere, naming the flags that would have fetched just the wanted
+// part.
+//
+// This exists because documenting the flags was measurably not enough. In an
+// observed agent session the mandatory `dwe docs llms-txt` briefing — read in
+// full as the very first command — carries the line "`--toc` / `--anchors` …
+// use these instead of piping through `head`/`sed`", and the same session then
+// piped 17 of 17 `docs show` calls through `head`/`sed`. A briefing read once
+// at the start does not govern behaviour fifteen minutes later; a note at the
+// point of use does.
+//
+// Three gates keep it from becoming noise:
+//   - only when no anchor was requested — asking for a section is already the
+//     behaviour the hint teaches;
+//   - only when stdout is NOT a terminal, i.e. the output is being piped or
+//     captured. A human reading in a terminal is not nagged;
+//   - only for documents long and structured enough to be worth slicing.
+//
+// It goes to stderr specifically so that `docs show x | head` — the exact shape
+// this addresses — still delivers it, since the pipe truncates stdout only.
+func emitLongDocHint(cmd *cobra.Command, path string, content []byte, anchor string, isInteractive bool) {
+	if anchor != "" || isInteractive {
+		return
+	}
+	lines := bytes.Count(content, []byte("\n")) + 1
+	if lines < longDocMinLines {
+		return
+	}
+	sections := len(coredocs.ParseHeadingSlugs(content))
+	if sections < longDocMinSections {
+		return
+	}
+	sharedrender.NewWriter(cmd.ErrOrStderr()).Info(fmt.Sprintf(
+		"%s is %d lines in %d sections. `dwe docs show %s --toc` lists them; "+
+			"`dwe docs show '%s#<anchor>'` prints one.",
+		path, lines, sections, path, path,
+	))
 }
 
 // filterDocRoots filters documentation sources by the --source flag.
