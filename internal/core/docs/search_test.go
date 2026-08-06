@@ -245,11 +245,17 @@ func TestSearch_DuplicateTokensHarmless(t *testing.T) {
 func TestSearch_DocumentLevelSecondTier(t *testing.T) {
 	split := "# T\n\n## Interpolation\n\nHow interpolation works.\n\n## Values\n\nvars are declared here.\n"
 	exact := "# T\n\n## Pair\n\ninterpolation of vars\n"
+	// The paths deliberately sort AGAINST the expected result: "aa-split" (the
+	// doc-level hit) precedes "zz-exact" (the section hit) lexicographically, and
+	// both match once. Only the tier tie-break can put the section hit first, so
+	// dropping it from the comparator fails this test instead of passing by the
+	// path ordering — which is exactly how the original fixture (exact/split)
+	// passed, protecting nothing.
 	roots := []DocRoot{{
 		Name: "dwe",
 		FS: fstest.MapFS{
-			"split.md": &fstest.MapFile{Data: []byte(split)},
-			"exact.md": &fstest.MapFile{Data: []byte(exact)},
+			"aa-split.md": &fstest.MapFile{Data: []byte(split)},
+			"zz-exact.md": &fstest.MapFile{Data: []byte(exact)},
 		},
 	}}
 
@@ -257,14 +263,89 @@ func TestSearch_DocumentLevelSecondTier(t *testing.T) {
 	if len(hits) != 2 {
 		t.Fatalf("expected the exact section hit plus one doc-level hit, got %+v", hits)
 	}
-	if hits[0].Path != "exact" {
-		t.Errorf("tier-1 hit must sort first, got %q", hits[0].Path)
+	if hits[0].Count != hits[1].Count {
+		t.Fatalf("fixture must tie on count for the tier to be the deciding key, got %d vs %d",
+			hits[0].Count, hits[1].Count)
 	}
-	if hits[1].Path != "split" || hits[1].Section == "" {
-		t.Errorf("doc-level hit = {%q, %q}, want split anchored at a section", hits[1].Path, hits[1].Section)
+	if hits[0].Path != "zz-exact" {
+		t.Errorf("tier-1 hit must sort first on an equal count, got %q", hits[0].Path)
+	}
+	if hits[1].Path != "aa-split" || hits[1].Section == "" {
+		t.Errorf("doc-level hit = {%q, %q}, want aa-split anchored at a section", hits[1].Path, hits[1].Section)
 	}
 	if hits[1].Snippet == "" {
 		t.Error("doc-level hit must carry a snippet too")
+	}
+}
+
+// TestSortRankedHits_SourceIsTheFinalTieBreak pins the last comparator key.
+// AllTopics deduplicates by (source, path), so the same path legitimately
+// appears once per root and `--source all` surfaces both; without Source the
+// two hits compare equal and sort.Slice — which is not stable — leaves their
+// order unspecified, so a --limit cutoff could keep a different root run to run.
+//
+// The pair is seeded in the WRONG order and the comparator is called directly,
+// both deliberately: a comparator missing the key leaves a two-element input
+// untouched, so this fails. Driving the same fixture through Search would NOT
+// discriminate — AllTopics already hands the pair over built-in-first, so it
+// passes either way (verified by removing the key).
+func TestSortRankedHits_SourceIsTheFinalTieBreak(t *testing.T) {
+	hits := []rankedHit{
+		{hit: SearchHit{Source: "project", Path: "same", Section: "s", Count: 1}, tier: tierSection},
+		{hit: SearchHit{Source: "dwe", Path: "same", Section: "s", Count: 1}, tier: tierSection},
+	}
+	sortRankedHits(hits)
+	if hits[0].hit.Source != "dwe" || hits[1].hit.Source != "project" {
+		t.Errorf("sources = %q, %q; want the built-in root first",
+			hits[0].hit.Source, hits[1].hit.Source)
+	}
+}
+
+// TestSearch_SamePathFromTwoRootsBothSurface is the integration half of the
+// test above: AllTopics keeps one topic per (source, path), so a project doc
+// shadowing a built-in path must produce two rows, not one.
+func TestSearch_SamePathFromTwoRootsBothSurface(t *testing.T) {
+	doc := "# T\n\n## S\n\nalpha beta\n"
+	roots := []DocRoot{
+		{Name: "dwe", FS: fstest.MapFS{"same.md": &fstest.MapFile{Data: []byte(doc)}}},
+		{Name: "project", FS: fstest.MapFS{"same.md": &fstest.MapFile{Data: []byte(doc)}}},
+	}
+
+	hits := Search(roots, "alpha beta", "en", SearchOptions{})
+	if len(hits) != 2 {
+		t.Fatalf("expected one hit per root, got %+v", hits)
+	}
+	if hits[0].Source != "dwe" || hits[1].Source != "project" {
+		t.Errorf("sources = %q, %q; want the built-in root first", hits[0].Source, hits[1].Source)
+	}
+}
+
+// TestSearch_TierIsATieBreakNotThePrimaryKey pins the counterpart of
+// TestSearch_DocumentLevelSecondTier: the tier decides only when Count ties. A
+// doc-level hit matching three times must outrank a section hit matching once,
+// because ordering the tiers outright buried the strongest answer below every
+// weak one and made it invisible at a narrowed --limit.
+func TestSearch_TierIsATieBreakNotThePrimaryKey(t *testing.T) {
+	weak := "# T\n\n## S\n\nalpha beta\n"
+	strong := "# T\n\n## A\n\nalpha alpha alpha\n\n## B\n\nbeta beta beta\n"
+	roots := []DocRoot{{
+		Name: "dwe",
+		FS: fstest.MapFS{
+			"weak.md":   &fstest.MapFile{Data: []byte(weak)},
+			"strong.md": &fstest.MapFile{Data: []byte(strong)},
+		},
+	}}
+
+	hits := Search(roots, "alpha beta", "en", SearchOptions{})
+	if len(hits) != 2 {
+		t.Fatalf("expected both documents, got %+v", hits)
+	}
+	if hits[0].Path != "strong" || hits[0].Count != 3 {
+		t.Errorf("first hit = {%q, count=%d}, want the doc-level hit {strong, count=3}",
+			hits[0].Path, hits[0].Count)
+	}
+	if hits[1].Path != "weak" {
+		t.Errorf("second hit = %q, want weak", hits[1].Path)
 	}
 }
 

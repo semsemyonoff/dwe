@@ -32,9 +32,10 @@ type SearchOptions struct {
 const snippetMaxLen = 160
 
 // Search searches every topic in roots, attributing matches to the nearest
-// preceding H2/H3 section. Results are sorted by (Count desc, Path asc,
-// Section asc) so the highest-signal sections rise to the top regardless of
-// doc order.
+// preceding H2/H3 section. Results are sorted by
+// (Count desc, tier asc, Path asc, Section asc, Source asc) so the
+// highest-signal sections rise to the top regardless of doc order. The tier is
+// explained below; Source is last only to make the order total.
 //
 // The query is split on whitespace and ALL tokens must be present for a
 // section to match (AND). Ranking uses the MINIMUM per-token count rather than
@@ -48,7 +49,7 @@ const snippetMaxLen = 160
 // longer word — `uid` matches `guide`/`guides`, `env` matches `environment`.
 // It is a deliberate false-positive, not an oversight.
 //
-// Two tiers, in order:
+// Two tiers:
 //
 //  1. sections that contain every token;
 //  2. per document, when NO section of that document satisfies (1) but the
@@ -56,8 +57,12 @@ const snippetMaxLen = 160
 //     densest single line. Without this tier a page that explains a pair of
 //     concepts in two adjacent sections is invisible to the query naming both.
 //
-// Tier-1 hits always sort above tier-2 hits: a section containing everything is
-// a stronger answer than a page scattering it.
+// The tier is a TIE-BREAK, not the primary sort key: Count wins first, and a
+// section containing everything only outranks a page scattering it when the two
+// match equally often. Ordering the tiers outright instead buried a doc-level
+// hit matching four times below twelve section hits — nine of them matching
+// once — measured on the built-in tree for `UID GID env`. That is invisible at
+// any narrowed --limit, which is exactly when ranking matters.
 //
 // The matcher is intentionally NOT regex: agents and humans both type literal
 // identifiers ("depends_on", "RunContext.Render") far more often than they
@@ -74,8 +79,7 @@ func Search(roots []DocRoot, query, locale string, opts SearchOptions) []SearchH
 	}
 
 	topics := AllTopics(roots, locale)
-	sectionHits := make([]SearchHit, 0, len(topics))
-	docHits := make([]SearchHit, 0, 4)
+	ranked := make([]rankedHit, 0, len(topics))
 
 	for _, t := range topics {
 		// Find the doc root that actually contains this topic.
@@ -96,12 +100,15 @@ func Search(roots []DocRoot, query, locale string, opts SearchOptions) []SearchH
 				continue
 			}
 			matched = true
-			sectionHits = append(sectionHits, SearchHit{
-				Source:  t.Source,
-				Path:    t.Path,
-				Section: s.slug,
-				Count:   count,
-				Snippet: sanitizeSnippet(s.bestLine),
+			ranked = append(ranked, rankedHit{
+				hit: SearchHit{
+					Source:  t.Source,
+					Path:    t.Path,
+					Section: s.slug,
+					Count:   count,
+					Snippet: sanitizeSnippet(s.bestLine),
+				},
+				tier: tierSection,
 			})
 		}
 		if matched || len(tokens) < 2 {
@@ -110,14 +117,31 @@ func Search(roots []DocRoot, query, locale string, opts SearchOptions) []SearchH
 		if hit, ok := docLevelHit(sections, tokens); ok {
 			hit.Source = t.Source
 			hit.Path = t.Path
-			docHits = append(docHits, hit)
+			ranked = append(ranked, rankedHit{hit: hit, tier: tierDocument})
 		}
 	}
 
-	sortSearchHits(sectionHits)
-	sortSearchHits(docHits)
-	return append(sectionHits, docHits...)
+	sortRankedHits(ranked)
+	out := make([]SearchHit, len(ranked))
+	for i, r := range ranked {
+		out[i] = r.hit
+	}
+	return out
 }
+
+// rankedHit carries the tier alongside a hit for the duration of the sort only.
+// The tier stays unexported on purpose: SearchHit is the JSON payload of
+// `dwe docs search --output json`, and the tier is a ranking detail, not a fact
+// a caller should branch on.
+type rankedHit struct {
+	hit  SearchHit
+	tier int
+}
+
+const (
+	tierSection  = 0
+	tierDocument = 1
+)
 
 // searchTokens lowercases the query and splits it into the tokens that must all
 // be present. Splitting uses strings.Fields, never strings.Split(q, " "): a
@@ -267,15 +291,33 @@ func docLevelHit(sections []sectionStats, tokens []string) (SearchHit, bool) {
 	}, true
 }
 
-func sortSearchHits(hits []SearchHit) {
+// sortRankedHits orders by
+// (Count desc, tier asc, Path asc, Section asc, Source asc). The tier sits
+// BELOW Count deliberately — see the tie-break note on Search.
+//
+// Source is the final key and exists to make the comparator a TOTAL order.
+// AllTopics deduplicates by (source, path), so the same path legitimately
+// appears once per root, and `--source all` surfaces both; without this key two
+// such hits compare equal and sort.Slice — which is not stable — leaves their
+// relative order unspecified, so a `--limit` cutoff could keep a different root
+// from run to run. Ascending Source puts "dwe" before "project", matching the
+// precedence AllTopics already applies to the topic list itself.
+func sortRankedHits(hits []rankedHit) {
 	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].Count != hits[j].Count {
-			return hits[i].Count > hits[j].Count
+		a, b := hits[i], hits[j]
+		if a.hit.Count != b.hit.Count {
+			return a.hit.Count > b.hit.Count
 		}
-		if hits[i].Path != hits[j].Path {
-			return hits[i].Path < hits[j].Path
+		if a.tier != b.tier {
+			return a.tier < b.tier
 		}
-		return hits[i].Section < hits[j].Section
+		if a.hit.Path != b.hit.Path {
+			return a.hit.Path < b.hit.Path
+		}
+		if a.hit.Section != b.hit.Section {
+			return a.hit.Section < b.hit.Section
+		}
+		return a.hit.Source < b.hit.Source
 	})
 }
 

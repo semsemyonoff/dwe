@@ -46,7 +46,8 @@ query as one substring instead.
 
 When no single section of a document holds every word, but the document as a
 whole does, one row is emitted for that document, anchored at its densest
-section. Those rows sort after the exact section matches.
+section. Such a row outranks an exact section match whenever it matches more
+often — the tier only breaks a tie between equal counts.
 
 Default output is tab-separated (one row per matching section):
   <source>\t<path>#<anchor>\t<count>\t<snippet>
@@ -55,9 +56,9 @@ With --output json, emits a JSON array of {source, path, anchor, count,
 snippet} records (path and anchor are split; anchor is empty for lead text
 under the H1 before the first H2/H3).
 
-Sections are sorted by match count (desc), then by path; the count is the
-rarest word's occurrences, not the total, so a section about the whole query
-outranks one that merely repeats its commonest word. The snippet is the source
+Rows are sorted by match count (desc), then by tier, then by path, section and
+source; the count is the rarest word's occurrences, not the total, so a section
+about the whole query outranks one that merely repeats its commonest word. The snippet is the source
 line carrying the most distinct words of the query, whitespace-collapsed and
 truncated. Matches inside fenced code blocks are counted — that's where schema
 names usually appear.
