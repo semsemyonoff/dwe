@@ -40,11 +40,17 @@ type HarvestResult struct {
 // store. When at least one field is newly written, the store is saved atomically
 // to <projectRoot>/<generatedstore.DefaultRelPath>.
 //
-// "Harvest, not mint": DWE only reads a string the service itself generated. A
-// missing file, a pattern that matches no line, a pattern with no capture group,
-// or a pattern that captures an empty value are all surfaced as errors — never
-// silently skipped — so a half-minted secret cannot pollute the store. A service
-// that declares no generated: fields is a no-op (no store write).
+// A field the store already holds is skipped without touching the disk: the
+// stored value is authoritative and write-if-absent could not replace it anyway.
+// This is what makes an ungated harvest step safe on every deploy after the
+// first — the documented pipeline shape gates only the mint step.
+//
+// "Harvest, not mint": DWE only reads a string the service itself generated. For
+// a field that is NOT yet stored, a missing file, a pattern that matches no
+// line, a pattern with no capture group, or a pattern that captures an empty
+// value are all surfaced as errors — never silently skipped — so a half-minted
+// secret cannot pollute the store. A service that declares no generated: fields
+// is a no-op (no store write).
 func HarvestGenerated(projectRoot string, cfg *projectconfig.DweConfig, serviceName string, store *generatedstore.Store) (HarvestResult, error) {
 	if cfg == nil {
 		return HarvestResult{}, errors.New("config harvest: nil cfg")
@@ -75,6 +81,23 @@ func HarvestGenerated(projectRoot string, cfg *projectconfig.DweConfig, serviceN
 	res := HarvestResult{Service: serviceName}
 	wroteAny := false
 	for _, field := range sortedGeneratedKeys(svc.Generated) {
+		// A field already in the store is never overwritten (write-if-absent),
+		// so reading its source file is work whose only possible effect is a
+		// spurious failure — and that failure is reachable by the sequence the
+		// docs themselves recommend: `dwe reset run` (without
+		// --clear-generated) deliberately keeps the store while wiping the
+		// service hub, so on the very next deploy the minted file is gone while
+		// the value it produced is still authoritative. The mint step skips
+		// (its `generated-missing` gate is closed) and an unconditional harvest
+		// would then fail the whole deploy over a value it already has.
+		if store.Has(serviceName, field) {
+			res.Fields = append(res.Fields, HarvestedField{
+				Field: field,
+				Value: store.Get(serviceName, field),
+				Wrote: false,
+			})
+			continue
+		}
 		value, err := extractGenerated(absRoot, absHubDir, serviceName, field, svc.Generated[field])
 		if err != nil {
 			return HarvestResult{}, err
