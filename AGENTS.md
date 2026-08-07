@@ -148,7 +148,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Execution (`pipeline/`), § `internal/shared/tpl/` and § Core — Workflow (`deploy/journal/`).
 
 - **Live view is not a bubbletea program** — `liveui` drives `bubbles/v2` models by hand and paints a footer into normal scrollback beside the pipeline's own output; never `tea.NewProgram`, `term.MakeRaw`, or terminal capability queries.
-  Numbered non-negotiable invariants govern frame ordering — read `internal/shared/liveui/liveline.go` first.
+  Nine numbered non-negotiable invariants govern how it shares the terminal with the child process — they are enumerated in the `liveui` package doc (`liveline.go`), and the code cites them by number; read them first.
   See § `internal/shared/liveui/`.
 
 - **Prompt hot path** — `dwe prompt` and `dwe prompt --check` bypass cobra entirely via `isPromptInvocation` in `cmd/dwe/main.go`; the cobra command is `Hidden: true`, for `--help` discoverability.
