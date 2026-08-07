@@ -32,10 +32,6 @@ func runWorkflowUnderParallel(t *testing.T, reg *Registry, wf *CommandDef, skipC
 	return errBuf.String(), err
 }
 
-// -----------------------------------------------------------------------------
-// Nested-parallel guard
-// -----------------------------------------------------------------------------
-
 func TestWorkflowRunner_NestedParallel_UnderParallelRejected(t *testing.T) {
 	leaf := makeShellLeaf("wf.leaf", "true")
 	wf := &CommandDef{

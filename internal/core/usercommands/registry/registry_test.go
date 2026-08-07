@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
 func writeYAML(t *testing.T, dir, relPath, content string) string {
 	t.Helper()
 	full := filepath.Join(dir, relPath)
@@ -43,10 +39,6 @@ func mustRegistry(t *testing.T, fileMap map[string]string) *Registry {
 	}
 	return reg
 }
-
-// ---------------------------------------------------------------------------
-// LoadRegistry — happy path
-// ---------------------------------------------------------------------------
 
 const dbYAML = `
 group:
@@ -126,10 +118,6 @@ func TestLoadRegistry_EmptyDir(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Get
-// ---------------------------------------------------------------------------
-
 func TestRegistry_Get_Found(t *testing.T) {
 	reg := mustRegistry(t, map[string]string{"db.yml": dbYAML})
 	cmd, err := reg.Get("db.up")
@@ -148,10 +136,6 @@ func TestRegistry_Get_NotFound(t *testing.T) {
 		t.Error("expected error for missing command, got nil")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// List / ListAll
-// ---------------------------------------------------------------------------
 
 func TestRegistry_List_ExcludesPrivate(t *testing.T) {
 	reg := mustRegistry(t, map[string]string{"db.yml": dbYAML})
@@ -221,10 +205,6 @@ func TestRegistry_List_SortedByID(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Groups / GroupNode tree
-// ---------------------------------------------------------------------------
 
 func TestRegistry_Groups_Root(t *testing.T) {
 	reg := mustRegistry(t, map[string]string{
