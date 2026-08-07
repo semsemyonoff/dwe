@@ -53,8 +53,8 @@ const timestampLayout = "06-01-02 15:04:05"
 // inProgress holds the most recent non-final (`\r`) frame for the sub-step,
 // or the trailing tail emitted by lineTee.Flush at end-of-stream. It is
 // display state only — never committed by StepOutput itself; the central
-// commitTrailingTail helper (Task 9) is responsible for flushing it on
-// step-finish events.
+// commitTrailingTail helper is responsible for flushing it on step-finish
+// events.
 type subStepEntry struct {
 	groupAddr     string
 	buf           strings.Builder
