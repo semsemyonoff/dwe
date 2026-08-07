@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
-	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
@@ -57,7 +56,7 @@ func StopService(ctx context.Context, deps StopServiceDeps, name string) error {
 	if errOut == nil {
 		errOut = io.Discard
 	}
-	if err := preflight.Run(ctx, deps.Cfg, deps.CmdRegistry, deps.BaseDir, "stop", deps.SkipPreflight, errOut); err != nil {
+	if err := preflightRun(ctx, deps.Cfg, deps.CmdRegistry, deps.BaseDir, "stop", deps.SkipPreflight, errOut); err != nil {
 		return err
 	}
 	if deps.CmdRegistryErr != nil {

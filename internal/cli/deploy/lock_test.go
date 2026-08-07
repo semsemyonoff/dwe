@@ -45,7 +45,13 @@ func TestDeployRunCmd_LockHeldBlocksDeploy(t *testing.T) {
 			cmd := &cobra.Command{}
 			cmd.SetContext(context.Background())
 			flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
-			err = deployRunCmd(cmd, flags, "", false, false, true, false, false)
+			// skipPreflight=true: the subject here is the lock, which is
+			// acquired only after preflight passes. Leaving preflight on makes
+			// the assertion depend on a real `docker compose version` probe
+			// finishing inside its 5s deadline — on a loaded CI runner it gets
+			// killed, preflight fails first, and the test reports a
+			// *preflight.Error instead of the lock error it is checking.
+			err = deployRunCmd(cmd, flags, "", false, false, true, true, false)
 			if err == nil {
 				t.Fatal("expected deploy to fail when lock is held")
 			}
