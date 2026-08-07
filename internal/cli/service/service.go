@@ -272,7 +272,6 @@ type selectToggleFn func(title string, items []widgets.SelectorItem) (int, error
 // defaultSelectToggle calls widgets.RunSelector.
 var defaultSelectToggle selectToggleFn = widgets.RunSelector
 
-// pickServiceToEnable returns the name of a disabled non-required service to enable.
 // manageableOptionalServices returns the sorted names of manageable, optional
 // (non-required) services whose enabled state matches wantEnabled. It backs both
 // the interactive pickers and the shell-completion candidate lists.

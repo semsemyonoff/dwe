@@ -40,7 +40,6 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 
 	output := DiagnosticsTable(rows)
 
-	// Verify the output contains expected elements.
 	checks := []string{
 		"STATUS",
 		"DOMAIN",

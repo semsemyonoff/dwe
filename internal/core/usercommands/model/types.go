@@ -44,8 +44,8 @@ const (
 	CommandTypeDaemon CommandType = "daemon"
 )
 
-// DaemonControlStart, etc. are the four control names that may appear in
-// DaemonSpec.Controls. They map to the four synthesized virtual commands.
+// DaemonControlStart, etc. are the four control names appended to a daemon's
+// base ID. They name the four synthesized virtual commands.
 const (
 	DaemonControlStart   = "start"
 	DaemonControlLogs    = "logs"
@@ -601,7 +601,6 @@ func (pd *ParamDef) EffectiveWidget() ParamWidget {
 		return pd.Widget
 	}
 
-	// Infer from Type and Options.
 	if pd.Type == ParamTypeBool {
 		return WidgetConfirm
 	}
@@ -1544,7 +1543,6 @@ func (c *CommandDef) validateParams() error {
 			}
 		}
 
-		// Determine the effective widget.
 		effective := pdef.EffectiveWidget()
 
 		// Widget = select/multiselect requires non-empty options.

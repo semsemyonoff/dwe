@@ -319,7 +319,7 @@ func TestBuildTogglePlan_NotesPresentAndAbsent(t *testing.T) {
 }
 
 // TestBuildTogglePlan_NotesTemplate verifies that notes support Go template
-// expansion against the merged config (.name / .svc / .project / .raw).
+// expansion against the merged config (.name / .svc / .services / .project).
 func TestBuildTogglePlan_NotesTemplate(t *testing.T) {
 	cfg := makeToggleCfg(map[string]config.ServiceConfig{
 		"web": {
@@ -405,8 +405,8 @@ func TestBuildTogglePlan_DeployOrRestart_RejectedWithoutDeployFile(t *testing.T)
 	}
 }
 
-// TestBuildTogglePlan_UnknownRequires verifies ErrUnknownToggleRequires without
-// running dwe validate first (regression for the fourth review).
+// TestBuildTogglePlan_UnknownRequires verifies ErrUnknownToggleRequires fires at
+// buildTogglePlan time, without running dwe validate first.
 func TestBuildTogglePlan_UnknownRequires(t *testing.T) {
 	cfg := makeToggleCfg(map[string]config.ServiceConfig{
 		"web": svcApp(&config.ServiceToggleHooks{Requires: "rstart"}, nil, nil),

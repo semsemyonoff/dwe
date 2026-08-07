@@ -1539,10 +1539,10 @@ info:
 // TestLoadConfig_overlaySchemeOnlyOnParentPropagatesToChild verifies that a
 // scheme-only overlay applied to a parent's own declared port is visible to
 // children that extend the parent — i.e. extends inherits the overlaid
-// scheme, not the pre-overlay one. This was Codex's round-3 finding: applying
-// scheme-only overlays only in Phase 2 (after extends) would clone the
-// parent's pre-overlay Ports map into the child and then mutate only the
-// parent, losing the override on the child side.
+// scheme, not the pre-overlay one. Regression guard: applying scheme-only
+// overlays only in Phase 2 (after extends) would clone the parent's
+// pre-overlay Ports map into the child and then mutate only the parent,
+// losing the override on the child side.
 func TestLoadConfig_overlaySchemeOnlyOnParentPropagatesToChild(t *testing.T) {
 	dir := t.TempDir()
 	cfgYAML := `

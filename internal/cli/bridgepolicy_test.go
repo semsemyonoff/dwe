@@ -333,7 +333,7 @@ func TestApplyBridgeContainerVisibility_hostNoop(t *testing.T) {
 
 // TestHideIfBridgeBlocked_parentWithAllowedChild pins the structural rule: a
 // blocked parent with an allowed descendant stays visible while its blocked
-// siblings hide (the `bridge status` vs `bridge stop` shape from task 10).
+// siblings hide (the `bridge status` vs `bridge stop` shape).
 func TestHideIfBridgeBlocked_parentWithAllowedChild(t *testing.T) {
 	root := &cobra.Command{Use: "dwe"}
 	bridge := &cobra.Command{Use: "bridge"}

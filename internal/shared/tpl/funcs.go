@@ -1,4 +1,6 @@
-// Package tpl provides Go template evaluation for info.yml when/value fields.
+// Package tpl provides the template substrate shared by info.yml when/value
+// fields, user commands and pipeline steps: Go template evaluation plus the
+// ${...} shorthand compiled by CompileVarSyntax.
 package tpl
 
 import (

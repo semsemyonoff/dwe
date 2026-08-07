@@ -38,11 +38,9 @@ func PreprocessMermaid(input []byte, placeholderFunc PlaceholderFunc) (output []
 		line := lines[i]
 		matches := fenceStartRE.FindSubmatch(line)
 
-		// Check if this is a fence start
 		if matches != nil {
 			lang := string(matches[1])
 
-			// If it's a mermaid block, process it
 			if lang == "mermaid" {
 				// Capture the mermaid source
 				var sourceLines [][]byte
@@ -66,7 +64,6 @@ func PreprocessMermaid(input []byte, placeholderFunc PlaceholderFunc) (output []
 
 				source := string(bytes.Join(sourceLines, []byte("\n")))
 
-				// Get placeholder text
 				placeholder := placeholderFunc(diagramIndex)
 
 				// Record position now (len(result) is the index the placeholder will occupy).

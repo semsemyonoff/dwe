@@ -28,7 +28,6 @@ func TestActionForMode(t *testing.T) {
 
 // TestBrowser_ModeEditSelectReturnsActionEdit asserts that selecting a leaf in
 // ModeEdit (the vars browser) commits with ActionEdit and the chosen item index.
-// Ported from the deleted *Model TestModeEdit_EnterReturnsActionEdit.
 func TestBrowser_ModeEditSelectReturnsActionEdit(t *testing.T) {
 	t.Parallel()
 	items := []Item{{ID: "vars.db.host"}, {ID: "vars.db.port"}}

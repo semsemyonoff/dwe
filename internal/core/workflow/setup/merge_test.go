@@ -275,8 +275,6 @@ func TestBuildPortOverlay(t *testing.T) {
 	}
 }
 
-// Helper functions
-
 func stringContains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || s[0:len(substr)] == substr || s[len(s)-len(substr):] == substr || contains(s, substr))
 }

@@ -5,7 +5,7 @@ import (
 )
 
 // ResolveLocale picks the active locale per the documented precedence:
-// 1. flagLang (docs generate --lang value)
+// 1. flagLang (an explicit --lang flag)
 // 2. configLang (userpkg.Language)
 // 3. sysLang (system $LANG environment variable)
 // 4. "en" (default)

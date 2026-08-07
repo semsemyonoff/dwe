@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// ---- CompileVarSyntax ----
-
 func TestCompileVarSyntax_noOp(t *testing.T) {
 	cases := []string{
 		"plain text",
@@ -146,7 +144,7 @@ func TestCompileVarSyntax_goTemplatePreserved(t *testing.T) {
 	}
 }
 
-// ---- Unknown head whitelist (Task 1) ----
+// ---- Unknown head whitelist ----
 
 func TestCompileVarSyntax_knownHeadsCompile(t *testing.T) {
 	cases := map[string]string{
@@ -204,8 +202,6 @@ func TestRenderCommand_knownHeadUnknownSubkey(t *testing.T) {
 		}
 	}
 }
-
-// ---- RenderCommand ----
 
 func TestRenderCommand_plainString(t *testing.T) {
 	ctx := &RenderContext{}
@@ -352,8 +348,6 @@ func TestRenderCommand_mixedVarsAndGoTemplate(t *testing.T) {
 	}
 }
 
-// ---- resolveMapPath (internal) ----
-
 func TestResolveMapPath_shallow(t *testing.T) {
 	m := map[string]any{"key": "val"}
 	got := resolveMapPath(m, "key")
@@ -391,9 +385,7 @@ func TestResolveMapPath_nilMap(t *testing.T) {
 	}
 }
 
-// ---- Sprout template functions (tested in funcs_test.go) ----
-// Legacy date, datetime, base, dir tests removed — see Task 2 of plan.
-// Sprout functions are tested in funcs_test.go with table-driven approach.
+// ---- Sprout template functions (table-driven coverage in funcs_test.go) ----
 
 func TestRenderCommand_nowDateExpression(t *testing.T) {
 	// Verify that the sprout 'now | date' pipeline works through RenderCommand,
@@ -429,8 +421,6 @@ func TestRenderCommand_sproutFunctionInheritance(t *testing.T) {
 		t.Errorf("sprout default func = %q, want %q", got, want)
 	}
 }
-
-// ---- Files namespace ----
 
 func TestCompileVarSyntax_filesPath(t *testing.T) {
 	got := CompileVarSyntax("${files.dump.path}")
@@ -536,8 +526,6 @@ func TestRenderCommand_filesMixedVars(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
-
-// ---- EvalCommandCondition ----
 
 func TestEvalCommandCondition_emptyExpr(t *testing.T) {
 	ctx := &RenderContext{}
@@ -717,13 +705,9 @@ func TestEvalCommandCondition_malformedBuiltin(t *testing.T) {
 }
 
 // TestRenderCommand_ServicesNestedPortsHosts verifies that the generic dot-path
-// resolver walks two-level nested maps for the new services.<name>.ports.<port-name>
-// and services.<name>.hosts.<host-name> shapes without any tpl-side changes.
-//
-// This is a plumbing-verification test for the unified-services-schema refactor:
-// the producer (injectServicesIntoRaw) hasn't been rewritten yet, but the consumer
-// (CompileVarSyntax → resolve → resolveMapPath) already walks nested maps via .Raw
-// generically. No tpl changes are required.
+// resolver walks two-level nested maps for the services.<name>.ports.<port-name>
+// and services.<name>.hosts.<host-name> shapes — the resolver is shape-agnostic,
+// so the nesting needs no tpl-side special case.
 func TestRenderCommand_ServicesNestedPortsHosts(t *testing.T) {
 	raw := map[string]any{
 		"services": map[string]any{
@@ -759,8 +743,6 @@ func TestRenderCommand_ServicesNestedPortsHosts(t *testing.T) {
 		}
 	}
 }
-
-// ---- Generated namespace ----
 
 func TestCompileVarSyntax_generated(t *testing.T) {
 	got := CompileVarSyntax("${generated.app_key}")

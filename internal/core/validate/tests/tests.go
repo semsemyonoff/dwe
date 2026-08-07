@@ -247,8 +247,8 @@ func validateCommandRefs(cfg *config.DweConfig, steps []config.DeployStep, targe
 // vars:), substituting any value equal to envtest.AutoPortSentinel with
 // autoPortPlaceholder. This lets ${vars.x} used in a strict-int builtin param
 // render to a valid placeholder at validate time — the same "auto" magic value
-// stage-1b's runner substitutes with a real allocated port, just resolved
-// early since validate never allocates ports or deploys anything.
+// the runner substitutes with a real allocated port, just resolved early since
+// validate never allocates ports or deploys anything.
 //
 // It ALSO overlays the scenario's env.services enable/disable toggles onto the
 // throwaway config's service-enabled state (see applyServiceToggles), so a

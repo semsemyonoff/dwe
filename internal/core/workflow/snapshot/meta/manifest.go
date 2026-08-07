@@ -15,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// CreateStatus / RestoreStatus enum values recorded in last_create / last_restore.
+// Status values recorded in last_create / last_restore.
 const (
 	StatusOk          = "ok"
 	StatusFailed      = "failed"
@@ -92,9 +92,9 @@ type LastRestore struct {
 
 // Manifest is the canonical shape of a snapshot's manifest.yml.
 //
-// Per CLAUDE.md "no schema_version" project policy, the manifest carries no
-// version field; the loader is lenient on unknown fields so that future
-// dwe versions can add metadata without breaking older readers.
+// The manifest carries no version field; the loader is lenient on unknown
+// fields so that future dwe versions can add metadata without breaking older
+// readers.
 type Manifest struct {
 	// Name mirrors the snapshot directory name.
 	Name string `yaml:"name" json:"name"`

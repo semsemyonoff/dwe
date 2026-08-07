@@ -100,11 +100,9 @@ func walkAndExport(dst, subdir string, node *docs.Node, root docs.DocRoot, opts 
 	targetPath := filepath.Join(dst, subdir, node.Path)
 
 	if node.IsDir {
-		// Create directory
 		if err := os.MkdirAll(targetPath, 0o755); err != nil {
 			return fmt.Errorf("cannot create directory: %w", err)
 		}
-		// Recurse into children
 		if node.Children != nil {
 			for _, child := range node.Children {
 				if err := walkAndExport(dst, subdir, child, root, opts); err != nil {
@@ -126,12 +124,10 @@ func walkAndExport(dst, subdir string, node *docs.Node, root docs.DocRoot, opts 
 			content = append([]byte(banner), content...)
 		}
 
-		// Create parent directory
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 			return fmt.Errorf("cannot create directory: %w", err)
 		}
 
-		// Write file
 		if err := os.WriteFile(targetPath, content, 0o644); err != nil {
 			return fmt.Errorf("cannot write %s: %w", targetPath, err)
 		}

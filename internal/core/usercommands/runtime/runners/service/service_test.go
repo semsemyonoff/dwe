@@ -974,8 +974,8 @@ func TestExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 	}
 }
 
-// TestBuildServiceArgv_ShellFromConfig verifies that buildServiceArgv uses
-// cfg.Binaries.Shell instead of a hardcoded "sh".
+// TestBuildServiceArgv_ShellFromConfig verifies that buildServiceArgv resolves
+// the shell via config.ShellBin instead of a hardcoded "sh".
 func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
 	tests := []struct {
 		name      string

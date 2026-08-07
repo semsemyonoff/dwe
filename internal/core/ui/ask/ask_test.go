@@ -348,10 +348,7 @@ func TestConfirmFieldDefaultParsing(t *testing.T) {
 }
 
 // TestResultHasDistinguishesPresentFromAbsent verifies Result.Has
-// distinguishes present from absent keys (split out of the former
-// TestRunUserAbortedError, which pinned the huh.ErrUserAborted sentinel — the
-// cancel contract moved to widgets.ErrCancelled; see
-// TestFormRunCancelReturnsErrCancelled below).
+// distinguishes present from absent keys.
 func TestResultHasDistinguishesPresentFromAbsent(t *testing.T) {
 	r := NewResultForTest(map[string]any{"present": "value"})
 	if !r.Has("present") {
@@ -767,11 +764,11 @@ func TestBuildHuhFieldFilterableRejectedForNonMultiselect(t *testing.T) {
 	}
 }
 
-// TestBuildHuhFieldMultiselectFilterableTogglesSlotVisibility verifies the
-// design-decision-3 visibility caveat: a Filterable:false multiselect omits
-// the Filter/SetFilter/ClearFilter bindings from KeyBinds() entirely (huh's
-// own behaviour, not something ask implements), while Filterable:true (or
-// nil default) keeps them.
+// TestBuildHuhFieldMultiselectFilterableTogglesSlotVisibility pins the
+// visibility caveat: a Filterable:false multiselect omits the
+// Filter/SetFilter/ClearFilter bindings from KeyBinds() entirely (huh's own
+// behaviour, not something ask implements), while Filterable:true (or nil
+// default) keeps them.
 func TestBuildHuhFieldMultiselectFilterableTogglesSlotVisibility(t *testing.T) {
 	base := Field{
 		Key:     "m",

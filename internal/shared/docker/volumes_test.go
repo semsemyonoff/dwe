@@ -7,12 +7,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-// TestEnsureVolumes_BinarySubstitution verifies that EnsureVolumes uses the
-// supplied bin argument rather than a hardcoded "docker". We pass a deliberate
-// non-existent binary name so the exec fails fast (volume doesn't exist) —
-// the important thing is that no call to the real "docker" binary is made.
-// Because volumeExists itself will exec the binary, we use a bin that reports
-// "does not exist" behavior by failing with an ExitError (not a path error).
+// TestEnsureVolumes_BinarySubstitution verifies that EnsureVolumes threads the
+// supplied bin argument instead of a hardcoded "docker". The volume list is
+// empty, so nothing is exec'd — this only guards the no-op path.
 func TestEnsureVolumes_BinarySubstitution(t *testing.T) {
 	// volumeExists uses exec.Command(bin, "volume", "inspect", name).Run().
 	// A missing binary returns a path error, not an ExitError, so volumeExists

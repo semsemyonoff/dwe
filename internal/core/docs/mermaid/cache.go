@@ -29,7 +29,7 @@ type FileCache struct {
 // NewFileCache constructs a FileCache wrapping the given renderer.
 // Dir is the cache directory (e.g. $XDG_CACHE_HOME/dwe/mermaid).
 // CapBytes is the max cache size; eviction removes oldest by mtime until under cap.
-// Version is called once (via sync.OnceValue in callers) to include in the cache key.
+// Version is called on every cache-key computation, so it must never block.
 func NewFileCache(dir string, capBytes int64, underlying Renderer, version func() string) *FileCache {
 	return &FileCache{
 		Dir:        dir,
@@ -81,8 +81,8 @@ func (fc *FileCache) Render(ctx context.Context, src string, theme Theme, width 
 
 		// Atomically write to cache: write temp file, then rename.
 		if err := fc.writeCached(keyPath, png); err != nil {
-			// Write failure doesn't prevent returning the rendered result to the caller.
-			// Just log and continue (important for scenarios where cache dir is full).
+			// A cache-write failure (e.g. a full cache dir) must not fail the render:
+			// return the PNG the caller asked for.
 			return png, nil
 		}
 
@@ -102,9 +102,8 @@ func (fc *FileCache) Render(ctx context.Context, src string, theme Theme, width 
 	return nil, ErrRenderingDisabled
 }
 
-// writeCached atomically writes png to keyPath and triggers eviction if needed.
+// writeCached atomically writes png to keyPath (temp file, then rename).
 func (fc *FileCache) writeCached(keyPath string, png []byte) error {
-	// Ensure dir exists.
 	if err := os.MkdirAll(fc.Dir, 0o700); err != nil {
 		return err
 	}
@@ -156,7 +155,6 @@ func (fc *FileCache) evictIfNeeded() {
 		totalSize += size
 	}
 
-	// If under cap, nothing to do.
 	if totalSize <= fc.CapBytes {
 		return
 	}
@@ -166,7 +164,6 @@ func (fc *FileCache) evictIfNeeded() {
 		return files[i].mtime < files[j].mtime
 	})
 
-	// Delete oldest until under cap.
 	for _, f := range files {
 		if totalSize <= fc.CapBytes {
 			break

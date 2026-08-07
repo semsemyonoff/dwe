@@ -169,11 +169,5 @@ func TestHealthStatusWithFakeDocker(t *testing.T) {
 	// For now, this is a placeholder for the integration-style test that would
 	// need a mock docker binary or actual docker running.
 
-	// In a real scenario, we'd set up a test helper that:
-	// 1. Creates a fake docker executable in testdata/
-	// 2. Points PATH to it
-	// 3. Calls HealthStatus
-	// 4. Verifies the output and command arguments
-
 	t.Skip("requires docker daemon or mock binary setup")
 }

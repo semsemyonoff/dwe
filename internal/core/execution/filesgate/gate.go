@@ -65,7 +65,6 @@ func UnmarshalRequireSpec(node *yaml.Node) (RequireSpec, error) {
 		return RequireRequired{}, nil
 	}
 
-	// Handle null case (node.Tag == "!!null" or node.Value == "null").
 	if node.Tag == "!!null" || (node.Kind == yaml.ScalarNode && node.Value == "null") {
 		return RequireRequired{}, nil
 	}
@@ -155,7 +154,6 @@ func (fg *FilesGate) UnmarshalYAML(node *yaml.Node) error {
 		State   State          `yaml:"state"`
 	}
 
-	// Check for unknown fields.
 	allowedKeys := map[string]bool{
 		"command": true,
 		"with":    true,
@@ -178,7 +176,6 @@ func (fg *FilesGate) UnmarshalYAML(node *yaml.Node) error {
 		}
 	}
 
-	// Decode the allowed fields.
 	var raw rawFilesGate
 	if err := node.Decode(&raw); err != nil {
 		return err

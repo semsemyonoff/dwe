@@ -321,8 +321,8 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 }
 
 // declaredPort identifies a host port that one of our services declared in
-// workspace/services.yml (or overlays). Service + PortName are kept so the
-// diagnostic can pinpoint exactly which service expected the port.
+// workspace/services/<name>/service.yml (or overlays). Service + PortName are
+// kept so the diagnostic can pinpoint exactly which service expected the port.
 type declaredPort struct {
 	Service  string
 	PortName string
@@ -560,10 +560,11 @@ func IsPortAvailable(port int) bool {
 	return portListenFn(port) == nil
 }
 
-// given port and closes it immediately. Used as the fallback check for ports
-// not bound by any docker container — if listen succeeds the port is free,
-// if it fails with EADDRINUSE some non-docker process owns it. Any other error
-// (e.g. EACCES on a privileged port < 1024) means we cannot probe — treat as free.
+// listenTCP attempts to bind the given port and closes it immediately. Used as
+// the fallback check for ports not bound by any docker container — if listen
+// succeeds the port is free, if it fails with EADDRINUSE some non-docker
+// process owns it. Any other error (e.g. EACCES on a privileged port < 1024)
+// means we cannot probe — treat as free.
 func listenTCP(port int) error {
 	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {

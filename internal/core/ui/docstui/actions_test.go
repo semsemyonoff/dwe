@@ -256,7 +256,7 @@ func TestHandleAction_NavUp_RoutesToViewportWhenViewportActive(t *testing.T) {
 	}
 }
 
-// --- Directional h/l semantics (intentional change from old Toggle-on-both) ---
+// --- Directional h/l semantics ---
 
 func TestTreeWidget_Collapse_CollapsesExpandedNode(t *testing.T) {
 	b := newTestBrowserWithHeadings(t)

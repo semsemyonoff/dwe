@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// ---- Sprout Function Coverage ----
-
 func TestSproutFunctions(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -107,8 +105,6 @@ func TestSproutFunctions(t *testing.T) {
 	}
 }
 
-// ---- Time Rendering Smoke Test ----
-
 func TestTimeRenderingSmoke(t *testing.T) {
 	t.Parallel()
 	// Smoke test that sprout's 'now' and 'date' work together.
@@ -133,8 +129,6 @@ func TestTimeRenderingSmoke(t *testing.T) {
 		}
 	}
 }
-
-// ---- AppURL Regression Tests ----
 
 func TestAppURLRegression(t *testing.T) {
 	cases := []struct {
@@ -193,8 +187,6 @@ func TestAppURLRegression(t *testing.T) {
 	}
 }
 
-// ---- Hermetic Boundary Tests ----
-
 func TestHermeticBoundary(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -242,8 +234,6 @@ func TestHermeticBoundary(t *testing.T) {
 		})
 	}
 }
-
-// ---- Legacy-Removal Negative Tests ----
 
 func TestLegacyRemoval(t *testing.T) {
 	cases := []struct {
@@ -293,8 +283,6 @@ func TestLegacyRemoval(t *testing.T) {
 	}
 }
 
-// ---- OnceValue Caching Test ----
-
 func TestFuncMapCaching(t *testing.T) {
 	t.Parallel()
 	// FuncMap() returns a per-call shallow clone: mutations must not bleed across calls.
@@ -315,8 +303,6 @@ func TestFuncMapCaching(t *testing.T) {
 		t.Error("appURL function pointer differs across FuncMap calls; OnceValue cache is not hit")
 	}
 }
-
-// ---- Isolation Test (Shallow Clone Defense) ----
 
 func TestCommandFuncMapIsolation(t *testing.T) {
 	t.Parallel()

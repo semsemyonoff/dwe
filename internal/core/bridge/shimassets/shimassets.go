@@ -8,8 +8,9 @@
 // compile error for the whole module (vet and lint compile too).
 //
 // The package is a leaf on purpose: it must not import its parent
-// internal/core/bridge (composegen there will reference shim file names),
-// so the bridge-dir path join is duplicated from bridge.DefaultBridgeDir.
+// internal/core/bridge (whose composegen.go references shim file names via
+// FileName), so the bridge-dir path join is duplicated from
+// bridge.DefaultBridgeDir.
 package shimassets
 
 import (

@@ -1103,7 +1103,7 @@ services:
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
-	// Setup services.yml with service details
+	// Write the per-service workspace/services/<name>/service.yml files
 	setupServicesConfig(t, projectRoot, `
 services:
   api:

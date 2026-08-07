@@ -67,7 +67,6 @@ func TestRenderTabStrip_EmptyTabs(t *testing.T) {
 	require.Empty(t, strings.TrimSpace(tabStrip), "should return empty for no tabs")
 }
 
-// Test Init method
 func TestInit_BumpsLoadGen(t *testing.T) {
 	ctx := context.Background()
 	deps := Deps{}

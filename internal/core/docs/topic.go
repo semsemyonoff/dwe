@@ -30,7 +30,6 @@ func ParseTopic(input string) (path, anchor string, err error) {
 		return "", "", errors.New("topic path cannot be empty")
 	}
 
-	// Split on # to separate path and anchor
 	parts := strings.SplitN(input, "#", 2)
 	path = strings.TrimSpace(parts[0])
 
@@ -38,7 +37,6 @@ func ParseTopic(input string) (path, anchor string, err error) {
 		anchor = strings.TrimSpace(parts[1])
 	}
 
-	// Trim trailing .md extension if present
 	path = strings.TrimSuffix(path, ".md")
 
 	// After trimming, ensure path is not empty
@@ -46,7 +44,6 @@ func ParseTopic(input string) (path, anchor string, err error) {
 		return "", "", errors.New("topic path cannot be empty")
 	}
 
-	// Reject trailing slashes
 	if strings.HasSuffix(path, "/") {
 		return "", "", fmt.Errorf("invalid topic path: %q (no trailing slash)", path)
 	}
@@ -217,7 +214,6 @@ func AllTopics(roots []DocRoot, locale string) []TopicEntry {
 	for _, root := range roots {
 		tree, err := BuildTree(root, locale)
 		if err != nil {
-			// Skip roots with errors
 			continue
 		}
 
@@ -267,7 +263,6 @@ func collectTopics(node *Node, source string, topics *[]TopicEntry, seen map[str
 		return
 	}
 
-	// This is a directory node; recurse into children
 	if node.Children != nil {
 		for _, child := range node.Children {
 			collectTopics(child, source, topics, seen)

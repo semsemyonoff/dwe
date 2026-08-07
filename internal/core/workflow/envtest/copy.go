@@ -43,7 +43,7 @@ var excludedTopLevel = map[string]struct{}{
 // the partial copy is best-effort removed before returning, so a failed copy
 // never leaves an orphaned tree behind. This matters because the caller has no
 // manifest yet at this point — a partial copy would otherwise be invisible to
-// manifest-driven Teardown and stage-2 `dwe test clean`.
+// manifest-driven Teardown and `dwe test clean`.
 func CopyTree(srcRoot, dstRoot, gitBin string, warn func(string)) (err error) {
 	if warn == nil {
 		warn = func(string) {}

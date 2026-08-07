@@ -147,7 +147,7 @@ func firstWords(cmd string) string {
 	return cmd
 }
 
-// paramNames lists a command's declared param names in definition order.
+// paramNames lists a command's declared param names, sorted.
 func paramNames(def *model.CommandDef) []string {
 	names := make([]string, 0, len(def.Params))
 	for name := range def.Params {

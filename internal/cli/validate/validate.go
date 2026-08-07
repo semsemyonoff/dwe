@@ -159,9 +159,8 @@ func shouldEmitFilterHint(rows, errors, warnings int, quiet bool, levelRaw strin
 }
 
 // emitFilterHint writes a single info line to stderr after a long diagnostics
-// table, naming the two flags that shrink it. The output-narrowing flags have
-// existed since May and were used zero times across the sessions this hint was
-// added for — a table that scrolls past a screen is exactly the point of need.
+// table, naming the two flags that shrink it: a table that scrolls past a
+// screen is exactly the point of need for flags nobody discovers otherwise.
 //
 // Same shape and constraints as cmdctx.EmitDefaultNotice: stderr only (stdout
 // stays the parseable surface), no-op in JSON mode where the consumer filters
@@ -533,9 +532,9 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 		validateCfg, validateWarnings, validateLoadErr = config.LoadValidateConfig(config.ValidateConfigPath(projectRoot))
 	}
 
-	// Load user-config diagnostically (nil is OK if it fails or is absent).
-	// Per the pattern in command/root.go:156-160, userconfig load failures
-	// are logged as warnings and do not break project-level validation.
+	// Load user-config diagnostically (nil is OK if it fails or is absent):
+	// a load failure is logged as a warning and does not break project-level
+	// validation.
 	var userCfg *userpkg.Config
 	if projectRoot != "" {
 		userCfg, err = userpkg.Load(projectRoot)

@@ -23,9 +23,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// runAsk is the package-level test seam over ask.Run (mirrors command.go:22).
-// Tests stub it to drive the no-value interactive form deterministically; they
-// MUST NOT call t.Parallel() while overriding it (global state).
+// runAsk is the package-level test seam over ask.Run (mirroring the runAsk seam
+// in internal/cli/command). Tests stub it to drive the no-value interactive form
+// deterministically; they MUST NOT call t.Parallel() while overriding it
+// (global state).
 var runAsk = ask.Run
 
 // varSetJSON is the JSON shape for `dwe vars set --output json`: the var and its
@@ -258,9 +259,8 @@ func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*con
 // and the in-TUI vars-browser edit overlay (via ask.Build). The field carries
 // the inspect-style per-layer description and an inline CoerceScalar validator
 // so an invalid scalar (a map / sequence, or anything CoerceScalar rejects) is
-// caught IN-FORM rather than only after submit — an improvement over the old
-// post-submit-only coercion. The caller's post-submit CoerceScalar remains the
-// authoritative parse.
+// caught IN-FORM rather than only after submit. The caller's post-submit
+// CoerceScalar remains the authoritative parse.
 func buildVarSetFields(flags *cmdctx.RootFlags, path string) []ask.Field {
 	disp := uirender.DisplayVarPath(path)
 	return []ask.Field{{

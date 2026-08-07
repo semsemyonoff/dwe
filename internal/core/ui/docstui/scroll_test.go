@@ -81,8 +81,8 @@ func (f flatFS) ReadFile(name string) ([]byte, error) {
 }
 
 // loadFirstTopic resolves and applies the model's initial async topic load so
-// the viewport holds rendered content. The construction-time initCmd was
-// dropped (Decision #10); this helper calls loadTopic directly instead.
+// the viewport holds rendered content, calling loadTopic directly instead of
+// waiting for browser.Update(WindowSizeMsg) to fire it.
 func loadFirstTopic(t *testing.T, m *Model) {
 	t.Helper()
 	if m.CurrentTopic == nil {

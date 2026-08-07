@@ -22,7 +22,6 @@ func LoadSetupYAML(path string) (*Config, error) {
 		return nil, fmt.Errorf("load %s: %w", path, err)
 	}
 
-	// Handle empty file case
 	if len(data) == 0 {
 		return &Config{}, nil
 	}

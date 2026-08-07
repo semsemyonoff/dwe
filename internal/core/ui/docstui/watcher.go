@@ -42,7 +42,6 @@ func NewWatcher(ctx context.Context, root string) (*Watcher, error) {
 		return nil, err
 	}
 
-	// Create a cancellable context for the event pump
 	ctx, cancel := context.WithCancel(ctx)
 
 	w := &Watcher{
@@ -54,7 +53,6 @@ func NewWatcher(ctx context.Context, root string) (*Watcher, error) {
 		done:    make(chan struct{}),
 	}
 
-	// Start the event pump goroutine
 	go w.eventPump()
 
 	return w, nil

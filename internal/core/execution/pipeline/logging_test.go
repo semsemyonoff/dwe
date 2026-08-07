@@ -154,7 +154,7 @@ func TestChildIO_Parallel_TTY_NoPTY(t *testing.T) {
 }
 
 func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
-	// Task 6: childIO with stepWriter == nil falls back to os.Stdout / os.Stderr
+	// childIO with stepWriter == nil falls back to os.Stdout / os.Stderr
 	// passthrough so ad-hoc external callers (`dwe deploy run STEP`) still
 	// inherit the real terminal fd. Replaces the old parallel-nil panic which
 	// is no longer reachable: parallel-mode callers always supply a tee.
@@ -167,7 +167,7 @@ func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
 
 // TestParallelGroup_PerSubStepLogRoutesOutput exercises the executor's
 // parallel branch end-to-end: each sub-step's stdout must reach its dedicated
-// log file, the global pipeline log, and Reporter.SubStepOutput; nothing must
+// log file, the global pipeline log, and Reporter.StepOutput; nothing must
 // reach a sibling sub-step's log file or os.Stdout.
 func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	tmp := t.TempDir()
@@ -228,7 +228,7 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	// in joinWriters); content assertions on globalLog belong in plain_test.go.
 	_ = globalLog
 
-	// Reporter.SubStepOutput was called with each sub-step's line.
+	// Reporter.StepOutput was called with each sub-step's line.
 	sawAlpha, sawBeta := false, false
 	for _, e := range rep.events {
 		if e.kind != "StepOutput" {
@@ -246,9 +246,10 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	}
 }
 
-// TestParallelGroup_NoOutputWithLoggingDisabled verifies that when the
-// pipeline log is disabled (opts.LogWriter == nil), no per-sub-step log file
-// is created, but SubStepOutput events still fire so the reporter can render.
+// TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter verifies that
+// when the pipeline log is disabled (opts.LogWriter == nil), no per-sub-step
+// log file is created, but StepOutput events still fire so the reporter can
+// render.
 func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) {
 	tmp := t.TempDir()
 
@@ -277,7 +278,7 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 		t.Errorf("expected no parallel/ log dir when logging disabled, got err=%v", err)
 	}
 
-	// SubStepOutput still fires.
+	// StepOutput still fires.
 	saw := false
 	for _, e := range rep.events {
 		if e.kind == "StepOutput" && strings.Contains(e.reason, "a") {
@@ -385,9 +386,9 @@ func TestSequentialStep_LogTeeCapturesOutput(t *testing.T) {
 
 // TestSequentialStep_SuspendsAndResumesLive verifies the executor pauses
 // the LiveLine footer around each sequential step body and resumes after.
-// The previous design (Task 6 of the live-pipeline plan) tried to keep the
-// footer visible by routing child output through StepOutput; this broke
-// docker compose's interactive UI and stripped command colors.
+// The previous design tried to keep the footer visible by routing child
+// output through StepOutput; this broke docker compose's interactive UI and
+// stripped command colors.
 func TestSequentialStep_SuspendsAndResumesLive(t *testing.T) {
 	rep := &mockReporter{}
 	phase := config.DeployPhase{Name: "p"}

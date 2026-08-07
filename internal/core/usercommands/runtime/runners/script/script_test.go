@@ -14,9 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// Local aliases keep the moved tests readable without rewriting every type
-// qualifier. The tests live in the same package as Runner so the original
-// `&Runner{}` form is renamed in-place to `&Runner{}`.
+// Local aliases let the tests use unqualified model/spec type names.
 type (
 	CommandDef    = model.CommandDef
 	RunContext    = spec.RunContext
@@ -52,10 +50,6 @@ func captureOutput(t *testing.T, ctx RunContext) (string, string, error) {
 	err := r.Run(context.Background(), ctx)
 	return outBuf.String(), errBuf.String(), err
 }
-
-// ---------------------------------------------------------------------------
-// Contract env vars
-// ---------------------------------------------------------------------------
 
 func TestRunner_ContractEnvVars(t *testing.T) {
 	dir := t.TempDir()
@@ -254,10 +248,6 @@ func TestRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Simple mode
-// ---------------------------------------------------------------------------
-
 func TestRunner_SimpleMode(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "simple.sh", `printf 'hello from simple'`)
@@ -302,10 +292,6 @@ func TestRunner_SimpleMode_ScriptFails(t *testing.T) {
 		t.Fatal("expected error for failing script")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Phased mode
-// ---------------------------------------------------------------------------
 
 func TestRunner_PhasedMode_AllPhases(t *testing.T) {
 	dir := t.TempDir()
@@ -410,10 +396,6 @@ func TestRunner_PhasedMode_PlanFails_RunNotExecuted(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Shell override
-// ---------------------------------------------------------------------------
-
 func TestRunner_ShellOverride(t *testing.T) {
 	// Use bash if available; otherwise skip.
 	if _, err := os.Stat("/bin/bash"); os.IsNotExist(err) {
@@ -441,10 +423,6 @@ func TestRunner_ShellOverride(t *testing.T) {
 		t.Errorf("expected 'bash-ok'; got %q", out)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// DWE_TEMP_DIR cleanup
-// ---------------------------------------------------------------------------
 
 func TestRunner_TempDirCreatedAndCleaned(t *testing.T) {
 	dir := t.TempDir()
@@ -479,10 +457,6 @@ func TestRunner_TempDirCreatedAndCleaned(t *testing.T) {
 		t.Errorf("expected temp dir %q to be cleaned up after Run", tmpPath)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Files directive integration tests
-// ---------------------------------------------------------------------------
 
 func TestRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 	dir := t.TempDir()
@@ -537,10 +511,6 @@ func TestRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
 		t.Errorf("expected DWE_NONINTERACTIVE=1 when NonInteractive=true; got %q", out)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Workdir support
-// ---------------------------------------------------------------------------
 
 func TestRunner_Workdir_AbsolutePath(t *testing.T) {
 	projectRoot := t.TempDir()

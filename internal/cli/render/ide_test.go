@@ -23,8 +23,6 @@ const minimalVscodeSettingsTpl = `{"php.validate.executablePath":"/usr/local/bin
 // setupIDEPackTemplates writes an IDE template pack at <dir>/workspace/templates/ide/<packName>/.
 // Every key is treated as a "from" path (typically ending in .tmpl); a manifest.yml is
 // auto-generated whose `to` paths are the same path with any trailing .tmpl stripped.
-// This matches the legacy walk-based behavior, so tests written against the old layout
-// continue to exercise the manifest-driven renderer.
 func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
 	t.Helper()
 	packDir := filepath.Join(dir, "workspace", "templates", "ide", packName)

@@ -7,9 +7,8 @@ import (
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
-// notifier is the consumer-local interface declared per the plan's
-// testability pattern. Tests swap in a recording fake by overriding
-// newNotifier.
+// notifier is the consumer-local interface for desktop notifications. Tests
+// swap in a recording fake by overriding newNotifier.
 type notifier interface {
 	Notify(ctx context.Context, ev notify.Event)
 }

@@ -449,9 +449,9 @@ func (tw *TreeWidget) Collapse() { tw.eng.Collapse() }
 func (tw *TreeWidget) Expand() { tw.eng.Expand() }
 
 // Toggle flips the expanded state of the cursor when it sits on a directory
-// (including empty / index-only directories, whose glyph then flips ▶ ↔ ▼ as
-// it did before the engine refactor) or on a file that has heading sub-rows.
-// Heading rows themselves are leaves and the call is a no-op there.
+// (including empty / index-only directories, whose glyph then flips ▶ ↔ ▼) or
+// on a file that has heading sub-rows. Heading rows themselves are leaves and
+// the call is a no-op there.
 func (tw *TreeWidget) Toggle() { tw.eng.Toggle() }
 
 // VisibleNodes returns the slice of currently visible tree rows.

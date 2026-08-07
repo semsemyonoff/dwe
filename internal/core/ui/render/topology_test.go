@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// --- ParseComposeTopology ---
-
 const composeConfigYAML = `
 services:
   nginx:
@@ -104,8 +102,6 @@ func TestParseComposeTopology_InvalidYAML(t *testing.T) {
 		t.Error("expected error for invalid YAML, got nil")
 	}
 }
-
-// --- Topology ---
 
 func TestRenderTopology_Empty(t *testing.T) {
 	result := Topology(nil, nil, nil)

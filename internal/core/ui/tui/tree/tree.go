@@ -370,8 +370,7 @@ func (e *Engine[N]) SetExpandedByKey(key string, b bool) {
 }
 
 // EnsureFocusVisible adjusts topIdx so the cursor stays within a viewport of
-// the given height (the inner tree-panel height the Frame supplies). Ported
-// verbatim from cmdbrowser.ensureFocusVisible.
+// the given height (the inner tree-panel height the Frame supplies).
 func (e *Engine[N]) EnsureFocusVisible(height int) {
 	n := len(e.visible)
 	if n == 0 || height <= 0 {
@@ -399,7 +398,7 @@ func (e *Engine[N]) EnsureFocusVisible(height int) {
 
 // FocusRow moves the cursor to the visible node at the given panel-local row
 // (0-based, relative to the first rendered row at topIdx). A click past the
-// last visible node is a no-op. Ported verbatim from cmdbrowser.focusRow.
+// last visible node is a no-op.
 func (e *Engine[N]) FocusRow(row int) {
 	if row < 0 {
 		return
@@ -412,8 +411,8 @@ func (e *Engine[N]) FocusRow(row int) {
 }
 
 // Clip slices the rendered tree (one line per visible node) to height rows
-// starting at topIdx. Ported verbatim from cmdbrowser.clipToViewport. A
-// zero/negative height renders no rows rather than overflowing the panel.
+// starting at topIdx. A zero/negative height renders no rows rather than
+// overflowing the panel.
 func (e *Engine[N]) Clip(full string, height int) string {
 	if height <= 0 {
 		return ""

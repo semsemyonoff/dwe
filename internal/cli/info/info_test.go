@@ -299,9 +299,10 @@ func TestInfoCmd_MissingConfig(t *testing.T) {
 	}
 }
 
-// TestInfoCmd_UsesUIRenderInfo verifies that the info command no longer uses
-// the legacy TableHeader/Definition rendering path by checking that section
-// content is still present (structural smoke test).
+// TestInfoCmd_UsesUIRenderInfo is a structural smoke test that `dwe info`
+// renders through core/ui/render.Info rather than the shared/render Writer's
+// TableHeader/Definition helpers: it only checks that the section title and
+// definition values still reach the command's output.
 func TestInfoCmd_UsesUIRenderInfo(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeMinimalWorkspaceYML(t, dir)

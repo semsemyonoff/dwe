@@ -140,9 +140,9 @@ func TestScanUsages_MultipleMatchingRefsOnOneLineDedupe(t *testing.T) {
 
 // TestWithRecursion pins that templatedMapKeys (with:/env:) scanning recurses
 // through nested maps and sequences — not only direct scalar children —
-// matching what Task 2's pipeline render helper actually renders at any
-// depth. Exercised here through the query-driven ScanUsages path, which
-// shares the same recursive walk as EnumerateAllUsages.
+// matching what the pipeline render helper actually renders at any depth.
+// Exercised here through the query-driven ScanUsages path, which shares the
+// same recursive walk as EnumerateAllUsages.
 func TestWithRecursion(t *testing.T) {
 	res, err := ScanUsages(fixtureEnumProj, "vars.source.branch")
 	if err != nil {

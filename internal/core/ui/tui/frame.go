@@ -22,9 +22,8 @@ import (
 // OUTSIDE the composite (so it is never dimmed), and returns a tea.View whose
 // envelope fields (AltScreen, MouseMode) the framework owns.
 
-// frameOptions are the private construction knobs for a [Frame]. They are
-// defined here (not in RunOptions, Task 8) so the package builds in isolation
-// after this task; Task 8's Run maps its public RunOptions into this struct.
+// frameOptions are the private construction knobs for a [Frame]. [Run] maps its
+// public [RunOptions] into this struct.
 type frameOptions struct {
 	// mouse enables CellMotion mouse reporting (click + wheel, no motion) when
 	// the terminal is capable. Set per-program via RunOptions.Mouse; the
@@ -75,8 +74,7 @@ func withLocale(s string) frameOption { return func(o *frameOptions) { o.locale 
 // doubleClickWindow is the maximum interval between two left-clicks in the same
 // panel cell that triggers a double-click Select. 400ms matches the common OS
 // double-click default and tested comfortably for tree-toggle / list-run.
-// Chosen value for the Stage 3 pilot; final on-device feel sign-off is a
-// Post-Completion item.
+// The value is provisional — final on-device feel sign-off is still open.
 const doubleClickWindow = 400 * time.Millisecond
 
 // wheelCoalesceInterval bounds how often a buffered mouse-wheel flood produces a
@@ -143,9 +141,8 @@ type Frame struct {
 	wheelAccum     map[PanelID]int
 	wheelTickArmed bool
 
-	// tr / locale resolve help-modal display strings. Stage 0 uses a
-	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
-	// thread real wiring through here.
+	// tr / locale resolve help-modal display strings. A nil translator falls back
+	// to i18n.NopTranslator and an empty locale to "en" (see newFrame).
 	tr     i18n.Translator
 	locale string
 }
@@ -216,7 +213,7 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 func (f *Frame) mouseCapable() bool { return f.opts.termEnv() != "dumb" }
 
 // Init implements tea.Model. It delegates to the plugin so plugin startup
-// commands run; the framework has no startup command of its own this stage.
+// commands run; the framework has no startup command of its own.
 func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 
 // Update implements tea.Model.

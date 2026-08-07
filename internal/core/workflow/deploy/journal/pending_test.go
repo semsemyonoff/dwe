@@ -40,7 +40,7 @@ func TestAddPendingOp_FirstRestart(t *testing.T) {
 }
 
 func TestAddPendingOp_MixedBatch(t *testing.T) {
-	// Add restart then deploy — both kinds must be preserved (tenth review regression).
+	// Add restart then deploy — both kinds must be preserved.
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "state.yml")
 
@@ -390,7 +390,6 @@ func TestPendingApply_Find_NilReceiver(t *testing.T) {
 // leaves the state unchanged. We simulate this by making the path a directory.
 func TestAddPendingOps_WriteFailureRegression(t *testing.T) {
 	tmpDir := t.TempDir()
-	// Use a subdirectory as the "file" path — Save will fail trying to write there.
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	// Pre-seed valid state.
@@ -410,8 +409,9 @@ func TestAddPendingOps_WriteFailureRegression(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestClearPendingOps_WriteFailureRegression verifies that a write failure during
-// ClearPendingOps leaves state unchanged.
+// TestClearPendingOps_WriteFailureRegression asserts only that a multi-op
+// clear on valid input succeeds and rewrites the state file — no write
+// failure is injected (there is no seam for one).
 func TestClearPendingOps_WriteFailureRegression(t *testing.T) {
 	tmpDir := t.TempDir()
 	statePath := filepath.Join(tmpDir, "state.yml")
@@ -426,10 +426,8 @@ func TestClearPendingOps_WriteFailureRegression(t *testing.T) {
 	originalData, err := os.ReadFile(statePath)
 	require.NoError(t, err)
 
-	// Make it read-only to cause Save to fail.
-	// We'll test indirectly: just confirm existing state is valid post-failure.
-	// Since we can't easily inject errors in unit tests without seams, we verify
-	// that a no-error call on valid input succeeds (smoke test).
+	// No seam exists to inject a Save failure here, so this stays a smoke test:
+	// a no-error call on valid input must apply the clear.
 	clears := []PendingClear{
 		{Kind: PendingDeploy, Services: []string{"a"}},
 		{Kind: PendingRestart},

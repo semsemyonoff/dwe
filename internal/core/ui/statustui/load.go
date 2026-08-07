@@ -199,8 +199,7 @@ func buildTabsCmd(ctx context.Context, d Deps, gen uint64) tea.Cmd {
 // 1=Deploy, 2=Topology, 3=Git, 4=Daemons) from snap, at the given width. It
 // is pure: no Docker or git probe, no side effect, safe to call once per
 // render. Titles, warning prefixes, and empty-section placeholders are
-// composed here, matching what buildTabs used to do before rendering moved
-// to render time.
+// composed here.
 func renderTab(snap tabSnapshot, index, width int) (body string, anchors []int) {
 	switch index {
 	case 0:

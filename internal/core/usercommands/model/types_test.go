@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 func mustParse(t *testing.T, yaml string) *CommandFile {
 	t.Helper()
 	cf, err := ParseCommandFile([]byte(yaml))
@@ -18,10 +14,6 @@ func mustParse(t *testing.T, yaml string) *CommandFile {
 	}
 	return cf
 }
-
-// ---------------------------------------------------------------------------
-// Type constant tests
-// ---------------------------------------------------------------------------
 
 func TestCommandTypeConstants(t *testing.T) {
 	types := []CommandType{
@@ -1098,10 +1090,6 @@ commands:
 	}
 }
 
-// ---------------------------------------------------------------------------
-// WorkflowParallel tests
-// ---------------------------------------------------------------------------
-
 func TestParseYAML_WorkflowParallel_Valid(t *testing.T) {
 	yaml := `
 commands:
@@ -1294,10 +1282,6 @@ func TestValidate_Workflow_WithParallelStep(t *testing.T) {
 		t.Errorf("expected workflow with parallel step to validate, got %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// File spec validation tests
-// ---------------------------------------------------------------------------
 
 func TestFileAccessConstants(t *testing.T) {
 	modes := []FileAccess{FileAccessRead, FileAccessWrite, FileAccessReadWrite}
@@ -1964,10 +1948,6 @@ func TestValidate_NoFiles_EnvConflictParamVsContext(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ComposeArgs Tests
-// ---------------------------------------------------------------------------
-
 func TestParseYAML_ServiceExec_WithComposeArgs(t *testing.T) {
 	yaml := `
 commands:
@@ -2150,10 +2130,6 @@ func TestValidate_WorkdirRejectedOnDwe(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Strict YAML decode — legacy field rejection
-// ---------------------------------------------------------------------------
-
 func TestParseCommandFile_StrictDecode_LegacyRunField(t *testing.T) {
 	yaml := `
 commands:
@@ -2201,10 +2177,6 @@ func TestValidate_LegacyCommandType(t *testing.T) {
 		t.Errorf("expected 'unknown type' error, got %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Per-type field allowlist validation
-// ---------------------------------------------------------------------------
 
 func TestParseCommandFile_PerTypeAllowlist_Shell(t *testing.T) {
 	// Valid: shell with cmd
@@ -2581,19 +2553,11 @@ commands:
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 // setID returns a copy of cmd with ID set (used in test helpers).
 func setID(cmd CommandDef, id string) CommandDef {
 	cmd.ID = id
 	return cmd
 }
-
-// ---------------------------------------------------------------------------
-// ParamWidget constants
-// ---------------------------------------------------------------------------
 
 func TestParamWidgetConstants(t *testing.T) {
 	widgets := []ParamWidget{WidgetInput, WidgetSelect, WidgetMultiselect, WidgetConfirm}
@@ -2604,10 +2568,6 @@ func TestParamWidgetConstants(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// ParamOptions.UnmarshalYAML tests
-// ---------------------------------------------------------------------------
 
 func TestParamOptions_UnmarshalYAML_Null(t *testing.T) {
 	yaml := `
@@ -2790,10 +2750,6 @@ commands:
 		t.Errorf("expected error about mapping, got %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// ParamDef.EffectiveWidget tests
-// ---------------------------------------------------------------------------
 
 func TestParamDef_EffectiveWidget_Explicit(t *testing.T) {
 	tests := []struct {
@@ -3084,10 +3040,6 @@ func TestValidate_Params_MultiselectWithSeparator(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// argv_append_from
-// ---------------------------------------------------------------------------
 
 // TestParseCommandFile_ArgvAppendFrom: the field must survive the strict
 // decoder and the per-type allowlist on every type that builds an argv.

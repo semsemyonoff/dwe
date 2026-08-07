@@ -172,8 +172,7 @@ func TestLayoutPanels_RespectsBodyOffset(t *testing.T) {
 	}
 }
 
-// itoa is a tiny local helper so test files pull in no extra imports (mirrors
-// cmdbrowser/border_width_test.go).
+// itoa is a tiny local helper so test files pull in no extra imports.
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

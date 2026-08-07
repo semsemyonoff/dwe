@@ -92,7 +92,6 @@ func emitZshFpathHint(cmd *cobra.Command, targetPath string) {
 			return
 		}
 	}
-	// Print the fpath hint.
 	errW := cmd.ErrOrStderr()
 	_, _ = fmt.Fprintf(errW, "\nTo enable completions, add the following to %s:\n\n", zshrc)
 	_, _ = fmt.Fprintf(errW, "    fpath=(%s $fpath)\n", installDir)

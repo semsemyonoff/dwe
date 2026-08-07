@@ -86,12 +86,14 @@ func (v tableView) renderRecord(row, budget, labelWidth int) string {
 // joined with " · " (skipping empty and "—" cells) and wrapped together as
 // plain text at budget, with continuation lines indented by recordIndent.
 //
-// Title cells are intentionally rendered unstyled here: wrapping requires
-// plain input (see the ANSI-unsafe invariant documented on the wrap helpers
-// in table_wrap.go — style is always applied after wrapping, never before),
-// and multiple title cells sharing one wrapped line cannot be attributed
-// back to distinct per-cell styles once merged. The glyph is exempt because
-// it is never wrapped: styling it before composition is safe.
+// Title cells are intentionally rendered unstyled here: the wrap helpers
+// measure with lipgloss.Width but slice on rune boundaries, so a break can
+// land between a style-open and its reset (pinned by
+// TestSplitDisplayWidth_ANSIInputIsUnsupported) — style is therefore always
+// applied after wrapping, never before. Multiple title cells sharing one
+// wrapped line also cannot be attributed back to distinct per-cell styles
+// once merged. The glyph is exempt because it is never wrapped: styling it
+// before composition is safe.
 func (v tableView) recordHeaderLine(row, budget int) string {
 	glyph, hasGlyph := v.recordGlyphPrefix(row)
 	title := v.recordTitleText(row)

@@ -55,10 +55,9 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 // empty bordered box. Used by `dwe validate`.
 //
 // The render mode is decided once, across every domain, rather than per
-// domain: a table immediately above a record block reads as a bug (see
-// § Mode decision is per render call, not per table). If any single domain
-// cannot fit as a table at the shared budget, every domain renders as
-// records.
+// domain: a table immediately above a record block reads as a bug. If any
+// single domain cannot fit as a table at the shared budget, every domain
+// renders as records.
 //
 // Budget is resolved from stdout, not stderr: unlike DiagnosticsTable, this
 // renderer's only call site (`dwe validate`) writes to cmd.OutOrStdout(). The
@@ -113,16 +112,16 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 // DOMAIN column. STATUS is always column 0 (its centering/glyph styling keys
 // off that), so dropping DOMAIN shifts only the prose columns.
 //
-// Budget is resolved from stderr, not stdout: DiagnosticsTable is the sole
-// stderr consumer among the six renderers — all three of its call sites
-// (preflight, deploy menu ×2) write diagnostics to stderr.
+// Budget is resolved from stderr, not stdout: DiagnosticsTable is the only
+// renderer in this package whose sink is stderr — all three of its call
+// sites (preflight, deploy menu ×2) write diagnostics to stderr.
 func diagnosticsTable(rows []DiagnosticRow, showDomain bool) string {
 	return diagnosticsTableView(rows, showDomain).Render(stderrBudget())
 }
 
 // diagnosticsTableView builds the tableView backing diagnosticsTable. Split
-// out so a future caller (DiagnosticsByDomain) can inspect fit/Render per
-// domain without duplicating the column-spec construction.
+// out so DiagnosticsByDomain can inspect fit/Render per domain without
+// duplicating the column-spec construction.
 func diagnosticsTableView(rows []DiagnosticRow, showDomain bool) tableView {
 	stringRows := make([][]string, len(rows))
 	severities := make([]validate.Severity, len(rows))

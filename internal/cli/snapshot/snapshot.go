@@ -19,10 +19,6 @@ import (
 )
 
 // NewCmd builds the `dwe snapshot` command group.
-//
-// Read-only subcommands (list, current, inspect) ship in this task; the
-// mutating subcommands (create, restore, rollback, remove, pack, unpack) are
-// added by later tasks in the snapshot subsystem plan.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
@@ -404,8 +400,8 @@ func looksLikeTarArchive(s string) bool {
 
 // snapshotNameCompletion returns shell completion for the snapshot <name>
 // argument. Follows the CLAUDE.md completion contract (calls
-// completionConfigPath before touching the project; returns NoFileComp on
-// any error so tab-complete is never noisy).
+// cmdctx.CompletionConfigPath before touching the project; returns NoFileComp
+// on any error so tab-complete is never noisy).
 func snapshotNameCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {

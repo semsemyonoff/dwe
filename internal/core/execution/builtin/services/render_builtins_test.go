@@ -60,8 +60,6 @@ func renderExecCtx(t *testing.T, root string, raw map[string]any, generated map[
 	}, buf
 }
 
-// --- ConfigsRender ---
-
 func TestServiceConfigsRender_Validate(t *testing.T) {
 	b := ConfigsRender{}
 	if err := b.Validate(nil); err == nil {
@@ -119,8 +117,6 @@ func TestServiceConfigsRender_Run_NoPack_SkipsCleanly(t *testing.T) {
 	}
 }
 
-// --- ConfigsRenderCheck ---
-
 func TestServiceConfigsRenderCheck_Validate(t *testing.T) {
 	b := ConfigsRenderCheck{}
 	if err := b.Validate(nil); err == nil {
@@ -171,8 +167,6 @@ func TestServiceConfigsRenderCheck_Run_NoPack_NoOp(t *testing.T) {
 		t.Fatalf("check with no pack should be a no-op: %v", err)
 	}
 }
-
-// --- GeneratedHarvest ---
 
 func TestServiceGeneratedHarvest_Validate(t *testing.T) {
 	b := GeneratedHarvest{}

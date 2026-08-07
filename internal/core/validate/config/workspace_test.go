@@ -281,8 +281,8 @@ docs:
 
 // TestWorkspaceValidator_UnknownRootKey asserts that a strict-root violation
 // (a custom key not under vars:) surfaces as a SeverityError diagnostic via the
-// LoadConfig-error path. The check itself lives in the loader (Task 1); the
-// validator only mirrors load errors as diagnostics-as-data.
+// LoadConfig-error path. The check itself lives in the loader; the validator
+// only mirrors load errors as diagnostics-as-data.
 func TestWorkspaceValidator_UnknownRootKey(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
@@ -311,7 +311,7 @@ db:
 
 // TestWorkspaceValidator_BadUpdateMode asserts that an out-of-range update.mode
 // surfaces as a SeverityError diagnostic via the LoadConfig-error path. The
-// load-time value check lives in the loader (Task 3).
+// load-time value check lives in the loader.
 func TestWorkspaceValidator_BadUpdateMode(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
@@ -1309,8 +1309,8 @@ func TestInfoValidator_decodeStates(t *testing.T) {
 	}
 }
 
-// TestInfoValidator_absentFileStaysInformational confirms Task 10 left the
-// missing-file case untouched — only the present-file verdict was inverted.
+// TestInfoValidator_absentFileStaysInformational pins that an absent info.yml
+// stays a SeverityInfo diagnostic — only the present-file verdicts are graded.
 func TestInfoValidator_absentFileStaysInformational(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

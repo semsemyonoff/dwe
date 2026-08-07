@@ -148,9 +148,9 @@ func TestStepForcesRun(t *testing.T) {
 			want: true,
 		},
 		{
-			// The 5 observed steps that carry a when: and deliberately no
-			// check: must keep their journal skip — when: stays a pure
-			// conditional, and check: auto is opt-in precisely because of them.
+			// A step that carries a when: and deliberately no check: must keep
+			// its journal skip — when: stays a pure conditional, and check: auto
+			// is opt-in precisely because of such steps.
 			name: "when without check does not force run",
 			rs: ResolvedStep{
 				Step: config.DeployStep{

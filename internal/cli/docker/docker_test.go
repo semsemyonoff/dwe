@@ -106,7 +106,6 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 
 // TestDockerEnvRegenCommands verifies .env regeneration triggers for the hardcoded command list.
 func TestDockerEnvRegenCommands(t *testing.T) {
-	// Task 17: .env is now hardcoded to regenerate for {up, run, exec, restart, build}.
 	tests := []struct {
 		command string
 		want    bool
@@ -727,7 +726,7 @@ func writeDockerStub(t *testing.T, body string) string {
 	return path
 }
 
-// composeConfigCase is a one-service compose config JSON with an inline
+// composeConfigOneRef is a one-service compose config JSON with an inline
 // Dockerfile FROM golang:1.22 — used by prepullBases tests that don't care
 // about parser edge cases, only about the derive -> inspect -> pull wiring.
 const composeConfigOneRef = `{"services":{"api":{"build":{"context":"/unused","dockerfile_inline":"FROM golang:1.22\n"}}}}`

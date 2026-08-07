@@ -175,9 +175,9 @@ func (r *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 			// canonical "command not found" error there.
 			//
 			// Skip path emits OnStepEnd only — matching the when:false and
-			// override-gate skip paths above. Per CLAUDE.md, every early-
-			// continue branch emits OnStepEnd; OnStepStart is reserved for
-			// steps that actually begin work.
+			// override-gate skip paths above. Per docs/internals/packages.md,
+			// every early-continue branch emits OnStepEnd; OnStepStart is
+			// reserved for steps that actually begin work.
 			if targetDef, lookupErr := rc.Registry.Get(step.Command); lookupErr == nil && targetDef.Hidden {
 				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ workflow %q step[%d] %q: skipped (target hidden)\n",
 					rc.Cmd.ID, i, step.Command)

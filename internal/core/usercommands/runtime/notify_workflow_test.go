@@ -8,9 +8,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// TestWorkflowRunner_SubStep_SkipNotifyIsSet verifies that workflow sub-steps
-// suppress notifications even when their underlying command has notify: true.
-// The workflow command itself is not opted in, so zero events fire.
+// TestWorkflowRunner_SubStep_SuppressesNotifyTrueLeaf verifies that workflow
+// sub-steps suppress notifications even when their underlying command has
+// notify: true. The workflow command itself is not opted in, so zero events fire.
 func TestWorkflowRunner_SubStep_SuppressesNotifyTrueLeaf(t *testing.T) {
 	rec := installRecordingNotifier(t)
 
@@ -102,7 +102,7 @@ func TestWorkflowRunner_SubStep_SetsSkipNotify(t *testing.T) {
 	}
 }
 
-// TestWorkflowRunner_SubStep_TopLevelNotifyFires uses RunCommand for the
+// TestRunCommand_WorkflowParent_NotifyOnlyOnce uses RunCommand for the
 // outer workflow so the top-level notifier fires, but the inner leaf with
 // notify: true must NOT add a second event.
 func TestRunCommand_WorkflowParent_NotifyOnlyOnce(t *testing.T) {

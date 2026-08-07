@@ -132,7 +132,7 @@ type RunOptions struct {
 }
 
 // Form is a form built by Build: runnable via Run, or introspectable via
-// Huh()/Result() so Stage 7 can embed it as a capturing-overlay child model
+// Huh()/Result() so callers can embed it as a capturing-overlay child model
 // (driving Update/View directly instead of calling Run).
 type Form struct {
 	huh      *huh.Form
@@ -140,8 +140,7 @@ type Form struct {
 	empty    bool // true when built from zero fields; Run short-circuits without invoking huh
 }
 
-// Build constructs a Form from fields and opts without running it. Mirrors
-// the validation and construction Run used to do inline; Run is now
+// Build constructs a Form from fields and opts without running it; Run is
 // Build + (*Form).Run.
 func Build(title string, fields []Field, opts RunOptions) (*Form, error) {
 	if opts.Input == nil {
@@ -151,14 +150,12 @@ func Build(title string, fields []Field, opts RunOptions) (*Form, error) {
 		opts.Output = os.Stdout
 	}
 
-	// Validate that no field has FieldUnknown.
 	for _, f := range fields {
 		if f.Kind == FieldUnknown {
 			return nil, fmt.Errorf("field %q: kind is FieldUnknown (zero value)", f.Key)
 		}
 	}
 
-	// Handle empty field list early.
 	if len(fields) == 0 {
 		return &Form{empty: true}, nil
 	}
@@ -206,7 +203,7 @@ func (f *Form) Run(ctx context.Context) (Result, error) {
 	return f.Result(), nil
 }
 
-// Huh exposes the underlying huh.Form. Stage 7 embeds this as a
+// Huh exposes the underlying huh.Form for callers that embed it as a
 // capturing-overlay child model instead of calling Run.
 func (f *Form) Huh() *huh.Form {
 	return f.huh

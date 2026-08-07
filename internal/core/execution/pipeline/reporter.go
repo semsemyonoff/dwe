@@ -67,7 +67,7 @@ type Reporter interface {
 	// final=true marks a `\n`-terminated committed line; final=false marks an
 	// in-progress `\r` redraw frame (or the trailing non-terminated tail
 	// emitted by lineTee.Flush at end-of-stream). Used for both sequential
-	// steps (Task 6) and parallel sub-steps.
+	// steps and parallel sub-steps.
 	StepOutput(stepAddr string, frame string, final bool)
 
 	// SetSubStepLogPath records the absolute path of the per-sub-step log file

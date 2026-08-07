@@ -80,9 +80,8 @@ func TestOutputFlag_JSON_SilencesErrors(t *testing.T) {
 	}
 }
 
-// TestOutputFlag_Text_DoesNotSilenceErrors verifies that the default text mode
-// does not force-set SilenceErrors/SilenceUsage (fang may still set them, but
-// PersistentPreRunE must not do it for text mode).
+// TestOutputFlag_Text_DoesNotSetNoColor verifies that the default text mode
+// does not set NO_COLOR — only --output json does (see PersistentPreRunE).
 func TestOutputFlag_Text_DoesNotSetNoColor(t *testing.T) {
 	t.Chdir(t.TempDir())
 

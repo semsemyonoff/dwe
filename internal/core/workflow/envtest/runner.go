@@ -123,9 +123,9 @@ type ScenarioResult struct {
 // cleanup releases every resource the factory opened (including the reporter
 // itself) and must be called exactly once.
 //
-// The CLI (stage-1b Task 8) injects a silent variant in JSON output mode
-// (screen writer = io.Discard, subprocOut = log only) so live pipeline output
-// never leaks into JSON stdout, while the file log keeps recording. A nil
+// The CLI injects a silent variant in JSON output mode (screen writer =
+// io.Discard, subprocOut = log only) so live pipeline output never leaks into
+// JSON stdout, while the file log keeps recording. A nil
 // RunRequest.ReporterFactory uses defaultReporterFactory.
 type ReporterFactory func(workDir, name string) (rep pipeline.Reporter, logWriter, subprocOut io.Writer, cleanup func(), err error)
 
@@ -245,7 +245,7 @@ type Runner struct {
 	execDwe         execDweFunc
 	allocatePorts   func(n int) ([]int, error)
 	newTeardownDeps func(manifestPath string, log io.Writer) TeardownDeps
-	// collectReport is the stage-2 failure-report seam. It is nil-checked at
+	// collectReport is the failure-report seam. It is nil-checked at
 	// the call site — runner_test.go has no shared constructor and builds
 	// &Runner{...} literals directly, several of which reach finish() on a
 	// non-passed status; production NewRunner always sets it, so a nil seam
@@ -377,7 +377,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 
 	// From here on, a prep failure must best-effort remove the copy itself:
 	// no manifest exists yet, so the manifest-driven Teardown cannot find it
-	// (and stage-2 `dwe test clean` would otherwise never see the leftover).
+	// (and `dwe test clean` would otherwise never see the leftover).
 	prepFail := func(stage string, err error) (*ScenarioResult, error) {
 		if rmErr := os.RemoveAll(copyRoot); rmErr != nil {
 			warn(fmt.Sprintf("removing copy after %s failure: %v", stage, rmErr))

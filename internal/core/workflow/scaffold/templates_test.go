@@ -114,7 +114,7 @@ func TestMapEmbedPath(t *testing.T) {
 
 func TestRenderPlan_EmbeddedFSLoads(t *testing.T) {
 	// Smoke test: the real embedded FS walks and renders without error for
-	// representative Options. Content assertions live in later tasks.
+	// representative Options. Content assertions live in templates_content_test.go.
 	plan, err := renderPlan(newTestOptions())
 	if err != nil {
 		t.Fatalf("renderPlan on embedded FS: %v", err)

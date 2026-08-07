@@ -37,8 +37,6 @@ func makeCfgWithService(name, dir string, dirs []string) *config.DweConfig {
 	}
 }
 
-// ---- Validate ------------------------------------------------------------
-
 func TestServiceDirsEnsureValidate(t *testing.T) {
 	b := DirsEnsure{}
 
@@ -64,8 +62,6 @@ func TestServiceDirsEnsureValidate(t *testing.T) {
 	}
 }
 
-// ---- Describe ------------------------------------------------------------
-
 func TestServiceDirsEnsureDescribe(t *testing.T) {
 	b := DirsEnsure{}
 	got := b.Describe(map[string]any{"service": "main", "mode": "skip"})
@@ -81,8 +77,6 @@ func TestServiceDirsEnsureDescribe(t *testing.T) {
 		t.Errorf("Describe() default mode = %q, want %q", got, want)
 	}
 }
-
-// ---- buildDirList --------------------------------------------------------
 
 func TestBuildDirList(t *testing.T) {
 	cases := []struct {
@@ -131,8 +125,6 @@ func TestBuildDirList(t *testing.T) {
 		})
 	}
 }
-
-// ---- Security validation -------------------------------------------------
 
 func TestValidateRelDir(t *testing.T) {
 	cases := []struct {
@@ -211,8 +203,6 @@ func TestServiceDirsEnsureRun_SkipExisting(t *testing.T) {
 	}
 }
 
-// ---- Run: error mode -----------------------------------------------------
-
 func TestServiceDirsEnsureRun_ErrorMode_ExistingDir(t *testing.T) {
 	b := DirsEnsure{}
 	root := t.TempDir()
@@ -254,8 +244,6 @@ func TestServiceDirsEnsureRun_ErrorMode_CreatesMissingDirs(t *testing.T) {
 		}
 	}
 }
-
-// ---- Run: recreate mode --------------------------------------------------
 
 func TestServiceDirsEnsureRun_RecreateMode(t *testing.T) {
 	b := DirsEnsure{}
@@ -317,8 +305,6 @@ func TestServiceDirsEnsureRun_RecreateMode_MandatoryDirsSafe(t *testing.T) {
 		t.Errorf("sentinel in mandatory src dir must survive recreate: %v", err)
 	}
 }
-
-// ---- Run: error cases ----------------------------------------------------
 
 func TestServiceDirsEnsureRun_UnknownService(t *testing.T) {
 	b := DirsEnsure{}
@@ -382,8 +368,6 @@ func TestServiceDirsEnsureRun_PathTraversalInDirs(t *testing.T) {
 	}
 }
 
-// ---- ensureInsideBase -------------------------------------------------------
-
 func TestEnsureInsideBase_Escaping(t *testing.T) {
 	base := "/tmp/project"
 	abs := "/tmp/other"
@@ -399,8 +383,6 @@ func TestEnsureInsideBase_Valid(t *testing.T) {
 		t.Errorf("unexpected error for valid path: %v", err)
 	}
 }
-
-// ---- ensureDir edge cases ---------------------------------------------------
 
 func TestEnsureDir_ExistsNotDir(t *testing.T) {
 	root := t.TempDir()

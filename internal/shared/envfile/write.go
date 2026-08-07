@@ -26,7 +26,6 @@ func Write(cfg *config.DweConfig, outputPath string) error {
 
 // Regenerate reloads config from configPath, writes .env next to it,
 // and returns the absolute path of the written file.
-// It replaces regenEnv(configPath, baseDir) — baseDir is implied by configPath's directory.
 func Regenerate(configPath string) (string, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {

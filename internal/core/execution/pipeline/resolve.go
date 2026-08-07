@@ -278,8 +278,8 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 		subs = append(subs, rs)
 	}
 	if len(subs) < 2 {
-		// Line 152 already rejects groups with fewer than 2 declared sub-steps, so
-		// reaching here means template when: evaluation filtered out sub-steps.
+		// The declared-count guard above already rejects groups with fewer than
+		// two sub-steps, so reaching here means template when: filtered some out.
 		return nil, fmt.Errorf("step %s: %w (%d of %d sub-step(s) remain after when: filtering)",
 			prefix, ErrEmptyParallelSteps, len(subs), len(step.Parallel.Steps))
 	}
@@ -311,13 +311,12 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 }
 
 // resolveStepWhen evaluates a step's `when:` at plan time. A runtime condition
-// is rendered into a copy (Task 2b: ${...} in a shell/builtin when.cmd is
-// substituted the same as cmd/with/check) and returned as runtimeWhen (to
-// attach to the resolved step) with keep=true; a template condition is
-// evaluated immediately and keep reports whether the step survives filtering
-// (keep=false when it evaluates to false). prefix names the step for error
-// messages. when: nil or a non-template/non-runtime condition yields
-// (nil, true, nil).
+// is rendered into a copy (${...} in a shell/builtin when.cmd is substituted
+// the same as cmd/with/check) and returned as runtimeWhen (to attach to the
+// resolved step) with keep=true; a template condition is evaluated immediately
+// and keep reports whether the step survives filtering (keep=false when it
+// evaluates to false). prefix names the step for error messages. when: nil or
+// a non-template/non-runtime condition yields (nil, true, nil).
 func resolveStepWhen(cfg *config.DweConfig, step config.DeployStep, prefix string) (runtimeWhen *condition.Condition, keep bool, err error) {
 	if step.When == nil {
 		return nil, true, nil

@@ -202,8 +202,6 @@ func TestStopTimeoutSeconds(t *testing.T) {
 	}
 }
 
-// --- helpers ---
-
 func mustContainOrdered(t *testing.T, args []string, want ...string) {
 	t.Helper()
 	if !hasInOrder(args, want...) {

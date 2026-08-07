@@ -13,8 +13,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 )
 
-// --- Classify ---
-
 func TestClassify_emptyIsTemplate(t *testing.T) {
 	kind, payload := condition.Classify("")
 	if kind != condition.KindTemplate {
@@ -89,8 +87,6 @@ func TestClassify_leadingSpaceTrimmed(t *testing.T) {
 	}
 }
 
-// --- IsRuntime ---
-
 func TestIsRuntime(t *testing.T) {
 	cases := []struct {
 		expr string
@@ -113,8 +109,6 @@ func TestIsRuntime(t *testing.T) {
 		}
 	}
 }
-
-// --- EvalBuiltin ---
 
 func TestEvalBuiltin_dirExists(t *testing.T) {
 	root := t.TempDir()
@@ -309,8 +303,6 @@ func TestEvalBuiltin_absolutePath(t *testing.T) {
 	}
 }
 
-// --- EvalBuiltin: generated-missing ---
-
 // writeGeneratedStore writes a .dwe/generated.yml under root with the given
 // service→field→value entries.
 func writeGeneratedStore(t *testing.T, root string, services map[string]map[string]string) {
@@ -433,8 +425,6 @@ func TestEvalBuiltin_generatedMissing_isRuntimeAndRoutes(t *testing.T) {
 	}
 }
 
-// --- EvalCmd ---
-
 func TestEvalCmd_successExitZero(t *testing.T) {
 	root := t.TempDir()
 	ok, err := condition.EvalCmd("exit 0", root)
@@ -489,8 +479,6 @@ func TestEvalCmd_fileTestFalse(t *testing.T) {
 		t.Error("EvalCmd: expected false for test -f missing file")
 	}
 }
-
-// --- EvalRuntime ---
 
 func TestEvalRuntime_builtin(t *testing.T) {
 	root := t.TempDir()

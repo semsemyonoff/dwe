@@ -628,8 +628,9 @@ func (c *DweConfig) AppServices() map[string]ServiceConfig {
 }
 
 // ToolServices returns the subset of c.Services whose Type is "tool".
-// The name deliberately does not shadow the deleted .Tools field so the
-// acceptance grep can still flag stale `.Tools` references.
+// Deliberately not named Tools: a method of that name would make templates
+// spell `.Tools` legitimately again, defeating the grep guard against the
+// removed accessor (execution/templates/ide/source_regression_test.go).
 func (c *DweConfig) ToolServices() map[string]ServiceConfig {
 	return filterServicesByType(c.Services, ServiceTypeTool)
 }
@@ -692,8 +693,8 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	// Group by type: tools, then infra, then apps; sorted by name within each group.
 	// Services with an empty Type are emitted last in the same pass as apps so
 	// tests that build ServiceConfig literals without setting Type still work.
-	// Order is part of the public surface — see Task 6 in
-	// docs/plans/2026-05-22-unified-services-schema.md.
+	// Order is part of the public surface — overlay precedence depends on it
+	// (pinned by TestComposeFiles_grouped_tool_infra_app).
 	emitGroup := func(match func(ServiceType) bool) {
 		for _, name := range slices.Sorted(maps.Keys(c.Services)) {
 			svc := c.Services[name]
@@ -1883,8 +1884,9 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 // Ports and hosts are deliberately overridable: a developer commonly needs
 // to change a port that clashes with something already bound on their host,
 // or switch the `*.local` hostname they use, without editing the shared
-// workspace/services.yml. Each is deep-merged by port-name / host-name on top
-// of the declared map so a partial override only touches the listed entries.
+// workspace/services/<name>/service.yml. Each is deep-merged by port-name /
+// host-name on top of the declared map so a partial override only touches the
+// listed entries.
 var OverlayAllowedKeys = map[string]bool{
 	"enabled": true,
 	"ports":   true,
@@ -1893,9 +1895,9 @@ var OverlayAllowedKeys = map[string]bool{
 
 // validateServicesOverlay rejects any non-overlay-allowed field under a
 // layer's services.<name> mapping, any services.<name> entry naming a
-// service not declared in workspace/services.yml, and malformed ports/hosts
-// blocks. layerPath is included in error messages so the user knows which
-// file to edit.
+// service not declared in workspace/services/<name>/service.yml, and malformed
+// ports/hosts blocks. layerPath is included in error messages so the user knows
+// which file to edit.
 //
 // isLocal is true when this layer is `workspace/local.yml`. It gates the
 // per-service `compose:` block to local.yml only — that key is per-developer
@@ -3013,9 +3015,10 @@ func ValidUpdateMode(s string) bool {
 	return false
 }
 
-// loadDeployConfigDecode does the strict YAML decode + shape validation for any
-// pipeline file. It permits all fields including After; context-specific callers
-// enforce restrictions on top of this. NOT exported.
+// loadProjectDeployConfigDecode does the strict YAML decode + shape validation
+// for pipeline files using the ProjectDeployConfig shape: workspace/deploy.yml,
+// workspace/reset.yml and per-service reset.yml. That shape carries no After
+// field, so KnownFields(true) rejects `after:` structurally.
 func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeployConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

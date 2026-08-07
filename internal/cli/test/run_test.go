@@ -430,8 +430,8 @@ func TestRunTestRun_PassingScenario_NoReportLine(t *testing.T) {
 
 // --- Exact full-match output tests (pin N=1 byte-identity) ---
 //
-// These require.Equal on the COMPLETE stdout/stderr for the effective<=1
-// paths, so the parallel restructure cannot silently alter a line, newline, or
+// These compare the COMPLETE stdout/stderr for the effective<=1 paths, so a
+// change to the parallel path cannot silently alter a line, newline, or
 // reporter. They drive runTest (the RunE entry) at --parallel 1.
 
 func TestRunTest_Seq_AllPassed_ExactOutput(t *testing.T) {

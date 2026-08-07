@@ -1,12 +1,9 @@
 package render
 
-// Byte-exact golden baseline for all six table renderers, captured before
-// the responsive-tables refactor (see docs/plans/20260804-responsive-tables.md
-// Task 1). Tasks 6-8 use golden equality as their pass/fail criterion: the
-// width budget is 0 (disabled) whenever the sink is not a TTY, tests pin the
-// width seams to non-TTY, so these goldens must survive the whole migration
-// byte-for-byte. If a golden needs regenerating during that migration, the
-// refactor changed behavior and is wrong.
+// Byte-exact goldens for every table renderer. The width budget is 0
+// (disabled) whenever the sink is not a TTY and the tests pin the width
+// seams to non-TTY, so these files must stay byte-stable: a golden that
+// needs regenerating means rendering behavior changed.
 //
 // Regenerate with:
 //

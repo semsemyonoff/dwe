@@ -47,10 +47,6 @@ func runParallelWorkflowCtx(t *testing.T, projectRoot string, reg *Registry, wf 
 	return outBuf.String(), errBuf.String(), err
 }
 
-// ---------------------------------------------------------------------------
-// Validation: workflow parallel YAML
-// ---------------------------------------------------------------------------
-
 func TestWorkflowRunner_Parallel_RunsConcurrently(t *testing.T) {
 	dir := t.TempDir()
 	// Each leaf writes to its own file AND increments a shared counter through a

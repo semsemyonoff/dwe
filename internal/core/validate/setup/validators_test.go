@@ -790,11 +790,10 @@ func TestRequiredConsistentValidator(t *testing.T) {
 	}
 }
 
-// TestValidatorTargetMatchesID locks in the refactor that moved a diagnostic's
-// Target from a hardcoded literal to the embedded baseValidator.id: every
-// emitted diagnostic must carry Target == validator.ID() and Domain == "setup".
-// The per-validator tests above only assert diagnostic counts, so a Target/ID
-// drift would otherwise slip through.
+// TestValidatorTargetMatchesID pins that every emitted diagnostic carries
+// Target == validator.ID() (sourced from the embedded baseValidator.id) and
+// Domain == "setup". The per-validator tests above only assert diagnostic
+// counts, so a Target/ID drift would otherwise slip through.
 func TestValidatorTargetMatchesID(t *testing.T) {
 	cases := []struct {
 		validator validate.Validator

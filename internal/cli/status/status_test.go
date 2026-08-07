@@ -298,8 +298,8 @@ func TestStatusCmd_InfraSubcommandRendersOnlyInfra(t *testing.T) {
 	}
 }
 
-// TestStatusCmd_UnknownToolsCommand_RemovedFromRoot verifies the rename guard:
-// `dwe tools` should error as unknown after the unification.
+// TestStatusCmd_ToolsRootCmdRemoved verifies that `dwe tools` is not a root
+// command: it must error as unknown (the tools view lives at `dwe status tools`).
 func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
 	configPath := statusFixture(t)
 	root := buildStatusTestRoot()
@@ -595,7 +595,7 @@ func TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial(t *testing.T) {
 }
 
 func TestStatus_TopLevel_PlainPath_WritesStopped(t *testing.T) {
-	// No stub override → default real Docker probe fails (no Docker in tests) → stopped.
+	// Every container stubbed as not running → stopped.
 	withStubContainerRunning(t, func(_, _, _ string, _ []string) bool { return false })
 
 	configPath := statusFixture(t)
@@ -787,8 +787,7 @@ func TestStatusCmd_TUI_CleanQuit_NoPlainFallback(t *testing.T) {
 
 // TestStatusCmd_TUI_Cancelled_ExitsClean verifies that a user-initiated cancel
 // (OS SIGINT/SIGTERM, surfaced by tui.Run as widgets.ErrCancelled) exits clean
-// with no error and without the plain-text fallback, matching the pre-Frame
-// mapRunError behavior.
+// with no error and without the plain-text fallback.
 func TestStatusCmd_TUI_Cancelled_ExitsClean(t *testing.T) {
 	forceTUIPath(t)
 	runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error { return widgets.ErrCancelled }

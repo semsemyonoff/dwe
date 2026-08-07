@@ -12,9 +12,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 )
 
-// starterArtefacts are the three service-scoped artefacts task 5 adds: the
-// per-service pipeline skeleton, the ai template pack, and the starter
-// scenario. Paths are the ones a default `dwe init` writes.
+// starterArtefacts are the service-scoped artefacts a default `dwe init`
+// writes: the per-service pipeline skeleton, the ai template pack (manifest +
+// template), and the starter scenario.
 var starterArtefacts = []string{
 	"workspace/services/app/deploy.yml",
 	"workspace/templates/ai/default/manifest.yml",

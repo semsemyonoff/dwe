@@ -6,8 +6,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 )
 
-// --- AggregateHealth ---
-
 func TestAggregateHealth_AllRunning(t *testing.T) {
 	rows := []render.ServiceTableRow{
 		{Name: "main", Mandatory: true, Running: true},
@@ -52,8 +50,6 @@ func TestAggregateHealth_Empty(t *testing.T) {
 		t.Errorf("AggregateHealth(nil) = %d, want HealthStopped (%d)", got, HealthStopped)
 	}
 }
-
-// --- AggregateHealthFromTopo ---
 
 func TestAggregateHealthFromTopo_AllRunning(t *testing.T) {
 	topo := map[string]render.NodeStatus{
@@ -114,8 +110,6 @@ func TestAggregateHealthFromTopo_Empty(t *testing.T) {
 	}
 }
 
-// --- HealthFromStatusInput ---
-
 func TestHealthFromStatusInput_TopoTakesPrecedenceOverRows(t *testing.T) {
 	// Topo says everything running; service rows say nothing running. Topo wins.
 	in := StatusInput{
@@ -158,8 +152,6 @@ func TestHealthFromStatusInput_RowsFallbackWhenTopoOnlyDisabled(t *testing.T) {
 		t.Errorf("HealthFromStatusInput = %d, want HealthStopped (rows fallback when topo is only-disabled), got %d", got, HealthStopped)
 	}
 }
-
-// --- HasRuntimeStatuses ---
 
 func TestHasRuntimeStatuses_EmptyMap(t *testing.T) {
 	if HasRuntimeStatuses(nil) {

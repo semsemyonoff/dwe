@@ -1,6 +1,6 @@
 // Package manifest defines the shared template-pack manifest schema used by
-// AI, IDE, and git renderers. Per-kind constraints (e.g. git's basename-only
-// `to`, no-symlinks rule) live in each kind's wrapper, not here.
+// the ai, ide, git and config renderers. Per-kind constraints (e.g. git's
+// basename-only `to`, no-symlinks rule) live in each kind's wrapper, not here.
 package manifest
 
 import (

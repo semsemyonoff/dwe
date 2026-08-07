@@ -176,7 +176,7 @@ func TestNativeBackend_NotifyCallsBeeep(t *testing.T) {
 	if !strings.Contains(gotTitle, "succeeded") {
 		t.Fatalf("title=%q", gotTitle)
 	}
-	// Project name is now in the title, not the body.
+	// The project name belongs in the title, not the body.
 	if !strings.Contains(gotTitle, "p") {
 		t.Fatalf("title missing project: %q", gotTitle)
 	}
@@ -216,9 +216,8 @@ func TestNativeBackend_TimeoutDoesNotBlock(t *testing.T) {
 		return nil
 	})
 
-	// Shorten the timeout for this test by temporarily replacing the
-	// constant via a small wrapper: we can't change the const, so we
-	// just assert the call returns within timeout + slack.
+	// nativeBackendTimeout is a const and cannot be lowered for the test, so
+	// assert only that notify returns within that timeout plus slack.
 	b := newNativeBackend()
 	start := time.Now()
 	b.notify(context.Background(), Event{Operation: "deploy", Outcome: OutcomeSuccess})

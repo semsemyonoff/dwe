@@ -791,7 +791,7 @@ func TestFrame_Init(t *testing.T) {
 }
 
 // TestRouteWhileCapturing asserts the pure capturing-overlay routing helper
-// classifies messages according to the Stage 1 contract: ctrl+c → hard-quit,
+// classifies messages per the documented contract: ctrl+c → hard-quit,
 // esc → close overlay, everything else (printables, ?, non-key messages) →
 // swallow-to-plugin (registry bypassed).
 func TestRouteWhileCapturing(t *testing.T) {
@@ -847,8 +847,8 @@ func TestRouteWhileCapturing(t *testing.T) {
 }
 
 // TestOverlay_CapturesInputField verifies the CapturesInput field exists on the
-// Overlay type and propagates through the overlayStack so the Stage 3 consumer
-// can inspect it via Top().
+// Overlay type and propagates through the overlayStack so a plugin can inspect
+// it via Top().
 func TestOverlay_CapturesInputField(t *testing.T) {
 	// Non-capturing overlay (default): CapturesInput should be false.
 	plain := Overlay{Content: "plain", Width: 5, Height: 1}
@@ -883,10 +883,9 @@ func TestOverlay_CapturesInputField(t *testing.T) {
 }
 
 // TestFrame_NonCapturingOverlayUnaffected asserts that a non-capturing overlay
-// (CapturesInput == false) continues to use the normal modal-swallow policy:
-// plugin action keys are swallowed (no acting behind the modal), while
-// framework built-ins (help, quit) still work. This verifies that adding the
-// CapturesInput field does not alter existing Stage 0 frame behaviour.
+// (CapturesInput == false) uses the normal modal-swallow policy: plugin action
+// keys are swallowed (no acting behind the modal), while framework built-ins
+// (help, quit) still work.
 func TestFrame_NonCapturingOverlayUnaffected(t *testing.T) {
 	f, p := newTestFrame(t, 80, frameGoldenHeight)
 
@@ -1174,9 +1173,8 @@ func receivedMsg(p *stubPlugin, payload string) bool {
 	return false
 }
 
-// --- mousePlugin: a dedicated test plugin for wheel/click tests (Task 4+) ---
-//
-// We do NOT add Nav/Select to stubPlugin because its Actions feeds the
+// mousePlugin is a dedicated test plugin for the wheel/click tests. We do NOT
+// add Nav/Select to stubPlugin because its Actions feeds the
 // frame_help_open.golden and adding mouse defaults would change that golden,
 // breaking the byte-stable regression guard.
 
@@ -1204,7 +1202,7 @@ type mousePlugin struct {
 	// frame's reset-on-entering-capture transition.
 	captureOnFilter bool
 	// pending is the capturing overlay the plugin will surface on the next
-	// PendingOverlay drain — used by Task 2 overlay-wheel tests.
+	// PendingOverlay drain — used by the overlay-wheel tests.
 	pending *Overlay
 	// republishOnUpdate, when set, is re-marked pending on every Update —
 	// modelling a capturing overlay that republishes a fresh snapshot after a
@@ -1363,10 +1361,10 @@ func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp, X:
 func wheelLeft() tea.Msg  { return tea.MouseWheelMsg{Button: tea.MouseWheelLeft} }
 func wheelRight() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelRight} }
 
-// TestFrame_WheelRouting exercises the immediate pointer-routed wheel dispatch
-// introduced in Task 1 of the mouse-wheel overhaul. Each wheel notch now
-// forwards a WheelMsg{Panel, Delta} synchronously (no tick, no accumulator)
-// to the panel under the pointer, leaving focus unchanged.
+// TestFrame_WheelRouting exercises handleMouse's pointer-routed wheel dispatch
+// (the path taken when the wheelFilter coalescer is not installed, as in these
+// direct-Update tests): each wheel notch forwards a WheelMsg{Panel, Delta} to
+// the panel under the pointer, leaving focus unchanged.
 func TestFrame_WheelRouting(t *testing.T) {
 	t.Run("wheel_down_over_main_panel_forwards_wheel_msg", func(t *testing.T) {
 		// Geometry at 80x24: main outer {0,0,40,23}; (5,5) is inside.
@@ -1520,10 +1518,10 @@ func TestFrame_WheelRouting(t *testing.T) {
 	})
 }
 
-// TestFrame_WheelOverlayRouting exercises the overlay-aware wheel routing added
-// in Task 2: a CapturesInput overlay forwards the raw tea.MouseWheelMsg to the
-// plugin and refreshes the overlay snapshot in-place; a non-capturing overlay
-// swallows the wheel; an active inline filter (no overlay) also swallows.
+// TestFrame_WheelOverlayRouting exercises the overlay-aware wheel routing: a
+// CapturesInput overlay forwards the raw tea.MouseWheelMsg to the plugin and
+// refreshes the overlay snapshot in-place; a non-capturing overlay swallows the
+// wheel; an active inline filter (no overlay) also swallows.
 func TestFrame_WheelOverlayRouting(t *testing.T) {
 	t.Run("capturing_overlay_forwards_raw_wheel_to_plugin", func(t *testing.T) {
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
@@ -1744,7 +1742,7 @@ func TestFrame_WheelFilterCoalescesCapturingOverlay(t *testing.T) {
 	}
 }
 
-// TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.
+// TestFrame_ClickRouting exercises the full click-routing policy.
 func TestFrame_ClickRouting(t *testing.T) {
 	// Coordinates derived from mouseFrameGeometry:
 	//   (5, 5)   → panel main (outer {0,0,40,23})
@@ -2067,11 +2065,11 @@ func TestFrame_ClickRouting(t *testing.T) {
 	})
 }
 
-// TestFrame_PanelClickAndFocusDelivery covers the Task 2 seam: single-click
-// inside a panel's content forwards a PanelClickMsg with panel-local coords and
-// sets focus; a border click sets focus but emits NO PanelClickMsg; Tab emits a
-// FocusChangedMsg; and a double-click moves the cursor (first click) then
-// dispatches Select without a second PanelClickMsg.
+// TestFrame_PanelClickAndFocusDelivery covers the click/focus delivery seam:
+// single-click inside a panel's content forwards a PanelClickMsg with
+// panel-local coords and sets focus; a border click sets focus but emits NO
+// PanelClickMsg; Tab emits a FocusChangedMsg; and a double-click moves the
+// cursor (first click) then dispatches Select without a second PanelClickMsg.
 //
 // Geometry at 80x24 (weights {1,1}):
 //

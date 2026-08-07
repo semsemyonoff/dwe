@@ -24,8 +24,6 @@ func makeMessageCtx(t *testing.T) (spec.ExecContext, *bytes.Buffer) {
 	return ctx, buf
 }
 
-// ---- Validate ---------------------------------------------------------------
-
 func TestMessageValidate(t *testing.T) {
 	b := Message{}
 
@@ -55,8 +53,6 @@ func TestMessageValidate(t *testing.T) {
 	}
 }
 
-// ---- Describe ---------------------------------------------------------------
-
 func TestMessageDescribe(t *testing.T) {
 	b := Message{}
 	got := b.Describe(map[string]any{"level": "info", "text": "hello"})
@@ -65,8 +61,6 @@ func TestMessageDescribe(t *testing.T) {
 		t.Errorf("Describe() = %q, want %q", got, want)
 	}
 }
-
-// ---- Run: all four levels ---------------------------------------------------
 
 func TestMessageRun_AllLevels(t *testing.T) {
 	b := Message{}
@@ -85,8 +79,6 @@ func TestMessageRun_AllLevels(t *testing.T) {
 		})
 	}
 }
-
-// ---- Run: template evaluation in text --------------------------------------
 
 func TestMessageRun_TemplateEvaluation(t *testing.T) {
 	b := Message{}

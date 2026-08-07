@@ -14,8 +14,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-// --- ConfigsCopy.Validate ---
-
 func TestServiceConfigsCopy_Validate_MissingService(t *testing.T) {
 	b := ConfigsCopy{}
 	err := b.Validate(nil)
@@ -53,8 +51,6 @@ func TestServiceConfigsCopy_Validate_DefaultMode(t *testing.T) {
 	}
 }
 
-// --- ConfigsCopy.Describe ---
-
 func TestServiceConfigsCopy_Describe(t *testing.T) {
 	b := ConfigsCopy{}
 	desc := b.Describe(map[string]any{"service": "main", "mode": "update"})
@@ -65,8 +61,6 @@ func TestServiceConfigsCopy_Describe(t *testing.T) {
 		t.Errorf("expected mode in describe, got %q", desc)
 	}
 }
-
-// --- CopyConfigFile ---
 
 func TestCopyConfigFile_Replace(t *testing.T) {
 	dir := t.TempDir()
@@ -221,8 +215,6 @@ func TestCopyConfigFile_Update_NoAdditions(t *testing.T) {
 	}
 }
 
-// --- ConfigsCopy.Run early error paths ---
-
 func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
@@ -273,8 +265,6 @@ func TestServiceConfigsCopy_Run_NoConfigs_Succeeds(t *testing.T) {
 	}
 }
 
-// --- touchFile ---
-
 func TestTouchFile_CreatesFile(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "sub", "file.txt")
@@ -300,8 +290,6 @@ func TestTouchFile_ExistingFileIsNoOp(t *testing.T) {
 		t.Errorf("touchFile should not modify existing file, got: %q", data)
 	}
 }
-
-// --- deprecation notice ---
 
 // setupCopyProject lays down a minimal project: configs/services/main/.env source
 // plus a service dir, and returns the project root.

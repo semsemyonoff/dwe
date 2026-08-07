@@ -156,8 +156,8 @@ func applyOverlayToMapping(mapping *yaml.Node, overlay map[string]any, path []st
 		// appending a new explicit key here would silently shadow the
 		// merge-inherited value (YAML explicit keys override merged ones) —
 		// e.g. `vars set vars.db.port` hiding an inherited vars.db.host subtree.
-		// Reject by default (the plan's documented merge-key guard); the dev can
-		// materialize the merged value explicitly first.
+		// Reject by default; the dev can materialize the merged value explicitly
+		// first.
 		if valNode == nil && mappingHasMergeKey(mapping) {
 			return fmt.Errorf("cannot set %q: parent mapping uses a YAML merge key (<<) and the key may be merge-inherited; materialize it explicitly in local.yml first", strings.Join(childPath, "."))
 		}

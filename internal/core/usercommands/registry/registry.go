@@ -112,11 +112,9 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 func (r *Registry) addCommandFile(cf *model.CommandFile) error {
 	gn := r.ensureGroup(cf.GroupID)
 	// Merge per-field: each non-empty value overrides the prior (last-wins
-	// per field), while empty fields preserve whatever an earlier file set.
-	// Preserves the pre-PR last-wins semantics for Title/Description while
-	// extending the same rule to the new Hide field. This avoids the silent
-	// regression where a sibling file declaring only `group: {hide: ...}`
-	// would wipe a title/description set by an earlier file.
+	// per field), while empty fields preserve whatever an earlier file set —
+	// a sibling file declaring only `group: {hide: ...}` must not wipe the
+	// title/description an earlier file set.
 	if cf.Group.Title != "" {
 		gn.Meta.Title = cf.Group.Title
 	}

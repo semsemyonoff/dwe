@@ -249,8 +249,6 @@ func TestFilesGateRoundTrip(t *testing.T) {
 	}
 }
 
-// Helper functions.
-
 func requireSpecEqual(a, b RequireSpec) bool {
 	switch av := a.(type) {
 	case RequireRequired:

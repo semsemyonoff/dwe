@@ -40,7 +40,7 @@ func goldenDocs() map[string]string {
 
 // newGoldenBrowser builds a deterministic browser for golden frame tests:
 //   - the mermaid-theme seam is overridden to "dark" so the
-//     auto→HasDarkBackground probe is bypassed (Decision #11);
+//     auto→HasDarkBackground probe is bypassed;
 //   - a nil renderer means the Lookuper check fails and prefetch is skipped
 //     (no goroutine leaks, no async timing in goldens);
 //   - an empty ProjectRoot means no watcher is created;

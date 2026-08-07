@@ -402,7 +402,7 @@ func TestBuildArgs_DoubleDashSeparatorExec(t *testing.T) {
 	// Test: docker exec <svc> -- <cmd with flags>
 	args := c.BuildArgs("exec", "db", "--", "mariadb", "-u", "root", "-h", "localhost")
 
-	// Verify -- is at position 4 (after "exec" and "db")
+	// -- must survive the arg build; its exact index is pinned by the expected argv below.
 	dashDashIndex := -1
 	for i, arg := range args {
 		if arg == "--" {
@@ -481,8 +481,6 @@ func TestBuildArgs_DoubleDashSeparatorRun(t *testing.T) {
 		}
 	}
 }
-
-// --- BinName ---
 
 func TestBinName_ZeroValue(t *testing.T) {
 	c := &Compose{}

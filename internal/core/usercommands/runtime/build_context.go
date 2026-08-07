@@ -76,7 +76,7 @@ func buildRunContext(
 	// referencing project-level config (Raw) and host info resolve before pattern
 	// validation. ${param.*} / ${context.*} are not available here — those belong to
 	// the target command and are what this call is computing. Symmetric with the
-	// workflow step path in runner_workflow.go.
+	// workflow step path in runners/workflow/step.go.
 	renderCtx := &tpl.RenderContext{
 		Raw:           cfg.Raw,
 		Host:          tpl.CurrentHostInfo(),

@@ -53,8 +53,8 @@ const timestampLayout = "06-01-02 15:04:05"
 // inProgress holds the most recent non-final (`\r`) frame for the sub-step,
 // or the trailing tail emitted by lineTee.Flush at end-of-stream. It is
 // display state only — never committed by StepOutput itself; the central
-// commitTrailingTail helper (Task 9) is responsible for flushing it on
-// step-finish events.
+// commitTrailingTail helper is responsible for flushing it on step-finish
+// events.
 type subStepEntry struct {
 	groupAddr     string
 	buf           strings.Builder
@@ -93,7 +93,7 @@ type PlainReporter struct {
 	mu        sync.Mutex // guards every write to w and any future shared state
 	w         *render.Writer
 	logFile   io.Writer        // optional ANSI-stripped side-channel to the global pipeline log file
-	termOut   io.Writer        // raw terminal stream for cursor ANSI (LiveLine in later tasks); io.Discard when non-TTY
+	termOut   io.Writer        // raw terminal stream for LiveLine cursor ANSI; io.Discard when non-TTY
 	ttyMode   bool             // true when termOut is a real TTY (LiveLine block features enabled)
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
@@ -141,10 +141,10 @@ func (p livePrinter) PrintLine(s string) { p.live.PrintlnDiag(s) }
 //
 // screen is the status-line writer (typically wrapping os.Stdout). logFile is
 // the raw global pipeline log file (or nil when logging is disabled); the
-// reporter wraps it with logSanitizer internally so the file on disk receives
-// ANSI-stripped, `\r`-normalised content. termOut is the raw terminal stream
-// reserved for cursor/spinner ANSI sequences in later live-progress tasks; it
-// is io.Discard when stdout is not a TTY.
+// reporter wraps it with liveui.LogSanitizer internally so the file on disk
+// receives ANSI-stripped, `\r`-normalised content. termOut is the raw terminal
+// stream the LiveLine uses for cursor/spinner ANSI; it is io.Discard when
+// stdout is not a TTY.
 func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Writer) *PlainReporter {
 	if termOut == nil {
 		termOut = io.Discard
@@ -318,7 +318,7 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 //
 // Untracked steps (index == 0, total == 0) produce no output. When the step
 // is a parallel sub-step (registered by StartGroup), any buffered output
-// captured via SubStepOutput is dumped between separator bars after the
+// captured via StepOutput is dumped between separator bars after the
 // status line.
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
 	if index == 0 && total == 0 {
@@ -750,7 +750,7 @@ const (
 // flushSubStepLocked dumps the captured output for a parallel sub-step (if
 // any) between separator bars, updates the group counters, and marks the entry
 // as flushed. The entry is kept in r.subs (not deleted) so that a subsequent
-// SubStepOutput call from lineTee.Flush() delivering a trailing non-newline-
+// StepOutput call from lineTee.Flush() delivering a trailing non-newline-
 // terminated line can detect the flushed state and write directly rather than
 // silently dropping the content. FinishGroup cleans up flushed entries.
 // Caller must hold r.mu. No-op for non-parallel addresses.
@@ -759,7 +759,7 @@ func (r *PlainReporter) flushSubStepLocked(addr string, status subStepStatus) {
 	if !ok {
 		return
 	}
-	// Buffer-dump policy (Task 9):
+	// Buffer-dump policy:
 	//   - non-TTY: always dump (existing behaviour).
 	//   - TTY + FAILED: always dump (user needs full history to diagnose).
 	//   - TTY + succeeded/skipped + logPath: suppress dump, emit "Full log:".

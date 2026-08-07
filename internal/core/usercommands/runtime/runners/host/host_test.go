@@ -214,8 +214,8 @@ func TestHostRunner_BuildCommand_WorkdirAbsoluteTemplate(t *testing.T) {
 	}
 }
 
-// TestHostRunner_BuildCommand_ShellFromConfig verifies that the host Runner uses
-// cfg.Binaries.Shell instead of a hardcoded "sh".
+// TestHostRunner_BuildCommand_ShellFromConfig verifies that the host Runner
+// resolves the shell via config.ShellBin instead of a hardcoded "sh".
 func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 	tests := []struct {
 		name      string

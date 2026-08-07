@@ -12,10 +12,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
 // runWorkflowCtx executes a workflow command and returns stdout, stderr, and error.
 func runWorkflowCtx(t *testing.T, reg *Registry, workflowCmd *CommandDef) (string, string, error) {
 	t.Helper()
@@ -34,14 +30,9 @@ func runWorkflowCtx(t *testing.T, reg *Registry, workflowCmd *CommandDef) (strin
 	return outBuf.String(), errBuf.String(), err
 }
 
-// readFileBytes reads a file into bytes, returning nil on error.
 func readFileBytes(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
-
-// ---------------------------------------------------------------------------
-// NoRegistry error
-// ---------------------------------------------------------------------------
 
 func TestWorkflowRunner_NoRegistry_Error(t *testing.T) {
 	cmd := &CommandDef{
@@ -65,10 +56,6 @@ func TestWorkflowRunner_NoRegistry_Error(t *testing.T) {
 		t.Errorf("expected 'registry' in error; got %q", err.Error())
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Step sequencing
-// ---------------------------------------------------------------------------
 
 func TestWorkflowRunner_StepSequencing(t *testing.T) {
 	dir := t.TempDir()
@@ -114,10 +101,6 @@ func TestWorkflowRunner_StepSequencing(t *testing.T) {
 		t.Errorf("expected [step1 step2]; got %v", lines)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Param passing via `with`
-// ---------------------------------------------------------------------------
 
 func TestWorkflowRunner_WithParamOverride(t *testing.T) {
 	dir := t.TempDir()
@@ -194,10 +177,6 @@ func TestWorkflowRunner_WithParam_DefaultWhenNotProvided(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Private command callable from workflow
-// ---------------------------------------------------------------------------
-
 func TestWorkflowRunner_PrivateCommand_Callable(t *testing.T) {
 	dir := t.TempDir()
 	logFile := dir + "/private.log"
@@ -271,10 +250,6 @@ func TestWorkflowRunner_ConfirmStep_NonInteractive_AutoSkip(t *testing.T) {
 		t.Errorf("expected step after confirm to run; log: %q", string(data))
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Missing command reference error
-// ---------------------------------------------------------------------------
 
 func TestWorkflowRunner_MissingCommandRef_Error(t *testing.T) {
 	wf := &CommandDef{
@@ -547,10 +522,6 @@ func TestWorkflowRunner_ConfirmStep_NonInteractiveContext_SkipsConfirm(t *testin
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Workflow `when` condition (skip on falsy)
-// ---------------------------------------------------------------------------
-
 func TestWorkflowRunner_WhenParam_Truthy_Runs(t *testing.T) {
 	dir := t.TempDir()
 	logFile := dir + "/when.log"
@@ -765,10 +736,6 @@ func TestWorkflowRunner_WhenInvalidExpr_Error(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Workflow `continue_on_error` (non-fatal failures)
-// ---------------------------------------------------------------------------
-
 func TestWorkflowRunner_ContinueOnError_True_Continues(t *testing.T) {
 	dir := t.TempDir()
 	logFile := dir + "/order.log"
@@ -900,10 +867,6 @@ func TestWorkflowRunner_ContinueOnError_OnConfirmStep_Rejected(t *testing.T) {
 		t.Fatal("expected validation error for continue_on_error on confirm step")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Hidden target — workflow auto-skip
-// ---------------------------------------------------------------------------
 
 // When a workflow step references a Hidden command (resolved via
 // reg.ApplyVisibility), the step is skipped before any other gate fires.

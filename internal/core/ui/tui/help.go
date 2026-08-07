@@ -11,19 +11,18 @@ import (
 
 // help.go builds the ?-modal help overlay from the action registry. The modal
 // lists every registered binding grouped by [Section] (label · keys ·
-// description rows, per the spec mockup) and is width-aware so it always fits
-// inside the body region the overlay manager centres it over.
+// description rows) and is width-aware so it always fits inside the body region
+// the overlay manager centres it over.
 //
-// i18n key namespace (RESERVED, finalised in Stage 1):
+// i18n key namespace (shipped in internal/shared/i18n/translations/en.yml and
+// allowlisted in i18n.KnownUIKeys):
 //
 //	tui.help.title              → the modal title ("Help")
 //	tui.help.section.<name>     → a section label (fallback: the English name)
 //	tui.help.action.<actionID>  → a binding description (fallback: Binding.Desc)
 //
-// No YAML translation keys are added yet: the framework uses code-level English
-// fallbacks (i18n.NopTranslator) and there is no live consumer of this namespace
-// until the migration stages. The migration stages register this namespace before
-// adding real translations. (Note: the ui: unknown-key validator at
+// Every lookup carries a code-level English fallback, so an unregistered key
+// still renders. (Note: the ui: unknown-key validator at
 // internal/core/validate/config/ui.go only warns on ui.commands keys in
 // workspace.yml and is unrelated to this tui.help.* namespace.)
 const (
@@ -47,12 +46,11 @@ const (
 // [Composite] does clamp an oversized overlay to the body as a last-resort
 // safety net, but that truncates the box edge, so sizing here is what produces
 // good output at small-but-permitted sizes (tooNarrow only floors height at
-// minHeight). locale is required because [i18n.Translator.T] takes it; Stage 0
-// callers may pass a fixed locale with a NopTranslator.
+// minHeight). locale is required because [i18n.Translator.T] takes it.
 //
 // Only [Binding.Keys] are rendered in the modal; [Binding.Aliases] are
 // intentionally excluded — they dispatch (Match resolves them) but are hidden
-// from the help modal to avoid cluttering the display. Locked in Stage 1.
+// from the help modal to avoid cluttering the display.
 func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width, height int) Overlay {
 	if tr == nil {
 		tr = i18n.NopTranslator{}

@@ -64,7 +64,6 @@ func Validate(cfg *config.DweConfig, reg *registry.Registry, ref filesgate.StepR
 		return issues // Fail-fast.
 	}
 
-	// Expand require spec.
 	_, err = ResolveRequireIDs(fg.Require, def.Files)
 	if err != nil {
 		issues = append(issues, Issue{Message: err.Error()})

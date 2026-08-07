@@ -49,7 +49,7 @@ func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 // TestValidateServicesOverlay_acceptsPortsHosts confirms that per-developer
 // port/host overrides are permitted in overlay layers — a core dwe
 // feature so a developer can resolve port clashes locally without touching
-// shared workspace/services.yml.
+// the shared workspace/services/<name>/service.yml.
 func TestValidateServicesOverlay_acceptsPortsHosts(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool, Container: "adminer"}}
 	raw := map[string]any{
@@ -122,9 +122,9 @@ func TestValidateServicesOverlay_rejectsBadHostsShape(t *testing.T) {
 }
 
 // TestValidateServicesOverlay_rejectsUnknownService confirms that overlays
-// cannot reference services that are not declared in workspace/services.yml —
-// the canonical "unknown service in overlay" case the merge-after-validate
-// ordering catches.
+// cannot reference services that are not declared under
+// workspace/services/<name>/service.yml — the canonical "unknown service in
+// overlay" case the merge-after-validate ordering catches.
 func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool}}
 	raw := map[string]any{
@@ -149,8 +149,8 @@ func TestValidateServicesOverlay_noServicesBlock(t *testing.T) {
 }
 
 // TestLoadConfig_overlaySequencing_unknownServiceRejected is the canonical
-// sequencing test for Task 4: an overlay layer declaring a brand-new
-// services.<name> block (one that does NOT appear in services.yml) must be
+// sequencing test: an overlay layer declaring a brand-new services.<name>
+// block (one that does NOT appear under workspace/services/) must be
 // rejected — even when the YAML is otherwise well-formed. This guards the
 // merge-after-validate ordering of LoadConfig.
 func TestLoadConfig_overlaySequencing_unknownServiceRejected(t *testing.T) {
@@ -911,11 +911,12 @@ func TestApplyLocalComposeExtra_sourceGating(t *testing.T) {
 	}
 }
 
-// TestLoadConfig_localComposeExtraPathValidation covers Task 4: every overlay
-// path declared in workspace/local.yml is checked in three stages —
-// absolute-rejection, containment under the project root, and existence.
-// Paths are stored as-written (relative form) on the typed config so docker
-// compose resolves them via cmd.Dir = baseDir, matching ServiceConfig.Compose.
+// TestLoadConfig_localComposeExtraPathValidation covers every overlay path
+// declared in workspace/local.yml: absolute-rejection, clean-path rejection,
+// containment under the project root, and existence (symlink escape has its
+// own test below). Paths are stored as-written (relative form) on the typed
+// config so docker compose resolves them via cmd.Dir = baseDir, matching
+// ServiceConfig.Compose.
 func TestLoadConfig_localComposeExtraPathValidation(t *testing.T) {
 	tests := []struct {
 		name      string

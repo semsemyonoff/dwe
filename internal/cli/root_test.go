@@ -161,7 +161,7 @@ func TestCompletionCmd_InAdvancedGroupWithShellSubcommands(t *testing.T) {
 	}
 }
 
-// TestRenderCmdIsInConfigurationGroup verifies "render" specifically (it has a subcommand use field).
+// TestRenderCmdRegisteredWithGroup verifies "render" specifically (it has a subcommand use field).
 func TestRenderCmdRegisteredWithGroup(t *testing.T) {
 	root := NewRootCmd()
 	for _, c := range root.Commands() {

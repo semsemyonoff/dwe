@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// ComputeGroup
-// ---------------------------------------------------------------------------
-
 func TestComputeGroup(t *testing.T) {
 	tests := []struct {
 		relPath string
@@ -31,10 +27,6 @@ func TestComputeGroup(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// ComputeCommandID
-// ---------------------------------------------------------------------------
 
 func TestComputeCommandID(t *testing.T) {
 	tests := []struct {
@@ -76,10 +68,6 @@ func TestIsReservedTopLevelID(t *testing.T) {
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// DiscoverCommandFiles
-// ---------------------------------------------------------------------------
 
 func TestDiscoverCommandFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -144,10 +132,6 @@ func TestDiscoverCommandFiles_EmptyDir(t *testing.T) {
 		t.Errorf("expected empty result for empty dir, got %v", got)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// LoadCommandFile
-// ---------------------------------------------------------------------------
 
 func writeYAML(t *testing.T, dir, relPath, content string) string {
 	t.Helper()
@@ -552,10 +536,6 @@ commands:
 		t.Fatal("expected env-conflict error when params.database.env and files.dump.env both declare DUMP_FILE, got nil")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Workflow parallel sub-steps
-// ---------------------------------------------------------------------------
 
 func TestLoadCommandFile_WorkflowParallel_Valid(t *testing.T) {
 	dir := t.TempDir()

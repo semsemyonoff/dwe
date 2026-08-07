@@ -15,7 +15,7 @@ import (
 // a diagram (the "render failed" placeholder only hints; this surfaces the real
 // cause, e.g. "Could not find Chrome …"). It mirrors the cmdbrowser inspect
 // overlay: a viewport in a rounded-border box flagged CapturesInput, with a
-// proportional scrollbar overdrawn on the right border. The Model holds a
+// proportional scrollbar overdrawn on the right border. The browser holds a
 // *errorState; nil means the overlay is closed.
 type errorState struct {
 	vp viewport.Model

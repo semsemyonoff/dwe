@@ -205,8 +205,9 @@ refuses to allocate a PTY there, and the command says so.`,
 	return cmd
 }
 
-// resolveTTYMode maps the two boolean flags onto the tri-state ttyMode. The
-// mutually-exclusive case is rejected in RunE before this is reached.
+// resolveTTYMode maps the two boolean flags onto the tri-state ttyMode. Cobra
+// rejects the mutually-exclusive pair at parse time
+// (MarkFlagsMutuallyExclusive), so both are never set here.
 func resolveTTYMode(force, off bool) ttyMode {
 	switch {
 	case force:

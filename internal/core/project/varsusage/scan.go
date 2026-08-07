@@ -180,8 +180,8 @@ func ScanUsages(projectRoot, queryPath string) (ScanResult, error) {
 // dot-path and the Go-template bare `vars.x` token form (e.g.
 // {{ resolve .Raw "vars.x" }}) are intentionally out of scope: they are
 // vars-specific idioms ScanUsages already covers for the query-driven case,
-// and CompileVarSyntax (what Task 2's pipeline rendering actually invokes)
-// only ever rewrites the ${...} shorthand.
+// and CompileVarSyntax (what pipeline rendering actually invokes) only ever
+// rewrites the ${...} shorthand.
 func EnumerateAllUsages(projectRoot string) ([]Usage, error) {
 	return scanProject(projectRoot, "", true)
 }

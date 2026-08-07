@@ -15,9 +15,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// Model holds the docs browser's internal state. It is embedded in browser to
-// share Tree/Viewport/Filter/DiagramState/heading-index/loaded-topic fields
-// between the legacy standalone path and the plugin path.
+// Model holds the docs browser's internal state: the
+// Tree/Viewport/Filter/DiagramState/heading-index/loaded-topic fields the
+// browser plugin embeds.
 type Model struct {
 	// TUI state
 	Tree       *TreeWidget
@@ -179,7 +179,6 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 		projectDocsPath := filepath.Join(projectRoot, "docs")
 		_, err := os.Stat(projectDocsPath)
 		if err == nil {
-			// Project docs exist; create a watcher
 			watcher, err := NewWatcher(ctx, projectDocsPath)
 			if err == nil {
 				m.Watcher = watcher
@@ -189,7 +188,7 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 
 	// Set the initial cursor so the browser knows which topic to load on the
 	// first WindowSizeMsg. The load itself is deferred to browser.Update so
-	// it uses the correct framework-supplied width (Decision #10).
+	// it uses the correct framework-supplied width.
 	if m.Tree.Cursor() != nil {
 		m.CurrentTopic = m.Tree.Cursor()
 	}

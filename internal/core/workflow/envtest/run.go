@@ -116,8 +116,8 @@ func ListManifests(baseDir string) ([]string, error) {
 	return matches, nil
 }
 
-// ReportsDir returns the reserved (stage 2) failure-report directory for a
-// scenario: .dwe/tests/reports/<scenario>.
+// ReportsDir returns the failure-report directory for a scenario:
+// .dwe/tests/reports/<scenario>.
 func ReportsDir(baseDir, scenario string) string {
 	return filepath.Join(testsRootDir(baseDir), "reports", scenario)
 }

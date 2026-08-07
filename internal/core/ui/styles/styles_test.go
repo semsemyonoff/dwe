@@ -347,7 +347,7 @@ func TestTermWidthOrZero_TTY_SizeError_ReturnsZero(t *testing.T) {
 	}
 }
 
-// --- huh theme tests (migrated from internal/core/ui/huh_test.go) ---
+// --- huh theme tests ---
 
 func TestThemeNonNilByDefault(t *testing.T) {
 	th := Theme()
@@ -459,8 +459,6 @@ func TestBuildPaletteApplierNilNoOp(t *testing.T) {
 func TestBuildPaletteApplierEmptyColorsNoOp(t *testing.T) {
 	apply := BuildPaletteApplier()
 	s := huh.ThemeBase(false)
-	// Calling apply with an empty config should not change any foreground colors
-	// on fields whose color comes from ThemeBase (they should stay as zero/default).
 	apply(s)
 	// The test verifies the applier runs without panicking.
 }

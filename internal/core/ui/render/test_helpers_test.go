@@ -12,10 +12,11 @@ import (
 
 // TestMain pins termWidthFn to a non-TTY default (0 = unbounded) for the
 // whole suite, so the sink-probing renderers (Table, ServicesTable,
-// DaemonTable, DeployStatus, GitWorkspace, DiagnosticsTable) behave
-// identically whether the compiled test binary is run through `go test`
-// (stdout/stderr piped, already non-TTY) or directly from a real terminal.
-// Without this pin the Task 1 goldens would only hold under `go test`.
+// DaemonTable, DeployStatus, GitWorkspace, DiagnosticsTable,
+// DiagnosticsByDomain) behave identically whether the compiled test binary
+// is run through `go test` (stdout/stderr piped, already non-TTY) or
+// directly from a real terminal. Without this pin the goldens would only
+// hold under `go test`.
 func TestMain(m *testing.M) {
 	termWidthFn = func(*os.File) int { return 0 }
 	os.Exit(m.Run())
@@ -55,9 +56,8 @@ func fitsAt(v tableView, budget int) bool {
 }
 
 // resetStyles re-initialises the styles package palette to the built-in
-// defaults for the current dark/light mode. Provided here so the renderer
-// tests still co-located in package ui can reset palette state via the
-// styles package's public API.
+// defaults for the current dark/light mode, via the styles package's public
+// API.
 func resetStyles() {
 	styles.ApplyStyles(nil)
 	styles.DefSep = "—"

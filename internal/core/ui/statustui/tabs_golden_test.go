@@ -129,8 +129,7 @@ func goldenPath(name string) string {
 }
 
 // TestTabs_CharacterizationGolden_FilesExist is a light guard that the
-// tabs_*.golden fixtures actually landed under testdata/, matching the Files
-// list in the responsive-tables plan.
+// tabs_*.golden fixtures actually landed under testdata/.
 func TestTabs_CharacterizationGolden_FilesExist(t *testing.T) {
 	for _, name := range tabsGoldenNames {
 		p := goldenPath("tabs_" + name + ".golden")
@@ -152,8 +151,8 @@ var widthDependentTabIndex = map[int]string{0: "services", 1: "deploy", 3: "git"
 // exercises shrink/record mode rather than trivially fitting. Columns
 // declared unbreakable by design (DaemonTable's ID/CONTAINER, GitWorkspace's
 // SHA) are deliberately kept short — a value longer than the budget in one
-// of those is expected to overflow (Cols[i].Wrap == nil never wraps; see the
-// plan's "no data is ever dropped" invariant), so including one here would
+// of those is expected to overflow (Cols[i].Wrap == nil never wraps, and the
+// renderers overflow rather than drop data), so including one here would
 // make TestTabs_RenderedWidthNeverExceedsBudget assert the wrong thing.
 // Built directly (not via buildTabs) so the test needs no docker/git stubs.
 func wideTabSnapshot() tabSnapshot {
@@ -262,12 +261,9 @@ func TestTabs_AnchorsAtNarrowWidthLandOnHeadings(t *testing.T) {
 
 // TestTabs_CharacterizationGolden_Width60 pins byte-exact bodies for the four
 // width-dependent tabs at panel width 60, built from the same deterministic
-// snapshot as TestTabs_CharacterizationGolden. This is the one place in the
-// responsive-tables plan where a statustui golden legitimately changes
-// output as of Task 11: previously renderTab was always called with width 0
-// (unbounded) from the plugin, so no narrow-width tab body existed to pin.
-// The width-0 goldens above are untouched — width 0 still means "unbounded"
-// until Task 12 enables the sink-aware budget.
+// snapshot as TestTabs_CharacterizationGolden. The width-0 goldens above stay
+// unbounded; these pin the narrow-panel rendering the status TUI actually
+// uses.
 //
 // Regenerate with:
 //

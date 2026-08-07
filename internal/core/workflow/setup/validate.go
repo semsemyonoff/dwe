@@ -33,7 +33,6 @@ func ValidateAndCoerce(q Question, raw string) (any, error) {
 		return raw, nil
 	}
 
-	// If preset is set, use it.
 	if q.Validate.Preset != "" {
 		switch q.Validate.Preset {
 		case PresetPort:
@@ -51,7 +50,6 @@ func ValidateAndCoerce(q Question, raw string) (any, error) {
 		}
 	}
 
-	// If regex is set, use it.
 	if q.Validate.Regex != "" {
 		return coerceRegex(q.Validate.Regex, raw)
 	}

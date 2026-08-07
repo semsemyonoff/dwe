@@ -167,10 +167,10 @@ func TestExecCommandAction_NoEchoWhenUnresolved(t *testing.T) {
 	}
 }
 
-// TestParallelGroup_TraceAttributesEchoToSubStepLog exercises Task 3 routing
-// end-to-end: in a parallel group at Verbose, each sub-step's command echo lands
-// in its own sub-step log (via the ctx-attached writerLinePrinter) and never in
-// a sibling's.
+// TestParallelGroup_TraceAttributesEchoToSubStepLog exercises per-sub-step trace
+// routing end-to-end: in a parallel group at Verbose, each sub-step's command echo
+// lands in its own sub-step log (via the ctx-attached writerLinePrinter) and never
+// in a sibling's.
 func TestParallelGroup_TraceAttributesEchoToSubStepLog(t *testing.T) {
 	trace.Configure(nil, trace.LevelVerbose)
 	defer trace.Configure(nil, trace.LevelOff)

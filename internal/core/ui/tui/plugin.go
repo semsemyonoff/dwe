@@ -12,21 +12,19 @@ type PanelID string
 // horizontal split weight. The framework lays panels out left→right by weight
 // (see [layoutPanels]) and computes each inner region.
 //
-// Weight must be a positive integer; [newFrame] (Task 7) validates the panel
-// set before launch (non-empty, all weights positive), so [layoutPanels] and
+// Weight must be a positive integer; [newFrame] validates the panel set before
+// launch (non-empty, all weights positive), so [layoutPanels] and
 // [Plugin.ViewPanel] never see a degenerate layout.
 //
-// ID and Weight are load-bearing in Stage 0. Title is a DOCUMENTED PLACEHOLDER
-// (like the registry's Aliases/Rebindable/Mouse): it exists now so callers can
-// be written against the final shape, but Stage 0 renders plain borders and
-// never draws it — lipgloss v2 has no border-title primitive, so the title
-// renderer lands with the real frame stage.
+// ID and Weight are load-bearing. Title is a DOCUMENTED PLACEHOLDER: it exists
+// so callers can be written against the final shape, but the frame renders
+// plain borders and never draws it — lipgloss v2 has no border-title
+// primitive.
 type Panel struct {
 	// ID uniquely identifies this panel within the plugin.
 	ID PanelID
-	// Title is the placeholder for the panel's top-border label. English here;
-	// the migration stages route it through i18n. Reserved for a later stage:
-	// Stage 0 does not render it (see the type doc).
+	// Title is the placeholder for the panel's top-border label. English here
+	// (no i18n routing); the frame does not render it (see the type doc).
 	Title string
 	// Weight is the relative horizontal share of the body width. A two-panel
 	// plugin with weights {1, 2} gives the second panel twice the first's width
@@ -34,13 +32,13 @@ type Panel struct {
 	Weight int
 }
 
-// Overlay is one modal layer (help, future inspect/filter) composited centred
+// Overlay is one modal layer (help, inspect, embedded form) composited centred
 // over the body region. It carries its pre-rendered content plus the cell
-// dimensions that content occupies, so the overlay manager (Task 5) can centre
-// it without re-measuring ANSI width.
+// dimensions that content occupies, so the overlay manager can centre it
+// without re-measuring ANSI width.
 //
-// This is the canonical definition. Task 5's overlayStack and Composite operate
-// over THIS type; they do not redefine it.
+// This is the canonical definition: [overlayStack] and [Composite] operate over
+// THIS type; they do not redefine it.
 type Overlay struct {
 	// Content is the pre-rendered, possibly multi-line, possibly ANSI-styled
 	// overlay body.
@@ -161,11 +159,13 @@ type CloseOverlayMsg struct {
 }
 
 // WheelMsg is delivered to the plugin when the mouse wheel turns over one of
-// its panels. Panel is the panel under the pointer (NOT the focused panel);
-// Delta is -1 for an upward notch and +1 for a downward notch. The plugin
-// decides how far to scroll based on the panel type. A wheel turn never changes
-// focus; clicking still focuses. This is dispatched immediately (no coalescing
-// tick), one per wheel event, pointer-routed via classifyHit.
+// its panels (or, under [OverlayWheelPanel], over a capturing overlay's
+// viewport). Panel is the panel under the pointer (NOT the focused panel);
+// Delta is the NET coalesced notch count — negative up, positive down — that
+// [Frame.flushWheelAccum] drained from one burst, so a plugin must scroll by
+// |Delta| notches rather than assuming ±1. The plugin decides how far one notch
+// scrolls. A wheel turn never changes focus; clicking still focuses.
+// Pointer-routed via classifyHit.
 type WheelMsg struct {
 	Panel PanelID
 	Delta int
@@ -183,23 +183,20 @@ const OverlayWheelPanel PanelID = "\x00overlay-wheel"
 // Plugin is the contract every full-screen surface implements to run inside the
 // [Frame]. The framework owns chrome (borders, status line, overlays, the
 // terminal envelope) and geometry; the plugin owns body content and behaviour.
-//
-// Contract status: PINNED, not frozen. The method set is stable enough for the
-// Stage 3 pilot to build against, but the Stage 3 migration may feed one
-// revision back before the contract is frozen for Stages 4–5b (spec § 7).
+// The method set is frozen: cmdbrowser, docstui and statustui all implement it.
 //
 // View contract split: a plugin renders each panel's body as a STRING via
 // [Plugin.ViewPanel]; only [Frame] (the tea.Model) returns a tea.View and owns
 // its envelope fields (AltScreen, MouseMode, Cursor). Plugins never construct a
-// tea.View. (In bubbletea/v2 v2.0.7, Model.View returns tea.View, not a string;
-// see cmdbrowser/model.go and statustui/tui.go.)
+// tea.View. (In bubbletea/v2 v2.0.7, Model.View returns tea.View, not a string
+// — see [Frame.View], the only such method in the tree.)
 type Plugin interface {
 	// Init returns the plugin's startup command, run once when the program
 	// starts. The framework batches it with its own startup work.
 	Init() tea.Cmd
 
-	// Close releases plugin resources. The launch helper (Task 8) defers it so it
-	// runs on normal quit AND error/interrupt paths.
+	// Close releases plugin resources. [Run] defers it so it runs on normal quit
+	// AND error/interrupt paths.
 	Close() error
 
 	// Resize is called on every terminal resize with the overall INNER body
@@ -257,8 +254,7 @@ type Plugin interface {
 	// normal registry-dispatch policy. (Overlay-based capture is a separate
 	// mechanism — see [Overlay.CapturesInput] and [routeWhileCapturing].)
 	//
-	// This is a deliberate Stage 3 contract addition (the first migration
-	// revision the Plugin interface allows): the inline filter is the first real
-	// consumer. Stub/simple plugins return false.
+	// The inline filters in cmdbrowser and docstui are the consumers;
+	// stub/simple plugins return false.
 	CapturingInput() bool
 }

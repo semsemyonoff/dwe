@@ -31,7 +31,6 @@ func Sources(projectRoot string) []DocRoot {
 	if projectRoot != "" {
 		projectDocsPath := filepath.Join(projectRoot, "docs")
 		if info, err := os.Stat(projectDocsPath); err == nil && info.IsDir() {
-			// Open the docs directory as an OS filesystem.
 			projectFS := os.DirFS(projectDocsPath)
 			roots = append(roots, DocRoot{
 				Name:        "project",
@@ -47,7 +46,6 @@ func Sources(projectRoot string) []DocRoot {
 // RelPath returns the relative path from the documentation root,
 // or an error if the path is invalid.
 func RelPath(root DocRoot, path string) (string, error) {
-	// Normalize the path.
 	normalized := filepath.Clean(path)
 
 	// Reject paths that try to escape the root.
@@ -55,7 +53,6 @@ func RelPath(root DocRoot, path string) (string, error) {
 		return "", fmt.Errorf("invalid path: %q", path)
 	}
 
-	// Ensure the path doesn't contain directory traversal.
 	if containsTraversal(normalized) {
 		return "", fmt.Errorf("path traversal not allowed: %q", path)
 	}

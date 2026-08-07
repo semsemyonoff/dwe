@@ -446,7 +446,8 @@ func batchServiceConfigHash(cfg *config.DweConfig, svcDeploys map[string]*config
 // captures pre-state, writes local.yml, regenerates .env, builds the toggle plan
 // from all toEnable/toDisable actions, renders it to out, then atomically writes
 // pending ops. On any failure in steps 2-5, local.yml and .env are restored.
-// Pending is always written; see mutateAndPlan for the policy.
+// Pending is written only when stackEverDeployed is true; see mutateAndPlan for
+// the policy.
 func mutateAndPlanBatch(
 	out io.Writer,
 	baseDir, configPath, localPath, envPath, statePath string,

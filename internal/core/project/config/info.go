@@ -100,7 +100,8 @@ type AutoHostsSpec struct {
 // The Title field (for subgroups) is distinct from Text (for info/warning).
 // All types support the Decorative flag to override the type's default visibility.
 type InfoItem struct {
-	// Type selects the rendering function: info, warning, definition, separator, subgroup.
+	// Type selects the rendering function: info, warning, definition, separator,
+	// subgroup, auto-urls, auto-hosts.
 	Type string `yaml:"type"`
 
 	// Text is the content for: warning, info.
@@ -340,23 +341,19 @@ func validateItems(items []InfoItem, pathPrefix string) error {
 	for i, item := range items {
 		itemPath := fmt.Sprintf("%s.items[%d]", pathPrefix, i)
 
-		// Validate type is known
 		if !validInfoTypes[item.Type] {
 			return fmt.Errorf("info: %s: unknown type %q; valid types: info, warning, definition, separator, subgroup, auto-urls, auto-hosts", itemPath, item.Type)
 		}
 
-		// Subgroup-specific validation
 		if item.Type == "subgroup" {
 			if len(item.Items) == 0 {
 				return fmt.Errorf("info: %s: subgroup must declare items", itemPath)
 			}
-			// Recurse into subgroup children
 			if err := validateItems(item.Items, itemPath); err != nil {
 				return err
 			}
 		}
 
-		// auto-urls validation
 		if item.Type == "auto-urls" {
 			if item.SourceAutoURLsSpec == nil {
 				return fmt.Errorf("info: %s: auto-urls must have spec populated by unmarshaller", itemPath)
@@ -366,7 +363,6 @@ func validateItems(items []InfoItem, pathPrefix string) error {
 			}
 		}
 
-		// auto-hosts validation
 		if item.Type == "auto-hosts" {
 			if item.SourceAutoHostsSpec == nil {
 				return fmt.Errorf("info: %s: auto-hosts must have spec populated by unmarshaller", itemPath)

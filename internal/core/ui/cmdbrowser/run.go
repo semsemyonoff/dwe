@@ -14,11 +14,11 @@ import (
 )
 
 // Minimum usable terminal size for the two-panel frame. Below either bound the
-// browser drops to the flat huh fallback (runFallback) — Variant A removed the
-// in-TUI single-panel (60–79) layout, so minBrowserWidth is the sole boundary
-// between the framework frame and the fallback. tui.Run re-gates on its own
-// (smaller) minimum internally, a harmless double-check; this is the real
-// fallback boundary.
+// browser drops to the flat huh fallback (runFallback): there is no in-TUI
+// single-panel layout, so minBrowserWidth is the sole boundary between the
+// framework frame and the fallback. tui.Run re-gates on its own (smaller)
+// minimum internally, a harmless double-check; this is the real fallback
+// boundary.
 const (
 	minBrowserWidth  = 80
 	minBrowserHeight = 15

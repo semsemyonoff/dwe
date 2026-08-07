@@ -116,10 +116,8 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 		return fmt.Errorf("invalid topic: %w", err)
 	}
 
-	// Load sources for documentation
 	allRoots := coredocs.Sources(projectRoot)
 
-	// Filter by --source flag
 	roots := filterDocRoots(allRoots, df.source)
 	if len(roots) == 0 {
 		return fmt.Errorf("no documentation sources available with --source=%s", df.source)
@@ -238,7 +236,6 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	emitLongDocHint(cmd, resolved.Path, content, anchor, isInteractive)
 
 	if !shouldRender {
-		// Output raw markdown (no rendering)
 		_, _ = cmd.OutOrStdout().Write(contentWithBanners)
 		return nil
 	}
@@ -256,7 +253,6 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 		return fmt.Errorf("failed to render: %w", err)
 	}
 
-	// Write the rendered output
 	_, _ = cmd.OutOrStdout().Write(result.Output)
 
 	return nil

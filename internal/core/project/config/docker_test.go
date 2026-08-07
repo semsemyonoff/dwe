@@ -546,7 +546,7 @@ args:
 	}
 }
 
-// Tests for per-key defaults behavior (Task 8)
+// Tests for per-key defaults behavior.
 
 func TestLoadDockerConfig_DefaultsAppliedWhenAbsent(t *testing.T) {
 	// When args keys are entirely absent, defaults should be applied.

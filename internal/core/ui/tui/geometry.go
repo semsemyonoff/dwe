@@ -11,8 +11,7 @@ package tui
 // never draw the frame border themselves.
 
 // Chrome constants. These describe the cells the frame's chrome consumes around
-// plugin content. They are provisional (Stage 0) and may be tuned once a real
-// surface is migrated.
+// plugin content.
 const (
 	// statusLineRows is the height of the bottom status line, which lives below
 	// the body frame and is never part of the overlay coordinate space.
@@ -29,8 +28,8 @@ const (
 	vPadding = 0
 
 	// minWidth / minHeight are the minimum usable terminal dimensions. Below
-	// either, tooNarrow reports true and the launch helper drops to a fallback
-	// (a later stage). Provisional thresholds.
+	// either, tooNarrow reports true and [Run] returns [ErrTooNarrow] so the
+	// caller can drop to a non-full-screen fallback. Provisional thresholds.
 	minWidth  = 40
 	minHeight = 10
 )
@@ -116,9 +115,9 @@ func tooNarrow(w, h int) bool {
 // (79, 99). Every region shares body's Y and Height; only X and Width differ.
 //
 // Precondition: weights is non-empty and every weight is positive. The caller
-// (newFrame, Task 7) validates this before launch, so layoutPanels has no error
-// path and stays pure for the View hot path — a violated precondition is a
-// programmer error, not a runtime condition.
+// (newFrame) validates this before launch, so layoutPanels has no error path and
+// stays pure for the View hot path — a violated precondition is a programmer
+// error, not a runtime condition.
 func layoutPanels(body Region, weights []int) []Region {
 	total := 0
 	for _, wt := range weights {

@@ -56,7 +56,6 @@ func ContainedRel(absRoot, absChild string) (string, error) {
 		return "", fmt.Errorf("path escapes root")
 	}
 
-	// Clean the path
 	cleanRel := filepath.Clean(rel)
 
 	// Reject if cleaning produces . or .. or escaping path

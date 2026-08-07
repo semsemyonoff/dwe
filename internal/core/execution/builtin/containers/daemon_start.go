@@ -35,8 +35,9 @@ type startArgsInput struct {
 
 // buildStartExtraArgs returns the argv elements appended after `compose run`'s
 // own header (project / file flags / global args / command defaults). Order
-// matches runner_service.go's compose-run path so daemons follow the same
-// command-fields-win-on-conflict semantics as service_run.
+// matches the service_run compose-run path
+// (usercommands/runtime/runners/service/run.go) so daemons follow the same
+// command-fields-win-on-conflict semantics.
 func buildStartExtraArgs(in startArgsInput) []string {
 	extraArgs := []string{"-d", "--no-deps", "--entrypoint", ""}
 	if in.AutoRemove {

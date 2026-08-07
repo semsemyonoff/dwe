@@ -25,11 +25,11 @@ const (
 
 func stubCmd() tea.Msg { return stubMsg{payload: "from-action"} }
 
-// stubPlugin is a minimal but complete [Plugin] implementation. It is the
-// contract proof reused by every golden/unit test from Task 3 onward: it declares
-// two weighted panels, registers a couple of actions, records lifecycle calls and
-// every Update message (for async preservation), exposes a fixed status context,
-// and returns a typed result.
+// stubPlugin is a minimal but complete [Plugin] implementation, the contract
+// proof reused by the golden/unit tests: it declares two weighted panels,
+// registers a couple of actions, records lifecycle calls and every Update
+// message (for async preservation), exposes a fixed status context, and returns
+// a typed result.
 type stubPlugin struct {
 	// recorded observations.
 	initCalled    bool

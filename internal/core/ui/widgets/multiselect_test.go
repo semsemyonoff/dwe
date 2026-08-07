@@ -220,10 +220,8 @@ func TestRunMultiSelect_GenericErrorPropagated(t *testing.T) {
 	}
 }
 
-// TestRunMultiSelect_NoIOSideEffects verifies RunMultiSelect does not write to
-// any io.Writer directly. Since the primitive accepts no writer, and the only
-// output comes from the huh form (which we stub), this test confirms no stray
-// fmt.Print calls exist by checking the fake form is the sole I/O path.
+// TestRunMultiSelect_NoIOSideEffects pins that RunMultiSelect takes no writer
+// of its own: with the huh form stubbed out it still returns a full result.
 func TestRunMultiSelect_NoIOSideEffects(t *testing.T) {
 	old := runMultiSelectFormFn
 	t.Cleanup(func() { runMultiSelectFormFn = old })

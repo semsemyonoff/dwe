@@ -78,14 +78,12 @@ func (p *plugin) CapturingInput() bool { return false }
 // nothing to cache here.
 func (p *plugin) Resize(tui.Region) {}
 
-// Update implements tui.Plugin. tabsLoadedMsg handling (stale-gen drop,
+// Update implements tui.Plugin: tabsLoadedMsg handling (stale-gen drop,
 // snapshot assign, loadedAt/healthIndicator, YOffset restore-on-matching-
-// reload else GotoTop) and spinner.TickMsg preserve the legacy model.Update's
-// state machine — see the plan's single most important invariant. Body
-// content itself is no longer set here; renderBody recomputes it from
-// m.snap on the next render via renderTab. Unmatched messages (e.g.
-// viewport nav keys the registry left unbound) delegate to viewport.Update
-// for scroll handling.
+// reload else GotoTop) plus spinner.TickMsg. Body content is not set here;
+// renderBody recomputes it from m.snap on the next render via renderTab.
+// Unmatched messages (e.g. viewport nav keys the registry left unbound)
+// delegate to viewport.Update for scroll handling.
 func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 	m := p.m
 
@@ -159,8 +157,8 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 
 // ViewPanel implements tui.Plugin. Renders the single-panel body: a centered
 // spinner while the initial load is in flight, otherwise the tab strip +
-// divider + viewport content. Reuses the model's existing renderTabStrip
-// helper so hit-zones in Task 6 match exactly what is drawn here.
+// divider + viewport content. Reuses the model's renderTabStrip helper so
+// mouse.go's tabHitZones match exactly what is drawn here.
 func (p *plugin) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	if id != panelMain {
 		return ""
@@ -213,7 +211,7 @@ func (p *plugin) renderActiveTab(width int) (string, []int) {
 // renderBody sizes the viewport to the panel's inner region (minus the
 // tab-strip and divider rows) and renders tab strip + divider + viewport
 // content. Reloading state does not change body rendering — only
-// StatusContext (Task 3) reflects it.
+// StatusContext reflects it.
 //
 // The active tab's body is recomputed here, via renderActiveTab, at the
 // panel's real inner width — the same width the tables are fitted or
@@ -248,9 +246,9 @@ func (p *plugin) renderBody(inner tui.Region) string {
 
 // StatusContext implements tui.Plugin. Returns the middle-zone status
 // string: health indicator + "loaded X ago", or a loading/reloading state.
-// This is the old renderStatusBar leftParts, minus the help text (the right
-// side of the old status bar), which the Frame now supplies itself. Called
-// every render so the content is reactive to the model's current state.
+// The help text on the right of the status line is supplied by the Frame,
+// not here. Called every render so the content is reactive to the model's
+// current state.
 func (p *plugin) StatusContext() string {
 	m := p.m
 	var parts []string

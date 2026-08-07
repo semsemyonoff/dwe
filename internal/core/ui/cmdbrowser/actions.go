@@ -85,7 +85,6 @@ func (b *browser) Actions(reg *tui.Registry) error {
 
 // actionForMode maps Mode → Action so Result carries the right intent for the
 // caller. Mode is normalised by Options.applyDefaults before reaching here.
-// Relocated from the deleted model.go (Task 11).
 func actionForMode(mode Mode) Action {
 	switch mode {
 	case ModeInspect:
@@ -101,8 +100,8 @@ func actionForMode(mode Mode) Action {
 // dispatches here; built-ins (help/quit/focus) never reach this method.
 // Navigation and select route to the active panel — tree and list are distinct
 // widgets with distinct movement, so dispatch cannot be panel-agnostic. The
-// active panel is tracked via FocusChangedMsg (wired in Task 9); it starts on
-// the tree (focus index 0).
+// active panel is tracked via FocusChangedMsg; it starts on the tree (focus
+// index 0).
 //
 // A returned (cmd, true) is dispatched by the frame; (nil, false) lets the
 // frame forward the raw key to Update. Every action the browser registers is
@@ -164,9 +163,9 @@ func (b *browser) navVertical(delta int) {
 }
 
 // navLeft handles ←/h. In the tree it collapses the focused node or steps to its
-// parent (engine Collapse). In the list it is a no-op: focus is now Tab/click
-// only, so the legacy left-arrow "return to tree" affordance (model.go updateRight)
-// is intentionally gone — panel switching belongs to the frame.
+// parent (engine Collapse). In the list it is a deliberate no-op: focus is
+// Tab/click only, so panel switching belongs to the frame rather than to a
+// left-arrow "return to tree" affordance.
 func (b *browser) navLeft() {
 	if b.active == panelList {
 		return

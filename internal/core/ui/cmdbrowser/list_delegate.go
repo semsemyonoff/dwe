@@ -12,9 +12,8 @@ import (
 
 // listItem adapts an Item for bubbles/v2/list. The original-items index is
 // preserved so Result.Idx survives filtering and reordering inside the list.
-// In single-panel mode (width 60–79) the list is populated with pseudo-header
-// rows interleaved between groups; those rows set header=true and are not
-// selectable.
+// header marks a non-selectable pseudo-header row; no producer sets it today
+// (the single-panel layout that used them is gone).
 type listItem struct {
 	origIdx    int
 	id         string
@@ -93,10 +92,10 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 
 	// Param-count indicator: rendered as `[N]` in the muted description colour
 	// so users can spot input-taking commands without opening the param form.
-	// Placed left of the type badge with a one-space gap. Hidden in
-	// single-panel and reduced (80–99) buckets via the same showBadges gate
-	// the type badge uses — these widths already drop secondary chrome to keep
-	// the list scannable.
+	// Placed left of the type badge with a one-space gap. Hidden below
+	// listBadgesMinWidth inner cells (terminal width < 100) via the same
+	// showBadges gate the type badge uses — those widths already drop secondary
+	// chrome to keep the list scannable.
 	paramBadge := ""
 	if d.showBadges && li.paramCount > 0 {
 		paramBadge = paletteDescription().Render(fmt.Sprintf("[%d]", li.paramCount))
@@ -170,9 +169,9 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
 
-// renderHeader emits the "── group ──" pseudo-header used in single-panel
-// mode (width 60–79). The header consumes both lines of the delegate height
-// so spacing stays consistent with item rows.
+// renderHeader emits the "── group ──" pseudo-header for listItem.header rows.
+// The header consumes both lines of the delegate height so spacing stays
+// consistent with item rows.
 func (d *cmdDelegate) renderHeader(w io.Writer, width int, label string) {
 	if label == "" {
 		label = "(root)"

@@ -154,7 +154,7 @@ func ApplyHelpBranding(root *cobra.Command) {
 }
 
 // rootLongDescription is the plain-text Long help body for the root command.
-// applyHelpBranding rebuilds this with accent-coloured emphasis after the
+// ApplyHelpBranding rebuilds this with accent-coloured emphasis after the
 // styles palette is resolved; this constant is the fallback rendered when
 // styles have not been loaded (e.g. during docs generation).
 const rootLongDescription = `DWE (Dev Workspace Engine) — CLI for managing Docker-based local development environments.
@@ -169,8 +169,9 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		// PersistentPreRunE resolves the project root before any subcommand runs.
 		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
 		// validates the config, and populates flags.ConfigPath / flags.Root.
-		// Commands that work without a project (version, completion, print, docs) are
-		// allowed through when no project is found via discovery.
+		// Commands allowlisted by allowedWithoutProject (bare dwe, init, version,
+		// prompt, bridge daemon, completion, docs) are allowed through when no
+		// project is found via discovery.
 		// The validate command bypasses schema validation so it can report schema errors
 		// as diagnostics instead of aborting before the validators run.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

@@ -130,11 +130,10 @@ func Run(ctx context.Context, deps WizardDeps) error {
 		return fmt.Errorf("read existing local.yml: %w", err)
 	}
 
-	// Apply overlays sequentially (last wins on a leaf conflict, matching the
-	// former deep-merge precedence). The node-aware guard inside ApplyOverlayToNode
-	// reproduces the old validateMergeable contract — it rejects a map-over-scalar
-	// collision except the legacy bare-int port-leaf upgrade. Empty overlays are
-	// skipped so we never write spurious keys.
+	// Apply overlays sequentially (last wins on a leaf conflict). The node-aware
+	// guard inside ApplyOverlayToNode rejects a map-over-scalar collision except
+	// the legacy bare-int port-leaf upgrade. Empty overlays are skipped so we
+	// never write spurious keys.
 	for _, ov := range []struct {
 		label   string
 		overlay map[string]any

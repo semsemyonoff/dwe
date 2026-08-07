@@ -70,8 +70,8 @@ func StopService(ctx context.Context, deps StopServiceDeps, name string) error {
 	return stopServiceLocked(ctx, deps, name)
 }
 
-// stopServiceLocked is the package-internal core used by reset (Task 16), which
-// has already run preflight and holds the project locks.
+// stopServiceLocked is the package-internal core for callers that have
+// already run preflight and hold the project locks.
 func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) error {
 	containerName, err := resolveServiceContainer(deps.BaseDir, deps.Cfg, name)
 	if err != nil {

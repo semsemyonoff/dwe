@@ -65,7 +65,7 @@ func NewTeardownDeps(manifestPath string, log io.Writer) TeardownDeps {
 // Teardown runs the spec §6 teardown sequence for a completed or aborted
 // scenario run, driven ONLY by m and the copy's own contents — never the
 // original scenario definition — so a half-dead run is still sweepable from
-// the manifest alone (also feeds the future stage-2 `dwe test clean`).
+// the manifest alone (this is also what `dwe test clean` reuses).
 //
 // Order: compose down -> reap containers by exact label -> remove volumes by
 // exact project prefix -> stop the bridge daemon -> remove the copy -> delete
@@ -254,7 +254,7 @@ var (
 )
 
 // removeVolumesReal removes every volume prefixed "<m.ComposeProject>_" via
-// the shared extracted helper (Task 5) — shared, unprefixed volumes survive.
+// containers.RemoveVolumesByProjectPrefix — shared, unprefixed volumes survive.
 func removeVolumesReal(ctx context.Context, m *Manifest) error {
 	dockerBin := dockerBinForCopy(m.CopyPath)
 	_, _, err := containers.RemoveVolumesByProjectPrefix(ctx, dockerBin, m.ComposeProject, nil)

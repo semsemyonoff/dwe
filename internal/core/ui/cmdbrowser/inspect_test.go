@@ -82,10 +82,10 @@ func TestBrowser_InspectRequestsCapturingOverlay(t *testing.T) {
 	}
 }
 
-// TestBrowser_InspectReopenAfterClosePushesOnce guards the documented lingering-
-// state contract: the Frame pops the inspect overlay on esc WITHOUT notifying the
-// plugin, so b.inspect stays non-nil as inert content. Re-opening (on another row)
-// must rebuild it and push EXACTLY one fresh overlay — no double-push, no stale idx.
+// TestBrowser_InspectReopenAfterClosePushesOnce guards the lingering-state
+// contract: a b.inspect left non-nil after the overlay was popped is inert
+// content. Re-opening (on another row) must rebuild it and push EXACTLY one
+// fresh overlay — no double-push, no stale idx.
 func TestBrowser_InspectReopenAfterClosePushesOnce(t *testing.T) {
 	b := newInspectBrowser(t, DefaultOptions())
 
