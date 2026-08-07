@@ -228,7 +228,7 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	// in joinWriters); content assertions on globalLog belong in plain_test.go.
 	_ = globalLog
 
-	// Reporter.SubStepOutput was called with each sub-step's line.
+	// Reporter.StepOutput was called with each sub-step's line.
 	sawAlpha, sawBeta := false, false
 	for _, e := range rep.events {
 		if e.kind != "StepOutput" {
@@ -278,7 +278,7 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 		t.Errorf("expected no parallel/ log dir when logging disabled, got err=%v", err)
 	}
 
-	// SubStepOutput still fires.
+	// StepOutput still fires.
 	saw := false
 	for _, e := range rep.events {
 		if e.kind == "StepOutput" && strings.Contains(e.reason, "a") {

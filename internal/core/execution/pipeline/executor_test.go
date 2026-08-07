@@ -2020,8 +2020,8 @@ func TestExecAction_UnknownType(t *testing.T) {
 	}
 }
 
-// TestExecStep_ShellFromConfig verifies that ExecStep uses cfg.Binaries.Shell
-// instead of a hardcoded "sh" when running a run: step.
+// TestExecStep_ShellFromConfig verifies that ExecStep resolves the shell
+// through config.ShellBin instead of a hardcoded "sh" when running a run: step.
 func TestExecStep_ShellFromConfig(t *testing.T) {
 	// Use a step that would fail if run under "sh" but trivially succeeds under
 	// the configured shell. We assert the step succeeds with a shell that exists.

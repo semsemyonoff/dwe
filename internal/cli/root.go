@@ -169,9 +169,9 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		// PersistentPreRunE resolves the project root before any subcommand runs.
 		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
 		// validates the config, and populates flags.ConfigPath / flags.Root.
-		// Commands allowlisted by allowedWithoutProject (init, version, prompt,
-		// bridge daemon, completion, docs) are allowed through when no project is
-		// found via discovery.
+		// Commands allowlisted by allowedWithoutProject (bare dwe, init, version,
+		// prompt, bridge daemon, completion, docs) are allowed through when no
+		// project is found via discovery.
 		// The validate command bypasses schema validation so it can report schema errors
 		// as diagnostics instead of aborting before the validators run.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
