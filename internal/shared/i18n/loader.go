@@ -103,7 +103,6 @@ func Load(projectRoot string) (*Store, error) {
 func LoadProjectBundles(projectRoot string) ([]ProjectFile, error) {
 	dir := filepath.Join(projectRoot, "workspace", "i18n")
 
-	// Check if dir exists
 	stat, err := os.Stat(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -127,7 +126,6 @@ func LoadProjectBundles(projectRoot string) ([]ProjectFile, error) {
 		}}, nil
 	}
 
-	// List files
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return []ProjectFile{{

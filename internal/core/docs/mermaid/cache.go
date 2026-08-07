@@ -104,7 +104,6 @@ func (fc *FileCache) Render(ctx context.Context, src string, theme Theme, width 
 
 // writeCached atomically writes png to keyPath and triggers eviction if needed.
 func (fc *FileCache) writeCached(keyPath string, png []byte) error {
-	// Ensure dir exists.
 	if err := os.MkdirAll(fc.Dir, 0o700); err != nil {
 		return err
 	}
@@ -156,7 +155,6 @@ func (fc *FileCache) evictIfNeeded() {
 		totalSize += size
 	}
 
-	// If under cap, nothing to do.
 	if totalSize <= fc.CapBytes {
 		return
 	}
@@ -166,7 +164,6 @@ func (fc *FileCache) evictIfNeeded() {
 		return files[i].mtime < files[j].mtime
 	})
 
-	// Delete oldest until under cap.
 	for _, f := range files {
 		if totalSize <= fc.CapBytes {
 			break

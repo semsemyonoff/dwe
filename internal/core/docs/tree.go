@@ -65,7 +65,6 @@ func walkFS(fsys fs.FS, dir string, relPath string, parent *Node, root DocRoot, 
 				continue
 			}
 
-			// Create a directory node.
 			dirNode := &Node{
 				Name:     name,
 				Path:     entryRelPathForward,
@@ -74,7 +73,6 @@ func walkFS(fsys fs.FS, dir string, relPath string, parent *Node, root DocRoot, 
 			}
 			parent.Children = append(parent.Children, dirNode)
 
-			// Recurse into the directory.
 			subPath := filepath.Join(dir, name)
 			if err := walkFS(fsys, subPath, entryRelPath, dirNode, root, locale); err != nil {
 				return err
@@ -118,7 +116,6 @@ func sortChildren(node *Node) {
 		return ni.Name < nj.Name
 	})
 
-	// Recursively sort children's children.
 	for _, child := range node.Children {
 		if child.IsDir {
 			sortChildren(child)

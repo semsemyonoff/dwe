@@ -1318,8 +1318,6 @@ func TestLoadConfig_noServicesFile(t *testing.T) {
 	}
 }
 
-// --- ExportRule loading ---
-
 // --- DeployConfig loading ---
 
 const sampleDeployYML = `
@@ -3618,8 +3616,6 @@ docs:
 // has been removed from DweConfig. The IDE field is no longer part of the
 // typed configuration and cfg.IDE does not exist.
 func TestLoadConfig_noTopLevelIDEField(t *testing.T) {
-	// Verify that the DweConfig struct does not carry top-level IDE state.
-	// Reflection check: IDE field should not exist in the struct.
 	cfgStructType := reflect.TypeFor[DweConfig]()
 	if _, ok := cfgStructType.FieldByName("IDE"); ok {
 		t.Error("DweConfig should not have an IDE field")

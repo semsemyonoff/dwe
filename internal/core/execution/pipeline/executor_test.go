@@ -165,8 +165,6 @@ func (m *mockRecorder) OnPipelineFinish(success bool) {
 	m.append(recorderEvent{kind: "OnPipelineFinish", success: success})
 }
 
-// --- helpers ---
-
 // noopStep returns a step that runs a no-op shell command.
 func noopStep(name string) config.DeployStep {
 	return config.DeployStep{Name: name, Type: "shell", Cmd: "true"}
@@ -180,8 +178,6 @@ func buildResolvedSteps(phase config.DeployPhase, steps []config.DeployStep) []R
 	}
 	return result
 }
-
-// --- tests ---
 
 func TestRunPipeline_EmptySteps(t *testing.T) {
 	rep := &mockReporter{}

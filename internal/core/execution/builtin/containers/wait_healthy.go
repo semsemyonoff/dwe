@@ -17,7 +17,6 @@ type WaitHealthy struct{}
 
 // Validate checks that the with parameters are valid before the pipeline runs.
 func (WaitHealthy) Validate(with map[string]any) error {
-	// Validate timeout.
 	timeout, err := spec.GetDurationParam(with, "timeout", 60*time.Second)
 	if err != nil {
 		return err
@@ -26,7 +25,6 @@ func (WaitHealthy) Validate(with map[string]any) error {
 		return fmt.Errorf("builtin docker_wait_healthy: timeout must be positive, got %v", timeout)
 	}
 
-	// Validate interval.
 	interval, err := spec.GetDurationParam(with, "interval", 2*time.Second)
 	if err != nil {
 		return err
@@ -55,7 +53,6 @@ func (WaitHealthy) Validate(with map[string]any) error {
 		return fmt.Errorf("builtin docker_wait_healthy: services list contains empty string")
 	}
 
-	// Validate no unknown keys.
 	for key := range with {
 		if !slices.Contains([]string{"timeout", "interval", "services"}, key) {
 			return fmt.Errorf("builtin docker_wait_healthy: unknown key %q", key)
@@ -85,7 +82,6 @@ func (WaitHealthy) Describe(with map[string]any) string {
 
 // Run executes the docker_wait_healthy builtin.
 func (WaitHealthy) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
-	// Parse parameters.
 	timeout, _ := spec.GetDurationParam(with, "timeout", 60*time.Second)
 	interval, _ := spec.GetDurationParam(with, "interval", 2*time.Second)
 	services, _ := spec.GetStringSlice(with, "services")
@@ -98,10 +94,8 @@ func (WaitHealthy) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 	}
 
 	var err error
-	// Build compose.
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	// Obtain container IDs.
 	var ids []string
 	if len(services) > 0 {
 		ids, err = compose.ContainerIDsFor(services)
@@ -123,6 +117,5 @@ func (WaitHealthy) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 	// Compute attempts using ceiling division so the full timeout duration is covered.
 	attempts := max(int((timeout+interval-1)/interval), 1)
 
-	// Wait for healthy.
 	return docker.WaitContainersHealthyContext(ctx, ids, compose.HealthStatus, attempts, interval, ectx.Output)
 }

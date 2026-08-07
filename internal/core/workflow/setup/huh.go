@@ -320,7 +320,6 @@ func buildInputValidator(q Question) func(string) error {
 		// Apply preset or regex validation.
 		if q.Validate != nil {
 			if q.Validate.Preset != "" {
-				// Try to validate via ValidateAndCoerce.
 				_, err := ValidateAndCoerce(q, s)
 				if err != nil {
 					return err

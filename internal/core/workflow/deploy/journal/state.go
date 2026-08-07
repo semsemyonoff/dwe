@@ -80,7 +80,6 @@ func Load(path string) (*ProjectState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return zero-value with defaults
 			return &ProjectState{
 				SchemaVersion: "1",
 				Project:       &ProjectLevelState{},
@@ -118,13 +117,11 @@ func Save(path string, s *ProjectState) error {
 		return fmt.Errorf("cannot save nil state")
 	}
 
-	// Ensure parent directory exists
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
-	// Marshal state to YAML
 	data, err := yaml.Marshal(s)
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
@@ -149,7 +146,6 @@ func Save(path string, s *ProjectState) error {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
-	// Set file permissions
 	if err := os.Chmod(tmpPath, 0o644); err != nil {
 		return fmt.Errorf("failed to set file permissions: %w", err)
 	}
@@ -178,7 +174,6 @@ func RemoveService(path string, name string) error {
 		return err
 	}
 
-	// Delete the service
 	delete(state.Services, name)
 
 	// If no services remain and no project-level phases exist, remove the file entirely.

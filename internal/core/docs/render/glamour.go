@@ -25,13 +25,11 @@ func Render(input []byte, opts Opts, placeholderFunc PlaceholderFunc) (Result, e
 		opts.Width = 100
 	}
 
-	// Preprocess mermaid blocks
 	preprocessed, diagrams, err := PreprocessMermaid(input, placeholderFunc)
 	if err != nil {
 		return Result{}, err
 	}
 
-	// Render with glamour
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithStylePath(opts.Theme),
 		glamour.WithWordWrap(opts.Width),

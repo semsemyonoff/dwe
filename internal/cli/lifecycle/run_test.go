@@ -9,8 +9,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 )
 
-// --- cobra wiring tests ---
-
 func TestRunCmd_Use(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRunCmd(groupEnvironment, flags)
@@ -73,8 +71,6 @@ func TestRunCmd_InEnvironmentGroup(t *testing.T) {
 	}
 	t.Error("run command not found in root commands")
 }
-
-// --- config loading error tests (cobra integration) ---
 
 // makeMinimalWorkspaceYML writes the minimum workspace.yml needed for config.LoadConfig to succeed.
 func makeMinimalWorkspaceYML(t *testing.T, dir string) string {

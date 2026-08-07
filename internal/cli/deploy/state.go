@@ -70,7 +70,6 @@ func deployStateShowCmd(flags *cmdctx.RootFlags, out io.Writer) error {
 		return fmt.Errorf("loading state: %w", err)
 	}
 
-	// Marshal state to YAML and print
 	data, err := yaml.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("marshaling state: %w", err)
@@ -127,7 +126,6 @@ func deployStateClearCmd(flags *cmdctx.RootFlags, force bool) error {
 		return nil
 	}
 
-	// Prompt for confirmation if not forced and interactive
 	if !force && widgets.IsInteractiveFn(os.Stdin) {
 		confirmed, err := widgets.RunConfirm(
 			"Clear deploy state?",
@@ -199,10 +197,8 @@ func deployStateRepairCmd(flags *cmdctx.RootFlags) error {
 		return fmt.Errorf("loading state: %w", err)
 	}
 
-	// Recompute status aggregates
 	journal.Recompute(state)
 
-	// Save the repaired state
 	if err := journal.Save(statePath, state); err != nil {
 		return fmt.Errorf("saving repaired state: %w", err)
 	}

@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// ---- CompileVarSyntax ----
-
 func TestCompileVarSyntax_noOp(t *testing.T) {
 	cases := []string{
 		"plain text",
@@ -205,8 +203,6 @@ func TestRenderCommand_knownHeadUnknownSubkey(t *testing.T) {
 	}
 }
 
-// ---- RenderCommand ----
-
 func TestRenderCommand_plainString(t *testing.T) {
 	ctx := &RenderContext{}
 	got, err := RenderCommand("hello world", ctx)
@@ -352,8 +348,6 @@ func TestRenderCommand_mixedVarsAndGoTemplate(t *testing.T) {
 	}
 }
 
-// ---- resolveMapPath (internal) ----
-
 func TestResolveMapPath_shallow(t *testing.T) {
 	m := map[string]any{"key": "val"}
 	got := resolveMapPath(m, "key")
@@ -429,8 +423,6 @@ func TestRenderCommand_sproutFunctionInheritance(t *testing.T) {
 		t.Errorf("sprout default func = %q, want %q", got, want)
 	}
 }
-
-// ---- Files namespace ----
 
 func TestCompileVarSyntax_filesPath(t *testing.T) {
 	got := CompileVarSyntax("${files.dump.path}")
@@ -536,8 +528,6 @@ func TestRenderCommand_filesMixedVars(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
-
-// ---- EvalCommandCondition ----
 
 func TestEvalCommandCondition_emptyExpr(t *testing.T) {
 	ctx := &RenderContext{}
@@ -759,8 +749,6 @@ func TestRenderCommand_ServicesNestedPortsHosts(t *testing.T) {
 		}
 	}
 }
-
-// ---- Generated namespace ----
 
 func TestCompileVarSyntax_generated(t *testing.T) {
 	got := CompileVarSyntax("${generated.app_key}")

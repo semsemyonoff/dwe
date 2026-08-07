@@ -714,7 +714,6 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	infoPath := filepath.Join(ctx.ProjectRoot, "workspace", "info.yml")
 
-	// Check if file exists
 	fileExists := true
 	if _, statErr := os.Stat(infoPath); statErr != nil {
 		fileExists = false

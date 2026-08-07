@@ -57,12 +57,10 @@ func runDocsCacheClear(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// Remove the cache directory
 	if err := os.RemoveAll(cacheDir); err != nil {
 		return fmt.Errorf("removing cache directory: %w", err)
 	}
 
-	// Recreate the cache directory
 	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		return fmt.Errorf("recreating cache directory: %w", err)
 	}

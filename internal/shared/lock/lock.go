@@ -42,21 +42,17 @@ func (e *HeldError) Unwrap() error {
 // If the lock is already held by another live process, returns ErrLockHeld.
 // If the lock is held by a stale process (dead PID), cleans it up and retries once.
 func Acquire(path string) (*Lock, error) {
-	// Ensure parent directory exists
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create lock dir: %w", err)
 	}
 
-	// Attempt to open/create the lock file
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)
 	}
 
-	// Attempt non-blocking exclusive lock
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
-		// Lock acquired successfully
 		return finalizeAcquire(file, path)
 	}
 
@@ -64,7 +60,6 @@ func Acquire(path string) (*Lock, error) {
 	if err := checkAndCleanStaleLock(file, path); err == nil {
 		// Stale lock was cleaned; retry once
 		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
-			// Retry succeeded
 			return finalizeAcquire(file, path)
 		}
 	}
@@ -91,7 +86,6 @@ func finalizeAcquire(file *os.File, path string) (*Lock, error) {
 		return nil, fmt.Errorf("truncate lock file: %w", err)
 	}
 
-	// Write current PID to the lock file
 	pid := os.Getpid()
 	pidStr := strconv.Itoa(pid)
 	if _, err := file.WriteString(pidStr); err != nil {
@@ -117,14 +111,12 @@ func (l *Lock) Release() error {
 		return nil
 	}
 
-	// If already released, this is a no-op
 	if l.released {
 		return nil
 	}
 
 	l.released = true
 
-	// Unlock the file
 	if err := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN); err != nil {
 		_ = l.file.Close()
 		return fmt.Errorf("unlock file: %w", err)
@@ -159,7 +151,6 @@ func checkAndCleanStaleLock(file *os.File, path string) error {
 		return fmt.Errorf("kill check failed: %w", err)
 	}
 
-	// Process is alive
 	return errors.New("lock is held by a live process")
 }
 

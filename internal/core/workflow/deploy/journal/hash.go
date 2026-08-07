@@ -215,7 +215,6 @@ func sortedMap(v any) any {
 		if len(val) == 0 {
 			return val
 		}
-		// Create a slice of key-value pairs, sorted by key
 		keys := make([]string, 0, len(val))
 		for k := range val {
 			keys = append(keys, k)

@@ -10,8 +10,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// --- Actions registration ---
-
 // statusReg builds a registry the way the Frame does for this single-panel
 // plugin: the focus built-ins are stripped (freeing tab / shift+tab) before the
 // plugin's Actions hook runs. Mirrors newFrame / BuildHelp.
@@ -101,8 +99,6 @@ func TestActions_TabRebindAndBuiltins(t *testing.T) {
 		}
 	}
 }
-
-// --- HandleAction dispatch ---
 
 func newActionTestPlugin(t *testing.T) *plugin {
 	t.Helper()
@@ -251,8 +247,6 @@ func TestHandleAction_Unknown(t *testing.T) {
 		t.Errorf("HandleAction(bogus) = (%v, %v), want (nil, false)", cmd, handled)
 	}
 }
-
-// --- Help modal ---
 
 // TestHelpModal_TabsSectionAndReloadBinding asserts the ?-modal (via
 // tui.BuildHelp) shows the Tabs section and ctrl+r reload, and does not show a

@@ -83,7 +83,6 @@ func renderBlock(
 			currentPath = fmt.Sprintf("%s.items[%d]", itemPath, idx)
 		}
 
-		// Evaluate when: condition
 		show, err := tpl.EvalCondition(item.When, cfg)
 		if err != nil {
 			return "", false, fmt.Errorf("section %q %s when: %w", sectionID, currentPath, err)
@@ -94,13 +93,11 @@ func renderBlock(
 
 		// Handle subgroup items specially (recursive)
 		if item.Type == "subgroup" {
-			// Render the subgroup title
 			renderedTitle, err := tpl.Render(item.Title, cfg)
 			if err != nil {
 				return "", false, fmt.Errorf("section %q %s (subgroup) title: %w", sectionID, currentPath, err)
 			}
 
-			// Recursively render the subgroup
 			subOut, subRendered, err := renderBlock(
 				cfg,
 				item.Items,
@@ -142,12 +139,10 @@ func renderBlock(
 		}
 	}
 
-	// If no content and hide_on_empty, return empty
 	if contentCount == 0 && hideOnEmpty {
 		return "", false, nil
 	}
 
-	// Build output
 	var outSB strings.Builder
 	if title != "" {
 		var head string

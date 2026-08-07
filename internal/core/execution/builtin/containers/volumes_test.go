@@ -14,8 +14,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-// --- RemoveProjectVolumes ---
-
 // swapVolumeSeams replaces the list/remove seams and registers cleanup.
 func swapVolumeSeams(t *testing.T, list func(context.Context, string) ([]string, error), remove func(context.Context, string, string) error) {
 	t.Helper()
@@ -225,8 +223,6 @@ func TestDockerRemoveVolumes_Run_ListError(t *testing.T) {
 		t.Errorf("error chain does not wrap listErr: %v", err)
 	}
 }
-
-// --- RemoveVolumesByProjectPrefix (extracted, reusable core) ---
 
 // TestRemoveVolumesByProjectPrefix_FiltersByPrefix verifies only volumes
 // carrying the "<projectName>_" prefix are removed — an unprefixed shared

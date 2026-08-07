@@ -138,7 +138,6 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 
 	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 
-	// Iterate through all phases and steps in the deploy config
 	diags = append(diags, validateFilesGatePhases(ctx.Cfg, reg, ctx.Cfg.Deploy.Phases,
 		relPath(ctx.ProjectRoot, deployPath), "config.deploy")...)
 

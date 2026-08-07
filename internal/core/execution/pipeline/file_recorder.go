@@ -149,7 +149,6 @@ func (r *FileRecorder) ensureServicePhaseSteps(service, phaseName string) {
 func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// Initialize phase if not present
 	if rs.Service == "" {
 		// Project-scope step
 		r.ensureProjectPhaseSteps(rs.Phase.Name)
@@ -195,18 +194,15 @@ func (r *FileRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash str
 	}
 
 	if rs.Service == "" {
-		// Project-scope step
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		// Recompute phase status from all steps so a resume run can clear a previously
 		// failed phase once all its steps succeed.
 		r.state.Project.Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Project.Phases[rs.Phase.Name].Steps)
 	} else {
-		// Service-scope step
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps)
 	}
 
-	// Flush to disk immediately
 	if err := r.flush(); err != nil {
 		r.flushErr = err
 	}
@@ -237,7 +233,6 @@ func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash strin
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = journal.StatusFailed
 	}
 
-	// Flush to disk immediately
 	if err := r.flush(); err != nil {
 		r.flushErr = err
 	}
@@ -280,7 +275,6 @@ func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash strin
 		r.servicesSeenInThisRun[rs.Service] = true
 	}
 
-	// Flush to disk immediately
 	if err := r.flush(); err != nil {
 		r.flushErr = err
 	}

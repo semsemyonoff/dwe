@@ -203,8 +203,6 @@ func EvalRuntime(expr, projectRoot string) (bool, error) {
 	}
 }
 
-// --- helpers ---
-
 func isDirExisting(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()

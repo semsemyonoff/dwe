@@ -16,8 +16,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
-// unpack ----------------------------------------------------------------------
-
 // Unpack extracts a .tar.gz archive into <snapshotsRoot>/<targetName>/ with
 // strict safety contract. The caller is responsible for holding project
 // locks. Extraction happens into a sibling staging dir; on any error the

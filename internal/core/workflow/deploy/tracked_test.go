@@ -99,7 +99,6 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 
 	testDir := t.TempDir()
 
-	// Create minimal workspace.yml
 	cfgYAML := `project:
   name: test
   prefix: dwe
@@ -112,7 +111,6 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 		t.Fatalf("writing workspace.yml: %v", err)
 	}
 
-	// Create workspace dir
 	workspaceDir := filepath.Join(testDir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("creating workspace dir: %v", err)
@@ -134,7 +132,6 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 		t.Fatalf("writing deploy.yml: %v", err)
 	}
 
-	// Load config
 	cfg, err := config.LoadConfig(filepath.Join(testDir, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)

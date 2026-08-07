@@ -12,7 +12,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// readFileBytes reads a file into bytes, returning nil on error.
 func readFileBytes(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }

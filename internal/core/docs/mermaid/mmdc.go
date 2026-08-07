@@ -82,7 +82,6 @@ func (m *MmdcRenderer) Render(ctx context.Context, src string, theme Theme, widt
 	// Platform-specific setup (see mmdc_unix.go / mmdc_windows.go).
 	configureCommand(cmd)
 
-	// Run the command.
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -102,11 +101,9 @@ func (m *MmdcRenderer) Render(ctx context.Context, src string, theme Theme, widt
 			return nil, context.DeadlineExceeded
 		}
 
-		// Return the full error message.
 		return nil, fmt.Errorf("mmdc render failed: %w (stderr: %s)", err, stderr.String())
 	}
 
-	// Read the output PNG.
 	png, err := os.ReadFile(outputFile)
 	if err != nil {
 		return nil, fmt.Errorf("read mermaid output: %w", err)

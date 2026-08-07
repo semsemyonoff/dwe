@@ -169,7 +169,6 @@ func TestRun_ReloadThenQuit_CancelsInflightContext(t *testing.T) {
 		return nil
 	}
 
-	// Create a cancellable context for buildTabs
 	buildCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

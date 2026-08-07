@@ -61,11 +61,9 @@ func runDocsExport(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsExportF
 	// Build the roots list based on options
 	roots := []coredocs.DocRoot{}
 	for _, r := range allRoots {
-		// Always include dwe
 		if r.Name == "dwe" {
 			roots = append(roots, r)
 		}
-		// Optionally include project
 		if r.Name == "project" && df.includeProject {
 			roots = append(roots, r)
 		}
@@ -83,7 +81,6 @@ func runDocsExport(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsExportF
 		return fmt.Errorf("export failed: %w", err)
 	}
 
-	// Report success
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Documentation exported to %s\n", targetDir)
 
 	return nil

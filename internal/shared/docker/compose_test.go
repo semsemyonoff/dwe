@@ -482,8 +482,6 @@ func TestBuildArgs_DoubleDashSeparatorRun(t *testing.T) {
 	}
 }
 
-// --- BinName ---
-
 func TestBinName_ZeroValue(t *testing.T) {
 	c := &Compose{}
 	if got := c.BinName(); got != "docker" {

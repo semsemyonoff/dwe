@@ -53,7 +53,6 @@ func WriteLocalYAML(localPath string, local map[string]any) error {
 // mode 0o600. Shared by WriteLocalYAML (map-based) and WriteLocalYAMLNode
 // (node-based).
 func writeFileAtomic(localPath string, data []byte) error {
-	// Ensure parent directory exists
 	dir := filepath.Dir(localPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create directory for %s: %w", localPath, err)

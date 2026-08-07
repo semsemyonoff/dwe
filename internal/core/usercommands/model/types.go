@@ -601,7 +601,6 @@ func (pd *ParamDef) EffectiveWidget() ParamWidget {
 		return pd.Widget
 	}
 
-	// Infer from Type and Options.
 	if pd.Type == ParamTypeBool {
 		return WidgetConfirm
 	}
@@ -1544,7 +1543,6 @@ func (c *CommandDef) validateParams() error {
 			}
 		}
 
-		// Determine the effective widget.
 		effective := pdef.EffectiveWidget()
 
 		// Widget = select/multiselect requires non-empty options.

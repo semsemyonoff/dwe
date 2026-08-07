@@ -81,7 +81,6 @@ func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags
 	// Resolve the locale
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
-	// Get all topics
 	topics := coredocs.AllTopics(roots, locale)
 
 	// Compile the glob once so an invalid pattern fails the command instead of

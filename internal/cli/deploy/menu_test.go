@@ -52,7 +52,6 @@ func TestRunDeployMenu_MenuDispatch_Run(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
-	// Override test seams
 	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	oldRunDeployRunFn := runDeployRunFn
@@ -94,7 +93,6 @@ func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
-	// Override test seams
 	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	defer func() {

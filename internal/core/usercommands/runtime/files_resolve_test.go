@@ -1336,7 +1336,6 @@ func TestComputeFilePaths_CandidatesInvalidRegex(t *testing.T) {
 	}
 }
 
-// Helper function to check if a string contains a substring.
 func contains(s, substr string) bool {
 	for i := range s {
 		if i+len(substr) <= len(s) && s[i:i+len(substr)] == substr {

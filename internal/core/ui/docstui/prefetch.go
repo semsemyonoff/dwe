@@ -172,10 +172,7 @@ func (p *Prefetch) renderOne(ctx context.Context, work WorkItem) {
 // Items are prioritized: current file's diagrams first, then others.
 // This should be called before any diagrams are actually rendered.
 func (p *Prefetch) Queue(items []WorkItem) {
-	// Sort items to prioritize current file
-	// (items from the same file are grouped, with the current file first)
 	sort.Slice(items, func(i, j int) bool {
-		// Lower indices come first (current file's diagrams)
 		return items[i].Index < items[j].Index
 	})
 

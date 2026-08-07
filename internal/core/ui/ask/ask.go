@@ -151,14 +151,12 @@ func Build(title string, fields []Field, opts RunOptions) (*Form, error) {
 		opts.Output = os.Stdout
 	}
 
-	// Validate that no field has FieldUnknown.
 	for _, f := range fields {
 		if f.Kind == FieldUnknown {
 			return nil, fmt.Errorf("field %q: kind is FieldUnknown (zero value)", f.Key)
 		}
 	}
 
-	// Handle empty field list early.
 	if len(fields) == 0 {
 		return &Form{empty: true}, nil
 	}

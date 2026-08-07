@@ -59,7 +59,6 @@ func (DirsEnsure) Run(_ context.Context, with map[string]any, ectx spec.ExecCont
 	// Build the full directory list: mandatory first, then configured extras.
 	dirs := buildDirList(svc.Dirs)
 
-	// Resolve base directory for the service hub.
 	baseDir := filepath.Join(ectx.ProjectRoot, svc.Dir)
 
 	for _, rel := range dirs {

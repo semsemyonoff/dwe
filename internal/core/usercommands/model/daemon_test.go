@@ -263,7 +263,6 @@ func TestDaemon_SourceDaemonOnBuiltinIsAllowed(t *testing.T) {
 	}
 }
 
-// CommandTypeDaemon constant.
 func TestDaemon_TypeConstant(t *testing.T) {
 	if string(CommandTypeDaemon) != "daemon" {
 		t.Errorf("CommandTypeDaemon = %q, want daemon", CommandTypeDaemon)

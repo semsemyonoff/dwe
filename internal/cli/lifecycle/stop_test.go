@@ -25,15 +25,12 @@ func TestStopCmd_MaximumOneArg(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewStopCmd(groupEnvironment, flags)
 
-	// Zero args allowed.
 	if err := cmd.Args(cmd, []string{}); err != nil {
 		t.Errorf("expected zero args to be allowed, got: %v", err)
 	}
-	// One arg allowed.
 	if err := cmd.Args(cmd, []string{"postgres"}); err != nil {
 		t.Errorf("expected one arg to be allowed, got: %v", err)
 	}
-	// Two args rejected.
 	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
 		t.Error("expected error when passing two arguments to stop command")
 	}

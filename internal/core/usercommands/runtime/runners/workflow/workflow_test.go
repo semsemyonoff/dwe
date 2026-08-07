@@ -34,7 +34,6 @@ func runWorkflowCtx(t *testing.T, reg *Registry, workflowCmd *CommandDef) (strin
 	return outBuf.String(), errBuf.String(), err
 }
 
-// readFileBytes reads a file into bytes, returning nil on error.
 func readFileBytes(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }

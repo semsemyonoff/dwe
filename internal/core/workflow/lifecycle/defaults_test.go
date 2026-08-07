@@ -6,8 +6,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
-// --- DefaultRunConfig shape tests ---
-
 func TestDefaultRunConfig_Shape(t *testing.T) {
 	cfg := DefaultRunConfig()
 	if cfg == nil {
@@ -66,8 +64,6 @@ func TestDefaultRunConfig_ReturnsFreshAlloc(t *testing.T) {
 		t.Error("mutating one result must not affect another")
 	}
 }
-
-// --- EnsureRunConfig tests ---
 
 func TestEnsureRunConfig(t *testing.T) {
 	populated := &config.LifecycleConfig{

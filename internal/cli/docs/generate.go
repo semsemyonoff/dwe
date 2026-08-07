@@ -130,7 +130,6 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 		all = reg.List("")
 	}
 
-	// Group by group ID.
 	groups, byGroup := listCommandsByGroup(all)
 
 	for _, group := range groups {
@@ -175,7 +174,6 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercom
 
 	fmt.Fprintf(&sb, "# %s\n\n", def.ID)
 
-	// Use i18n lookup for description
 	description := store.CommandDescription(locale, def.ID, def.Description)
 	if description != "" {
 		sb.WriteString(description + "\n\n")

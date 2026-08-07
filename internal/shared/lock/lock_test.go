@@ -15,7 +15,6 @@ import (
 func TestAcquireAndRelease(t *testing.T) {
 	lockPath := filepath.Join(t.TempDir(), "test.lock")
 
-	// Acquire the lock
 	lock1, err := Acquire(lockPath)
 	if err != nil {
 		t.Fatalf("first acquire failed: %v", err)
@@ -33,7 +32,6 @@ func TestAcquireAndRelease(t *testing.T) {
 		t.Errorf("lock file contains %q, expected %q", string(data), pidStr)
 	}
 
-	// Release the lock
 	if err := lock1.Release(); err != nil {
 		t.Fatalf("release failed: %v", err)
 	}
@@ -129,7 +127,6 @@ func TestReleaseAllowsNextAcquire(t *testing.T) {
 	}
 	defer func() { _ = lock2.Release() }()
 
-	// Verify the lock file exists
 	_, err = os.ReadFile(lockPath)
 	if err != nil {
 		t.Fatalf("read lock file: %v", err)

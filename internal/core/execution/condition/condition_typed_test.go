@@ -10,8 +10,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 )
 
-// --- Typed Condition Decode ---
-
 func TestTypedCondition_DecodeBuiltin(t *testing.T) {
 	data := `type: builtin
 cmd: dir-empty foo`
@@ -57,8 +55,6 @@ expr: "{{ .Services.main.Enabled }}"`
 	}
 }
 
-// --- Reject String Shorthand ---
-
 func TestTypedCondition_RejectStringShorthand(t *testing.T) {
 	data := `"dir-empty foo"`
 	var c condition.Condition
@@ -76,8 +72,6 @@ func TestTypedCondition_RejectBareString(t *testing.T) {
 		t.Error("expected error when decoding bare string")
 	}
 }
-
-// --- Validation ---
 
 func TestTypedCondition_ValidateBuiltin_Empty(t *testing.T) {
 	c := condition.Condition{Type: condition.TypeBuiltin, Cmd: ""}
@@ -132,8 +126,6 @@ func TestTypedCondition_ValidateTemplate_OK(t *testing.T) {
 	}
 }
 
-// --- IsRuntime ---
-
 func TestTypedCondition_IsRuntime(t *testing.T) {
 	cases := []struct {
 		cond     condition.Condition
@@ -150,8 +142,6 @@ func TestTypedCondition_IsRuntime(t *testing.T) {
 		}
 	}
 }
-
-// --- EvalRuntimeTyped ---
 
 func TestTypedCondition_EvalRuntimeTyped_Nil(t *testing.T) {
 	ok, err := condition.EvalRuntimeTyped(nil, t.TempDir())

@@ -57,8 +57,6 @@ func makeSourceRepo(t *testing.T) string {
 	return dir
 }
 
-// --- Validate ---
-
 func TestClone_Validate(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -105,8 +103,6 @@ func TestClone_Describe(t *testing.T) {
 		t.Errorf("describe with branch = %q", got)
 	}
 }
-
-// --- Run ---
 
 func TestClone_FreshClone(t *testing.T) {
 	repo := makeSourceRepo(t)

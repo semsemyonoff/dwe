@@ -206,8 +206,6 @@ func TestDeployAfterValidator_ServiceResetAfterError(t *testing.T) {
 	requireSeverity(t, diags, validate.SeverityError, "reset.yml")
 }
 
-// --- helpers ---
-
 // requireOK asserts at least one SeverityOK diagnostic with the given target,
 // and no SeverityError diagnostics.
 func requireOK(t *testing.T, diags []validate.Diagnostic, target string) {

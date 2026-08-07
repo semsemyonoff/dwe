@@ -179,7 +179,6 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 		projectDocsPath := filepath.Join(projectRoot, "docs")
 		_, err := os.Stat(projectDocsPath)
 		if err == nil {
-			// Project docs exist; create a watcher
 			watcher, err := NewWatcher(ctx, projectDocsPath)
 			if err == nil {
 				m.Watcher = watcher

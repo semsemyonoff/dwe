@@ -619,7 +619,6 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		}
 	}
 
-	// Resolve the deploy plan
 	var steps []pipeline.ResolvedStep
 	switch {
 	case len(opts.Services) == 0:
@@ -655,7 +654,6 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		},
 	}
 
-	// Load existing state if present
 	state, err := journal.Load(statePath)
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)

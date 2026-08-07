@@ -710,7 +710,7 @@ func (b *browser) applyInnerScrollbar(content string, h int) string {
 	return strings.Join(lines, "\n")
 }
 
-// --- Inline filter capture (Task 7) ---
+// --- Inline filter capture ---
 
 // enterFilter opens the inline filter capture mode. It saves the current tree
 // cursor, opens the TreeFilter with an empty query, and applies it (which causes

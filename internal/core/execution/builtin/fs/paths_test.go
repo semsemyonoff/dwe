@@ -22,8 +22,6 @@ func newTestExecCtx(root string) spec.ExecContext {
 	}
 }
 
-// --- RemovePaths.Validate ---
-
 func TestRemovePaths_Validate_MissingPaths(t *testing.T) {
 	b := RemovePaths{}
 	if err := b.Validate(nil); err == nil {
@@ -74,8 +72,6 @@ func TestRemovePaths_Validate_Valid(t *testing.T) {
 	}
 }
 
-// --- RemovePaths.Describe ---
-
 func TestRemovePaths_Describe(t *testing.T) {
 	b := RemovePaths{}
 	desc := b.Describe(map[string]any{"paths": []any{"a", "b"}})
@@ -83,8 +79,6 @@ func TestRemovePaths_Describe(t *testing.T) {
 		t.Errorf("expected builtin name in describe, got %q", desc)
 	}
 }
-
-// --- RemovePaths.Run ---
 
 func TestRemovePaths_Run_RemovesFile(t *testing.T) {
 	root := t.TempDir()
@@ -132,8 +126,6 @@ func TestRemovePaths_Run_InvalidPathsType(t *testing.T) {
 		t.Fatal("expected error for invalid paths type in Run")
 	}
 }
-
-// --- RemovePaths.Validate edge case ---
 
 func TestRemovePaths_Validate_InvalidPathsType(t *testing.T) {
 	b := RemovePaths{}

@@ -7,10 +7,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// -----------------------------------------------------------------------------
-// Transitive confirmation guard — ConfirmCommand
-// -----------------------------------------------------------------------------
-
 func TestConfirmCommand_UnderParallelRejected(t *testing.T) {
 	cmd := &CommandDef{
 		ID:           "test.confirming",

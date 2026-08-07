@@ -18,8 +18,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-// --- IsInteractive ---
-
 func TestIsInteractive(t *testing.T) {
 	cases := []struct {
 		name string
@@ -43,8 +41,6 @@ func TestIsInteractive(t *testing.T) {
 	}
 }
 
-// --- knownNames ---
-
 func TestKnownNames_AllRegistered(t *testing.T) {
 	names := knownNames()
 	if len(names) == 0 {
@@ -63,8 +59,6 @@ func TestKnownNames_AllRegistered(t *testing.T) {
 		}
 	}
 }
-
-// --- Inventory ---
 
 func TestInventory_EveryEntryHasSummary(t *testing.T) {
 	inv := Inventory()
@@ -135,8 +129,6 @@ func TestKindString(t *testing.T) {
 	}
 }
 
-// --- Validate dispatcher ---
-
 func TestValidate_UnknownBuiltin(t *testing.T) {
 	err := Validate("nonexistent_builtin", nil, CtxUserYAML)
 	if err == nil {
@@ -155,8 +147,6 @@ func TestValidate_KnownBuiltin_NoParams(t *testing.T) {
 	}
 }
 
-// --- Describe dispatcher ---
-
 func TestDescribe_UnknownBuiltin(t *testing.T) {
 	desc := Describe("nonexistent_builtin", nil)
 	if !strings.Contains(desc, "nonexistent_builtin") {
@@ -170,8 +160,6 @@ func TestDescribe_KnownBuiltin(t *testing.T) {
 		t.Error("expected non-empty describe for confirm builtin")
 	}
 }
-
-// --- Run dispatcher ---
 
 func TestRun_UnknownBuiltin(t *testing.T) {
 	ctx := ExecContext{
@@ -187,8 +175,6 @@ func TestRun_UnknownBuiltin(t *testing.T) {
 		t.Errorf("error should mention the unknown name, got: %v", err)
 	}
 }
-
-// --- Kind categorization and CallerContext gating ---
 
 // TestKindCategorization verifies that every registered builtin
 // has the expected kind, and that kind/context gating works as intended.
@@ -321,8 +307,6 @@ func TestGetKindMismatch(t *testing.T) {
 	})
 }
 
-// --- KindOf classifier ---
-
 func TestKindOf(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -367,8 +351,6 @@ func TestPredicateAsUserCommand_Intentional(t *testing.T) {
 		t.Error("daemons_reap must remain unreachable from CtxUserYAML")
 	}
 }
-
-// --- Registry composition ---
 
 // allBuiltinNames enumerates every builtin name expected in the registry after
 // the subpackage refactor. Adding or removing a name requires updating this list.

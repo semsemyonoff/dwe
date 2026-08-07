@@ -9,8 +9,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 )
 
-// --- FetchComposeTopology bin parameter ---
-
 func TestFetchComposeTopology_EmptyFiles_NilRegardlessOfBin(t *testing.T) {
 	// No files → nil regardless of which binary is requested.
 	if got := FetchComposeTopology(nil, "proj", nil, "podman", ""); got != nil {
@@ -23,8 +21,6 @@ func TestComposeNodeStatuses_EmptyFiles_NilRegardlessOfBin(t *testing.T) {
 		t.Errorf("expected nil for empty file list, got %v", got)
 	}
 }
-
-// --- BuildComposeArgs ---
 
 func TestBuildComposeArgs_WithProjectName(t *testing.T) {
 	args := BuildComposeArgs("my-project", []string{"compose.yaml"}, "config")
@@ -51,8 +47,6 @@ func TestBuildComposeArgs_NoProjectName(t *testing.T) {
 		}
 	}
 }
-
-// --- ParseTopologyFromFiles ---
 
 func TestParseTopologyFromFiles_Empty(t *testing.T) {
 	result := ParseTopologyFromFiles(nil, "")
@@ -95,8 +89,6 @@ services:
 		t.Error("expected app in result")
 	}
 }
-
-// --- DisabledNodes ---
 
 func TestDisabledNodes_ReturnsDisabledServiceContainers(t *testing.T) {
 	cfg := makeServicesCfg(
@@ -153,8 +145,6 @@ func TestDisabledNodes_EnabledToolExcluded(t *testing.T) {
 		}
 	}
 }
-
-// --- AugmentWithDisabled ---
 
 func TestAugmentWithDisabled_AddsDisabledNodes(t *testing.T) {
 	cfg := makeServicesCfg(
@@ -236,8 +226,6 @@ func TestAugmentWithDisabled_NoDisabledNoop(t *testing.T) {
 	}
 }
 
-// --- RemoveHiddenNodes ---
-
 func TestRemoveHiddenNodes_RemovesFromBoth(t *testing.T) {
 	topo := map[string][]string{
 		"web":  {"db"},
@@ -287,8 +275,6 @@ func TestRemoveHiddenNodes_EmptyHidden(t *testing.T) {
 		t.Errorf("empty hidden list should leave everything unchanged")
 	}
 }
-
-// --- ResolveProjectAndDocker ---
 
 func TestResolveProjectAndDocker_WithDockerYML(t *testing.T) {
 	dir := makeMinimalProject(t)
