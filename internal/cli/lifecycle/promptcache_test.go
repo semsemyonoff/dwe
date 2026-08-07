@@ -73,6 +73,13 @@ func TestStop_NoFlag_WritesStopped(t *testing.T) {
 }
 
 func TestStop_WithService_InvalidatesCache(t *testing.T) {
+	// This test asserts what happens AFTER preflight, so it must not depend on
+	// a real docker probe: `StopService` runs preflight before the locks, and a
+	// probe killed on its 5s deadline would fail the command for an unrelated
+	// reason. The direct-`StopService` tests get this via `SkipPreflight: true`;
+	// the cobra path builds its own deps, so it stubs the seam instead.
+	stubPreflightRun(t)
+
 	cfgPath := writeStopTestConfig(t, map[string]struct {
 		enabled   bool
 		container string
