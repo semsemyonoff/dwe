@@ -31,7 +31,7 @@ type MmdcRenderer struct {
 }
 
 // NewMmdc constructs an MmdcRenderer with a given binary name.
-// It probes the version once at construction time (via sync.OnceValue in callers).
+// Version is a lazy probe closure; New replaces it with a non-blocking one.
 // If strict is true, missing mmdc returns ErrMmdcRequired instead of ErrMmdcNotAvailable.
 func NewMmdc(bin string, strict bool) *MmdcRenderer {
 	return &MmdcRenderer{

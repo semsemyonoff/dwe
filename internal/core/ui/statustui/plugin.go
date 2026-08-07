@@ -78,14 +78,12 @@ func (p *plugin) CapturingInput() bool { return false }
 // nothing to cache here.
 func (p *plugin) Resize(tui.Region) {}
 
-// Update implements tui.Plugin. tabsLoadedMsg handling (stale-gen drop,
+// Update implements tui.Plugin: tabsLoadedMsg handling (stale-gen drop,
 // snapshot assign, loadedAt/healthIndicator, YOffset restore-on-matching-
-// reload else GotoTop) and spinner.TickMsg preserve the legacy model.Update's
-// state machine — see the plan's single most important invariant. Body
-// content itself is no longer set here; renderBody recomputes it from
-// m.snap on the next render via renderTab. Unmatched messages (e.g.
-// viewport nav keys the registry left unbound) delegate to viewport.Update
-// for scroll handling.
+// reload else GotoTop) plus spinner.TickMsg. Body content is not set here;
+// renderBody recomputes it from m.snap on the next render via renderTab.
+// Unmatched messages (e.g. viewport nav keys the registry left unbound)
+// delegate to viewport.Update for scroll handling.
 func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 	m := p.m
 
@@ -248,9 +246,9 @@ func (p *plugin) renderBody(inner tui.Region) string {
 
 // StatusContext implements tui.Plugin. Returns the middle-zone status
 // string: health indicator + "loaded X ago", or a loading/reloading state.
-// This is the old renderStatusBar leftParts, minus the help text (the right
-// side of the old status bar), which the Frame now supplies itself. Called
-// every render so the content is reactive to the model's current state.
+// The help text on the right of the status line is supplied by the Frame,
+// not here. Called every render so the content is reactive to the model's
+// current state.
 func (p *plugin) StatusContext() string {
 	m := p.m
 	var parts []string

@@ -319,8 +319,9 @@ type Context struct {
 }
 
 // RenderHooks renders every entry in ctx.Manifest into ctx.HooksDir.
-// Each destination is written atomically (write then chmod 0755). A destination
-// that exists as a symlink is rejected without overwrite.
+// Each destination is written and then chmod'd to 0755 (unconditionally, so a
+// re-render normalises permissions). A destination that exists as a symlink is
+// rejected without overwrite.
 func RenderHooks(ctx Context) error {
 	if ctx.Manifest == nil {
 		return errors.New("git: nil manifest")

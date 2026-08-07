@@ -10,8 +10,8 @@ import (
 )
 
 func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
-	// Project identity has moved to RenderBrandHeader. The summary itself must
-	// no longer contain the project name nor a "project —" label.
+	// Project identity lives in BrandHeader; the summary itself must not
+	// contain the project name nor a "project —" label.
 	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
 	}

@@ -1883,8 +1883,9 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 // Ports and hosts are deliberately overridable: a developer commonly needs
 // to change a port that clashes with something already bound on their host,
 // or switch the `*.local` hostname they use, without editing the shared
-// workspace/services.yml. Each is deep-merged by port-name / host-name on top
-// of the declared map so a partial override only touches the listed entries.
+// workspace/services/<name>/service.yml. Each is deep-merged by port-name /
+// host-name on top of the declared map so a partial override only touches the
+// listed entries.
 var OverlayAllowedKeys = map[string]bool{
 	"enabled": true,
 	"ports":   true,
@@ -1893,9 +1894,9 @@ var OverlayAllowedKeys = map[string]bool{
 
 // validateServicesOverlay rejects any non-overlay-allowed field under a
 // layer's services.<name> mapping, any services.<name> entry naming a
-// service not declared in workspace/services.yml, and malformed ports/hosts
-// blocks. layerPath is included in error messages so the user knows which
-// file to edit.
+// service not declared in workspace/services/<name>/service.yml, and malformed
+// ports/hosts blocks. layerPath is included in error messages so the user knows
+// which file to edit.
 //
 // isLocal is true when this layer is `workspace/local.yml`. It gates the
 // per-service `compose:` block to local.yml only — that key is per-developer
@@ -3013,9 +3014,10 @@ func ValidUpdateMode(s string) bool {
 	return false
 }
 
-// loadDeployConfigDecode does the strict YAML decode + shape validation for any
-// pipeline file. It permits all fields including After; context-specific callers
-// enforce restrictions on top of this. NOT exported.
+// loadProjectDeployConfigDecode does the strict YAML decode + shape validation
+// for pipeline files using the ProjectDeployConfig shape: workspace/deploy.yml,
+// workspace/reset.yml and per-service reset.yml. That shape carries no After
+// field, so KnownFields(true) rejects `after:` structurally.
 func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeployConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

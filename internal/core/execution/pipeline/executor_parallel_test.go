@@ -90,7 +90,6 @@ func TestParallelGroup_HappyPath_AllSubStepsFinish(t *testing.T) {
 }
 
 func TestParallelGroup_GroupWhenFalse_SkippedWholesale(t *testing.T) {
-	// Use builtin "dir-empty <non-empty-dir>" → false to skip the group.
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
 	phase := config.DeployPhase{Name: "p"}
@@ -436,5 +435,5 @@ func TestParallelGroup_ErrorPropagatesAsErrSilent(t *testing.T) {
 	}
 }
 
-// guard against accidental ineffectual t.Helper / fmt usage.
+// Keeps the fmt import referenced; no test in this file uses fmt directly.
 var _ = fmt.Sprintf

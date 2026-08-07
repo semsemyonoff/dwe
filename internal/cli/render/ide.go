@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRenderIDECmd creates the `dwe render ide [service]` command.
+// newIDECmd creates the `dwe render ide [service]` command.
 // It generates IDE-specific config files into each service directory.
 // When a service name is provided only that service is processed;
 // otherwise all services matching the IDE selection policy are processed.
@@ -107,7 +107,7 @@ the IDE collision-policy winner (deepest extends) is rendered. This means
 
 // resolveIDEHubAnchor treats name as a hub anchor and returns the IDE collision
 // winner among services that share name's Dir. Applies the same gating used by
-// selectIDEServices (Enabled + IDERenderEnabled), then picks the deepest extends
+// ide.SelectServices (Enabled + IDERenderEnabled), then picks the deepest extends
 // chain (ties broken lexicographically). Returns name unchanged when there are
 // no qualifying siblings. The caller must have already validated name via
 // validateExplicitIDEArg, so name itself is guaranteed to qualify.

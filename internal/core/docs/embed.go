@@ -18,7 +18,6 @@ func init() {
 	subFS, err := fs.Sub(embedFS, "embedded")
 	if err != nil {
 		slog.Warn("failed to create docs FS", "err", err)
-		// Fallback to empty FS; Sources() will log a debug message.
 		BuiltinFS = &emptyFS{}
 		return
 	}

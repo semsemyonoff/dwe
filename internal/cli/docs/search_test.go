@@ -54,8 +54,8 @@ func TestDocsSearchTSV(t *testing.T) {
 }
 
 // TestDocsSearchJSON verifies --output json emits a parseable array of
-// {source, path, anchor, count} records. Field names are an agent-facing
-// contract — renames must be deliberate.
+// {source, path, anchor, count, snippet} records. Field names are an
+// agent-facing contract — renames must be deliberate.
 func TestDocsSearchJSON(t *testing.T) {
 	flags := &cmdctx.RootFlags{Output: "json", Locale: "en"}
 	cmd := newDocsSearchCmd(flags)

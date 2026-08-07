@@ -60,7 +60,10 @@ func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 }
 
 // shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.
-// Embedded single quotes are escaped via the '\\” idiom.
+// An embedded single quote is escaped the standard sh way: close the quoted
+// run, emit a backslash-escaped quote, reopen. The literal cannot be spelled
+// out here — gofmt rewrites a doubled quote in a doc comment into a typographic
+// one.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

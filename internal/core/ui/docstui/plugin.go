@@ -514,9 +514,8 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		return b.applyTopicLoaded(msg)
 
 	case FileChangedMsg:
-		// Reload the current topic if the changed file matches it. Mirrors
-		// Model.Update(FileChangedMsg) exactly (generation filtering, path
-		// comparison) so live-reload behavior is preserved.
+		// Reload the current topic only when the changed file is the one on
+		// screen (generation filtering plus path comparison).
 		var topicCmd tea.Cmd
 		if b.CurrentTopic != nil && b.CurrentTopic.Node != nil && b.ProjectRoot != "" {
 			projectDocsPath := filepath.Join(b.ProjectRoot, "docs")
@@ -655,11 +654,10 @@ func (b *browser) applyCursorGlyph(content string, h int) string {
 }
 
 // applyInnerScrollbar overdraws the rightmost character column of the inner
-// viewport panel string with a proportional scrollbar thumb/track. This mirrors
-// the old applyViewportScrollbar (view.go) but operates on border-free inner
-// content: the Frame owns the border, so the scrollbar column is carved out of
-// the inner width instead of overwriting a border rune. Returns content
-// unchanged when the whole document fits in the visible area.
+// viewport panel string with a proportional scrollbar thumb/track. It operates
+// on border-free inner content: the Frame owns the border, so the scrollbar
+// column is carved out of the inner width instead of overwriting a border rune.
+// Returns content unchanged when the whole document fits in the visible area.
 func (b *browser) applyInnerScrollbar(content string, h int) string {
 	if b.Viewport == nil {
 		return content
@@ -901,9 +899,10 @@ func isPrintable(s string) bool {
 // keyboard nav path through afterTreeMove → selectCursor; without this the
 // click would reposition the highlight but leave the viewport on the previously
 // loaded topic until the next key press). While the inline filter is active the
-// query line is not row-addressable so clicks are dropped. The viewport has no
-// per-row click targets today; wheel scroll arrives via WheelMsg (pointer-routed
-// by the framework), so no per-click scroll handling is needed here.
+// query line is not row-addressable so clicks are dropped. In the viewport a
+// click follows an internal link, jumps the scrollbar column, or moves the
+// reading cursor to the clicked row; wheel scroll arrives separately via
+// WheelMsg (pointer-routed by the framework).
 func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
 	// A click interrupts an in-flight wheel-scroll burst: drop the deferred tree
 	// load so the click's own selection takes over immediately.

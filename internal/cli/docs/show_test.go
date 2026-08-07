@@ -79,7 +79,7 @@ func TestDocsShowBuiltinTopic(t *testing.T) {
 	require.NotEmpty(t, outBuf.String(), "expected non-empty output for built-in topic")
 }
 
-// runDocsShow executes `docs show` with the given args and returns stdout and
+// execDocsShow executes `docs show` with the given args and returns stdout and
 // stderr separately — the long-doc hint is a stderr-only side channel, so a
 // test that merged the two could not tell it from document body.
 func execDocsShow(t *testing.T, args ...string) (stdout, stderr string) {

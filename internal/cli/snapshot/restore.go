@@ -184,8 +184,8 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 }
 
 func runSnapshotRollback(cmd *cobra.Command, flags *cmdctx.RootFlags, yes, noLive, silent bool) error {
-	// rollback resolves the target name from snapshot.yml; pass an empty name
-	// to runSnapshotRestore and dispatch through snapshotpkg.Rollback below.
+	// rollback takes its target from workspace/snapshot.yml instead of a CLI
+	// argument; runSnapshotRestore dispatches it through snapshotpkg.Rollback.
 	baseDir := flags.ProjectRoot()
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
 	if err != nil {

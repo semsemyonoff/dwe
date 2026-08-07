@@ -599,8 +599,8 @@ func genTopLevelIndex(outDir string) error {
 }
 
 // mmdcAvailable reports whether the configured mmdc binary resolves on $PATH
-// (or as an absolute path). Used purely for diagnostic banners — the renderer
-// itself handles the actual unavailable-fallback path.
+// (or as an absolute path). runDocsTUI uses it both to substitute a Disabled
+// renderer and to build the install notice for the diagram-error overlay.
 func mmdcAvailable(bin string) bool {
 	if bin == "" {
 		return false

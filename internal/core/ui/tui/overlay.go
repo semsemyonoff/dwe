@@ -22,9 +22,9 @@ import (
 // gap forces a hand-rolled path: dimming (below) is applied to the base string
 // BEFORE it becomes a layer, so the compositor itself needs no extension.
 
-// Overlay layer IDs. They tag the composited layers so the Stage 2 mouse layer
-// can distinguish a click on the modal from a click on the dimmed body via
-// Compositor.Hit (see overlayClickOutsideDismisses).
+// Overlay layer IDs. They name the two composited lipgloss layers (see
+// [Composite]); hit testing does NOT use them — classifyHit does the
+// modal/body split with region math (see hittest.go).
 const (
 	overlayBaseLayerID  = "tui.overlay.base"
 	overlayModalLayerID = "tui.overlay.modal"

@@ -15,9 +15,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// Model holds the docs browser's internal state. It is embedded in browser to
-// share Tree/Viewport/Filter/DiagramState/heading-index/loaded-topic fields
-// between the legacy standalone path and the plugin path.
+// Model holds the docs browser's internal state: the
+// Tree/Viewport/Filter/DiagramState/heading-index/loaded-topic fields the
+// browser plugin embeds.
 type Model struct {
 	// TUI state
 	Tree       *TreeWidget

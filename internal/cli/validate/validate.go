@@ -533,9 +533,9 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 		validateCfg, validateWarnings, validateLoadErr = config.LoadValidateConfig(config.ValidateConfigPath(projectRoot))
 	}
 
-	// Load user-config diagnostically (nil is OK if it fails or is absent).
-	// Per the pattern in command/root.go:156-160, userconfig load failures
-	// are logged as warnings and do not break project-level validation.
+	// Load user-config diagnostically (nil is OK if it fails or is absent):
+	// a load failure is logged as a warning and does not break project-level
+	// validation.
 	var userCfg *userpkg.Config
 	if projectRoot != "" {
 		userCfg, err = userpkg.Load(projectRoot)

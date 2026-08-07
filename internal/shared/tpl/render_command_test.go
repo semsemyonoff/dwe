@@ -707,13 +707,9 @@ func TestEvalCommandCondition_malformedBuiltin(t *testing.T) {
 }
 
 // TestRenderCommand_ServicesNestedPortsHosts verifies that the generic dot-path
-// resolver walks two-level nested maps for the new services.<name>.ports.<port-name>
-// and services.<name>.hosts.<host-name> shapes without any tpl-side changes.
-//
-// This is a plumbing-verification test for the unified-services-schema refactor:
-// the producer (injectServicesIntoRaw) hasn't been rewritten yet, but the consumer
-// (CompileVarSyntax → resolve → resolveMapPath) already walks nested maps via .Raw
-// generically. No tpl changes are required.
+// resolver walks two-level nested maps for the services.<name>.ports.<port-name>
+// and services.<name>.hosts.<host-name> shapes — the resolver is shape-agnostic,
+// so the nesting needs no tpl-side special case.
 func TestRenderCommand_ServicesNestedPortsHosts(t *testing.T) {
 	raw := map[string]any{
 		"services": map[string]any{

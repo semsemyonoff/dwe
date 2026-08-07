@@ -8,15 +8,11 @@ import (
 	"testing"
 )
 
-// TestSourceTemplates_noStaleAccessors walks every template-source location
-// in the repo and asserts that the deleted accessors (.Tools, .Runtime.Ports,
-// .Runtime.Hosts) and dot-paths (runtime.ports, runtime.hosts) no longer
-// appear. Mirrors the Task 13 acceptance grep, scoped to template-source
-// paths — catches stale source that happens not to be exercised by any
-// rendering fixture.
-//
-// Excludes the active plan and completed plans, which intentionally
-// enumerate the old names.
+// TestSourceTemplates_noStaleAccessors scans the template-source trees for the
+// removed accessors (.Tools, .Runtime.Ports, .Runtime.Hosts) and dot-paths
+// (runtime.ports, runtime.hosts), catching stale source that no rendering
+// fixture happens to exercise. Plan documents are skipped: they enumerate the
+// old names on purpose.
 func TestSourceTemplates_noStaleAccessors(t *testing.T) {
 	repoRoot := findRepoRoot(t)
 

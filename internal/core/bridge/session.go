@@ -238,9 +238,6 @@ func (d *Daemon) sendError(conn net.Conn, code, message string) {
 	d.logf("bridge: rejected connection: %s: %s", code, message)
 }
 
-// validateCwd enforces the D5 containment rule: the (already translated)
-// HELLO cwd must realpath-resolve inside the realpath'd project root. The
-// resolved path becomes the subprocess working directory.
 // resolveCwd maps the client-reported cwd onto a host working directory for
 // the forked dwe. A cwd that resolves inside the project is used as-is; any
 // other shape FALLS BACK to the daemon's own project root with a log note

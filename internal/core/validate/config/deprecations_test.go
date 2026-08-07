@@ -12,7 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-// writeFile writes content to path under root, creating parent dirs.
+// writeProjectFile writes content to rel under root, creating parent dirs.
 func writeProjectFile(t *testing.T, root, rel, content string) {
 	t.Helper()
 	path := filepath.Join(root, rel)

@@ -10,8 +10,8 @@ import (
 
 const defaultLineWidth = 76
 
-// Writer handles formatted terminal output, mirroring the legacy make functions:
-// ok, err, warn, inf, dfn, line_text, table_header, table_subheader, spc.
+// Writer prints colored, width-aware terminal output: status lines,
+// definition entries, table header rules, trees and ASCII banners.
 type Writer struct {
 	w         io.Writer
 	lineWidth int // 0 means use defaultLineWidth

@@ -134,9 +134,10 @@ func buildItemData(cfg *config.DweConfig, item config.InfoItem, sectionID string
 }
 
 // buildAutoURLsData extracts structured URL data from config.
-// Mirrors the traversal in core/ui.renderAutoURLs but returns data instead of styled strings.
-// The URL assembly helpers below are duplicated from core/ui/info_auto_urls.go because
-// core/ui is a string-only sink layer and cannot be imported by cli for data extraction.
+// Mirrors the traversal in core/ui/render.renderAutoURLs but returns data
+// instead of styled strings. The URL assembly helpers below are duplicated from
+// core/ui/render/info_auto_urls.go because that package is a string-only sink
+// and exposes no data-extraction entry point.
 func buildAutoURLsData(cfg *config.DweConfig, spec *config.AutoURLsSpec) []infoItem {
 	if cfg == nil || spec == nil {
 		return nil
@@ -286,8 +287,8 @@ func buildAutoHostsData(cfg *config.DweConfig, spec *config.AutoHostsSpec) []inf
 	return items
 }
 
-// URL building helpers — logic duplicated from core/ui/info_auto_urls.go.
-// core/ui is a string-only sink (returns styled strings); the cli layer owns data extraction.
+// URL building helpers — logic duplicated from core/ui/render/info_auto_urls.go.
+// That package is a string-only sink (returns styled strings); the cli layer owns data extraction.
 
 func autoDetectPortViaData(cfg *config.DweConfig) *config.ServiceConfig {
 	if cfg == nil {

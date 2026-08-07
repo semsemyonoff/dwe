@@ -1,4 +1,4 @@
-// Package templates provides validators for template packs (IDE and AI).
+// Package templates provides validators for template packs (IDE, AI, and git hooks).
 package templates
 
 import (

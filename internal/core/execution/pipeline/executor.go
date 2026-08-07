@@ -1055,13 +1055,13 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 }
 
 // runParallelSubStep opens a per-sub-step log file, builds a tee writer
-// (sub-step log + global pipeline log + line tee to Reporter.SubStepOutput),
+// (sub-step log + global pipeline log + line tee to Reporter.StepOutput),
 // and delegates to executeStepBody with Parallel=true so child I/O is routed
 // only through the tee — never to os.Stdout / os.Stderr, never via PTY.
 //
 // The sub-step log file is closed on every return path. The line tee is
 // flushed so any trailing un-terminated bytes still surface as a final
-// SubStepOutput line.
+// StepOutput line.
 func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep, sub ResolvedStep, subAddr string, idx, total int) error {
 	subFile, logPath, openErr := OpenSubStepLog(opts.WorkDir, opts.Name, group.Step.Name, sub.Step.Name, opts.LogWriter != nil)
 	if openErr != nil {

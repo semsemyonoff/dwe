@@ -278,8 +278,8 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 		subs = append(subs, rs)
 	}
 	if len(subs) < 2 {
-		// Line 152 already rejects groups with fewer than 2 declared sub-steps, so
-		// reaching here means template when: evaluation filtered out sub-steps.
+		// The declared-count guard above already rejects groups with fewer than
+		// two sub-steps, so reaching here means template when: filtered some out.
 		return nil, fmt.Errorf("step %s: %w (%d of %d sub-step(s) remain after when: filtering)",
 			prefix, ErrEmptyParallelSteps, len(subs), len(step.Parallel.Steps))
 	}

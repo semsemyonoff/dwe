@@ -6,7 +6,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 )
 
-// NewCmd builds the `dwe render` command tree: env / ide / ai / git
+// NewCmd builds the `dwe render` command tree: env / config / ide / ai / git
 // subcommands that generate artifacts derived from the merged workspace config.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{

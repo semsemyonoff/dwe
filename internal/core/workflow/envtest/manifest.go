@@ -12,8 +12,8 @@ import (
 // Manifest is the durable, on-disk record of a single scenario run. It is
 // written BEFORE any Docker interaction (spec §6) so a half-dead run — killed
 // mid-deploy, or left behind by --keep — is still sweepable from the manifest
-// alone: teardown (and the future stage-2 `dwe test clean`) consume only the
-// manifest + copy contents, never the original scenario definition.
+// alone: teardown (and `dwe test clean`) consume only the manifest + copy
+// contents, never the original scenario definition.
 type Manifest struct {
 	// Scenario is the scenario name this run belongs to.
 	Scenario string `yaml:"scenario"`
@@ -27,7 +27,7 @@ type Manifest struct {
 	CopyPath string `yaml:"copy_path"`
 	// BridgeDir is the copy's bridge runtime directory (bridge.DefaultBridgeDir(CopyPath)).
 	BridgeDir string `yaml:"bridge_dir"`
-	// ReportDir is the reserved (stage 2) failure-report directory for this scenario.
+	// ReportDir is the failure-report directory for this scenario.
 	ReportDir string `yaml:"report_dir"`
 	// CreatedAt is the UTC creation timestamp, RFC3339.
 	CreatedAt time.Time `yaml:"created_at"`

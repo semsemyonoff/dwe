@@ -6,12 +6,12 @@ import (
 	"charm.land/bubbles/v2/list"
 )
 
-// filterState carries the in-progress filter session. The Model owns one
-// instance; nil means "no filter active". Entering / leaves the filter is a
-// state transition handled in Model.enterFilter / Model.exitFilter.
+// filterState carries the in-progress filter session. The browser owns one
+// instance; nil means "no filter active". Entering / leaving the filter is a
+// state transition handled in browser.enterFilter / browser.exitFilter.
 type filterState struct {
 	query        string
-	matched      []int          // indices into Model.items, sorted by rank
+	matched      []int          // indices into browser.items, sorted by rank
 	matchCount   map[string]int // tree-node id → matches in subtree
 	savedExpand  map[string]bool
 	savedFocusID string
@@ -103,7 +103,7 @@ func (f *filterState) applyAutoCollapse(tm *treeModel) {
 }
 
 // restoreExpansion puts the original expanded set back on the tree (called on
-// filter exit). The focused ID is restored separately by Model.exitFilter.
+// filter exit). The focused ID is restored separately by browser.exitFilter.
 func (f *filterState) restoreExpansion(tm *treeModel) {
 	tm.eng.RestoreExpanded(f.savedExpand)
 	tm.eng.RebuildVisible(nil)

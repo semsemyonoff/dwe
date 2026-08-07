@@ -945,7 +945,7 @@ func TestBrowser_FocusChangedMsgSwitchesNavRouting(t *testing.T) {
 	// checking that HandleAction(ActionNavUp) on the viewport calls ScrollUp
 	// rather than MoveUp on the tree. The simplest proxy is checking the active
 	// panel field after the FocusChangedMsg — the routing logic in HandleAction
-	// reads b.active directly (see actions.go navLine).
+	// reads b.active directly (see actions.go navVertical).
 	b := newTestBrowser(t)
 	if b.active != panelTree {
 		t.Fatalf("initial active = %q, want tree", b.active)

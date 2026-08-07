@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `dwe test` command tree (run / list).
+// NewCmd builds the `dwe test` command tree (run / list / clean).
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		GroupID: groupID,

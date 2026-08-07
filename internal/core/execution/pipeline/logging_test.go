@@ -167,7 +167,7 @@ func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
 
 // TestParallelGroup_PerSubStepLogRoutesOutput exercises the executor's
 // parallel branch end-to-end: each sub-step's stdout must reach its dedicated
-// log file, the global pipeline log, and Reporter.SubStepOutput; nothing must
+// log file, the global pipeline log, and Reporter.StepOutput; nothing must
 // reach a sibling sub-step's log file or os.Stdout.
 func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	tmp := t.TempDir()
@@ -246,9 +246,10 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	}
 }
 
-// TestParallelGroup_NoOutputWithLoggingDisabled verifies that when the
-// pipeline log is disabled (opts.LogWriter == nil), no per-sub-step log file
-// is created, but SubStepOutput events still fire so the reporter can render.
+// TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter verifies that
+// when the pipeline log is disabled (opts.LogWriter == nil), no per-sub-step
+// log file is created, but StepOutput events still fire so the reporter can
+// render.
 func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) {
 	tmp := t.TempDir()
 

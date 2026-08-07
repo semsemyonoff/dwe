@@ -4,9 +4,10 @@
 // disabled services, var overrides), a wall-clock timeout, and an ordered list
 // of pipeline steps run after an implicit clean-slate deploy.
 //
-// This package (stage 1a) owns only the schema, the strict loader, and scenario
-// discovery/name validation. The runner, isolation, CLI, and teardown land in
-// stage 1b; the loader-side ${...} rendering of step bodies lives in render.go.
+// Alongside the schema and loader the package owns the runner, the disposable
+// copy and its isolation, teardown, failure-report collection and the
+// manifest-driven `dwe test clean` sweep. Step bodies are rendered exactly once,
+// inside pipeline.ResolvePhaseSteps — never in a package-local pre-pass.
 package envtest
 
 import (

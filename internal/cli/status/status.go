@@ -266,8 +266,7 @@ in the default view.`,
 					}
 					// A user-initiated cancel (OS SIGINT/SIGTERM, surfaced by
 					// tui.Run as widgets.ErrCancelled) is a clean exit, matching
-					// the pre-Frame mapRunError behavior and the sibling
-					// cmdbrowser caller.
+					// the sibling cmdbrowser caller.
 					if errors.Is(err, widgets.ErrCancelled) {
 						return nil
 					}

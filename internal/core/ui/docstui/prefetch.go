@@ -65,8 +65,8 @@ type Prefetch struct {
 const MaxPrefetchWorkers = 2
 
 // NewPrefetch creates a new prefetch manager with a bounded worker pool.
-// The workChan parameter can be used by callers to queue work items.
-// The progress channel is used to report completion status back to the TUI model.
+// Work items are submitted with Queue; the progress channel reports completion
+// status back to the TUI model.
 func NewPrefetch(ctx context.Context, renderer mermaid.Renderer, progress chan<- ProgressMsg) *Prefetch {
 	pctx, cancel := context.WithCancel(ctx)
 	tctx, tcancel := context.WithCancel(pctx)
@@ -168,9 +168,9 @@ func (p *Prefetch) renderOne(ctx context.Context, work WorkItem) {
 	}
 }
 
-// Queue enqueues work items for rendering.
-// Items are prioritized: current file's diagrams first, then others.
-// This should be called before any diagrams are actually rendered.
+// Queue enqueues one topic's work items for rendering, in ascending diagram
+// index (document) order. It rotates the per-topic context, so any in-flight
+// render for the previous topic is cancelled.
 func (p *Prefetch) Queue(items []WorkItem) {
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].Index < items[j].Index

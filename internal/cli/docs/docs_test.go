@@ -36,7 +36,7 @@ func TestDocsRootNonTTY(t *testing.T) {
 }
 
 func TestDocsRootWithArgs(t *testing.T) {
-	// Test that docs with arguments bypasses the parent RunE
+	// The docs command tree registers its subcommands.
 	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",

@@ -166,11 +166,12 @@ func isEmpty(v any) bool {
 
 // BuildEnv constructs the environment variable map for a command execution.
 //
-// The map is assembled in the following priority order (later wins):
-//  1. env vars declared via context entries (ContextDef.Env → resolved value)
-//  2. env vars declared via params (ParamDef.Env → resolved value)
-//  3. env vars declared via files (FileSpec.Env → resolved path)
-//  4. command-level env map (CommandDef.Env entries, kept as raw template strings)
+// Entries come from four sources, and a name declared by two of them is an
+// error naming both sites — never a silent override:
+//  1. context entries (ContextDef.Env → resolved value)
+//  2. params (ParamDef.Env → resolved value)
+//  3. files (FileSpec.Env → resolved path)
+//  4. command-level env map (CommandDef.Env, kept as raw template strings)
 func BuildEnv(cmd *model.CommandDef, params map[string]any, ctx map[string]any, files map[string]tpl.ResolvedFile) (map[string]string, error) {
 	env := make(map[string]string)
 	sources := make(map[string]string)

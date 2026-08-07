@@ -60,8 +60,8 @@ func recordBridgeEnsure(t *testing.T, err error) *[]bridge.EnsureConfig {
 }
 
 // TestStatusCmd_TopLevel_EnsuresBridgeDaemon: the top-level status performs
-// the best-effort daemon ensure (design D6) — the fixture's required app is
-// bridge-enabled by default.
+// the best-effort daemon ensure (design D6) when a service opts into the
+// bridge — the fixture opts in explicitly.
 func TestStatusCmd_TopLevel_EnsuresBridgeDaemon(t *testing.T) {
 	calls := recordBridgeEnsure(t, nil)
 	configPath := statusFixtureBridge(t, true)

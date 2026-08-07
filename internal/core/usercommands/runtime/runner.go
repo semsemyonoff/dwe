@@ -47,11 +47,10 @@ type RunContext = spec.RunContext
 // Alias for spec.FileProbeResult.
 type FileProbeResult = spec.FileProbeResult
 
-// Concrete-runner type aliases. External callers
-// (`internal/core/usercommands/usercommands.go:138-144` chains them onto
-// `usercommands.HostRunner` etc.) continue to write `runtime.HostRunner`,
-// `runtime.WorkflowRunner`, … . Subpackage tests also resolve their own
-// concrete type from these aliases when needed.
+// Concrete-runner type aliases. External callers (the `usercommands.HostRunner`
+// etc. re-export chain in `internal/core/usercommands/usercommands.go`) continue
+// to write `runtime.HostRunner`, `runtime.WorkflowRunner`, … . Subpackage tests
+// also resolve their own concrete type from these aliases when needed.
 type (
 	// HostRunner runs type=shell commands on the host machine.
 	HostRunner = host.Runner

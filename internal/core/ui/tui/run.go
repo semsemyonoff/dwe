@@ -14,13 +14,13 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// run.go is the framework's sole exported entry point this stage. Run owns the
-// terminal-capability gate (non-TTY → error, too-small → fallback sentinel),
-// tea.NewProgram construction, plugin teardown, and result extraction.
-// Alt-screen and the mouse mode are NOT program options in bubbletea/v2 —
-// they are owned by Frame.View, fed via frameOptions mapped from RunOptions
-// here. The unexported newFrame stays internal; Stage 0 adds no public
-// constructor because it has no importers.
+// run.go holds the framework's launch path. Run owns the terminal-capability
+// gate (non-TTY → error, too-small → fallback sentinel), tea.NewProgram
+// construction, plugin teardown, and result extraction. Alt-screen and the mouse
+// mode are NOT program options in bubbletea/v2 — they are owned by Frame.View,
+// fed via frameOptions mapped from RunOptions here. newFrame stays unexported:
+// consumers launch through Run (or, in tests, through testsupport.go's
+// RenderFrame / BuildHelp).
 
 // ErrNotTTY is returned by [Run] when stdout is not a terminal. It is reported
 // BEFORE any program start, so the plugin's Init never runs on this path — a
@@ -28,9 +28,8 @@ import (
 var ErrNotTTY = errors.New("tui: stdout is not a terminal")
 
 // ErrTooNarrow is the fallback sentinel returned by [Run] when the terminal is
-// below the minimum usable size (see [tooNarrow]). A caller can drop to a plain
-// selector instead of rendering a torn frame; the fallback UI itself is a later
-// stage.
+// below the minimum usable size (see [tooNarrow]). Callers drop to a plain
+// non-full-screen surface instead of rendering a torn frame.
 var ErrTooNarrow = errors.New("tui: terminal too small for the framework")
 
 // RunOptions configures a [Run] launch. Brand/Project feed the status line;

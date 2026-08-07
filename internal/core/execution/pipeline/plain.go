@@ -318,7 +318,7 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 //
 // Untracked steps (index == 0, total == 0) produce no output. When the step
 // is a parallel sub-step (registered by StartGroup), any buffered output
-// captured via SubStepOutput is dumped between separator bars after the
+// captured via StepOutput is dumped between separator bars after the
 // status line.
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
 	if index == 0 && total == 0 {
@@ -750,7 +750,7 @@ const (
 // flushSubStepLocked dumps the captured output for a parallel sub-step (if
 // any) between separator bars, updates the group counters, and marks the entry
 // as flushed. The entry is kept in r.subs (not deleted) so that a subsequent
-// SubStepOutput call from lineTee.Flush() delivering a trailing non-newline-
+// StepOutput call from lineTee.Flush() delivering a trailing non-newline-
 // terminated line can detect the flushed state and write directly rather than
 // silently dropping the content. FinishGroup cleans up flushed entries.
 // Caller must hold r.mu. No-op for non-parallel addresses.

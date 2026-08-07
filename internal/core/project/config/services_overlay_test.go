@@ -49,7 +49,7 @@ func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 // TestValidateServicesOverlay_acceptsPortsHosts confirms that per-developer
 // port/host overrides are permitted in overlay layers — a core dwe
 // feature so a developer can resolve port clashes locally without touching
-// shared workspace/services.yml.
+// the shared workspace/services/<name>/service.yml.
 func TestValidateServicesOverlay_acceptsPortsHosts(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool, Container: "adminer"}}
 	raw := map[string]any{
@@ -122,9 +122,9 @@ func TestValidateServicesOverlay_rejectsBadHostsShape(t *testing.T) {
 }
 
 // TestValidateServicesOverlay_rejectsUnknownService confirms that overlays
-// cannot reference services that are not declared in workspace/services.yml —
-// the canonical "unknown service in overlay" case the merge-after-validate
-// ordering catches.
+// cannot reference services that are not declared under
+// workspace/services/<name>/service.yml — the canonical "unknown service in
+// overlay" case the merge-after-validate ordering catches.
 func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool}}
 	raw := map[string]any{

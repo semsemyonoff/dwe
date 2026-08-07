@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRenderAICmd creates the `dwe render ai [service]` command.
+// newAICmd creates the `dwe render ai [service]` command.
 // It generates hub-level agentic docs into each service directory.
 // When a service name is provided only that service is processed;
 // otherwise all services matching the agents docs selection policy are processed.

@@ -62,7 +62,7 @@ func defaultRunMultiSelectForm(title string, opts []huh.Option[string]) ([]strin
 }
 
 // partitionMultiSelect splits items into locked and toggleable slices, preserving
-// the relative order of each group. Exported for testing via the internal package.
+// the relative order of each group.
 func partitionMultiSelect(items []MultiSelectItem) (locked, toggleable []MultiSelectItem) {
 	for _, item := range items {
 		if item.Locked {

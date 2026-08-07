@@ -16,7 +16,7 @@ import (
 // raw config map and normalizes the result:
 //   - List of scalars → each becomes {Value: string(v), Label: string(v)}
 //   - List of maps with "value" key → each becomes an OptionItem
-//   - Map → sorted-key list with {Value: key, Label: key}
+//   - Map → sorted-key list with {Value: key, Label: non-empty string value, else key}
 //   - Other types → error
 //
 // If the path is missing or resolves to nil, an empty slice is returned
@@ -84,7 +84,7 @@ func normalizeOptions(path string, resolved any) ([]model.OptionItem, error) {
 					return nil, fmt.Errorf("options %s[%d]: mixed scalar and non-scalar sequence not allowed", path, i)
 				}
 
-				// Extract value, label, description from the map.
+				// Extract value and label; any other key (e.g. description) is ignored.
 				value, ok := m["value"]
 				if !ok {
 					return nil, fmt.Errorf("options %s[%d]: missing required field 'value'", path, i)

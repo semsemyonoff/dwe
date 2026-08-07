@@ -23,9 +23,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// runAsk is the package-level test seam over ask.Run (mirrors command.go:22).
-// Tests stub it to drive the no-value interactive form deterministically; they
-// MUST NOT call t.Parallel() while overriding it (global state).
+// runAsk is the package-level test seam over ask.Run (mirroring the runAsk seam
+// in internal/cli/command). Tests stub it to drive the no-value interactive form
+// deterministically; they MUST NOT call t.Parallel() while overriding it
+// (global state).
 var runAsk = ask.Run
 
 // varSetJSON is the JSON shape for `dwe vars set --output json`: the var and its

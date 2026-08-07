@@ -182,19 +182,19 @@ func writeTempYML(t *testing.T, content string) string {
 //
 //	<tmp>/workspace.yml
 //	<tmp>/workspace/defaults.yml   (optional)
-//	<tmp>/workspace/local.yml       (optional)
-//	<tmp>/workspace/tools.yml       (sampleToolsYML)
+//	<tmp>/workspace/local.yml      (optional)
+//	<tmp>/workspace/services/<name>/service.yml  (from sampleToolsYML)
 //
-// Tests that need a non-standard tools.yml should call writeFullFixture with an
-// explicit tools argument; tests that want no tools.yml at all should pass
-// "<NONE>" sentinel for tools.
+// Tests that need a different service set should call writeFullFixture with an
+// explicit tools argument; tests that want no tool services at all should pass
+// the noToolsYML sentinel.
 func writeLayeredFixture(t *testing.T, wsContent, defaults, user string) string {
 	t.Helper()
 	return writeFullFixture(t, wsContent, defaults, user, "", sampleToolsYML)
 }
 
 // noToolsYML is a sentinel passed as the tools argument to writeFullFixture to
-// suppress creation of workspace/tools.yml entirely.
+// suppress creation of the tool service folders entirely.
 const noToolsYML = "<NONE>"
 
 // writeFullFixture creates the complete file layout used by LoadConfig,
@@ -1677,7 +1677,6 @@ func TestLoadServiceDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
-	// Legacy service_configs_copy is converted to builtin at load time.
 	if step.Type != "builtin" {
 		t.Errorf("Type = %q, want builtin", step.Type)
 	}

@@ -100,9 +100,9 @@ func foreground(hex string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
 }
 
-// rebuildSemanticStyles is the single source of truth for the 7 token styles
-// AND the legacy aliases. It resolves user/light/dark per token, then assigns
-// every package-level style var.
+// rebuildSemanticStyles is the single source of truth for the 7 token styles.
+// It resolves user/light/dark per token, then assigns every package-level
+// style var.
 func rebuildSemanticStyles(c config.StylesColors) {
 	dark := lipgloss.HasDarkBackground()
 	resolvedAccent = resolveHex(c.Accent, defaultAccent, dark)

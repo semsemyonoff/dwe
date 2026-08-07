@@ -727,7 +727,7 @@ func writeDockerStub(t *testing.T, body string) string {
 	return path
 }
 
-// composeConfigCase is a one-service compose config JSON with an inline
+// composeConfigOneRef is a one-service compose config JSON with an inline
 // Dockerfile FROM golang:1.22 — used by prepullBases tests that don't care
 // about parser edge cases, only about the derive -> inspect -> pull wiring.
 const composeConfigOneRef = `{"services":{"api":{"build":{"context":"/unused","dockerfile_inline":"FROM golang:1.22\n"}}}}`

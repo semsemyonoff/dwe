@@ -161,11 +161,13 @@ type CloseOverlayMsg struct {
 }
 
 // WheelMsg is delivered to the plugin when the mouse wheel turns over one of
-// its panels. Panel is the panel under the pointer (NOT the focused panel);
-// Delta is -1 for an upward notch and +1 for a downward notch. The plugin
-// decides how far to scroll based on the panel type. A wheel turn never changes
-// focus; clicking still focuses. This is dispatched immediately (no coalescing
-// tick), one per wheel event, pointer-routed via classifyHit.
+// its panels (or, under [OverlayWheelPanel], over a capturing overlay's
+// viewport). Panel is the panel under the pointer (NOT the focused panel);
+// Delta is the NET coalesced notch count — negative up, positive down — that
+// [Frame.flushWheelAccum] drained from one burst, so a plugin must scroll by
+// |Delta| notches rather than assuming ±1. The plugin decides how far one notch
+// scrolls. A wheel turn never changes focus; clicking still focuses.
+// Pointer-routed via classifyHit.
 type WheelMsg struct {
 	Panel PanelID
 	Delta int

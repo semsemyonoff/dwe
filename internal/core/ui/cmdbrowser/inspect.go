@@ -9,12 +9,12 @@ import (
 )
 
 // inspectState owns the viewport overlay shown while the user is inspecting a
-// single command. The Model holds a *inspectState; nil means the overlay is
+// single command. The browser holds a *inspectState; nil means the overlay is
 // closed. inspectIdx remembers which item is being shown so Enter can return
 // the right Result.
 type inspectState struct {
 	vp         viewport.Model
-	inspectIdx int // index into Model.items
+	inspectIdx int // index into browser.items
 }
 
 // newInspectState builds a viewport at the given (width, height). The render
@@ -22,7 +22,7 @@ type inspectState struct {
 // the actual viewport — passing a pre-rendered string wrapped to the terminal
 // would clip on the right edge. A nil render (or one that returns "") falls
 // back to a placeholder. The caller is responsible for sizing — see
-// Model.inspectViewportSize.
+// browser.inspectViewportSize.
 func newInspectState(width, height int, render func(width int) string, idx int) *inspectState {
 	w := max(width, 10)
 	h := max(height, 3)

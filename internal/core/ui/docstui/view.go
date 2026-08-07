@@ -16,8 +16,8 @@ func viewportInnerHeight(termHeight int) int {
 	return max(bodyHeight(termHeight, footerRows)-2, 1)
 }
 
-// footerRows is the fixed height reserved for the help footer in the legacy
-// standalone model path (kept so NewModel's initial geometry is stable).
+// footerRows is the help-footer height NewModel's initial geometry assumes;
+// the Frame owns the real footer once it supplies geometry.
 const footerRows = 2
 
 // Scrollbar runes used by applyInnerScrollbar in plugin.go.

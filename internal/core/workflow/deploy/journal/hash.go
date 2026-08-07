@@ -198,7 +198,8 @@ func canonicalMap(m map[string]any) []byte {
 		return []byte("{}")
 	}
 
-	// Use encoding/json.Marshal with a custom encoder to guarantee sorted keys
+	// json.Marshal emits map[string]any keys in sorted order, which is what
+	// makes the output canonical.
 	data, err := json.Marshal(sortedMap(m))
 	if err != nil {
 		slog.Error("journal: canonicalMap: json.Marshal failed; using empty fallback", "err", err)

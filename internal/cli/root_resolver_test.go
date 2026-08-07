@@ -103,8 +103,8 @@ func TestRootResolver_DiscoveryFromSubdir(t *testing.T) {
 	}
 }
 
-// TestRootResolver_NoProject_AllowlistedCommands verifies that allowlisted commands
-// (version, completion, print) succeed when run from a directory with no workspace.yml.
+// TestRootResolver_NoProject_AllowlistedVersion verifies that an allowlisted
+// command (version) succeeds when run from a directory with no workspace.yml.
 func TestRootResolver_NoProject_AllowlistedVersion(t *testing.T) {
 	t.Chdir(t.TempDir()) // no workspace.yml anywhere
 

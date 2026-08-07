@@ -65,8 +65,8 @@ func runDaemonSetPS(ctx context.Context, compose *docker.Compose, projectFull, d
 //     parse NDJSON, pull dwe.daemon.params label, return sorted unique
 //     "<key>=<value>" completions
 //
-// Failures return empty + NoFileComp silently (CLAUDE.md "Completion helpers"
-// rule: completion never surfaces errors to the terminal).
+// Failures return empty + NoFileComp silently: the shell parses a completion
+// callback's stdout as the candidate list, so it must never print diagnostics.
 func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {

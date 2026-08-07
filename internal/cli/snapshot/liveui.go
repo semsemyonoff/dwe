@@ -30,7 +30,8 @@ var snapshotLiveOutputs = func() (termOut io.Writer, screen io.Writer, isTTY boo
 
 // newSnapshotObserverLiveLine constructs the *liveui.LiveLine that the snapshot
 // observer paints into. Exposed as a package-level var so tests can swap in a
-// capturing writer (mirrors newWorkflowParallelLiveLine in runner_workflow.go).
+// capturing writer (mirrors newWorkflowParallelLiveLine in
+// usercommands/runtime/runners/workflow/workflow.go).
 var newSnapshotObserverLiveLine = func(workflowLabel string) *liveui.LiveLine {
 	termOut, screen, isTTY := snapshotLiveOutputs()
 	live := liveui.NewLiveLine(termOut, screen, isTTY)

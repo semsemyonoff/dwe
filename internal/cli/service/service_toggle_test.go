@@ -1810,8 +1810,8 @@ func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deplo
 	return filepath.Join(dir, "workspace.yml"), dir
 }
 
-// injectMultiToggleSeams replaces the multi-toggle apply seams for the duration
-// of the test, recording calls. Returns (callLog, restore).
+// multiToggleCallLog records what the injected multi-toggle apply seams were
+// called with.
 type multiToggleCallLog struct {
 	deployOpts   []cmddeploy.Opts
 	restartCalls int

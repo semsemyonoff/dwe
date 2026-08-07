@@ -290,7 +290,8 @@ func resolveShellTarget(cfg *config.DweConfig, serviceName string, flags shellCL
 		return shellOptions{}, "", err
 	}
 
-	// Validate the resolved mode — catches typos in workspace/services.yml or defaults.yml.
+	// Validate the resolved mode — catches typos in cli.mode in
+	// workspace/services/<name>/service.yml.
 	if !validModes[opts.Mode] {
 		return shellOptions{}, "", fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
 	}

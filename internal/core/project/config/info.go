@@ -100,7 +100,8 @@ type AutoHostsSpec struct {
 // The Title field (for subgroups) is distinct from Text (for info/warning).
 // All types support the Decorative flag to override the type's default visibility.
 type InfoItem struct {
-	// Type selects the rendering function: info, warning, definition, separator, subgroup.
+	// Type selects the rendering function: info, warning, definition, separator,
+	// subgroup, auto-urls, auto-hosts.
 	Type string `yaml:"type"`
 
 	// Text is the content for: warning, info.

@@ -31,15 +31,12 @@ func LoadLocalYAML(localPath string) (map[string]any, error) {
 // WriteLocalYAML writes the local config map atomically using write-temp + rename.
 // Ensures the parent directory exists with mode 0o755 and the file is written with mode 0o600.
 //
-// This is a thin compatibility wrapper over the comment-preserving node writer:
-// it materializes the map as an overlay onto a fresh empty document and routes
-// through ApplyOverlayToNode / WriteLocalYAMLNode, so there is a SINGLE on-disk
-// write path. No production code calls it anymore — all write callers (the
-// `services` toggle and the setup wizard) build an overlay and apply it onto a
-// LOADED node so comments/formatting survive. WriteLocalYAML is retained only
-// for tests and any caller that genuinely has nothing to preserve (a brand-new
-// file from a plain map); it still drops nothing because the source map has no
-// comments to begin with.
+// It is a thin compatibility wrapper over the comment-preserving node writer: the
+// map is applied as an overlay onto a FRESH empty document and routed through
+// ApplyOverlayToNode / WriteLocalYAMLNode, so there is a SINGLE on-disk write
+// path. Use it only when there is nothing to preserve (a brand-new file built
+// from a plain map); a caller editing an existing local.yml must build an overlay
+// and apply it onto a LOADED node instead, or comments and formatting are lost.
 func WriteLocalYAML(localPath string, local map[string]any) error {
 	doc := emptyMappingDoc()
 	if err := ApplyOverlayToNode(doc, local); err != nil {

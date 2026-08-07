@@ -101,10 +101,8 @@ func TestFileCacheKeyVariesWithWidth(t *testing.T) {
 	src := "graph LR"
 	theme := ThemeDark
 
-	// Render with width 100.
 	key100 := cache.cacheKey(src, theme, 100)
 
-	// Render with width 200.
 	key200 := cache.cacheKey(src, theme, 200)
 
 	if key100 == key200 {

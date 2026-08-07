@@ -143,9 +143,8 @@ type Frame struct {
 	wheelAccum     map[PanelID]int
 	wheelTickArmed bool
 
-	// tr / locale resolve help-modal display strings. Stage 0 uses a
-	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
-	// thread real wiring through here.
+	// tr / locale resolve help-modal display strings. A nil translator falls back
+	// to i18n.NopTranslator and an empty locale to "en" (see newFrame).
 	tr     i18n.Translator
 	locale string
 }

@@ -178,7 +178,7 @@ func TestRun_UnknownBuiltin(t *testing.T) {
 
 // TestKindCategorization verifies that every registered builtin
 // has the expected kind, and that kind/context gating works as intended.
-// This is the single source of truth for the 20-entry registry categorization.
+// This is the single source of truth for the registry categorization.
 func TestKindCategorization(t *testing.T) {
 	type kindCase struct {
 		name        string

@@ -276,7 +276,6 @@ func TestRun_NarrowBelow80DelegatesToSelector(t *testing.T) {
 // the given keystroke. bubbletea/v2's KeyPressMsg.String() comes from the
 // underlying Key fields; setting Text only is enough for the alphabetic
 // keys, but special keys ("esc", "tab", "ctrl+c") need the Code/Mod set.
-// We build a Key by parsing the string via uv.
 func syntheticKey(s string) tea.KeyPressMsg {
 	// Map a handful of keystroke strings used in tests. This avoids pulling
 	// in unstable internal APIs from charmbracelet/ultraviolet just to spell

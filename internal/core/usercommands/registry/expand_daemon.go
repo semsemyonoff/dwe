@@ -6,7 +6,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
-// expandDaemon turns a type=daemon CommandDef into up to four synthetic
+// expandDaemon turns a type=daemon CommandDef into the four synthetic
 // CommandDefs (.start/.logs/.stop/.restart). The source command is consumed
 // by expansion — callers must NOT insert it into byID.
 //

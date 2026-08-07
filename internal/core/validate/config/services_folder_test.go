@@ -15,7 +15,7 @@ import (
 func makeServiceFolder(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	// Create workspace.yml (not needed by the validator but keeps project structure valid).
+	// The workspace/ dir is not needed by the validator, but keeps the project structure valid.
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "workspace"), 0o755))
 	return dir
 }

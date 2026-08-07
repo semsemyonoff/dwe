@@ -323,10 +323,10 @@ func TestBrowser_PanelClickIgnoredWhileFiltering(t *testing.T) {
 }
 
 func TestBrowser_PanelClickWorksAfterInspectClosed(t *testing.T) {
-	// Regression: the Frame pops the inspect overlay on esc without notifying the
-	// plugin, so b.inspect lingers non-nil. handlePanelClick must not key off it,
-	// otherwise every click is swallowed for the rest of the session once inspect
-	// has been opened and closed once.
+	// Regression: handlePanelClick must not key off b.inspect — if a close ever
+	// leaves it lingering non-nil (as this test simulates), every click would be
+	// swallowed for the rest of the session once inspect has been opened and
+	// closed once.
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
 

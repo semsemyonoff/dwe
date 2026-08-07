@@ -319,7 +319,7 @@ func TestBuildTogglePlan_NotesPresentAndAbsent(t *testing.T) {
 }
 
 // TestBuildTogglePlan_NotesTemplate verifies that notes support Go template
-// expansion against the merged config (.name / .svc / .project / .raw).
+// expansion against the merged config (.name / .svc / .services / .project).
 func TestBuildTogglePlan_NotesTemplate(t *testing.T) {
 	cfg := makeToggleCfg(map[string]config.ServiceConfig{
 		"web": {

@@ -39,7 +39,7 @@ func (cmdTreeAdapter) Expandable(n *treeNode) bool      { return len(n.children)
 // treeModel owns the group hierarchy and the cached counts; it is a thin
 // wrapper over the shared *tree.Engine, which owns the expanded/focused state,
 // the visible-row list, and scroll geometry. It is internal to cmdbrowser; the
-// Model wires keypresses into the engine via the browser plugin.
+// browser plugin wires keypresses into the engine.
 type treeModel struct {
 	items          []Item
 	includePrivate bool
@@ -195,8 +195,8 @@ func (tm *treeModel) focusedID() string {
 }
 
 // focusVisible reports whether the focused node currently appears in the
-// engine's visible set. Mirrors the legacy indexOfFocused() >= 0 check used by
-// the filter exit/commit cursor-restoration logic.
+// engine's visible set. Used by the filter exit/commit cursor-restoration
+// logic.
 func (tm *treeModel) focusVisible() bool {
 	cur := tm.eng.Cursor()
 	if cur == nil {
