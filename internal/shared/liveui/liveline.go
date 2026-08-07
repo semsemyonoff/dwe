@@ -1,3 +1,48 @@
+// Package liveui owns the sticky footer (and multi-row block) rendered next to
+// a pipeline's own child-process output.
+//
+// # The nine invariants
+//
+// These are the non-negotiable rules the live view is built on. They are
+// numbered because the code cites them by number; the numbering is the one
+// established when the live view replaced the previous bubbletea program
+// (docs/plans/completed/2026-05-19-live-pipeline-progress.md, Task 12).
+//
+//  1. No tea.NewProgram for the live view. LiveLine drives its bubbles/v2
+//     models by hand — spinner.Model.Update on a private ticker, then
+//     spinner.View composed into an ANSI frame. The footer shares the terminal
+//     with a child process that is still writing to it, so an event loop (or an
+//     alt screen) would be fighting that child for ownership.
+//  2. No term.MakeRaw. The terminal stays in cooked mode; during a step the
+//     child owns it.
+//  3. No terminal capability queries. Nothing here writes a query escape (a
+//     cursor-position "\x1b[6n", a DA request) and waits for a reply — a reply
+//     would race the child's own stdin. The single terminal syscall is the
+//     width probe term.GetSize, itself behind the widthFn test seam.
+//  4. Split-channel writers. termOut takes cursor control and spinner frames,
+//     screen takes the data lines from Println, diag takes PrintlnDiag (stderr
+//     in production, so verbose/debug output honours "stderr only" even while
+//     the footer is live). Production points termOut and screen at the same fd;
+//     the split exists so tests can assert the separation directly.
+//  5. One mutex, and Stop is not reentrant. Every public method takes l.mu, so
+//     Stop MUST be called from outside any LiveLine callback.
+//  6. A carriage return is data, not a line terminator. Enforced upstream by
+//     pipeline's lineTee: a child emitting "50%\r100%\r" must reach the footer
+//     as successive frames, not as one line.
+//  7. Prompt handoff runs through hooks, never by tearing the footer down at
+//     the call site. Enforced by pipeline.PlainReporter, which wires
+//     widgets.SetHuhHooks(l.Pause, l.Resume) and SuspendForExec/ResumeAfterExec.
+//  8. Non-TTY parity. enabled is set once at construction; when it is false
+//     every footer operation is a no-op but Println still emits its data line,
+//     so piped output equals TTY output minus the footer.
+//  9. The cursor ends every operation on the row below the footer, so child
+//     output flows from there. Pause is the one intentional exception — huh
+//     renders from the current row, so leaving the cursor below would open a
+//     blank gap above the prompt — and Resume restores it.
+//
+// Invariants 6 and 7 are listed here because they are part of the same design
+// and the numbering is shared, but they are enforced in
+// internal/core/execution/pipeline, not in this package.
 package liveui
 
 import (
