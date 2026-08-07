@@ -63,7 +63,7 @@ Each pattern has a full write-up in [`docs/internals/packages.md`](docs/internal
 A bullet here is a **trap plus a pointer**, not a write-up: name what breaks and where the contract lives, one sentence per line.
 New invariants go into `packages.md` and gain at most a pointer here; `TestAgentsMdBudget` pins that.
 
-- **JSON output mode (`--output json`, `--pretty`)** — read-only commands route data through `cmdctx.WriteData[T]` and errors through the typed `cmdctx.Err`/`ErrWrap`, which carry exit codes and put a `{"error":{…}}` envelope on **stderr** so stdout stays parseable; gate any `warning:` write behind `flags.Output != "json"`.
+- **JSON output mode (`--output json`, `--pretty`)** — read-only commands route data through `cmdctx.WriteData[T]` and *return* the typed `cmdctx.Err`/`ErrWrap`, which carry the exit code and which `main.go`'s handler serializes via `cmdctx.WriteError` into a `{"error":{…}}` envelope on **stderr**, so stdout stays parseable; gate any `warning:` write behind `flags.Output != "json"`.
   Diagnostic commands (`validate`) are the exception: diagnostics-as-data on stdout even at severity=error.
   See § CLI (cross-cutting behaviors).
 
@@ -87,8 +87,8 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   Only `env/` + `checks/` (plus the cherry-picked `config.validate` validator) run in preflight — a content mistake in any other domain must never block a lifecycle command.
   See § Core — Validation.
 
-- **Preflight + locks ordering** — lifecycle commands call `preflight.Run` before any side effect *including the locks*, so a `type: command` check never runs under an operation lock; only then `lock.AcquireProjectLocks(baseDir)`.
-  Never `lock.Acquire` those two paths directly — use `cmdctx.AcquireProjectLocksOrReport`, or `AcquireProjectLocksSilent` while a full-screen TUI is live, since a lock-held banner printed mid-frame corrupts the alt screen.
+- **Preflight + locks ordering** — lifecycle commands call `preflight.Run` before any side effect *including the locks*, so a `type: command` check never runs under an operation lock; only then the project locks (deploy.lock → snapshot.lock, released in reverse).
+  Take them as a pair via `lock.AcquireProjectLocks(baseDir)`, never `lock.Acquire` on the individual files; from `internal/cli/` go through `cmdctx.AcquireProjectLocksOrReport` — or `AcquireProjectLocksSilent` while a full-screen TUI is live, since a lock-held banner printed mid-frame corrupts the alt screen (`core/workflow/` cannot import `cmdctx` and calls the pair directly).
   Docs commands and `dwe logs` are read-only: no preflight, no locks.
   See § `internal/core/execution/preflight/` and § `internal/shared/lock/`.
 
@@ -138,7 +138,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **`${...}` known-head whitelist** — `CompileVarSyntax` rewrites `${X}` only when the head is in `tpl.KnownVarHeads` AND `X` carries a tail (`${args}` excepted); anything else stays a **literal**, because rewriting a head-only `${host}`/`${files}` — a shell variable colliding with a namespace name, common in `cmd:` — silently erased it to `""` or dumped a `Raw` sub-map as `map[...]` text.
   It is a correctness control, not a security boundary; ask `tpl.IsVarNamespaceRef`/`IsKnownVarHead` rather than re-indexing the slice or re-deriving the tail rule elsewhere.
-  The pipeline context is Raw + Host only, so `tpl.ValidateRawScope` runs FIRST on every string and rejects `param`/`context`/`files`/`generated`/`args` — their lenient resolvers would render `git checkout ${param.branch}` to `git checkout `, invisible to both detectors. Do NOT extend it to `usercommands.buildRunContext` or workflow sub-steps, where `${param.*}` is legitimate.
+  The pipeline context is Raw + Host only, so `tpl.ValidateRawScope` runs FIRST on every string and rejects `param`/`context`/`files`/`generated`/`args` — their lenient resolvers would render `git checkout ${param.branch}` down to `git checkout` plus a trailing space, invisible to both detectors. Do NOT extend it to `usercommands.buildRunContext` or workflow sub-steps, where `${param.*}` is legitimate.
   See § `internal/shared/tpl/`, § Core — Execution (`pipeline/`), § Core — Validation and § Core — Foundation (`project/config/`, for the one `docker.yml project_name` exception).
 
 - **Resolve-time pipeline rendering** — `cmd`, `with:` leaves, `check`, `files_gate`, `timeout` and shell `when:` render **once** at resolve time into a deep copy; a render error fails the step, and `dwe reset step` must call `RenderStep`/`RenderWhen` itself.

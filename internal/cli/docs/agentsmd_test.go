@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
@@ -91,16 +92,46 @@ func criticalPatternsSection(t *testing.T, content string) []string {
 func TestAgentsMdCriticalPatternsLineLength(t *testing.T) {
 	section := criticalPatternsSection(t, readRepoFile(t, "AGENTS.md"))
 	for i, line := range section {
-		require.LessOrEqualf(t, len(line), agentsMdMaxLineLen,
+		// Runes, not bytes: the section is full of `—`, `§` and `…`, so a byte
+		// count would enforce a stricter, prose-dependent limit than documented.
+		n := utf8.RuneCountInString(line)
+		require.LessOrEqualf(t, n, agentsMdMaxLineLen,
 			"AGENTS.md `## Critical Patterns` line %d is %d chars; keep one sentence per line so diffs and merge conflicts stay surgical",
-			i+1, len(line))
+			i+1, n)
 	}
 }
 
 // pointerRe matches the `§ <target>` references that every Critical Patterns
 // bullet ends with. A target is either a backticked path or a packages.md
 // heading title (optionally followed by a parenthetical hint).
-var pointerRe = regexp.MustCompile("§ (`[^`]+`|[A-Za-z][^,;.]*?)(?:[,.]| and | or |$)")
+//
+// `(?m)` is load-bearing: the unbackticked branch is `[^,;.]`, which admits a
+// newline, and without multiline mode `$` only anchors the end of the whole
+// file — so a pointer that is last on its line would swallow the newline and
+// keep eating until the next `.` or `,` several lines down.
+var pointerRe = regexp.MustCompile("(?m)§ (`[^`]+`|[A-Za-z][^,;.]*?)(?:[,.]| and | or |$)")
+
+func TestAgentsMdPointerRegexIsLineAware(t *testing.T) {
+	targets := func(s string) []string {
+		var got []string
+		for _, m := range pointerRe.FindAllStringSubmatch(s, -1) {
+			got = append(got, strings.TrimSpace(m[1]))
+		}
+		return got
+	}
+
+	require.Equal(t,
+		[]string{"`internal/shared/tpl/`", "Core — Execution (`pipeline/`)", "Core — Validation"},
+		targets("  See § `internal/shared/tpl/`, § Core — Execution (`pipeline/`) and § Core — Validation.\n"),
+		"a multi-target pointer line must split on the separators")
+
+	// A pointer that ends its line with no trailing punctuation must stop at the
+	// newline instead of consuming the following line.
+	require.Equal(t,
+		[]string{"Core — Workflow", "`internal/cli/test/`"},
+		targets("  See § Core — Workflow\n  See § `internal/cli/test/`.\n"),
+		"an unterminated pointer must not swallow the next line")
+}
 
 // TestAgentsMdPointersResolve keeps the `§` pointers honest: a bullet that
 // delegates its write-up to packages.md is only useful if the named section
