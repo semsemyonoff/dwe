@@ -344,9 +344,8 @@ func bindCancelTerm(cmd *exec.Cmd) {
 	cmd.WaitDelay = 5 * time.Second
 }
 
-// RunOptions carries all inputs to Run, replacing individual positional arguments.
-// This struct bundles parameters to avoid signature churn and support optional
-// state-tracking features (Recorder, SkipDecider) added after the initial pipeline design.
+// RunOptions carries the inputs to RunWithOptions. Recorder and SkipDecider
+// are optional: when nil, state tracking is disabled and every step runs.
 type RunOptions struct {
 	Steps        []ResolvedStep
 	Reporter     Reporter
@@ -875,7 +874,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	// honors ctx. A body blocked on interactive input (e.g. a confirm builtin
 	// waiting on stdin) ignores ctx and is NOT force-interrupted by its
 	// timeout — the deadline fires but the goroutine stays blocked until
-	// input arrives. Out of scope for 3a; see plan docs/plans for rationale.
+	// input arrives.
 	bodyCtx := ctx
 	var cancel context.CancelFunc
 	if rs.Timeout > 0 {

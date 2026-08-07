@@ -239,8 +239,9 @@ func TestWorkflowRunner_Parallel_TransitiveConfirmRejected(t *testing.T) {
 
 func TestWorkflowRunner_Parallel_TransitiveConfirmationCommandRejected(t *testing.T) {
 	// Inner workflow's final step references a `confirmation: true` command.
-	// Task 5 preflight cannot see this because the IMMEDIATE sub-step is the
-	// workflow (Confirmation=false). The runtime guard in ConfirmCommand catches it.
+	// The parallel preflight cannot see this because the IMMEDIATE sub-step is
+	// the workflow (Confirmation=false). The runtime guard in ConfirmCommand
+	// catches it.
 	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }

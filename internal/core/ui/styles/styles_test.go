@@ -347,7 +347,7 @@ func TestTermWidthOrZero_TTY_SizeError_ReturnsZero(t *testing.T) {
 	}
 }
 
-// --- huh theme tests (migrated from internal/core/ui/huh_test.go) ---
+// --- huh theme tests ---
 
 func TestThemeNonNilByDefault(t *testing.T) {
 	th := Theme()

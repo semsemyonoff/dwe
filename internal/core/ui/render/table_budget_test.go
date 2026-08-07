@@ -127,9 +127,8 @@ func TestSinkAwareBudget_ServicesTable_ShrinkAndRecordModes(t *testing.T) {
 
 // TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords proves DaemonTable
 // passes through a genuine shrink stage (still a table, PARAMS narrowed)
-// before it degrades to records at a narrower width — completing the
-// per-renderer three-stage coverage Task 14 asks for (Table, ServicesTable,
-// and DiagnosticsTable already have shrink+record coverage above).
+// before it degrades to records at a narrower width — Table, ServicesTable
+// and DiagnosticsTable get the same shrink+record coverage above.
 func TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords(t *testing.T) {
 	resetStyles()
 	rows := []DaemonTableRow{
@@ -396,12 +395,12 @@ func TestFitRows_MaxCappedColumnWithOverlongToken(t *testing.T) {
 	}
 }
 
-// TestSinkAwareBudget_DefaultSeam_GoldensUnaffected re-renders two of the
-// Task 1 goldens under the enabled sink-aware budget (this task's change),
-// without overriding termWidthFn. TestMain pins it to the non-TTY default (0
-// = unbounded), so this must byte-match the pre-Task-12 goldens exactly —
-// confirming the budget mechanism is a no-op for every non-TTY sink, which is
-// every test and every piped/redirected real invocation.
+// TestSinkAwareBudget_DefaultSeam_GoldensUnaffected re-renders three goldens
+// under the sink-aware budget without overriding termWidthFn. TestMain pins
+// it to the non-TTY default (0 = unbounded), so the output must byte-match
+// the goldens exactly — confirming the budget mechanism is a no-op for every
+// non-TTY sink, which is every test and every piped/redirected real
+// invocation.
 func TestSinkAwareBudget_DefaultSeam_GoldensUnaffected(t *testing.T) {
 	pinGoldenPalette(t)
 	headers, rows := goldenTableRows()

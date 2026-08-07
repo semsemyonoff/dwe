@@ -107,7 +107,7 @@ func TestLoadStylesConfig_partialFields(t *testing.T) {
 		t.Errorf("colors.accent = %q, want #2EC3EB", cfg.Colors.Accent)
 	}
 	// Every other token zero-values to empty string; ApplyStyles is responsible
-	// for resolving these to the light/dark hex defaults (covered in Task 2).
+	// for resolving these to the light/dark hex defaults.
 	zeroCases := []struct {
 		name string
 		got  string

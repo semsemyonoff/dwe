@@ -9,18 +9,14 @@ import (
 // overlay.go owns the modal overlay layer: a LIFO stack of [Overlay] values and
 // the ANSI-aware centred compositing of the visible modal over the body region.
 //
-// Compositing substrate decision (Task 5 discovery):
-//
-// We adopt lipgloss v2's built-in layer compositor —
+// Compositing substrate: lipgloss v2's built-in layer compositor —
 // lipgloss.NewLayer(content).X().Y().Z() + lipgloss.NewCompositor(layers...).
-// Render() (charm.land/lipgloss/v2@v2.0.4/layer.go) — rather than hand-rolling
-// ANSI cell math. The compositor flattens layers, draws them onto an
-// ultraviolet screen cell-by-cell (so styled base content is preserved with
-// correct cell widths), and already exposes Compositor.Hit(x,y) LayerHit /
-// LayerHit.Bounds() for the Stage 2 mouse layer. Hand-rolling would re-derive
-// exactly the ANSI width-semantics risk the spec (§ 4 / § 7) flags. No concrete
-// gap forces a hand-rolled path: dimming (below) is applied to the base string
-// BEFORE it becomes a layer, so the compositor itself needs no extension.
+// Render() (charm.land/lipgloss/v2@v2.0.4/layer.go) — rather than hand-rolled
+// ANSI cell math. The compositor flattens layers and draws them onto an
+// ultraviolet screen cell-by-cell, so styled base content survives with correct
+// cell widths; hand-rolling would re-derive exactly that ANSI width-semantics
+// risk. Dimming (below) is applied to the base string BEFORE it becomes a
+// layer, so the compositor itself needs no extension.
 
 // Overlay layer IDs. They name the two composited lipgloss layers (see
 // [Composite]); hit testing does NOT use them — classifyHit does the

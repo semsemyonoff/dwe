@@ -144,7 +144,7 @@ func TestCompileVarSyntax_goTemplatePreserved(t *testing.T) {
 	}
 }
 
-// ---- Unknown head whitelist (Task 1) ----
+// ---- Unknown head whitelist ----
 
 func TestCompileVarSyntax_knownHeadsCompile(t *testing.T) {
 	cases := map[string]string{
@@ -385,9 +385,7 @@ func TestResolveMapPath_nilMap(t *testing.T) {
 	}
 }
 
-// ---- Sprout template functions (tested in funcs_test.go) ----
-// Legacy date, datetime, base, dir tests removed — see Task 2 of plan.
-// Sprout functions are tested in funcs_test.go with table-driven approach.
+// ---- Sprout template functions (table-driven coverage in funcs_test.go) ----
 
 func TestRenderCommand_nowDateExpression(t *testing.T) {
 	// Verify that the sprout 'now | date' pipeline works through RenderCommand,

@@ -40,7 +40,7 @@ func TestAddPendingOp_FirstRestart(t *testing.T) {
 }
 
 func TestAddPendingOp_MixedBatch(t *testing.T) {
-	// Add restart then deploy — both kinds must be preserved (tenth review regression).
+	// Add restart then deploy — both kinds must be preserved.
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "state.yml")
 

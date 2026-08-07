@@ -512,7 +512,7 @@ func TestBuildEnv_FileEnv(t *testing.T) {
 }
 
 func TestBuildEnv_EmptyFilesMap_Regression(t *testing.T) {
-	// When no files are declared, BuildEnv should behave identically to before the change.
+	// Regression: an empty files map must not disturb param or command-level env.
 	cmd := &CommandDef{
 		Type: CommandTypeShell,
 		Cmd:  "echo",

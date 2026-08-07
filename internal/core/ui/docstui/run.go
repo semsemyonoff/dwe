@@ -11,10 +11,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// Options carries all configuration for the docs browser. It collects the
-// inputs that the old NewModel constructor took (excluding termWidth/termHeight
-// — the Frame owns sizing now) plus the MmdcMissingNotice side-channel that the
-// old caller set directly on the Model.
+// Options carries all configuration for the docs browser. Terminal size is not
+// part of it — the Frame owns sizing.
 type Options struct {
 	Roots        []docs.DocRoot
 	Renderer     mermaid.Renderer
@@ -32,7 +30,7 @@ type Options struct {
 // mermaidThemeResolverFn is the package-level seam for the mermaid-theme
 // probe (auto → lipgloss.HasDarkBackground). Production uses resolveMermaidTheme;
 // tests swap it to return a deterministic value and avoid a terminal-background
-// probe (Decision #11).
+// probe.
 var mermaidThemeResolverFn = resolveMermaidTheme
 
 // runDocsTUI is the package-level seam through which Run drives the tui
@@ -50,11 +48,10 @@ var runDocsTUI = tui.Run
 //     framework minimum width.
 //   - a wrapped panic error on a recovered tea panic.
 //
-// Note: the old caller used tea.WithContext(ctx) to make parent-context
-// cancellation force-kill the program. tui.Run does NOT thread the context into
-// the tea program. External parent-context cancellation no longer force-kills
-// the browser; ctrl+c / q still terminate it cleanly via bubbletea's own signal
-// handling, and Close() tears down the watcher + prefetch on every exit path.
+// tui.Run does NOT thread ctx into the tea program, so cancelling the parent
+// context does not force-kill the browser; ctrl+c / q terminate it cleanly via
+// bubbletea's own signal handling, and Close() tears down the watcher +
+// prefetch on every exit path.
 func Run(ctx context.Context, opts Options) error {
 	model, err := newModelFromOpts(ctx, opts)
 	if err != nil {
@@ -83,10 +80,10 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 // newModelFromOpts builds a *Model from the given Options. The mermaid theme
-// is resolved through mermaidThemeResolverFn (swappable in tests per Decision
-// #11) so the auto probe runs exactly once and the result is stored in
-// model.Theme. Sizes are initialised to zero because the Frame supplies
-// geometry later via Plugin.Resize and Update(WindowSizeMsg).
+// is resolved through mermaidThemeResolverFn (swappable in tests) so the auto
+// probe runs exactly once and the result is stored in model.Theme. Sizes are
+// initialised to zero because the Frame supplies geometry later via
+// Plugin.Resize and Update(WindowSizeMsg).
 func newModelFromOpts(ctx context.Context, opts Options) (*Model, error) {
 	// Resolve the theme before passing to NewModel so the seam overrides the
 	// auto→HasDarkBackground probe for golden/unit tests. NewModel's own

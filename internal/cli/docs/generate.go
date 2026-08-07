@@ -75,7 +75,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 		resolvedLocale = rflags.I18n.ClampLocale(i18n.ResolveLocale(df.lang, "", ""))
 	}
 
-	// commandsDir now includes the language: commands/<lang>
+	// Command docs are language-scoped: commands/<lang>.
 	langDir := filepath.Join("commands", resolvedLocale)
 	commandsDir := filepath.Join(outDir, langDir)
 	if err := os.MkdirAll(commandsDir, 0o755); err != nil {

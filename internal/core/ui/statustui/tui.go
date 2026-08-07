@@ -108,8 +108,7 @@ func (m *model) Init() tea.Cmd {
 
 // setActiveTab switches to the tab at idx, resets the pending-reload
 // generation, and scrolls the viewport to the top. Out-of-range indices, and
-// any switch before the first load completes, are ignored — preserving the
-// per-key guard the explicit tab-switch blocks used to carry. Content is not
+// any switch before the first load completes, are ignored. Content is not
 // set here: renderBody recomputes the active tab's body on the next render
 // via renderTab.
 func (m *model) setActiveTab(idx int) {

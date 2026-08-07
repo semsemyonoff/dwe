@@ -259,9 +259,8 @@ func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*con
 // and the in-TUI vars-browser edit overlay (via ask.Build). The field carries
 // the inspect-style per-layer description and an inline CoerceScalar validator
 // so an invalid scalar (a map / sequence, or anything CoerceScalar rejects) is
-// caught IN-FORM rather than only after submit — an improvement over the old
-// post-submit-only coercion. The caller's post-submit CoerceScalar remains the
-// authoritative parse.
+// caught IN-FORM rather than only after submit. The caller's post-submit
+// CoerceScalar remains the authoritative parse.
 func buildVarSetFields(flags *cmdctx.RootFlags, path string) []ask.Field {
 	disp := uirender.DisplayVarPath(path)
 	return []ask.Field{{

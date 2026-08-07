@@ -3,9 +3,9 @@ package notify
 import "context"
 
 // backend is the unexported dispatch interface. Two implementations
-// today: noopBackend (silent) and nativeBackend (OS notifier, wired in
-// Task 3). New implementations live alongside; Notifier picks one at
-// construction time based on the resolved channel list.
+// today: noopBackend (silent) and nativeBackend (OS notifier). New
+// implementations live alongside; Notifier picks one at construction
+// time based on the resolved channel list.
 type backend interface {
 	notify(ctx context.Context, ev Event)
 }

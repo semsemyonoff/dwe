@@ -26,7 +26,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return cmd
 }
 
-// newComposeRawCmd creates the `dwe compose raw` command (formerly `dwe compose run`).
+// newComposeRawCmd creates the `dwe compose raw` command.
 // It resolves the compose file list and project name from config, then delegates
 // to `docker compose` with the user-supplied arguments. All docker compose flags
 // and subcommands can be passed after `--`.

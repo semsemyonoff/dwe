@@ -7,8 +7,8 @@ import (
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
-// notifier is the consumer-local interface declared per the plan's
-// testability pattern. Tests override newNotifier to capture events.
+// notifier is the consumer-local interface the runtime depends on. Tests
+// override newNotifier to capture events.
 type notifier interface {
 	Notify(ctx context.Context, ev notify.Event)
 }

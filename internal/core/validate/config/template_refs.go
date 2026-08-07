@@ -20,10 +20,10 @@ import (
 //
 // Deliberately silent on everything else: an unknown head (shell-style
 // ${HOME}, a stray dollar sign) and the special namespaces that never live
-// in Raw (param, context, files, host, snapshot, args, generated — see
-// Technical Details in the plan) are not this validator's concern. Both
-// exclusions come from gating on config.IsAllowedRootKey. A head-only
-// ${state} / ${vars} is excluded too, by tpl.IsVarNamespaceRef — see the gate.
+// in Raw (param, context, files, host, snapshot, args, generated) are not
+// this validator's concern. Both exclusions come from gating on
+// config.IsAllowedRootKey. A head-only ${state} / ${vars} is excluded too,
+// by tpl.IsVarNamespaceRef — see the gate.
 //
 // The gate is the root-key ALLOWLIST, not "head present in cfg.Raw": the
 // strict root makes Raw's keys a subset of allowedRootKeys, not an equal set,

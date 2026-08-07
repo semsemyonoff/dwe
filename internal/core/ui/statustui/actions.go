@@ -28,11 +28,11 @@ const (
 	sectionTabs = "Tabs"
 )
 
-// Actions implements tui.Plugin. It registers reload (stdlib), the tab switch on
-// tab / shift+tab (freed because the Frame strips its focus built-ins on this
-// single-panel surface — see tui.Registry.DisableFocusNav), the within-tab
-// table-jump on ] / [, and the plugin's own Tabs section. Reload moves to ctrl+r
-// (stdlib ActionReload), replacing the legacy "r" binding.
+// Actions implements tui.Plugin. It registers reload (stdlib ActionReload,
+// bound to ctrl+r), the tab switch on tab / shift+tab (freed because the
+// Frame strips its focus built-ins on this single-panel surface — see
+// tui.Registry.DisableFocusNav), the within-tab table-jump on ] / [, and the
+// plugin's own Tabs section.
 func (p *plugin) Actions(reg *tui.Registry) error {
 	if err := tui.RegisterStandard(reg, tui.ActionReload); err != nil {
 		return err
@@ -59,11 +59,10 @@ func (p *plugin) Actions(reg *tui.Registry) error {
 	return nil
 }
 
-// HandleAction implements tui.Plugin. Tab-switch actions are no-ops until the
-// first load completes (mirrors the legacy guard against navigating before
-// m.loaded is set — also avoids a modulo-by-zero on prev/next). Reload
-// preserves the existing loadGen/reloadGen/reloadActive/reloadYOffset state
-// machine verbatim.
+// HandleAction implements tui.Plugin. Tab-switch actions and reload are
+// no-ops until the first load completes (m.loaded), matching setActiveTab's
+// own guard. Reload drives the loadGen/reloadGen/reloadActive/reloadYOffset
+// state machine.
 func (p *plugin) HandleAction(a tui.Action) (tea.Cmd, bool) {
 	m := p.m
 	switch a {

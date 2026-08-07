@@ -23,9 +23,9 @@ func helpText(t *testing.T, b *browser, tr i18n.Translator, locale string) strin
 
 // TestHelpModal_EnLocalizedStrings asserts the built-in en bundle resolves the
 // tui.help.* namespace: the title, section labels, and per-action descriptions
-// all come from translations/en.yml (added in this task), not just the in-code
-// fallbacks. It also locks the per-mode action visibility: ModeRun shows the
-// skip-confirm (`y`) and force-form (`e`) verbs; ModeEdit omits both.
+// all come from translations/en.yml, not just the in-code fallbacks. It also
+// locks the per-mode action visibility: ModeRun shows the skip-confirm (`y`)
+// and force-form (`e`) verbs; ModeEdit omits both.
 func TestHelpModal_EnLocalizedStrings(t *testing.T) {
 	store, err := i18n.Load("")
 	if err != nil {

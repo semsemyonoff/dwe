@@ -36,8 +36,8 @@ type subResult struct {
 // Phase 1 — Preflight (sequential):
 //   - evaluate each sub-step's `when:` exactly once; cache the decision
 //   - for non-skipped sub-steps, reject confirmation-required commands when
-//     SkipConfirm/NonInteractive are not set (UX preflight; Task 6 adds the
-//     transitive-confirmation runtime guard)
+//     SkipConfirm/NonInteractive are not set (UX preflight; ConfirmCommand's
+//     ErrConfirmInsideParallel guard catches the transitive cases)
 //
 // Phase 2 — Concurrent execution (errgroup with SetLimit):
 //   - per-goroutine RunContext clone with UnderParallel=true, isolated

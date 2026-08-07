@@ -4,14 +4,13 @@ import "fmt"
 
 // Action is the stable identifier for one keyboard-triggered behaviour (help
 // toggle, quit, focus cycling, or a plugin-defined verb). It is decoupled from
-// the physical key(s) so Stage 1 can add rebinding without touching dispatch
+// the physical key(s) so rebinding can be added without touching dispatch
 // sites — callers switch on the Action, never on the raw key.
 type Action string
 
 // The framework's built-in actions. Their default [Binding]s are registered by
-// [NewRegistry]. The IDs are stable; the default keys are locked in Stage 1 —
-// the rebinding mechanism gated by [Binding.Rebindable] will let projects
-// override them later.
+// [NewRegistry]. The IDs and default keys are stable; the rebinding mechanism
+// gated by [Binding.Rebindable] will let projects override them later.
 const (
 	// ActionHelp toggles the ?-modal help overlay.
 	ActionHelp Action = "help"
@@ -24,7 +23,7 @@ const (
 )
 
 // Binding describes how an [Action] is triggered and how it presents in the help
-// modal. The registry/keymap surface is locked in Stage 1; see [Package tui].
+// modal.
 type Binding struct {
 	// Keys are the physical key strings (bubbletea key syntax, e.g. "?", "tab",
 	// "ctrl+c") that trigger the action. At least one is required. Keys are
@@ -43,8 +42,8 @@ type Binding struct {
 	// — it only closes overlays and never exits the TUI (see [NewRegistry]).
 	Aliases []string
 	// Rebindable marks whether a project may override Keys via a future
-	// rebinding config. This is documented metadata only — no config loader is
-	// built yet (YAGNI; no consumer until Stage 3). Locked in Stage 1.
+	// rebinding config. This is documented metadata only — no config loader
+	// reads it yet.
 	Rebindable bool
 	// Mouse is the mouse-event string that triggers this action, resolved via
 	// [Registry.MatchMouse]. Locked vocabulary: "double-click". "click" is
@@ -66,9 +65,8 @@ type Section struct {
 	Entries []Entry
 }
 
-// Registry maps actions to bindings and physical keys to actions. The
-// registry/keymap/overlay-input surface is locked in Stage 1. Plugins extend
-// the registry through their Actions hook; framework built-ins are
+// Registry maps actions to bindings and physical keys to actions. Plugins
+// extend the registry through their Actions hook; framework built-ins are
 // pre-registered by [NewRegistry].
 //
 // The zero value is not usable; construct via [NewRegistry].
@@ -94,7 +92,7 @@ func NewRegistry() *Registry {
 		keys:     make(map[string]Action),
 		sections: make(map[string][]Action),
 	}
-	// Built-in defaults — locked in Stage 1.
+	// Built-in defaults.
 	mustRegister(r, ActionFocusNext, Binding{Keys: []string{"tab"}, Desc: "Focus next panel", Section: sectionNavigation})
 	mustRegister(r, ActionFocusPrev, Binding{Keys: []string{"shift+tab"}, Desc: "Focus previous panel", Section: sectionNavigation})
 	mustRegister(r, ActionHelp, Binding{Keys: []string{"?"}, Desc: "Toggle help", Section: sectionGeneral})
@@ -102,8 +100,8 @@ func NewRegistry() *Registry {
 	return r
 }
 
-// Built-in section labels. English here; the help renderer (Task 6) resolves
-// display strings through the i18n Translator with these as fallbacks.
+// Built-in section labels. English here; buildHelpOverlay resolves display
+// strings through the i18n Translator with these as fallbacks.
 const (
 	sectionGeneral    = "General"
 	sectionNavigation = "Navigation"
@@ -256,8 +254,7 @@ func (r *Registry) unregister(a Action) {
 }
 
 // Match resolves a physical key to its action. The bool reports whether any
-// binding claims the key. Both canonical Keys and Aliases are consulted —
-// locked in Stage 1.
+// binding claims the key. Both canonical Keys and Aliases are consulted.
 func (r *Registry) Match(key string) (Action, bool) {
 	a, ok := r.keys[key]
 	return a, ok

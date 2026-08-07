@@ -115,9 +115,9 @@ func tooNarrow(w, h int) bool {
 // (79, 99). Every region shares body's Y and Height; only X and Width differ.
 //
 // Precondition: weights is non-empty and every weight is positive. The caller
-// (newFrame, Task 7) validates this before launch, so layoutPanels has no error
-// path and stays pure for the View hot path — a violated precondition is a
-// programmer error, not a runtime condition.
+// (newFrame) validates this before launch, so layoutPanels has no error path and
+// stays pure for the View hot path — a violated precondition is a programmer
+// error, not a runtime condition.
 func layoutPanels(body Region, weights []int) []Region {
 	total := 0
 	for _, wt := range weights {

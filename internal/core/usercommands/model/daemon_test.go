@@ -249,8 +249,8 @@ commands:
 }
 
 // SourceDaemon is the expansion-time metadata field; populating it on a
-// synthetic builtin command must not trigger leakage rejection. This protects
-// the registry expander (task 4) from being unable to attach metadata.
+// synthetic builtin command must not trigger leakage rejection, or the
+// registry expander could not attach metadata at all.
 func TestDaemon_SourceDaemonOnBuiltinIsAllowed(t *testing.T) {
 	cmd := CommandDef{
 		Type:         CommandTypeBuiltin,

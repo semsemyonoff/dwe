@@ -28,11 +28,8 @@ const (
 // [tui.Plugin]: the Frame owns chrome (borders, focus highlight, Tab cycling,
 // geometry, the status line) and the browser owns body content and behaviour.
 //
-// The existing *Model remains untouched and compilable through the Task 6–9
-// coexistence window (its Init/Update/View/quit are not changed here). The
-// browser embeds *Model to reuse its Tree/Viewport/Filter/DiagramState/
-// heading-index/loaded-topic state, mirroring how cmdbrowser's browser held
-// its data without deleting the old model first.
+// It embeds *Model for the Tree/Viewport/Filter/DiagramState/heading-index/
+// loaded-topic state.
 type browser struct {
 	*Model
 
@@ -53,9 +50,8 @@ type browser struct {
 	locale string
 
 	// ctx / cancel are the browser-owned context and its cancellation function,
-	// derived from the context passed to newBrowser (and in Task 10, from
-	// docstui.Run). Close() calls cancel() to stop any future browser-scoped
-	// operations.
+	// derived from the context passed to newBrowser. Close() calls cancel() to
+	// stop any future browser-scoped operations.
 	ctx    context.Context //nolint:containedctx
 	cancel context.CancelFunc
 
@@ -161,12 +157,11 @@ type wheelDebounceMsg struct {
 // Compile-time guarantee that *browser satisfies the tui.Plugin contract.
 var _ tui.Plugin = (*browser)(nil)
 
-// newBrowser builds the plugin from the same inputs as the legacy NewModel
-// (passed through as a *Model). Sizes are deferred — the Frame supplies
-// geometry through Resize/ViewPanel, so the viewport starts at zero width and
-// is sized on the first render pass. The context is used to scope the
-// browser's own lifecycle; Close() cancels it. Translator and locale are read
-// from the model (nil-safe).
+// newBrowser builds the plugin around an already-constructed *Model. Sizes are
+// deferred — the Frame supplies geometry through Resize/ViewPanel, so the
+// viewport starts at zero width and is sized on the first render pass. The
+// context is used to scope the browser's own lifecycle; Close() cancels it.
+// Translator and locale are read from the model (nil-safe).
 func newBrowser(ctx context.Context, m *Model) *browser {
 	bctx, cancel := context.WithCancel(ctx)
 	tr := m.Translator
@@ -207,7 +202,7 @@ func viewportPanelInnerWidth(termW int) int {
 // Init implements tui.Plugin. Subscribes to file-change events from the
 // watcher so live-reload works. The initial topic load is deliberately NOT
 // fired here — the Frame supplies geometry only later via WindowSizeMsg, so
-// loading here would use a zero content width (Decision #10).
+// loading here would use a zero content width.
 func (b *browser) Init() tea.Cmd {
 	if b.Watcher == nil {
 		return nil
@@ -237,9 +232,8 @@ func (b *browser) Close() error {
 }
 
 // Panels implements tui.Plugin. Two static panels: tree (left, weight 1) and
-// viewport (right, weight 5). The {1,5} split is the starting ratio validated
-// against the 60/79/80/99/100 goldens in Task 11; adjust toward {2,7}/{2,5} if
-// the tree inner width is too narrow at the 60-col bucket.
+// viewport (right, weight 5). The {1,5} split is pinned by the 60/79/80/99/100
+// frame goldens.
 func (b *browser) Panels() []tui.Panel {
 	return []tui.Panel{
 		{ID: panelTree, Title: "Contents", Weight: 1},
@@ -465,7 +459,7 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		// Recompute ContentWidth so the NEXT load event (topic switch / reload /
 		// FileChanged / locale change) uses the updated width. Resize only
 		// changes the display window; existing glamour content is not re-rendered
-		// until the next load (Decision #10, no load-storm / no YOffset reset).
+		// until the next load — no load-storm, no YOffset reset.
 		if msg.Width > 0 {
 			b.ContentWidth = viewportPanelInnerWidth(msg.Width)
 		}
@@ -480,7 +474,7 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		// Fire the first topic load exactly once, from the first non-zero-width
 		// WindowSizeMsg. firstLoadDone prevents a second trigger on resize.
 		// Resize(body) is void so this is the only Cmd-capable hook that has
-		// the framework-supplied width (Decision #10).
+		// the framework-supplied width.
 		if !b.firstLoadDone && msg.Width > 0 {
 			b.firstLoadDone = true
 			if b.CurrentTopic != nil {
@@ -597,7 +591,7 @@ func (b *browser) applyDiagramRefresh() tea.Cmd {
 }
 
 // ViewPanel implements tui.Plugin. Caches the per-panel inner region and
-// renders the panel body. Tree render wired in Task 3; viewport render here.
+// renders the panel body (tree or viewport).
 func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	switch id {
 	case panelTree:
@@ -619,9 +613,9 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 			return ""
 		}
 		// Size the display window to the panel inner region every render. This
-		// does NOT re-render the glamour content (content width is fixed at load
-		// time per Decision #10 — resize only resizes the window). Mirrors
-		// cmdbrowser's viewList sizing pattern.
+		// does NOT re-render the glamour content — content width is fixed at
+		// load time, so resize only resizes the window. Mirrors cmdbrowser's
+		// viewList sizing pattern.
 		b.Viewport.SetDimensions(inner.Width, inner.Height)
 		content := b.Viewport.View()
 		content = b.applyCursorGlyph(content, inner.Height)

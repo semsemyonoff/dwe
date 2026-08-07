@@ -243,8 +243,8 @@ func TestWaitContainersHealthy_mixedNoHealthcheckAndHealthy(t *testing.T) {
 	}
 }
 
-// TestComposeSubcommands verifies the compose command group has the expected subcommands
-// after the refactor: files, raw, argv (wait removed, run renamed to raw).
+// TestComposeSubcommands verifies the compose command group exposes exactly the
+// files, raw and argv subcommands.
 func TestComposeSubcommands(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	composeCmd := NewCmd("", flags)

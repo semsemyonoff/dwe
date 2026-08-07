@@ -143,8 +143,8 @@ func TestSelectingIndexDirRendersIndexContent(t *testing.T) {
 		t.Fatal("expected initial CurrentTopic to be set")
 	}
 
-	// Load the topic directly (initCmd removed — Decision #10; first load now
-	// deferred to browser.Update(WindowSizeMsg)).
+	// Load the topic directly; in the browser the first load is deferred to
+	// Update(WindowSizeMsg).
 	cmd, err := m.loadTopic(m.CurrentTopic)
 	if err != nil {
 		t.Fatalf("loadTopic error: %v", err)

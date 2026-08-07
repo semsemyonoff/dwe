@@ -157,8 +157,8 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 
 // ViewPanel implements tui.Plugin. Renders the single-panel body: a centered
 // spinner while the initial load is in flight, otherwise the tab strip +
-// divider + viewport content. Reuses the model's existing renderTabStrip
-// helper so hit-zones in Task 6 match exactly what is drawn here.
+// divider + viewport content. Reuses the model's renderTabStrip helper so
+// mouse.go's tabHitZones match exactly what is drawn here.
 func (p *plugin) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	if id != panelMain {
 		return ""
@@ -211,7 +211,7 @@ func (p *plugin) renderActiveTab(width int) (string, []int) {
 // renderBody sizes the viewport to the panel's inner region (minus the
 // tab-strip and divider rows) and renders tab strip + divider + viewport
 // content. Reloading state does not change body rendering — only
-// StatusContext (Task 3) reflects it.
+// StatusContext reflects it.
 //
 // The active tab's body is recomputed here, via renderActiveTab, at the
 // panel's real inner width — the same width the tables are fitted or

@@ -266,9 +266,9 @@ type shellRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir s
 // (runServicesCLI) and one-shot (runOneShotCommand) flows. It validates the
 // service exists, has a container, and carries a valid cli.mode.
 //
-// It no longer derives a "<project>-<container>" name: the running container is
-// located by compose labels at probe time (see serviceContainerState), which is
-// correct under custom container_name and compose's default
+// The running container is located by compose labels at probe time (see
+// serviceContainerState) rather than by a derived "<project>-<container>" name,
+// which is correct under custom container_name and compose's default
 // "<project>-<service>-<index>" naming.
 //
 // It returns the compose service name (svc.Container) the probe and `docker

@@ -106,7 +106,6 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 
 // TestDockerEnvRegenCommands verifies .env regeneration triggers for the hardcoded command list.
 func TestDockerEnvRegenCommands(t *testing.T) {
-	// Task 17: .env is now hardcoded to regenerate for {up, run, exec, restart, build}.
 	tests := []struct {
 		command string
 		want    bool

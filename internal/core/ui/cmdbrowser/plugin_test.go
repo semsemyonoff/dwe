@@ -101,8 +101,7 @@ func TestBrowser_StatusContextBreadcrumb(t *testing.T) {
 
 // TestBrowser_BreadcrumbPathAndPlural verifies the breadcrumb renders the
 // focused group's dotted path with " › " separators and singularizes/pluralizes
-// the command noun by count. Ported from the deleted *Model
-// TestModel_BreadcrumbFormatting.
+// the command noun by count.
 func TestBrowser_BreadcrumbPathAndPlural(t *testing.T) {
 	items := []Item{
 		{ID: "db.migrate"},
@@ -348,9 +347,9 @@ func TestBrowser_PanelClickWorksAfterInspectClosed(t *testing.T) {
 	}
 }
 
-// TestBrowser_WheelScrollsFocusedPanel is rewritten to inject tui.WheelMsg
-// (pointer-routed) instead of driving HandleAction, and now also asserts that
-// wheel scrolling never changes the focused panel (b.active).
+// TestBrowser_WheelScrollsFocusedPanel injects tui.WheelMsg (pointer-routed)
+// and asserts the wheel moves the panel under the cursor without ever changing
+// the focused panel (b.active).
 func TestBrowser_WheelScrollsFocusedPanel(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})

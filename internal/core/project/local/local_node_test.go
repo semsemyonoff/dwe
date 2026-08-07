@@ -302,7 +302,7 @@ func TestApplyOverlayToNode_RejectMapOverAlias(t *testing.T) {
 
 // A key reachable only through a `<<: *anchor` merge must not be shadowed by a
 // silently-appended explicit override (which YAML resolves as a full replace of
-// the merged subtree). The plan's merge-key guard requires rejecting this.
+// the merged subtree), so ApplyOverlayToNode must reject it.
 func TestApplyOverlayToNode_RejectAppendIntoMergeKeyMapping(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "local.yml")

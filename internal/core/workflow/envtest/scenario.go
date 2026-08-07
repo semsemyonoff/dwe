@@ -25,9 +25,9 @@ import (
 )
 
 // AutoPortSentinel is the only magic value permitted for an env.vars entry: it
-// asks the stage-1b runner to allocate a free host port before deploy and write
-// the concrete number into the copy's local.yml. In stage 1a the value is kept
-// as a raw string — no typed field, no allocation logic.
+// asks the runner to allocate a free host port before deploy and write the
+// concrete number into the copy's local.yml. The loader keeps it as a raw
+// string — no typed field, no allocation logic.
 const AutoPortSentinel = "auto"
 
 // scenarioNamePattern is the compose-project-name-fragment rule a scenario file
@@ -43,7 +43,7 @@ type Scenario struct {
 	// Env describes how the disposable copy differs from the working environment.
 	Env ScenarioEnv `yaml:"env,omitempty"`
 	// Timeout is the wall-clock budget for the whole scenario (e.g. "15m").
-	// Kept as a raw string here (parsed by the stage-1b runner), matching the
+	// Kept as a raw string here (parsed by the runner), matching the
 	// string-timeout convention used elsewhere in config.
 	Timeout string `yaml:"timeout,omitempty"`
 	// Steps are ordinary pipeline steps run after the implicit deploy, in the
@@ -56,7 +56,7 @@ type ScenarioEnv struct {
 	// Services toggles which services are enabled/disabled in the copy.
 	Services ScenarioServices `yaml:"services,omitempty"`
 	// Vars overrides project vars in the copy's local.yml. Values are scalars,
-	// plus the AutoPortSentinel string for host-port allocation (stage 1b).
+	// plus the AutoPortSentinel string for host-port allocation.
 	Vars map[string]any `yaml:"vars,omitempty"`
 }
 

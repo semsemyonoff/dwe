@@ -251,7 +251,7 @@ func TestPlugin_StatusContext_LoadedWithoutTimestamp(t *testing.T) {
 	}
 }
 
-// --- Task 5: reload + YOffset preservation through Plugin.Update ---
+// --- reload + YOffset preservation through Plugin.Update ---
 
 func TestPlugin_Update_CurrentTabsLoadedMsgApplied(t *testing.T) {
 	p, _ := newTestPlugin(t)
@@ -444,7 +444,7 @@ func TestPlugin_Update_WindowSizeMsgDoesNotSizeViewport(t *testing.T) {
 	}
 }
 
-// --- Task 6: mouse — tab clicks & wheel scroll ---
+// --- mouse — tab clicks & wheel scroll ---
 
 func TestPlugin_PanelClick_TabStripSelectsCorrectTab(t *testing.T) {
 	p, _ := newTestPlugin(t)
@@ -632,13 +632,13 @@ func TestPlugin_Update_FocusChangedMsgIsNoop(t *testing.T) {
 	}
 }
 
-// --- Task 11: renderActiveTab memoisation on (loadGen, active, width) ---
+// --- renderActiveTab memoisation on (loadGen, active, width) ---
 
 // TestPlugin_RenderActiveTab_MemoisationContract puts a call-count spy on
-// renderTabFn and drives it through the four invalidation triggers the plan
-// calls out directly, rather than inferring memoisation from inspecting
-// cache fields: two consecutive identical View() calls render once; a width
-// change, a tab switch, and a reload each force exactly one more render.
+// renderTabFn and drives it through the invalidation triggers directly,
+// rather than inferring memoisation from inspecting cache fields: two
+// consecutive identical View() calls render once; a width change, a tab
+// switch, and a reload each force exactly one more render.
 func TestPlugin_RenderActiveTab_MemoisationContract(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false

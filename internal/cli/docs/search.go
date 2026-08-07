@@ -149,7 +149,7 @@ func emitNoSearchMatches(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsS
 //
 // When anchor is empty, only `<path>` is printed (no trailing '#').
 // WriteData appends a single trailing newline; rows here are joined with '\n'
-// so the on-the-wire format matches the prior per-row Fprintf("…\n").
+// so the output ends with exactly one newline.
 //
 // The snippet is a FOURTH column rather than JSON-only on purpose: without it
 // every hit costs a second `docs show` call to find out whether it was worth

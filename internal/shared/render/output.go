@@ -122,7 +122,7 @@ func (w *Writer) Definition(name, desc string, indent int, icon string, delim ..
 	}
 }
 
-// LineText prints a line with centered text, following the legacy line_text macro:
+// LineText prints a line with centered text:
 //
 //	output = lead + padding(sym) + text + padding(sym) + lead
 //

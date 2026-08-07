@@ -188,7 +188,7 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 
 	// Set the initial cursor so the browser knows which topic to load on the
 	// first WindowSizeMsg. The load itself is deferred to browser.Update so
-	// it uses the correct framework-supplied width (Decision #10).
+	// it uses the correct framework-supplied width.
 	if m.Tree.Cursor() != nil {
 		m.CurrentTopic = m.Tree.Cursor()
 	}

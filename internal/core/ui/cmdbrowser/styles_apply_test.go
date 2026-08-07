@@ -164,9 +164,8 @@ func TestApplyViewportStyles_PopulatesPaletteFields(t *testing.T) {
 }
 
 // TestNewBrowser_AppliesListStyles verifies newBrowser threads the configured
-// palette into the embedded bubbles list. The help model moved to the Frame
-// (Task 11), so the help-footer styling assertion that the old *Model carried is
-// no longer the browser's concern.
+// palette into the embedded bubbles list. Help-footer styling belongs to the
+// Frame, not the browser.
 func TestNewBrowser_AppliesListStyles(t *testing.T) {
 	applyPaletteOverride(t)
 

@@ -52,13 +52,13 @@ func readMarker(t *testing.T, path string) string {
 }
 
 // TestRunHelper_VarsChange_WholeProjectReRuns is the whole-project half of
-// the end-to-end guard for hashing vars into ProjectConfigHash (plan task
-// 2d): a step whose rendered cmd depends on ${vars.*} must actually
-// re-execute — not just report a changed StepHash in isolation — when the
-// referenced var changes and no other config changed. Before vars were
-// folded into ProjectConfigHash, RunHelper's up-to-date gate short-circuited
-// the whole pipeline before any per-step hash was even consulted, so the
-// step re-rendered internally but its new output was never observed.
+// the end-to-end guard for hashing vars into ProjectConfigHash: a step whose
+// rendered cmd depends on ${vars.*} must actually re-execute — not just
+// report a changed StepHash in isolation — when the referenced var changes
+// and no other config changed. Before vars were folded into
+// ProjectConfigHash, RunHelper's up-to-date gate short-circuited the whole
+// pipeline before any per-step hash was even consulted, so the step
+// re-rendered internally but its new output was never observed.
 func TestRunHelper_VarsChange_WholeProjectReRuns(t *testing.T) {
 	swapImplicitEnvStep(t)
 
@@ -148,10 +148,10 @@ func TestRunHelper_VarsChange_ServiceScopedReRuns(t *testing.T) {
 	}
 }
 
-// TestRunHelper_VarsChange_UnrelatedVarsAlsoInvalidates pins the accepted
-// cost of hashing the whole vars: block rather than only referenced paths
-// (owner decision in the plan): changing an unrelated vars entry also causes
-// the next deploy to re-run, even though no step references it.
+// TestRunHelper_VarsChange_UnrelatedVarsAlsoInvalidates pins the deliberately
+// accepted cost of hashing the whole vars: block rather than only referenced
+// paths: changing an unrelated vars entry also causes the next deploy to
+// re-run, even though no step references it.
 func TestRunHelper_VarsChange_UnrelatedVarsAlsoInvalidates(t *testing.T) {
 	swapImplicitEnvStep(t)
 

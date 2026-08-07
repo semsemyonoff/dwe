@@ -195,8 +195,8 @@ func confirmUnpackOverwrite(fn func() (bool, error)) (bool, error) {
 }
 
 // extractTarGz walks the gzipped tar at tarPath and writes every entry under
-// targetRoot, enforcing the archive-safety contract documented in
-// docs/plans/2026-05-24-snapshot-subsystem.md Task 9.
+// targetRoot, enforcing the archive-safety contract: path containment, an
+// entry-type allowlist, and the total-size / entry-count caps.
 func extractTarGz(tarPath, targetRoot string) error {
 	f, err := os.Open(tarPath)
 	if err != nil {

@@ -15,8 +15,7 @@ import (
 const defaultIndent = 2
 
 // Info builds and returns the full styled info dashboard string for the
-// given dwe config and info configuration. It replaces the legacy
-// table-header / definition rendering in internal/cli/info/info.go.
+// given dwe config and info configuration.
 //
 // Returns an error if any Go template expression in text/value/when fields
 // fails to evaluate.

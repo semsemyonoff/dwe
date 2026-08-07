@@ -154,7 +154,7 @@ func TestChildIO_Parallel_TTY_NoPTY(t *testing.T) {
 }
 
 func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
-	// Task 6: childIO with stepWriter == nil falls back to os.Stdout / os.Stderr
+	// childIO with stepWriter == nil falls back to os.Stdout / os.Stderr
 	// passthrough so ad-hoc external callers (`dwe deploy run STEP`) still
 	// inherit the real terminal fd. Replaces the old parallel-nil panic which
 	// is no longer reachable: parallel-mode callers always supply a tee.
@@ -386,9 +386,9 @@ func TestSequentialStep_LogTeeCapturesOutput(t *testing.T) {
 
 // TestSequentialStep_SuspendsAndResumesLive verifies the executor pauses
 // the LiveLine footer around each sequential step body and resumes after.
-// The previous design (Task 6 of the live-pipeline plan) tried to keep the
-// footer visible by routing child output through StepOutput; this broke
-// docker compose's interactive UI and stripped command colors.
+// The previous design tried to keep the footer visible by routing child
+// output through StepOutput; this broke docker compose's interactive UI and
+// stripped command colors.
 func TestSequentialStep_SuspendsAndResumesLive(t *testing.T) {
 	rep := &mockReporter{}
 	phase := config.DeployPhase{Name: "p"}

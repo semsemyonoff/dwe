@@ -19,10 +19,6 @@ import (
 )
 
 // NewCmd builds the `dwe snapshot` command group.
-//
-// Read-only subcommands (list, current, inspect) ship in this task; the
-// mutating subcommands (create, restore, rollback, remove, pack, unpack) are
-// added by later tasks in the snapshot subsystem plan.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",

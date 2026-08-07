@@ -55,10 +55,9 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 // empty bordered box. Used by `dwe validate`.
 //
 // The render mode is decided once, across every domain, rather than per
-// domain: a table immediately above a record block reads as a bug (see
-// § Mode decision is per render call, not per table). If any single domain
-// cannot fit as a table at the shared budget, every domain renders as
-// records.
+// domain: a table immediately above a record block reads as a bug. If any
+// single domain cannot fit as a table at the shared budget, every domain
+// renders as records.
 //
 // Budget is resolved from stdout, not stderr: unlike DiagnosticsTable, this
 // renderer's only call site (`dwe validate`) writes to cmd.OutOrStdout(). The

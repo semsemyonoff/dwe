@@ -7,9 +7,9 @@ import "fmt"
 // supplies the canonical keys and section; the plugin's HandleAction interprets
 // them per its own context. Register any subset via [RegisterStandard].
 //
-// The IDs are stable and locked in Stage 1; default bindings are locked too.
-// Plugins call RegisterStandard(reg, ActionNavUp, ActionNavDown, …) in their
-// Actions hook and interpret these IDs in HandleAction.
+// The IDs and their default bindings are stable. Plugins call
+// RegisterStandard(reg, ActionNavUp, ActionNavDown, …) in their Actions hook and
+// interpret these IDs in HandleAction.
 const (
 	// Navigation row — canonical list/table movement.
 	ActionNavUp    Action = "nav.up"

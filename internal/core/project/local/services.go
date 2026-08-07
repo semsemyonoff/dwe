@@ -51,11 +51,10 @@ func ValidateServiceToggle(cfg *config.DweConfig, name string) error {
 // Either every name validates and an overlay is returned, or the first
 // validation error is surfaced and no overlay is produced (all-or-nothing).
 //
-// The overlay is applied onto a LOADED document node via ApplyOverlayToNode so
-// the developer's comments/formatting and any other local.yml keys survive —
-// this replaces the legacy load-map → mutate-map → marshal-map write path,
-// which dropped comments. Returns a nil overlay only when there is nothing to
-// toggle (both slices empty); callers treat a nil/empty overlay as a no-op.
+// Callers MUST apply the overlay onto a LOADED document node via
+// ApplyOverlayToNode, or the developer's comments/formatting and any other
+// local.yml keys are dropped. Returns a nil overlay only when there is nothing
+// to toggle (both slices empty); callers treat a nil/empty overlay as a no-op.
 func ServiceTogglesOverlay(cfg *config.DweConfig, toEnable, toDisable []string) (map[string]any, error) {
 	for _, name := range toEnable {
 		if err := ValidateServiceToggle(cfg, name); err != nil {

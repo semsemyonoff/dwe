@@ -24,14 +24,13 @@ project:
   prefix: dwe
 `
 
-// sampleToolsYML declares the standard tools as type=tool services with
-// compose overlays for two. Post-unification the file is a services.yml
-// fragment, not a separate tools.yml. Kept under the legacy name so existing
-// call sites stay terse.
+// sampleToolsYML is an alias for sampleToolsServicesYML: a `services:` fragment
+// of type=tool services, two of them carrying compose overlays. The "tools"
+// name is kept only so existing call sites stay terse.
 const sampleToolsYML = sampleToolsServicesYML
 
 // minimalToolsYML declares the standard tools as type=tool services without
-// compose overlays. Post-unification the file is a services.yml fragment.
+// compose overlays.
 const minimalToolsYML = `
 services:
   adminer:
@@ -349,7 +348,7 @@ state: staging
 	}
 }
 
-// --- strict root allowlist + vars: sandbox (Task 1) ---
+// --- strict root allowlist + vars: sandbox ---
 
 func TestLoadConfig_strictRoot_allowedKeysLoad(t *testing.T) {
 	// All formalized top-level keys + schema_version + vars: load without error.
@@ -774,9 +773,6 @@ func TestProjectFullName_noPrefix(t *testing.T) {
 		t.Errorf("FullName = %q, want myapp", p.FullName())
 	}
 }
-
-// Tools no longer have a dedicated AnyEnabled helper; the equivalent is to
-// walk cfg.Services and filter by IsTool().
 
 func TestDeepMerge_nonConflicting(t *testing.T) {
 	dst := map[string]any{"a": 1}
@@ -5598,11 +5594,4 @@ func TestAllowedRootKeysSubsetOfKnownVarHeads(t *testing.T) {
 	}
 }
 
-// Tests below this point were heavily tied to the legacy tools.yml /
-// runtime.ports / runtime.hosts shape. They are kept as no-op stubs here so
-// the file's structure remains unchanged; the new behaviour is exercised by
-// the dedicated services-overlay/injection tests added in services_overlay_test.go.
 var _ = sampleToolsServicesYML
-
-// Legacy tools.yml shape removed in the unified-services-schema refactor.
-// New behaviour is exercised by services_overlay_test.go.

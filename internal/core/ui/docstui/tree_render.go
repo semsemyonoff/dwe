@@ -39,8 +39,8 @@ func (tw *TreeWidget) renderRegion(inner tui.Region, panelFocused bool) string {
 }
 
 // renderAllRows emits one styled line per visible node (no clipping). Labels
-// are truncated to fit innerWidth. Operates on the TreeWidget's own state so
-// ViewPanel can render without the old Model's geometry fields.
+// are truncated to fit innerWidth. Operates on the TreeWidget's own state, so
+// ViewPanel supplies only the region geometry.
 func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
 	visible := tw.eng.VisibleNodes()
 	if len(visible) == 0 {

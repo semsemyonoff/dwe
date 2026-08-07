@@ -32,7 +32,7 @@ const (
 //
 // Standard navigation, select, filter, and reload use the stdlib defaults
 // (ActionNavLeft/ActionNavRight are NOT registered — tree.collapse/tree.expand
-// claim those keys with directional semantics instead of the old Toggle-on-both).
+// claim those keys with directional semantics instead).
 // Tab/Shift+Tab (focus), ?/q/esc/ctrl+c are framework built-ins — NOT registered.
 func (b *browser) Actions(reg *tui.Registry) error {
 	if err := tui.RegisterStandard(reg,
@@ -50,9 +50,8 @@ func (b *browser) Actions(reg *tui.Registry) error {
 	}
 
 	// Tree directional collapse/expand. Keys "left"/"h" and "right"/"l" map to
-	// these instead of the stdlib NavLeft/NavRight. Intentional behavior change
-	// from old Toggle-on-both: h collapses (or steps to parent), l expands (or
-	// steps into first child). Documented in tui-keymap.md (Task 12).
+	// these instead of the stdlib NavLeft/NavRight: h collapses (or steps to
+	// parent), l expands (or steps into first child). Documented in tui-keymap.md.
 	if err := reg.Register(actionTreeCollapse, tui.Binding{
 		Keys:    []string{"left", "h"},
 		Desc:    "Collapse / up to parent",
@@ -114,9 +113,7 @@ func (b *browser) Actions(reg *tui.Registry) error {
 
 // HandleAction implements tui.Plugin. The framework matches a key to an Action
 // and dispatches here; built-ins (help/quit/focus) never reach this method.
-// Navigation routes to the active panel (tree or viewport). Locale effects and
-// reload complete fully in Task 6; their tree mutations and topic loads are
-// already wired here.
+// Navigation routes to the active panel (tree or viewport).
 func (b *browser) HandleAction(a tui.Action) (tea.Cmd, bool) {
 	// A bound key interrupts an in-flight wheel-scroll burst: drop the deferred
 	// tree load so this action takes over immediately instead of racing a stale
@@ -318,8 +315,8 @@ func (b *browser) navHalfPage(delta int) tea.Cmd {
 }
 
 // afterTreeMove keeps the focused tree row on screen and re-syncs to the topic
-// behind the cursor. The returned Cmd carries the async topic load (the
-// topicLoadedMsg handler in Task 6 applies the rendered content).
+// behind the cursor. The returned Cmd carries the async topic load; the
+// topicLoadedMsg handler applies the rendered content.
 func (b *browser) afterTreeMove() tea.Cmd {
 	if b.Tree != nil {
 		b.Tree.eng.EnsureFocusVisible(b.treeInner.Height)

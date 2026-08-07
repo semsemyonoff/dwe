@@ -93,7 +93,7 @@ type PlainReporter struct {
 	mu        sync.Mutex // guards every write to w and any future shared state
 	w         *render.Writer
 	logFile   io.Writer        // optional ANSI-stripped side-channel to the global pipeline log file
-	termOut   io.Writer        // raw terminal stream for cursor ANSI (LiveLine in later tasks); io.Discard when non-TTY
+	termOut   io.Writer        // raw terminal stream for LiveLine cursor ANSI; io.Discard when non-TTY
 	ttyMode   bool             // true when termOut is a real TTY (LiveLine block features enabled)
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
@@ -141,10 +141,10 @@ func (p livePrinter) PrintLine(s string) { p.live.PrintlnDiag(s) }
 //
 // screen is the status-line writer (typically wrapping os.Stdout). logFile is
 // the raw global pipeline log file (or nil when logging is disabled); the
-// reporter wraps it with logSanitizer internally so the file on disk receives
-// ANSI-stripped, `\r`-normalised content. termOut is the raw terminal stream
-// reserved for cursor/spinner ANSI sequences in later live-progress tasks; it
-// is io.Discard when stdout is not a TTY.
+// reporter wraps it with liveui.LogSanitizer internally so the file on disk
+// receives ANSI-stripped, `\r`-normalised content. termOut is the raw terminal
+// stream the LiveLine uses for cursor/spinner ANSI; it is io.Discard when
+// stdout is not a TTY.
 func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Writer) *PlainReporter {
 	if termOut == nil {
 		termOut = io.Discard
@@ -759,7 +759,7 @@ func (r *PlainReporter) flushSubStepLocked(addr string, status subStepStatus) {
 	if !ok {
 		return
 	}
-	// Buffer-dump policy (Task 9):
+	// Buffer-dump policy:
 	//   - non-TTY: always dump (existing behaviour).
 	//   - TTY + FAILED: always dump (user needs full history to diagnose).
 	//   - TTY + succeeded/skipped + logPath: suppress dump, emit "Full log:".

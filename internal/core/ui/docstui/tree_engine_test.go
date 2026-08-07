@@ -91,9 +91,9 @@ func TestRebuildPreservesExpansionAndCursor(t *testing.T) {
 	}
 }
 
-// TestRebuildHeadingVanishFallsBackToParentFile locks Codex finding #1: when
-// the cursor sits on a heading that disappears after a locale Rebuild, the
-// cursor falls back to the heading's PARENT FILE, not the first visible row.
+// TestRebuildHeadingVanishFallsBackToParentFile locks the two-tier cursor
+// restore: when the cursor sits on a heading that disappears after a locale
+// Rebuild, it falls back to the heading's PARENT FILE, not the first visible row.
 func TestRebuildHeadingVanishFallsBackToParentFile(t *testing.T) {
 	roots := []docs.DocRoot{{Name: "dwe", FS: newLocaleFixtureFS()}}
 	tw, err := NewTreeWidget(roots, "en")
@@ -164,8 +164,8 @@ func TestMultiRootGroupsExpandedByDefault(t *testing.T) {
 	}
 }
 
-// TestEmptyQueryFilterRespectsExpansion locks Codex finding #3: opening the
-// filter with an empty query must NOT fully expand the tree — it keeps the
+// TestEmptyQueryFilterRespectsExpansion pins that opening the filter with an
+// empty query must NOT fully expand the tree — it keeps the
 // expansion-respecting visible set (a node inside a collapsed dir stays hidden).
 func TestEmptyQueryFilterRespectsExpansion(t *testing.T) {
 	roots := []docs.DocRoot{{Name: "dwe", FS: newLocaleFixtureFS()}}
@@ -198,10 +198,9 @@ func TestEmptyQueryFilterRespectsExpansion(t *testing.T) {
 	}
 }
 
-// TestIndexOnlyDirStaysExpandableAndEnterable locks Codex finding #4: an
-// index-only directory (no child rows after folding index.md) remains
-// expandable and resolves its index content on Enter — it must not degrade to
-// an inert leaf.
+// TestIndexOnlyDirStaysExpandableAndEnterable pins that an index-only
+// directory (no child rows after folding index.md) remains expandable and
+// resolves its index content on Enter — it must not degrade to an inert leaf.
 func TestIndexOnlyDirStaysExpandableAndEnterable(t *testing.T) {
 	roots := []docs.DocRoot{{Name: "dwe", FS: newLocaleFixtureFS()}}
 	tw, err := NewTreeWidget(roots, "en")
@@ -228,9 +227,9 @@ func TestIndexOnlyDirStaysExpandableAndEnterable(t *testing.T) {
 		t.Errorf("contentNodeFor(solo) = %v, want solo/index.md", cn)
 	}
 
-	// Toggle on the index-only dir flips its expansion glyph (▶ ↔ ▼) exactly as
-	// the pre-engine TreeWidget did, even though it has no child rows to reveal.
-	// Expand (→/l) stays a no-op (nothing to step into); neither moves the cursor.
+	// Toggle on the index-only dir flips its expansion glyph (▶ ↔ ▼) even though
+	// it has no child rows to reveal. Expand (→/l) stays a no-op (nothing to step
+	// into); neither moves the cursor.
 	tw.SetCursor(solo)
 	if tw.IsExpanded(solo) {
 		t.Fatal("index-only dir should start collapsed")

@@ -5,11 +5,10 @@ import "charm.land/lipgloss/v2"
 // focusManager tracks which of a plugin's declared panels currently holds focus
 // and supplies the per-panel border style ([focusedBorder] vs [unfocusedBorder])
 // the frame draws around it. It is the single source of focus truth so the frame
-// and the (future) action handlers never disagree about the active panel.
+// and the action handlers never disagree about the active panel.
 //
 // Panel order is the order the plugin returns from [Plugin.Panels]; Next/Prev
-// cycle through that order and wrap. The manager is provisional (Stage 0) like the
-// rest of the spike.
+// cycle through that order and wrap.
 type focusManager struct {
 	// panels is the ordered set of focusable panel IDs, as declared by the plugin.
 	panels []PanelID
@@ -20,8 +19,8 @@ type focusManager struct {
 
 // newFocusManager builds a focus manager over the plugin's declared panels, with
 // the first panel focused. An empty panel set yields a no-op manager (cycling and
-// BorderFor are safe but inert); the caller ([newFrame], Task 7) validates that a
-// real plugin declares at least one panel before launch.
+// BorderFor are safe but inert); the caller ([newFrame]) validates that a real
+// plugin declares at least one panel before launch.
 func newFocusManager(panels []Panel) *focusManager {
 	ids := make([]PanelID, len(panels))
 	for i, p := range panels {

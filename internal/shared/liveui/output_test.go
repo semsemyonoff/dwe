@@ -218,7 +218,7 @@ func TestSubStepLog_RoutedViaLineTee_SplitOSCClean(t *testing.T) {
 }
 
 // TestAnsiOnlyRe_PreservesCR ensures the regex used by the tee path leaves
-// `\r` bytes intact (precondition for Task 2 frame parsing).
+// `\r` bytes intact (precondition for LineTee frame parsing).
 func TestAnsiOnlyRe_PreservesCR(t *testing.T) {
 	in := []byte("\x1b[32m50%\r100%\x1b[0m\n")
 	got := ANSIOnlyRe.ReplaceAll(in, nil)

@@ -1206,11 +1206,11 @@ func TestResetStepCmd_DryRunRendersCmd(t *testing.T) {
 }
 
 // TestResetStepCmd_RendersWhenCmd verifies that a runtime shell when: cmd is
-// rendered before evaluation. Before Task 2c, `reset step` evaluated
-// step.When directly against the unrendered condition, so a
-// "${vars.mode}" would hit the shell as a literal and "bad substitution"
-// out — this pins that the condition now evaluates the substituted value and
-// gates step execution correctly in both directions.
+// rendered before evaluation. `reset step` used to evaluate step.When
+// directly against the unrendered condition, so a "${vars.mode}" would hit
+// the shell as a literal and "bad substitution" out — this pins that the
+// condition now evaluates the substituted value and gates step execution
+// correctly in both directions.
 func TestResetStepCmd_RendersWhenCmd(t *testing.T) {
 	resetYAML := "phases:\n" +
 		"  - name: probe\n" +
@@ -1344,7 +1344,7 @@ func TestResetStepCmd_AutoCheckInvertsWhen(t *testing.T) {
 // TestResetStepCmd_MatchesResetRunRenderedCommand verifies that `reset step
 // --dry-run` and the resolution path `reset run` uses (ResolvePhaseSteps via
 // reset.LoadAndResolvePlan) render the very same step to the very same
-// command — the divergence Task 2c exists to remove.
+// command — the two paths must never diverge.
 func TestResetStepCmd_MatchesResetRunRenderedCommand(t *testing.T) {
 	resetYAML := "phases:\n" +
 		"  - name: probe\n" +

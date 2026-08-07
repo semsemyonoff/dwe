@@ -217,8 +217,8 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 	seenIDs := make(map[string]int, len(raw.Checks))
 
 	// Diagnostics always reference the canonical "workspace/validate.yml" path
-	// regardless of how the file was located on disk — matches what Task 4/5
-	// validators report so users see a consistent reference everywhere.
+	// regardless of how the file was located on disk, so every validator reports
+	// the same file reference.
 	const diagFile = "workspace/validate.yml"
 
 	for i, r := range raw.Checks {

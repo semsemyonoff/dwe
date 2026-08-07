@@ -256,8 +256,7 @@ func TestBrowser_FilterExitRequestsListFocus(t *testing.T) {
 // TestBrowser_FilterEscFocusedIDVisibleAfterRestoration verifies that when the
 // pre-filter state had the focused node's parent collapsed (making the node
 // invisible after restoration), exitFilter walks up to the nearest visible
-// ancestor so the tree cursor never lands on a hidden node. Ported from the
-// deleted *Model TestFilter_ExitFilter_FocusedIDVisibleAfterRestoration.
+// ancestor so the tree cursor never lands on a hidden node.
 func TestBrowser_FilterEscFocusedIDVisibleAfterRestoration(t *testing.T) {
 	b := newBrowser("pick", filterTestItems(), DefaultOptions())
 

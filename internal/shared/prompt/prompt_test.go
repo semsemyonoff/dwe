@@ -1364,7 +1364,7 @@ func TestRunFromDirStackIconStaleCacheRefreshFailFallsBackToStale(t *testing.T) 
 	}
 }
 
-// Task 4 tests: refresh path. These tests MUST NOT call t.Parallel — they
+// Refresh-path tests. These tests MUST NOT call t.Parallel — they
 // swap the package-level dockerPsFunc and rely on Go's test framework running
 // non-parallel top-level tests sequentially before parallel tests resume.
 

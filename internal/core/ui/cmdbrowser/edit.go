@@ -14,8 +14,8 @@ import (
 // editFormHint is the footer hint row rendered inside the edit form overlay box.
 // It is the single authoritative key hint (huh's own help line is suppressed via
 // ShowHelp:false at BuildForm time — its ctrl+c=quit hint would be wrong under
-// the Frame, where ctrl+c hard-quits the whole TUI). Hardcoded English, matching
-// Stage 6's decision that form chrome i18n is out of scope.
+// the Frame, where ctrl+c hard-quits the whole TUI). Hardcoded English — form
+// chrome i18n is out of scope.
 const editFormHint = "enter save · esc cancel"
 
 // statusFlashDuration is how long a transient status-line confirmation (a commit

@@ -10,9 +10,8 @@ import (
 )
 
 // diagnosticStyleRecordView builds a tableView shaped like the diagnostics
-// table (STATUS glyph / TARGET+FILE title / MESSAGE body / HINT field),
-// matching the worked example in the plan's Overview, with severity color on
-// STATUS only — mirroring diagnosticsTable's own StyleFunc.
+// table (STATUS glyph / TARGET+FILE title / MESSAGE body / HINT field), with
+// severity color on STATUS only — mirroring diagnosticsTable's own StyleFunc.
 func diagnosticStyleRecordView(rows [][]string) tableView {
 	return tableView{
 		Headers: []string{"STATUS", "TARGET", "FILE", "MESSAGE", "HINT"},

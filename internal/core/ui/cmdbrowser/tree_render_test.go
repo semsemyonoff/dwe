@@ -116,7 +116,7 @@ func TestTreeRenderRegion_FilterPath(t *testing.T) {
 }
 
 // TestBrowserViewPanel_Tree asserts the plugin renders the tree into the inner
-// region and caches it; the list panel is exercised by plugin_test.go (Task 5).
+// region and caches it; the list panel is exercised by plugin_test.go.
 func TestBrowserViewPanel_Tree(t *testing.T) {
 	t.Parallel()
 	b := newBrowser("title", sampleItems(), Options{Mode: ModeRun})
@@ -135,7 +135,7 @@ func TestBrowserViewPanel_Tree(t *testing.T) {
 		}
 	}
 
-	// The list panel now renders (Task 5); it must still cache its inner region.
+	// The list panel must also cache its inner region.
 	b.ViewPanel(panelList, inner)
 	if b.listInner != inner {
 		t.Errorf("listInner not cached: %+v", b.listInner)

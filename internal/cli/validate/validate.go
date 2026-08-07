@@ -159,9 +159,8 @@ func shouldEmitFilterHint(rows, errors, warnings int, quiet bool, levelRaw strin
 }
 
 // emitFilterHint writes a single info line to stderr after a long diagnostics
-// table, naming the two flags that shrink it. The output-narrowing flags have
-// existed since May and were used zero times across the sessions this hint was
-// added for — a table that scrolls past a screen is exactly the point of need.
+// table, naming the two flags that shrink it: a table that scrolls past a
+// screen is exactly the point of need for flags nobody discovers otherwise.
 //
 // Same shape and constraints as cmdctx.EmitDefaultNotice: stderr only (stdout
 // stays the parseable surface), no-op in JSON mode where the consumer filters

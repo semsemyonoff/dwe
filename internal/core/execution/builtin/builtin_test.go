@@ -352,8 +352,8 @@ func TestPredicateAsUserCommand_Intentional(t *testing.T) {
 	}
 }
 
-// allBuiltinNames enumerates every builtin name expected in the registry after
-// the subpackage refactor. Adding or removing a name requires updating this list.
+// allBuiltinNames enumerates every builtin name expected in the registry.
+// Adding or removing a name requires updating this list.
 var allBuiltinNames = []string{
 	// root (cross-cutting predicates)
 	"shell",

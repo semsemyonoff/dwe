@@ -176,10 +176,7 @@ func TestDockerWaitHealthyDescribe(t *testing.T) {
 }
 
 func TestDockerWaitHealthyRun(t *testing.T) {
-	// Run testing is covered by integration tests that exercise the full
-	// builtin via the registry. Direct unit testing would require mocking
-	// docker compose commands, which is covered in integration tests.
-	// The public contract (Validate/Describe) is tested above.
+	// Run needs a real docker compose; it is exercised by the integration tests.
 }
 
 func TestComposeContainerIDsFor(t *testing.T) {

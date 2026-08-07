@@ -89,8 +89,8 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 }
 
 // formatEvent renders the title and body strings for a notification.
-// Format strings and the failure-body truncation length are locked by
-// the plan's Technical Details § notify package internals.
+// The exact format strings and failBodyMaxErrLen are pinned by
+// native_test.go — changing either breaks those assertions.
 func formatEvent(ev Event) (title, body string) {
 	op := ev.Operation
 	if op == "" {

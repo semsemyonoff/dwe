@@ -210,13 +210,9 @@ func TestParallelGroup_TrackedTotalIncludesSubSteps(t *testing.T) {
 func TestParallelGroup_SemaphoreCap_LimitsConcurrency(t *testing.T) {
 	rep := &mockReporter{}
 	phase := config.DeployPhase{Name: "p"}
-	// MaxConcurrent=1 ⇒ steps run serially. We assert this by checking
-	// the in-flight counter never exceeds 1 via a small shell snippet that
-	// uses a shared file lock would be flaky; instead use a wrapper that
-	// has each substep sleep briefly and asserts an atomic counter via a
-	// custom check action is overkill. Easier: use ExecAction via a
-	// builtin shim? Too heavy. Drop into an integration-style test using
-	// a guarded counter via the recorder.
+	// MaxConcurrent=1 ⇒ steps run serially. Asserted with a recorder-driven
+	// in-flight counter rather than shell-side locking or sleeps, which would
+	// be flaky.
 
 	var inflight atomic.Int32
 	var maxSeen atomic.Int32

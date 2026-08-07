@@ -933,7 +933,7 @@ func TestResolvePhaseSteps_resolvingSameConfigTwiceIsIdempotent(t *testing.T) {
 	}
 }
 
-// --- Task 2b: rendering the runtime `when` at all three scopes ---
+// --- rendering the runtime `when` at all three scopes ---
 
 func TestResolvePhaseSteps_rendersPhaseRuntimeWhen(t *testing.T) {
 	cfg := configWithSourceVars()
@@ -1040,9 +1040,9 @@ func TestResolvePhaseSteps_rendersLeafStepRuntimeWhen(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_leafWhenCmdMatchesDerivedCheckAutoInput(t *testing.T) {
-	// Plan B derives `check: auto` from when.Cmd; both sides must see the
-	// identical rendered string, or the derived check would compare against
-	// different text than the gate it inverts.
+	// `check: auto` derives from when.Cmd; both sides must see the identical
+	// rendered string, or the derived check would compare against different
+	// text than the gate it inverts.
 	cfg := configWithSourceVars()
 	whenCmd := "test -d ${vars.source.dir}"
 	phase := config.DeployPhase{

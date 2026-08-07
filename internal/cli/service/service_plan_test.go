@@ -405,8 +405,8 @@ func TestBuildTogglePlan_DeployOrRestart_RejectedWithoutDeployFile(t *testing.T)
 	}
 }
 
-// TestBuildTogglePlan_UnknownRequires verifies ErrUnknownToggleRequires without
-// running dwe validate first (regression for the fourth review).
+// TestBuildTogglePlan_UnknownRequires verifies ErrUnknownToggleRequires fires at
+// buildTogglePlan time, without running dwe validate first.
 func TestBuildTogglePlan_UnknownRequires(t *testing.T) {
 	cfg := makeToggleCfg(map[string]config.ServiceConfig{
 		"web": svcApp(&config.ServiceToggleHooks{Requires: "rstart"}, nil, nil),

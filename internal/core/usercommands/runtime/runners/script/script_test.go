@@ -14,9 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// Local aliases keep the moved tests readable without rewriting every type
-// qualifier. The tests live in the same package as Runner so the original
-// `&Runner{}` form is renamed in-place to `&Runner{}`.
+// Local aliases let the tests use unqualified model/spec type names.
 type (
 	CommandDef    = model.CommandDef
 	RunContext    = spec.RunContext

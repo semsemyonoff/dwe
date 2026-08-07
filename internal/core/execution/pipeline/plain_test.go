@@ -579,7 +579,7 @@ func TestPlainReporter_StepOutput_ParallelSubStep_Buffers(t *testing.T) {
 }
 
 // Sequential StepOutput writes the final frame directly to the screen so the
-// user sees real-time output (in Task 7 this routes through LiveLine.Println).
+// user sees real-time output (it routes through LiveLine.Println).
 func TestPlainReporter_StepOutput_Sequential_WritesDirectly(t *testing.T) {
 	r, buf := newBufReporter()
 	r.StepOutput("p/s", "line one", true)
@@ -722,7 +722,7 @@ func TestPlainReporter_FlushOutput_NoopWhenEmpty(t *testing.T) {
 	}
 }
 
-// --- Task 8: non-TTY parallel sub-step buffering and dump ---
+// --- non-TTY parallel sub-step buffering and dump ---
 
 // helper: build a parallel-group DeployStep with the named sub-steps so
 // StartGroup pre-registers the matching sub-addr buffers.
@@ -957,7 +957,7 @@ var errSentinel = errors.New("concurrent test")
 // Verify PlainReporter satisfies the Reporter interface at compile time.
 var _ Reporter = (*PlainReporter)(nil)
 
-// --- Task 7: LiveLine integration (sequential lifecycle) ---
+// --- LiveLine integration (sequential lifecycle) ---
 
 // newTTYReporter returns a PlainReporter wired to a termGrid as termOut so the
 // LiveLine is enabled. The internal ticker is suppressed via testHooks so the
@@ -1054,8 +1054,8 @@ func TestPlainReporter_FinishPipeline_Failure_StopsLiveLine(t *testing.T) {
 }
 
 // TestPlainReporter_FinishPipeline_StopIdempotent guards against any future
-// caller pattern that calls FinishPipeline followed by Close() (Task 10) by
-// asserting Stop is safe to invoke twice via stopOnce.
+// caller pattern that calls FinishPipeline followed by Close() by asserting
+// Stop is safe to invoke twice via stopOnce.
 func TestPlainReporter_FinishPipeline_StopIdempotent(t *testing.T) {
 	r, _ := newTTYReporter()
 	r.StartPipeline("deploy", 1)
@@ -1095,7 +1095,7 @@ func TestPlainReporter_LogFile_StatusLines_ExactlyOnce(t *testing.T) {
 	}
 }
 
-// --- Task 9: parallel block integration ---
+// --- parallel block integration ---
 
 // TestPlainReporter_TTY_StartGroup_ReservesBlockRows verifies that StartGroup
 // in TTY mode reserves N rows and paints the initial running rows for each
@@ -1399,7 +1399,7 @@ func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
 	}
 }
 
-// --- Task 10: huh hook registration ---
+// --- huh hook registration ---
 
 func TestNewPlainReporter_RegistersHuhHooks(t *testing.T) {
 	widgets.ClearHuhHooks()

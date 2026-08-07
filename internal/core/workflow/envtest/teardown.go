@@ -254,7 +254,7 @@ var (
 )
 
 // removeVolumesReal removes every volume prefixed "<m.ComposeProject>_" via
-// the shared extracted helper (Task 5) — shared, unprefixed volumes survive.
+// containers.RemoveVolumesByProjectPrefix — shared, unprefixed volumes survive.
 func removeVolumesReal(ctx context.Context, m *Manifest) error {
 	dockerBin := dockerBinForCopy(m.CopyPath)
 	_, _, err := containers.RemoveVolumesByProjectPrefix(ctx, dockerBin, m.ComposeProject, nil)

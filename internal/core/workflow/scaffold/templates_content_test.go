@@ -146,9 +146,9 @@ func uncommentInertBody(t *testing.T, data []byte) []byte {
 // TestEmbeddedTemplates_InertBodyUncommentsCleanly proves the "uncomment to
 // override" instruction each inert mirror carries actually works: taking the
 // commented-out YAML body literally and stripping only the comment markers
-// must load through the same strict decoder the real file goes through. This
-// is the regression guard for the class of defect fixed in task 11 (a
-// commented example referencing a field the schema no longer has).
+// must load through the same strict decoder the real file goes through. It is
+// the regression guard for a commented example that references a field the
+// schema no longer has.
 func TestEmbeddedTemplates_InertBodyUncommentsCleanly(t *testing.T) {
 	cases := []struct {
 		name string

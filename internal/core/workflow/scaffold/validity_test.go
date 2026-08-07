@@ -34,10 +34,10 @@ func defaultValidityOptions(target string) Options {
 // (deploy/lifecycle/info/docker) load and validate clean on first run.
 //
 // The criterion is zero config + templates diagnostics, not merely zero
-// errors — a fresh scaffold that warns is exactly the noise this branch is
-// removing. The env domain is deliberately excluded: it checks the HOST (a
-// declared port that happens to be busy is a legitimate error), so including
-// it would make the check host-dependent.
+// errors — a warning on a fresh scaffold is noise the user cannot act on. The
+// env domain is deliberately excluded: it checks the HOST (a declared port
+// that happens to be busy is a legitimate error), so including it would make
+// the check host-dependent.
 func runConfigValidators(t *testing.T, dir string, cfg *config.DweConfig) []validate.Diagnostic {
 	t.Helper()
 	ctx := validate.Context{
@@ -57,8 +57,8 @@ func runConfigValidators(t *testing.T, dir string, cfg *config.DweConfig) []vali
 	return found
 }
 
-// TestScaffold_FreshProjectLoads is the integration guard from the plan: a
-// freshly scaffolded project must load through config.LoadConfig without error.
+// TestScaffold_FreshProjectLoads is the integration guard: a freshly
+// scaffolded project must load through config.LoadConfig without error.
 func TestScaffold_FreshProjectLoads(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Scaffold(defaultValidityOptions(dir)); err != nil {

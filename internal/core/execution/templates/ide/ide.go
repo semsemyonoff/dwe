@@ -1,8 +1,7 @@
 // Package ide provides IDE template pack resolution and rendering.
 //
-// IDE packs are manifest-driven (same schema as AI/git). Each pack has a
-// manifest.yml declaring `render:` and `symlinks:` entries; the walker-based
-// layout has been removed.
+// IDE packs are manifest-driven (same schema as AI/git): each pack has a
+// manifest.yml declaring `render:` and `symlinks:` entries.
 package ide
 
 import (

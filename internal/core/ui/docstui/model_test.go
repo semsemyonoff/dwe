@@ -94,5 +94,4 @@ func (tr *testRenderer) Render(ctx context.Context, src string, theme mermaid.Th
 // Focus switching is owned by the tui.Frame and delivered to the plugin via
 // tui.FocusChangedMsg; the live routing is covered by
 // TestBrowser_FocusChangedMsgUpdatesActive and
-// TestBrowser_FocusChangedMsgSwitchesNavRouting in plugin_test.go. The old
-// assignment-only Model.FocusZone tautology was removed.
+// TestBrowser_FocusChangedMsgSwitchesNavRouting in plugin_test.go.

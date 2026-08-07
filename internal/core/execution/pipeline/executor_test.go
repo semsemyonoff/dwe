@@ -492,8 +492,8 @@ func TestRunPipeline_SuspendResumeAroundSequentialExec(t *testing.T) {
 	// Sequential step bodies must be wrapped in SuspendForExec/ResumeAfterExec
 	// so the LiveLine footer pauses while the child writes to the terminal,
 	// then resumes after the child returns. The previous attempt to route all
-	// child output through Reporter.StepOutput (Task 6 of
-	// docs/plans/completed/2026-05-19-live-pipeline-progress.md) stripped
+	// child output through Reporter.StepOutput
+	// (docs/plans/completed/2026-05-19-live-pipeline-progress.md) stripped
 	// colors and broke docker compose's interactive UI; this test pins the
 	// restored pause/resume hand-off.
 	rep := &mockReporter{}
@@ -2146,10 +2146,8 @@ func TestRunWithOptions_State_StepRuns_WithCheck(t *testing.T) {
 	}
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
 
-	// SkipDecider would return Skip (state ok, hash match), but step has check so should Run.
-	// In reality, the closure in Task 8 should handle this, but we test the behavior.
-	// Actually, looking back at the spec, when a step has a check, the Decide function
-	// returns Run. So we simulate that here.
+	// SkipDecider would return Skip (state ok, hash match), but a step with a
+	// check: must Run so the check can re-validate — simulate that here.
 	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
 		// If the step has a check, always run so the check can re-validate.
 		if rs.Step.Check != nil {

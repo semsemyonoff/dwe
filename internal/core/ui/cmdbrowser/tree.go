@@ -185,8 +185,8 @@ func (tm *treeModel) focusedNode() *treeNode {
 }
 
 // focusedID returns the dot-path id of the focused node, or "" for the
-// root/none sentinel (the engine's nil cursor). It mirrors the legacy
-// focusedID field for the breadcrumb, filter, and renderer.
+// root/none sentinel (the engine's nil cursor). Used by the breadcrumb, filter
+// and renderer.
 func (tm *treeModel) focusedID() string {
 	if n := tm.eng.Cursor(); n != nil {
 		return n.id

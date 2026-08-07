@@ -271,7 +271,7 @@ func TestBrowser_SatisfiesPlugin(t *testing.T) {
 	var _ tui.Plugin = b
 }
 
-// --- Task 4: viewport panel render ---
+// --- Viewport panel render ---
 
 // tallContent returns a long string that exceeds any normal panel height so
 // the scrollbar logic activates. Each line is a fixed-width prose line.
@@ -386,7 +386,7 @@ func TestBrowser_ViewPanelViewport_NilViewport(t *testing.T) {
 	}
 }
 
-// --- Task 6: async lifecycle ---
+// --- Async lifecycle ---
 
 func TestBrowser_FirstLoadFiresOnFirstWindowSizeMsg(t *testing.T) {
 	b := newTestBrowser(t)
@@ -637,7 +637,7 @@ func TestBrowser_FocusChangedMsgUpdatesActive(t *testing.T) {
 	}
 }
 
-// --- Task 7: inline filter capture ---
+// --- Inline filter capture ---
 
 // newMultiFileBrowser builds a browser backed by multiple file nodes so the
 // filter has a non-trivial visible set to narrow down.
@@ -937,7 +937,7 @@ func TestBrowser_ViewPanelNormalTreeWhenNotFiltering(t *testing.T) {
 	_ = out // non-empty is asserted in existing TestTreeViewPanel_RendersRows
 }
 
-// --- Task 8: mouse wiring (PanelClick / FocusChanged) ---
+// --- Mouse wiring (PanelClick / FocusChanged) ---
 
 func TestBrowser_FocusChangedMsgSwitchesNavRouting(t *testing.T) {
 	// After switching focus to the viewport, nav actions should route there
@@ -1061,7 +1061,7 @@ func TestBrowser_PanelClickWhileFilteringIsNoop(t *testing.T) {
 	}
 }
 
-// --- Task 9: StatusContext + i18n keys ---
+// --- StatusContext + i18n keys ---
 
 func TestBrowser_StatusContextEmptyWhenNilStatusBar(t *testing.T) {
 	b := newTestBrowser(t)
@@ -1273,7 +1273,7 @@ func TestBrowser_BuildHelp_NopTranslatorFallsBackToEnglish(t *testing.T) {
 	}
 }
 
-// --- Task 4 wheel: WheelMsg routing ---
+// --- Wheel: WheelMsg routing ---
 
 func TestBrowser_WheelMsgViewportScrollsDown(t *testing.T) {
 	b := newTestBrowser(t)

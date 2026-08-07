@@ -46,12 +46,11 @@ const (
 // [Composite] does clamp an oversized overlay to the body as a last-resort
 // safety net, but that truncates the box edge, so sizing here is what produces
 // good output at small-but-permitted sizes (tooNarrow only floors height at
-// minHeight). locale is required because [i18n.Translator.T] takes it; Stage 0
-// callers may pass a fixed locale with a NopTranslator.
+// minHeight). locale is required because [i18n.Translator.T] takes it.
 //
 // Only [Binding.Keys] are rendered in the modal; [Binding.Aliases] are
 // intentionally excluded — they dispatch (Match resolves them) but are hidden
-// from the help modal to avoid cluttering the display. Locked in Stage 1.
+// from the help modal to avoid cluttering the display.
 func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width, height int) Overlay {
 	if tr == nil {
 		tr = i18n.NopTranslator{}

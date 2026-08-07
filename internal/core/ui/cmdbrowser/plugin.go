@@ -29,14 +29,13 @@ const (
 // supplies — mirrors treeCountsMinWidth on the tree side.
 const listBadgesMinWidth = 74
 
-// browser is the cmdbrowser surface migrated onto the tui framework. It is a
-// [tui.Plugin]: the Frame owns chrome (borders, focus highlight, Tab cycling,
-// geometry, the status line) and the browser owns body content and behaviour.
+// browser is the cmdbrowser surface implemented as a [tui.Plugin]: the Frame
+// owns chrome (borders, focus highlight, Tab cycling, geometry, the status
+// line) and the browser owns body content and behaviour.
 //
-// It replaced the hand-rolled *Model (formerly model.go, now deleted); Run drives
-// the plugin directly (see run.go). The plugin holds the cmdbrowser-local tree
-// (left) and a bubbles/v2 list (right); per-panel rendering happens in ViewPanel
-// against the inner regions the Frame computes.
+// Run drives the plugin directly (see run.go). The plugin holds the
+// cmdbrowser-local tree (left) and a bubbles/v2 list (right); per-panel
+// rendering happens in ViewPanel against the inner regions the Frame computes.
 type browser struct {
 	title string
 	items []Item
@@ -119,11 +118,10 @@ type browser struct {
 // Compile-time guarantee that *browser satisfies the tui.Plugin contract.
 var _ tui.Plugin = (*browser)(nil)
 
-// newBrowser builds the plugin from the same inputs as the legacy newModel:
-// the tree, the bubbles list, and the item delegate. Sizes are deferred — the
-// Frame supplies geometry through Resize/ViewPanel, so the list and delegate
-// start at zero width and are sized on the first render pass. Translator and
-// locale are read from opts (nil-safe).
+// newBrowser builds the plugin: the tree, the bubbles list, and the item
+// delegate. Sizes are deferred — the Frame supplies geometry through
+// Resize/ViewPanel, so the list and delegate start at zero width and are sized
+// on the first render pass. Translator and locale are read from opts (nil-safe).
 func newBrowser(title string, items []Item, opts Options) *browser {
 	tm := newTreeModel(items, opts.IncludePrivate, opts.DefaultExpandedDepth)
 	dlg := newCmdDelegate(0, opts.ShowTypeBadges)
@@ -151,8 +149,7 @@ func newBrowser(title string, items []Item, opts Options) *browser {
 }
 
 // refreshList rebuilds the list contents from the currently focused tree group.
-// Ported from *Model.refreshList; called after any tree mutation that changes
-// the focused group.
+// Called after any tree mutation that changes the focused group.
 func (b *browser) refreshList() {
 	idxs := b.tree.itemsForFocus()
 	out := make([]list.Item, 0, len(idxs))
@@ -237,7 +234,7 @@ func (b *browser) StatusContext() string {
 
 // breadcrumb formats the focused group's full path and item count for the
 // status line. Root group shows as "(root)"; nested groups use " › "
-// separators. Mirrors *Model.breadcrumb.
+// separators.
 func (b *browser) breadcrumb() string {
 	n := b.tree.focusedNode()
 	path := "(root)"
@@ -252,8 +249,7 @@ func (b *browser) breadcrumb() string {
 
 // itemNoun returns the singular/plural noun for the breadcrumb count. ModeEdit
 // (the vars browser) names rows "var"; every other mode keeps "command". This
-// stays HARDCODED English for the pilot — it is not localized today. Mirrors
-// *Model.itemNoun.
+// stays HARDCODED English — it is not localized today.
 func (b *browser) itemNoun(count int) string {
 	singular := "command"
 	if b.opts.Mode == ModeEdit {
@@ -423,7 +419,6 @@ func (b *browser) selectListRow(row int) {
 // ViewPanel implements tui.Plugin. It caches the per-panel inner region (for
 // mouse translation and re-renders) and renders the panel body into it. The
 // Frame owns the border/padding, so the inner region is already chrome-free.
-// The list panel render lands in Task 5.
 func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	switch id {
 	case panelTree:
@@ -458,8 +453,7 @@ func (b *browser) viewList(inner tui.Region) string {
 
 // enterFilter opens the inline filter capture mode: it snapshots the tree's
 // expanded set and focused id, sets b.filter (so CapturingInput() reports true),
-// and seeds the match list. The capture key handling (typing / esc / enter) and
-// snapshot restore land in Task 7; Task 6 only opens the mode.
+// and seeds the match list.
 func (b *browser) enterFilter() {
 	b.filter = newFilterState(b.tree.eng.ExpandedSnapshot(), b.tree.focusedID())
 	b.refreshFilterMatches()
@@ -469,9 +463,8 @@ func (b *browser) enterFilter() {
 // line behaves like a text input: every printable character — including letters
 // bound elsewhere as actions (i / y / e / q / j / k / h / l) — extends the query
 // rather than firing the action. Only non-printable keys (Enter, Backspace, Esc,
-// arrows, page nav) keep their semantics. Reparented from *Model.updateFilter;
-// the Frame's capture branch (Task 1) routes raw keys here while
-// CapturingInput() reports true.
+// arrows, page nav) keep their semantics. The Frame's capture branch routes raw
+// keys here while CapturingInput() reports true.
 func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.Code {
 	case tea.KeyEnter:
@@ -515,8 +508,7 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 // expanded set + focused id, and moves the active panel to the list (the caller
 // pairs this with a requestFocus(panelList) so the Frame border follows). Per §8
 // cursor-restoration it keeps the tree cursor on the nearest ancestor of the
-// highlighted match when one exists. Reparented from *Model.exitFilter; the
-// single-panel populateList branch is dropped (Variant A has no single panel).
+// highlighted match when one exists.
 func (b *browser) exitFilter() {
 	if b.filter == nil {
 		return
@@ -633,8 +625,7 @@ func (b *browser) renderTreeFiltered(inner tui.Region) string {
 
 // refreshFilterMatches re-ranks the items against the current query and rebuilds
 // the list with the flat result. When AutoCollapseEmpty is set the tree is
-// re-expanded to show only subtrees containing matches. Reparented from
-// *Model.refreshFilterMatches.
+// re-expanded to show only subtrees containing matches.
 func (b *browser) refreshFilterMatches() {
 	if b.filter == nil {
 		return
@@ -655,7 +646,7 @@ func (b *browser) refreshFilterMatches() {
 // lines up with the section divider rendered by render.SectionTitle (which uses
 // the same min(width, 100) cap). Without this, the inspect area would stretch to
 // the full body width and the section dividers would float in dead space at the
-// right edge. Relocated from the deleted model.go (Task 11).
+// right edge.
 const inspectMaxWidth = 100
 
 // inspectBoxHChrome / inspectBoxVChrome are the cells the rounded-border modal

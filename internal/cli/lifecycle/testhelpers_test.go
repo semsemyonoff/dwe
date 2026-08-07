@@ -61,8 +61,8 @@ const (
 // pipelines groups, attaches all four lifecycle subcommands, and exposes the
 // persistent `--config` flag bound to flags.ConfigPath.
 //
-// Tests that previously called cli.NewRootCmd() use this helper to avoid the
-// (now-cyclic) import of the cli root package.
+// It exists because importing the cli root package here would be an import
+// cycle.
 func buildLifecycleTestRoot(flags *cmdctx.RootFlags) *cobra.Command {
 	root := &cobra.Command{Use: "dwe"}
 	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "path to workspace.yml")

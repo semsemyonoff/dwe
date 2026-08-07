@@ -15,10 +15,10 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate/env"
 )
 
-// Form rendering tested manually; see plan Post-Completion. The pure
-// coercion helpers (coerceInputAnswers, coercePortOverrides) are
-// unit-tested; form construction routes through ask.Run/ask.Build, tested
-// in internal/core/ui/ask.
+// Form rendering is exercised manually. The pure coercion helpers
+// (coerceInputAnswers, coercePortOverrides) are unit-tested here; form
+// construction routes through ask.Run/ask.Build, tested in
+// internal/core/ui/ask.
 
 // NewHuhAsker returns two callback functions for asking questions and port overrides.
 // The returned functions are wired to the provided io.Writer for output.
@@ -222,8 +222,7 @@ const serviceTogglesKey = "services"
 
 // serviceTogglesQuit is the declarative quit binding for the service-toggles
 // prompt. The "esc cancel" hint does not render (Filterable: false hides the
-// hijacked slot — see design decision 3 in the stage-6 plan); esc still
-// cancels via the form-level Quit binding.
+// hijacked slot); esc still cancels via the form-level Quit binding.
 var serviceTogglesQuit = &ask.QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
 
 // buildServiceTogglesField splits toggles into the mandatory (always-on,

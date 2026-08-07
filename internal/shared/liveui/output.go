@@ -203,7 +203,7 @@ func (t *LineTee) Write(p []byte) (int, error) {
 }
 
 // Flush emits any buffered un-terminated trailing bytes as a non-final frame.
-// The reporter's commitTrailingTail (Task 9) is responsible for committing the
+// The reporter's commitTrailingTail is responsible for committing the
 // tail to scrollback/log at step-finish time.
 func (t *LineTee) Flush() {
 	t.mu.Lock()
