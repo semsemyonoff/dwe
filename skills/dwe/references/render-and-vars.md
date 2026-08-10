@@ -161,10 +161,10 @@ Rule fields: `name`, `from` (dot-path into the **merged** config), optional `for
 Two traps in the write form:
 
 - **`--out` resolves against the caller's cwd**, not the project root — unlike every other dwe path. Run from `workspace/services/<name>/` it writes a stray `.env` there, exits 0, and leaves the real one stale. Always hand it over with an explicit project-root path.
-- **A rewritten `.env` does not reach running containers.** Compose reads it at up/recreate, so the new value lands only on the next `dwe run` — a plain `dwe deploy run` after a manual render can answer `already up-to-date` and return before `docker up` ever runs (§ 7). Verify against the file (`grep <NAME> <project-root>/.env`); `dwe shell <svc> -c 'printenv <NAME>'` reports the container's creation-time env and stays stale until it is recreated. Never reach for `docker compose exec`: it drops dwe's `-p`/`-f` argv and resolves a different compose project.
+- **A rewritten `.env` does not reach running containers.** Compose reads it at up/recreate, so the new value lands only on the next `dwe run` — a plain `dwe deploy run` after a manual render can answer `already up-to-date` and return before `docker up` ever runs (§ 7). Verify against the file (`grep -E '^<NAME>=' <project-root>/.env`); `dwe shell <svc> -c 'printenv <NAME>'` reports the container's creation-time env and stays stale until it is recreated. Never reach for `docker compose exec`: it drops dwe's `-p`/`-f` argv and resolves a different compose project.
 
 ```shell
-dwe render env                            # read: prints to stdout, writes nothing
+dwe render env | grep -E '^<NAME>='       # read: prints to stdout, writes nothing — always scoped
 dwe render env --out <project-root>/.env  # write: regenerates the file (mutating — hand it to the user)
 ```
 
