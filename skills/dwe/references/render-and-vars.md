@@ -154,10 +154,18 @@ exports:
     - { name: DBGATE_PORT, from: services.dbgate.ports.http, format: int, when: services.dbgate.enabled }
 ```
 
-Rule fields: `name`, `from` (dot-path into the **merged** config), optional `format` (`bool`|`int`|`string`), `when` (dot-path — skip if falsy), `default`, `required`, `comment`. A host port sourced `from: services.<name>.ports.<x>` is also what `dwe test` auto-remaps to a free port for every **enabled** service in the test copy, so a scenario runs alongside the live env — model host ports under `services.<name>.ports` and integration tests isolate them for free (`integration-tests.md`). Inspect the resolved env (safe — prints to stdout when there is **no** `--out`):
+Rule fields: `name`, `from` (dot-path into the **merged** config), optional `format` (`bool`|`int`|`string`), `when` (dot-path — skip if falsy), `default`, `required`, `comment`. A host port sourced `from: services.<name>.ports.<x>` is also what `dwe test` auto-remaps to a free port for every **enabled** service in the test copy, so a scenario runs alongside the live env — model host ports under `services.<name>.ports` and integration tests isolate them for free (`integration-tests.md`).
+
+**`--out` is what makes it a write; bare `dwe render env` is a read.** Without it the resolved env goes to stdout and **`.env` is not touched** — the flag is easy to drop, and the command then looks like it worked while the stack keeps running on the old file. The bare form has no `-o` short form (`-o` is the global output-format flag) and ignores `--output json` — it always prints dotenv text. It resolves every rule against the merged config, so its unfiltered output is the project's whole exported secret set — **always scope it** (`dwe render env | grep -E '^<NAME>='`, or `grep -q` for a presence check), never print the full body into a transcript or log. It is **host-only** — the container allowlist admits `render config` and nothing else from the `render` family.
+
+Two traps in the write form:
+
+- **`--out` resolves against the caller's cwd**, not the project root — unlike every other dwe path. Run from `workspace/services/<name>/` it writes a stray `.env` there, exits 0, and leaves the real one stale. Always hand it over with an explicit project-root path.
+- **A rewritten `.env` does not reach running containers.** Compose reads it at up/recreate, so the new value lands only on the next `dwe run` — a plain `dwe deploy run` after a manual render can answer `already up-to-date` and return before `docker up` ever runs (§ 7). Verify against the file (`grep <NAME> <project-root>/.env`); `dwe shell <svc> -c 'printenv <NAME>'` reports the container's creation-time env and stays stale until it is recreated. Never reach for `docker compose exec`: it drops dwe's `-p`/`-f` argv and resolves a different compose project.
 
 ```shell
-dwe render env
+dwe render env                            # read: prints to stdout, writes nothing
+dwe render env --out <project-root>/.env  # write: regenerates the file (mutating — hand it to the user)
 ```
 
 Schema: `dwe docs show render/env --lang en`.
@@ -167,9 +175,14 @@ Schema: `dwe docs show render/env --lang en`.
 Renders normally run inside `dwe deploy run`. To iterate on one pack, hand the **user** the scoped render (all mutating):
 
 ```shell
-dwe render config [<svc>]      # the ${...} runtime files
-dwe render ide|ai|git [<svc>]  # hub dotfiles
+dwe render env --out <project-root>/.env  # .env only — bare `render env` writes nothing (§6)
+dwe render config [<svc>]                 # the ${...} runtime files
+dwe render ide|ai|git [<svc>]             # hub dotfiles
 ```
+
+`.env` re-renders for free inside `dwe deploy run` (implicit first step), `dwe run` / `dwe restart`, `dwe services enable|disable` (written immediately, with or without `--apply`), and `dwe docker up|run|exec|restart|build` — **not** `docker down|stop|pull`. So a **`vars`** edit followed by any of those needs no separate render.
+
+An **`exports.env`-only** edit is the exception, and it fails on two layers: that block is in neither the project nor the service config hash (`vars` is in both), so `dwe deploy run` answers `already up-to-date` and returns — and on a run where some other always-run step defeats that early return, the implicit `render-env` step carries no `check:`, so the journal skips it on the still-matching hash anyway. Apply that one with `dwe run` (renders unconditionally, ahead of everything else) or `dwe deploy run --force`. The scoped `render env --out` is a last resort — it rewrites the file but leaves the running stack untouched (§ 6).
 
 `dwe render config --harvest` does NOT render — it write-if-absent stores declared `generated:` values into `.dwe/generated.yml`. It is a **host-only** mutation; never suggest it from inside a container.
 

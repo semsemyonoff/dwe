@@ -145,6 +145,7 @@ After editing yml, the apply command depends on **what** changed (never run it y
 - `workspace/lifecycle.yml` or the compose base/overlays → `dwe run`
 - toggled a service → `dwe services enable|disable <name> --apply`
 - only icon / host / display strings → `dwe validate` (then `run`/`deploy run` if it affects runtime)
+- `exports.env` **only** → `dwe run` (or `dwe deploy run --force`) — that block is in no config hash, so a plain `dwe deploy run` never re-renders `.env`: it either returns `already up-to-date` or journal-skips the implicit render step (`references/render-and-vars.md` § 7)
 - mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart)
 - authored/edited a `workspace/tests/<scenario>.yml` → verify read-only with `dwe validate tests`, then run or hand off `dwe test run <scenario>` (a clean deploy in a throwaway copy — does not touch the live stack). Whether you may run it yourself is decided by that scenario's cost profile — see **The `dwe test run` gate** below. Propose it for **substantial** changes (new service, reworked deploy pipeline), not after display-only edits. See `references/integration-tests.md`.
 
@@ -159,6 +160,7 @@ You MAY run READ commands without asking (all read-only — they don't mutate or
 - `snapshot list|current|inspect`
 - `compose argv|files`, `docker ps|logs|project-name`, `bridge status|logs`
 - `vars get|list|inspect`, `commands list` / `commands -i <id>`, `services list`
+- `render env` **bare only** (no `--out`) — prints the resolved `.env` to stdout, writes nothing. **Always scope it**: the unfiltered body is the project's whole exported secret set, so run `dwe render env | grep -E '^<NAME>='` (or `grep -q` for a presence check), never the bare form on its own. Host-only (the container allowlist admits only `render config`) and it ignores `--output json` — always dotenv text. With `--out` it is a write; see `references/render-and-vars.md` § 6.
 - `docs show|search|list|llms-txt` — read-only doc access.
 - `test list` — list integration-test scenarios (lock-free, no Docker). `test list -o json` also carries each scenario's **cost profile**, which is what decides whether you may run it — see the gate below. `test clean --dry-run` is also safe to run without asking (it previews a sweep and destroys nothing), but is NOT strictly lock-free/Docker-free: it does a read-only `docker ps` orphan probe and briefly acquires-then-releases each scenario's flock. (`validate tests` sits in the `validate` family above; `test run` and the real `test clean` are gated/handed off below.)
 
@@ -245,7 +247,7 @@ You MUST NOT invoke these MUTATING commands yourself. Prepare the change, then a
 - `dwe deploy run` — run the deploy pipeline (the right command after editing a service's config/deploy steps or adding a service; ends with `docker up --wait`). The `--service <name>` form requires that service's own `deploy.yml` and **skips** the final stack up — see the recipes before recommending it.
 - `dwe run` / `stop` / `restart` — runtime lifecycle (no deploy steps); `dwe reset run` — destructive.
 - `dwe services enable|disable <name> --apply` — toggle a service.
-- `dwe vars set`, `dwe render env|config|ide|ai|git`, `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
+- `dwe vars set`, `dwe render config|ide|ai|git`, `dwe render env --out <path>` (the bare form is a read — see the READ list above), `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
 - `dwe cmd <id>` / `dwe shell <service> -c '…'` **when the task they carry mutates** — see the judgement rule above. A verifying task through either one is not on this list.
 - `dwe test clean` (without `--dry-run`) — the integration-test sweeper: it tears down kept or crashed runs. Manifest-driven, but still a teardown — hand it over.
 - `dwe test run [scenario...]` — **conditional, not forbidden**: it is the one entry here whose answer comes from data. See **The `dwe test run` gate** above; if the scenario's `cost_profile` does not clear it, this list applies as written.
