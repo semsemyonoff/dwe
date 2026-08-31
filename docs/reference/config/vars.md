@@ -15,6 +15,7 @@ enumerate, read, edit, and trace those values.
   - [`dwe vars inspect`](#dwe-vars-inspect)
   - [`dwe vars set`](#dwe-vars-set)
   - [`dwe vars` (no args) — TUI browser](#dwe-vars-no-args--tui-browser)
+- [Output is not redacted](#output-is-not-redacted)
 - [Comment-preserving `local.yml` writes](#comment-preserving-localyml-writes)
 - [The static usage scan](#the-static-usage-scan)
 - [JSON output](#json-output)
@@ -172,6 +173,20 @@ Two observable behaviours differ from the standalone `dwe vars set`:
 In a **non-interactive** context — no TTY, `DWE_NONINTERACTIVE=1`, or running
 inside a container — the bare command falls back to `dwe vars list`. A namespace
 argument (`dwe vars vars.db`) also lists rather than browsing.
+
+## Output is not redacted
+
+`dwe vars list`, `get`, and `inspect` print effective values **verbatim** —
+nothing is masked. Some projects legitimately keep third-party credentials (API
+tokens, service DSNs) in `workspace/local.yml` / `.env`, because those cannot be
+faked locally; such values appear in full in the output.
+
+Masking is deliberately not offered: it would raise access by exactly zero bits
+— anyone who can run `dwe vars list` can read `workspace/local.yml` — and both
+files are already gitignored and written `0600`. What it *would* change is where
+the values travel, so that is the thing to watch: prefer `dwe vars get <path>`
+over a full `list` before pasting into an AI-agent session, a screenshot, or a
+demo.
 
 ## Comment-preserving `local.yml` writes
 

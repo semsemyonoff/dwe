@@ -33,7 +33,7 @@ func TestDocsLlmsTxtCommand_Structure(t *testing.T) {
 func TestDocsLlmsTxtCommand_Flags(t *testing.T) {
 	cmd := newDocsLlmsTxtCmd(newTestLlmsTxtFlags())
 
-	require.NotNil(t, cmd.Flag("output"))
+	require.NotNil(t, cmd.Flag("out"))
 	require.NotNil(t, cmd.Flag("lang"))
 	require.NotNil(t, cmd.Flag("include-internals"))
 	require.NotNil(t, cmd.Flag("no-project"))
@@ -63,7 +63,7 @@ func TestDocsLlmsTxtCommand_OutputFile(t *testing.T) {
 
 	flags := newTestLlmsTxtFlags()
 	cmd := newDocsLlmsTxtCmd(flags)
-	cmd.SetArgs([]string{"--output", outPath})
+	cmd.SetArgs([]string{"--out", outPath})
 
 	out := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
@@ -74,7 +74,7 @@ func TestDocsLlmsTxtCommand_OutputFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// stdout should be empty when writing to file
-	require.Empty(t, out.String(), "stdout should be empty when --output is set")
+	require.Empty(t, out.String(), "stdout should be empty when --out is set")
 
 	// file should exist and contain the llms.txt document
 	content, err := os.ReadFile(outPath)
@@ -89,7 +89,7 @@ func TestDocsLlmsTxtCommand_OutputFile_CreatesParentDirs(t *testing.T) {
 
 	flags := newTestLlmsTxtFlags()
 	cmd := newDocsLlmsTxtCmd(flags)
-	cmd.SetArgs([]string{"--output", outPath})
+	cmd.SetArgs([]string{"--out", outPath})
 
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
@@ -118,7 +118,7 @@ func TestDocsLlmsTxtCommand_OutputFile_WriteError(t *testing.T) {
 
 	flags := newTestLlmsTxtFlags()
 	cmd := newDocsLlmsTxtCmd(flags)
-	cmd.SetArgs([]string{"--output", outPath})
+	cmd.SetArgs([]string{"--out", outPath})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 

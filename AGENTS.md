@@ -56,6 +56,8 @@ Prefer table-driven tests for command parsing, config resolution, Docker orchest
 
 Recent history uses conventional-style commits such as `feat(commands): ...`, `fix(commands): ...`, `docs(config): ...`, and `refactor(commands)!: ...`. Keep the scope tied to the package or user-facing area, and use `!` only for breaking changes. Pull requests should include a summary, verification commands, linked issues when applicable, and screenshots or terminal output when changing CLI presentation.
 
+A PR that changes anything a user can observe — a new or renamed flag, a changed default, a removed config key, a different message — also adds an entry under `## [Unreleased]` in `CHANGELOG.md`. Release notes are cut from that file by `scripts/changelog-release-notes.sh`, which fails the release when the tagged version has no section, so a missing entry surfaces at tag time rather than in the published notes.
+
 ## Critical Patterns
 
 Recurring traps and load-bearing contracts.
@@ -248,7 +250,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Execution (`builtin/`, `condition/`).
 
 - **`llms-txt` budget + `docs search` ranking** — `cli/docs` is the only layer that may import `execution/`: builtin and condition data reach `core/docs/llmstxt` through `Opts`, never an import.
-  `dwe docs llms-txt --no-project` is capped at 12 KB by a test, and that number is duplicated in four places; its `--output` is a file path, not a format.
+  `dwe docs llms-txt --no-project` is capped at 12 KB by a test, and that number is duplicated in four places; its file flag is `--out PATH` — a local `--output` would shadow the root's and make `-o` unresolvable, so `-o json` now reaches the root format flag and is simply ignored here.
   `docs search` (see also § `internal/cli/docs/`) ANDs tokens ranked by MIN per-token count (a sum lets the commonest word win), with the per-document tier a tie-break BELOW the count — ordering tiers outright buried the strongest answer, invisibly at a narrowed `--limit`; substring matching is deliberate, and the snippet is sanitized (non-printables dropped, whitespace collapsed) and capped *including* the ellipsis so the 4th TSV column can never become a fifth field.
   See § Core — Docs.
 

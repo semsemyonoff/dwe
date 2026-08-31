@@ -159,14 +159,14 @@ Emit a single [llms.txt](https://llmstxt.org/) document — a dense briefing tha
 **Usage:**
 ```bash
 dwe docs llms-txt                          # print to stdout
-dwe docs llms-txt --output llms.txt        # write to file
+dwe docs llms-txt --out llms.txt           # write to file
 dwe docs llms-txt --include-internals      # include internals/* topics
 dwe docs llms-txt --no-project             # force project-agnostic output
 dwe docs llms-txt --lang ru                # localize command descriptions
 ```
 
 **Flags:**
-- `--output PATH` — write to PATH instead of stdout. Parent directories are created as needed.
+- `--out PATH` — write to PATH instead of stdout. Parent directories are created as needed. Named `--out` (like `dwe docs generate`) so it does not shadow the global `--output`/`-o` format flag.
 - `--lang CODE` — language for command descriptions. Defaults to user config / `$LANG` / `en`.
 - `--include-internals` — include the `internals/` architecture docs in the Documentation section.
 - `--no-project` — force the project-agnostic shape even when run inside a DWE project.
@@ -183,6 +183,7 @@ dwe docs llms-txt --lang ru                # localize command descriptions
 
 **Details:**
 - Read-only. Acquires no project lock and runs no preflight; works without `workspace.yml`.
+- The global `--output text|json` (`-o`) flag is accepted but has no effect here — like `dwe docs show`, this command always emits markdown. Use `--out PATH` to write it to a file.
 - Disabled services and private commands are excluded.
 - The `dwe-docs://<path>` link scheme corresponds to topic paths consumable by `dwe docs show <path>`.
 

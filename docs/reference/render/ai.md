@@ -50,6 +50,12 @@ flowchart TD
 
 ## Service selection
 
+The `[service]` argument is optional. Invoked **without** it, `dwe render ai` walks every service in the merged config and renders each one that passes the [activation gate](#activation-gate) below — per-service `render.ai.enabled` is honoured, so services that opted out are skipped without a warning.
+
+That argument-less form is the one to put in a pipeline: a single project-level step (`type: dwe`, `cmd: "render ai"` in `workspace/deploy.yml`) refreshes every hub and needs no edit when services are added, removed, or toggled. A per-service `render ai <name>` step in each `workspace/services/<name>/deploy.yml` only repeats the same work once per service. Nothing renders automatically — the built-in default deploy pipeline has no render phase, so the step is always an explicit opt-in.
+
+Reserve the explicit `[service]` argument for ad-hoc, single-hub runs.
+
 ### Activation gate
 
 A service participates in agent-docs rendering only when **both** flags are true:
