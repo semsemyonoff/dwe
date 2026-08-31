@@ -28,5 +28,10 @@ generated from commit subjects and stay on the
   printed verbatim and are never masked. `docs/reference/config/vars.md` gains
   an "Output is not redacted" section explaining what to watch and why masking
   is deliberately not offered.
+- `dwe init` no longer steers new projects toward a per-service
+  `render ai <name>` deploy step. The scaffolded `AGENTS.md` and the commented
+  per-service `deploy.yml` skeleton now point at a single project-level
+  `render ai`, which walks every service and honours each `render.ai.enabled`.
+  Rendering on deploy stays opt-in; nothing renders automatically.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD
