@@ -56,6 +56,8 @@ Prefer table-driven tests for command parsing, config resolution, Docker orchest
 
 Recent history uses conventional-style commits such as `feat(commands): ...`, `fix(commands): ...`, `docs(config): ...`, and `refactor(commands)!: ...`. Keep the scope tied to the package or user-facing area, and use `!` only for breaking changes. Pull requests should include a summary, verification commands, linked issues when applicable, and screenshots or terminal output when changing CLI presentation.
 
+A PR that changes anything a user can observe — a new or renamed flag, a changed default, a removed config key, a different message — also adds an entry under `## [Unreleased]` in `CHANGELOG.md`. Release notes are cut from that file by `scripts/changelog-release-notes.sh`, which fails the release when the tagged version has no section, so a missing entry surfaces at tag time rather than in the published notes.
+
 ## Critical Patterns
 
 Recurring traps and load-bearing contracts.
