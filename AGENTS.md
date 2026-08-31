@@ -250,7 +250,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Execution (`builtin/`, `condition/`).
 
 - **`llms-txt` budget + `docs search` ranking** — `cli/docs` is the only layer that may import `execution/`: builtin and condition data reach `core/docs/llmstxt` through `Opts`, never an import.
-  `dwe docs llms-txt --no-project` is capped at 12 KB by a test, and that number is duplicated in four places; its `--output` is a file path, not a format.
+  `dwe docs llms-txt --no-project` is capped at 12 KB by a test, and that number is duplicated in four places; its file flag is `--out PATH` — a local `--output` would shadow the root's and make `-o` unresolvable, so `-o json` now reaches the root format flag and is simply ignored here.
   `docs search` (see also § `internal/cli/docs/`) ANDs tokens ranked by MIN per-token count (a sum lets the commonest word win), with the per-document tier a tie-break BELOW the count — ordering tiers outright buried the strongest answer, invisibly at a narrowed `--limit`; substring matching is deliberate, and the snippet is sanitized (non-printables dropped, whitespace collapsed) and capped *including* the ellipsis so the 4th TSV column can never become a fifth field.
   See § Core — Docs.
 

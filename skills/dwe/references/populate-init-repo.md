@@ -12,7 +12,7 @@ dwe docs show guides/start-a-new-project --lang en
 dwe docs show concepts/project-layout --lang en
 ```
 
-If a root `AGENTS.md` already exists, read it — it is the project-specific layer (authoritative for project facts). `dwe docs show` ignores `--output json`; `dwe docs llms-txt`'s `--output` is a file path — never pass either `--output json`.
+If a root `AGENTS.md` already exists, read it — it is the project-specific layer (authoritative for project facts). `dwe docs show` and `dwe docs llms-txt` both always emit markdown and ignore `--output json` — never pass it to either (`llms-txt` writes to a file through its own `--out PATH`).
 
 ## Step 1 — Interview the user (ask, don't assume)
 

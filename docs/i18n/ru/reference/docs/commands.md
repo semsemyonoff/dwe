@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ 17fd5364137d
+> Translated from: reference/docs/commands.md @ fa331ed46fa8
 
 # Неинтерактивные команды документации
 
@@ -161,14 +161,14 @@ dwe docs export ./docs-latest/ --force
 **Использование:**
 ```bash
 dwe docs llms-txt                          # печать в stdout
-dwe docs llms-txt --output llms.txt        # запись в файл
+dwe docs llms-txt --out llms.txt           # запись в файл
 dwe docs llms-txt --include-internals      # включить темы internals/*
 dwe docs llms-txt --no-project             # принудительно сгенерировать project-agnostic вывод
 dwe docs llms-txt --lang ru                # локализовать описания команд
 ```
 
 **Флаги:**
-- `--output PATH` — записать в PATH вместо stdout. Родительские каталоги создаются по необходимости.
+- `--out PATH` — записать в PATH вместо stdout. Родительские каталоги создаются по необходимости. Назван `--out` (как у `dwe docs generate`), чтобы не перекрывать глобальный флаг формата `--output`/`-o`.
 - `--lang CODE` — язык описаний команд. По умолчанию — пользовательская конфигурация / `$LANG` / `en`.
 - `--include-internals` — включить архитектурные доки `internals/` в раздел Documentation.
 - `--no-project` — принудительно вывести project-agnostic форму даже внутри dwe-проекта.
@@ -185,6 +185,7 @@ dwe docs llms-txt --lang ru                # локализовать описа
 
 **Подробности:**
 - Только чтение. Не берёт проектную блокировку и не запускает preflight; работает без `workspace.yml`.
+- Глобальный флаг `--output text|json` (`-o`) принимается, но ни на что не влияет — как и `dwe docs show`, эта команда всегда выводит markdown. Для записи в файл используйте `--out PATH`.
 - Отключённые сервисы и приватные команды исключаются.
 - Схема ссылок `dwe-docs://<path>` соответствует путям тем, потребляемым `dwe docs show <path>`.
 
