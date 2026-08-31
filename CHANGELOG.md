@@ -16,4 +16,11 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+### Changed
+
+- `dwe vars` and `dwe vars list` now state in their help text that values are
+  printed verbatim and are never masked. `docs/reference/config/vars.md` gains
+  an "Output is not redacted" section explaining what to watch and why masking
+  is deliberately not offered.
+
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

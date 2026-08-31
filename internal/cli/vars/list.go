@@ -30,7 +30,10 @@ func newVarsListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 that supplies it (local override vs author default).
 
 An optional namespace narrows the output to a sub-tree (e.g. db); the vars.
-prefix is optional ("db" and "vars.db" are equivalent).`,
+prefix is optional ("db" and "vars.db" are equivalent).
+
+Values are printed verbatim and are never masked: this dumps every var, so
+check what it contains before pasting it anywhere.`,
 		Example: `  dwe vars list
   dwe vars list db
   dwe vars list --output json`,

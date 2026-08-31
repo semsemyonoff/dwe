@@ -46,7 +46,10 @@ Subcommands:
 Without a subcommand a real terminal opens the interactive browser; with a
 namespace arg, in JSON mode, or in any non-interactive context the leaves are
 listed instead (an optional namespace narrows the output). The vars. prefix is
-optional on every path argument: "db.host" and "vars.db.host" are equivalent.`,
+optional on every path argument: "db.host" and "vars.db.host" are equivalent.
+
+Values are printed verbatim and are never masked, so treat the output as
+sensitive wherever the project keeps real credentials in vars.`,
 		Example: `  dwe vars
   dwe vars list
   dwe vars list db
