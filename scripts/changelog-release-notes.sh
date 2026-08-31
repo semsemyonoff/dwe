@@ -31,8 +31,10 @@ fi
 
 # Print everything between `## [<version>]` and the next `## ` heading. The
 # heading itself is dropped — the release page already shows the tag.
-notes="$(awk -v version="$version" '
-  $0 ~ "^## \\[" version "\\]" { in_section = 1; next }
+# The heading is matched as a literal prefix, not a regex: a version string is
+# not a pattern, and `1.0.0` interpolated into one would also match `1a0b0`.
+notes="$(awk -v heading="## [$version]" '
+  substr($0, 1, length(heading)) == heading { in_section = 1; next }
   in_section && /^## / { exit }
   in_section { print }
 ' "$changelog")"

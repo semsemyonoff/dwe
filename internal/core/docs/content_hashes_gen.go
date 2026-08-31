@@ -80,6 +80,6 @@ var ContentHashes = map[string]string{
 	"reference/render/env.md":                  "491ea7327041",
 	"reference/render/git.md":                  "23d430061993",
 	"reference/render/ide.md":                  "8987c5ab04eb",
-	"reference/render/index.md":                "833bb97c47b9",
+	"reference/render/index.md":                "e2d0ffb704b8",
 	"reference/templates.md":                   "965d51aef6fd",
 }
