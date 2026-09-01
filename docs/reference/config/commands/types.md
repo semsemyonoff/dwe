@@ -289,7 +289,7 @@ db.create:
   type: service_exec
   description: Create a database in the db container
   service: db
-  mode: exec-or-run
+  mode: exec-or-fail   # a database is persistent state — never create a throwaway one
   params:
     database: { required: true, pattern: ^[a-zA-Z0-9_-]+$ }
   env:
@@ -764,7 +764,7 @@ When both `workdir` and `workdir_from` are set, `workdir_from` wins — the same
 | 6 | `services.<svc>.dir_internal` | The service's internal project directory |
 | 7 | _(nothing matched)_ | No `--workdir` flag — the image's own `WORKDIR` applies |
 
-Rungs 4–6 are exactly the chain `dwe shell` applies, so a shell session and a command targeting the same service finally land in the same directory. Before this, a command without an explicit `workdir` landed in the image's `WORKDIR` while `dwe shell` into the same service landed in the service's work directory.
+Rungs 4–6 are the same order `dwe shell` applies, so a shell session and a command targeting the same service finally land in the same directory. Before this, a command without an explicit `workdir` landed in the image's `WORKDIR` while `dwe shell` into the same service landed in the service's work directory.
 
 The service for rungs 4–6 is looked up by its `container:` value, not by the `workspace/services/<name>/` folder key — `service: app-main` reads the fallback from the service folder whose `service.yml` declares `container: app-main`. The lookup happens **after** the `runner.service` redirect, exactly like the `cli.user` fallback.
 

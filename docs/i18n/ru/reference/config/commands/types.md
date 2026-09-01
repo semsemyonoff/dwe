@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ b514ad2356be
+> Translated from: reference/config/commands/types.md @ 484ce6db2049
 
 # Типы команд
 
@@ -291,7 +291,7 @@ db.create:
   type: service_exec
   description: Create a database in the db container
   service: db
-  mode: exec-or-run
+  mode: exec-or-fail   # база — персистентное состояние, одноразовую создавать нельзя
   params:
     database: { required: true, pattern: ^[a-zA-Z0-9_-]+$ }
   env:
@@ -766,7 +766,7 @@ workdir_from: services.main.work_dir_internal
 | 6 | `services.<svc>.dir_internal` | Внутренняя директория проекта сервиса |
 | 7 | _(ничего не подошло)_ | Флаг `--workdir` не передаётся — применяется `WORKDIR` образа |
 
-Ступени 4–6 — ровно та цепочка, которую применяет `dwe shell`, поэтому shell-сессия и команда, нацеленные на один сервис, наконец оказываются в одной директории. Раньше команда без явного `workdir` попадала в `WORKDIR` образа, тогда как `dwe shell` в тот же сервис — в рабочую директорию сервиса.
+Ступени 4–6 идут в том же порядке, который применяет `dwe shell`, поэтому shell-сессия и команда, нацеленные на один сервис, наконец оказываются в одной директории. Раньше команда без явного `workdir` попадала в `WORKDIR` образа, тогда как `dwe shell` в тот же сервис — в рабочую директорию сервиса.
 
 Сервис для ступеней 4–6 ищется по значению `container:`, а не по ключу папки `workspace/services/<name>/`: `service: app-main` читает fallback из той папки сервиса, чей `service.yml` объявляет `container: app-main`. Lookup происходит **после** редиректа `runner.service` — точно так же, как fallback к `cli.user`.
 

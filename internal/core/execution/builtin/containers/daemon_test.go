@@ -359,9 +359,6 @@ func TestResolveDaemonWorkdirUser_cliUserFallback(t *testing.T) {
 	})
 }
 
-// TestResolveDaemonWorkdirUser_workdirFromNonString pins that a dot-path
-// pointing at a non-string value still fails the step loudly — only a nil
-// (absent) value falls through.
 // TestResolveDaemonWorkdirUser_workdirFromNonString pins the DIAGNOSTIC, not
 // the local type assertion: config.LookupDotPath already rejects a non-string
 // value, so the `resolved value is not a string` branch below it is

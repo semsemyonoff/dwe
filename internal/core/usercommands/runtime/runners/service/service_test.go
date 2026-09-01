@@ -18,6 +18,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
@@ -1336,7 +1337,7 @@ func TestRunRunner_BuildCommand_WorkdirChain(t *testing.T) {
 // the only thing that can force colours is the suppressed-TTY disjunct.
 func clearColorEnv(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", "DWE_BRIDGE_STDIN_TTY"} {
+	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", bridgeclient.EnvBridgeStdinTTY} {
 		t.Setenv(name, "x")
 		_ = os.Unsetenv(name)
 	}
@@ -1434,7 +1435,7 @@ func TestExecRunner_BuildCommand_ContainerTTY_Bridged(t *testing.T) {
 	}
 	clearColorEnv(t)
 	t.Setenv("CLICOLOR_FORCE", "1")
-	t.Setenv("DWE_BRIDGE_STDIN_TTY", "1")
+	t.Setenv(bridgeclient.EnvBridgeStdinTTY, "1")
 
 	pr, pw, err := os.Pipe()
 	if err != nil {

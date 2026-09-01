@@ -95,7 +95,7 @@ commands:
     type: service_exec
     description: Create a database in the db container
     service: db
-    mode: exec-or-run
+    mode: exec-or-fail   # a database is persistent state — never create a throwaway one
     params:
       database:
         type: string

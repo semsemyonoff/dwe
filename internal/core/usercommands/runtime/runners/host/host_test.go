@@ -16,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -505,7 +506,7 @@ func TestHostRunner_BuildCommand_ArgvAppendFrom_EmptySkips(t *testing.T) {
 // nothing but the runner's own decision can force colours.
 func clearColorEnv(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", "DWE_BRIDGE_STDIN_TTY"} {
+	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", bridgeclient.EnvBridgeStdinTTY} {
 		t.Setenv(name, "x")
 		_ = os.Unsetenv(name)
 	}

@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ 4145d51716ef
+> Translated from: guides/author-project-commands.md @ 3ba6ecad1ead
 
 # Авторство проектных команд
 
@@ -97,7 +97,7 @@ commands:
     type: service_exec
     description: Create a database in the db container
     service: db
-    mode: exec-or-run
+    mode: exec-or-fail   # база — персистентное состояние, одноразовую создавать нельзя
     params:
       database:
         type: string

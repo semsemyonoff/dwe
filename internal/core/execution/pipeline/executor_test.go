@@ -2743,7 +2743,10 @@ func installStubDocker(t *testing.T) func() []string {
 	t.Helper()
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "docker-args.log")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\nexit 0\n"
+	// shellQuote: t.TempDir() sits under TMPDIR, which can carry whitespace or
+	// shell metacharacters — an unquoted redirection target would silently log
+	// somewhere else and the stub would report no calls at all.
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + shellQuote(logPath) + "\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
 		t.Fatalf("write stub docker: %v", err)
 	}
