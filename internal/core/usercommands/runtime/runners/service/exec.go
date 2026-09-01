@@ -262,9 +262,10 @@ func flagNamePart(arg string) string {
 }
 
 // hasTTYFlag reports whether the flag vector already carries an explicit TTY
-// decision: `-T`, `-T=<value>`, or `--no-tty` in any case with or without a
-// value. Both forms are boolean flags, so `-T=false`, `--no-tty=false` and
-// `--no-tty=true` are all things a project can legitimately have written.
+// decision: `-T`, `-T=<value>`, `--no-tty` in any case with or without a value,
+// or `T` inside a short-flag bundle such as `-dT` (see shortFlagLetters). Both
+// forms are boolean flags, so `-T=false`, `--no-tty=false` and `--no-tty=true`
+// are all things a project can legitimately have written.
 //
 // `--no-tty` is compared case-INSENSITIVELY on purpose. The compose flag is
 // spelled lowercase (`-T, --no-tty` on both `exec` and `run`) and pflag is
@@ -274,12 +275,56 @@ func flagNamePart(arg string) string {
 // overridden.
 func hasTTYFlag(args []string) bool {
 	for _, a := range args {
-		name := flagNamePart(a)
-		if name == "-T" || strings.EqualFold(name, "--no-tty") {
+		if strings.EqualFold(flagNamePart(a), "--no-tty") {
+			return true
+		}
+		if strings.IndexByte(shortFlagLetters(a), 'T') >= 0 {
 			return true
 		}
 	}
 	return false
+}
+
+// composeBoolShorthands are the boolean short flags docker compose accepts on
+// exec and run. Only these can sit in the middle of a bundle.
+const composeBoolShorthands = "dTiqP"
+
+// composeValueShorthands take a value, so they TERMINATE a bundle: pflag reads
+// everything after one as that flag's value, not as further flags.
+const composeValueShorthands = "euwlpv"
+
+// shortFlagLetters returns the boolean short flags packed into a single
+// argument, or "" when the argument is not a short-flag group we can read.
+//
+// pflag lets short flags bundle, so `-dT` means `-d -T` and is valid on both
+// `exec` and `run`. Comparing whole tokens missed that: a `compose_args:
+// ["-dT"]` step read as neither detached nor TTY-flagged, which appended a
+// redundant `-T` (harmless) but also forced colour into a DETACHED container,
+// baking ANSI escapes into its Docker logs permanently — exactly what the
+// !detached guard exists to prevent.
+//
+// Decomposition stops at the first value-taking shorthand and refuses entirely
+// on an unknown letter, because a bundle cannot be told from a shorthand with
+// an attached value by shape alone: `-uTest` is `--user Test`, not a `-T`.
+// Refusing there keeps the old whole-token behaviour, which is the safe
+// direction — the auto-detect stays on and appends its own flag.
+func shortFlagLetters(arg string) string {
+	name := flagNamePart(arg)
+	if len(name) < 2 || name[0] != '-' || name[1] == '-' {
+		return ""
+	}
+	var out []byte
+	for i := 1; i < len(name); i++ {
+		switch c := name[i]; {
+		case strings.IndexByte(composeBoolShorthands, c) >= 0:
+			out = append(out, c)
+		case strings.IndexByte(composeValueShorthands, c) >= 0:
+			return string(out)
+		default:
+			return ""
+		}
+	}
+	return string(out)
 }
 
 // hasDetachFlag reports whether the flag vector asks for a detached container
@@ -289,8 +334,10 @@ func hasTTYFlag(args []string) bool {
 // run, a false negative bakes ANSI escapes into the Docker logs.
 func hasDetachFlag(args []string) bool {
 	for _, a := range args {
-		name := flagNamePart(a)
-		if name == "-d" || strings.EqualFold(name, "--detach") {
+		if strings.EqualFold(flagNamePart(a), "--detach") {
+			return true
+		}
+		if strings.IndexByte(shortFlagLetters(a), 'd') >= 0 {
 			return true
 		}
 	}

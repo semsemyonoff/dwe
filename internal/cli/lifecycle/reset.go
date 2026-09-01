@@ -733,12 +733,17 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 	}
 	_ = reg.ApplyVisibility(cfg, workDir)
 	// Single-step execution: no --yes flag, so confirm prompts are shown.
+	// UserInvoked is what separates this from the same step inside a pipeline:
+	// the user typed this one at a terminal and childIO hands it the real
+	// os.Stdout, so a `type: command` step pointing at an interactive
+	// service_exec (a psql, a tinker) must still get a container terminal.
 	actx := pipeline.ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
 		Reg:         reg,
 		LogWriter:   nil,
 		SkipConfirm: false,
+		UserInvoked: true,
 	}
 
 	if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {
@@ -758,7 +763,11 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 			}
 			check = *derived
 		}
-		if err := pipeline.ExecAction(cmd.Context(), check, actx); err != nil {
+		// A check: is a postcondition probe, never a user invocation — it must
+		// not acquire a container terminal even though the body just did.
+		checkActx := actx
+		checkActx.UserInvoked = false
+		if err := pipeline.ExecAction(cmd.Context(), check, checkActx); err != nil {
 			return fmt.Errorf("step %s: check failed: %w", address, err)
 		}
 	}

@@ -131,6 +131,11 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 		// subcommand layer owns end-of-run notifications, so suppress
 		// any per-leaf notification opt-ins.
 		SkipNotify: true,
+		// UserInvoked stays at its zero value on purpose: the user launched
+		// `dwe snapshot create`, not the individual service_exec leaves the
+		// workflow dispatches, so those leaves get `-T` plus forced colour
+		// rather than a container terminal. Pinned by
+		// TestRunWorkflow_LeavesUserInvokedFalse.
 	}
 	if obs != nil {
 		rc.StepObserver = obs

@@ -314,13 +314,13 @@ compose_args:
 The runner allocates a TTY inside the container only for a run the user launched themselves, with terminals on both ends:
 
 - **Gets a container TTY** — a top-level `dwe commands <id>` (alias `dwe cmd <id>`, and the same command started from the command browser) whose own stdin *and* stdout are a terminal; plus the same command run over the host bridge from inside a container, where the bridge fabricates the terminal itself.
-- **Gets `-T`** — everything else. A `type: command` step inside `dwe deploy run` or any other pipeline; a sub-step of a workflow `parallel:` block; a `check:` probe; a run whose output is piped or redirected (`dwe cmd foo | grep …`); and any nested re-entry into dwe — a `type: dwe` step, or a `type: shell` / `type: script` step calling back through `$DWE_BIN`.
+- **Gets `-T`** — everything else. A `type: command` step inside `dwe deploy run` or any other pipeline; a sub-step of a workflow `parallel:` block; a `check:` probe; a run whose output is piped or redirected (`dwe cmd foo | grep …`); and a nested re-entry into dwe — a `type: dwe` step, or a `type: shell` / `type: script` step calling back through `$DWE_BIN`. The one command that runs a pipeline step *as* a user invocation is `dwe reset step`, which you typed yourself: it keeps the terminal for the step body, though not for the step's `check:`.
 
 Suppressing the TTY does not cost you colour: when the runner takes the terminal away from a child whose output still reaches yours, it forwards `CLICOLOR_FORCE=1` / `FORCE_COLOR=1` / `COLORTERM=truecolor` into the container so isatty-keyed tools keep emitting ANSI. A detached child (`-d`) is deliberately excluded — its output goes to the Docker logs, where forced colour would bake escape sequences in permanently.
 
 #### Overriding the decision
 
-An explicit TTY flag anywhere in the **effective** flag vector wins, and the auto-detection stands down entirely. "Effective" means `docker.yml`'s `args.exec` / `args.run` defaults **plus** this command's own rendered `compose_args` — a flag declared in either place counts. The recognised forms are `-T`, `-T=<value>`, and `--no-tty` (compose spells it lowercase) with or without a value, matched case-insensitively.
+An explicit TTY flag anywhere in the **effective** flag vector wins, and the auto-detection stands down entirely. "Effective" means `docker.yml`'s `args.exec` / `args.run` defaults **plus** this command's own rendered `compose_args` — a flag declared in either place counts. The recognised forms are `-T`, `-T=<value>`, `--no-tty` with or without a value, and `T` inside a bundle of short flags such as `-dT`. Compose spells the long form lowercase, and it is matched case-insensitively so an author who wrote `--no-TTY` is still heard; the short `-T` is case-sensitive, because compose has no `-t`.
 
 Control is handed over on the *presence* of such a flag, regardless of its value. That is what makes forcing a TTY possible: there is no dedicated schema field for it, so
 

@@ -1174,6 +1174,24 @@ func TestExecRunner_BuildCommand_WorkdirChain(t *testing.T) {
 			want: "/from/config",
 		},
 		{
+			// The daemon mirror pins both nil fall-throughs; without these two
+			// rows the service side lets a rung be deleted unnoticed.
+			name: "workdir_from resolving to nil falls through to the literal",
+			cmd:  &CommandDef{Workdir: "/literal", WorkdirFrom: "services.missing.dir_internal"},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", CLI: config.ServiceCLIConfig{WorkDir: "/cli"}},
+			},
+			want: "/literal",
+		},
+		{
+			name: "workdir_from resolving to nil falls through to the service fallback",
+			cmd:  &CommandDef{WorkdirFrom: "services.missing.dir_internal"},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", WorkDirInternal: "/work", DirInternal: "/dir"},
+			},
+			want: "/work",
+		},
+		{
 			name: "literal beats cli.workdir",
 			cmd:  &CommandDef{Workdir: "/literal"},
 			services: map[string]config.ServiceConfig{
@@ -1376,6 +1394,15 @@ func TestExecRunner_BuildCommand_ContainerTTY(t *testing.T) {
 		{"--no-TTY matches case-insensitively", []string{"--no-TTY"}, false, nil, nil, 0},
 		{"an unrelated flag does not suppress the injection", []string{"--name", "box"}, false, nil, nil, 1},
 		{"-d is orthogonal to the tty decision", []string{"-d"}, false, nil, nil, 1},
+		// pflag bundles short flags, so these carry a real -T that a
+		// whole-token comparison misses.
+		{"-dT bundle suppresses the injection", []string{"-dT"}, false, nil, nil, 0},
+		{"-Td bundle suppresses the injection", []string{"-Td"}, false, nil, nil, 0},
+		{"-iT bundle suppresses the injection", []string{"-iT"}, false, nil, nil, 0},
+		// -u takes a value, so `Test` is the username, not a bundle: the
+		// decomposition must refuse and let the auto-detect append its own -T.
+		{"-uTest is a user, not a T bundle", []string{"-uTest"}, false, nil, nil, 1},
+		{"an unknown shorthand is not decomposed", []string{"-xT"}, false, nil, nil, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1577,6 +1604,12 @@ func TestBuildCommand_SuppressedTTYForcesColor(t *testing.T) {
 		{"run, detached", ExecModeRun, "exec", []string{"-d"}, true, false},
 		{"service_run, tty suppressed", "", "run", nil, true, true},
 		{"service_run, detached", "", "run", []string{"-d"}, true, false},
+		// The regression this pairing exists to prevent: a bundled `-dT` is
+		// detached, so forcing colour would bake ANSI into the Docker logs
+		// permanently. A whole-token comparison read it as neither flag.
+		{"exec, detached via a -dT bundle", ExecModeExec, "exec", []string{"-dT"}, true, false},
+		{"exec, detached via a -Td bundle", ExecModeExec, "exec", []string{"-Td"}, true, false},
+		{"run, detached via a -dT bundle", "", "run", []string{"-dT"}, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

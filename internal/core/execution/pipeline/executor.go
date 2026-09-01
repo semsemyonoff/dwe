@@ -132,6 +132,16 @@ type ActionContext struct {
 	// pipeline steps. When nil, NopTranslator is used (English fallback).
 	Translator i18n.Translator
 	Locale     string
+	// UserInvoked marks an action the user launched directly rather than one a
+	// pipeline dispatched. It exists for exactly one caller — `dwe reset step`,
+	// which runs a single step at the terminal with confirm prompts enabled and
+	// the real os.Stdout — and it reaches spec.RunContext.UserInvoked, which
+	// gates container TTY allocation.
+	//
+	// The zero value (false) is what every pipeline path wants, so a new caller
+	// that forgets it can only be conservative. Never set it on a check: — a
+	// postcondition is a probe, not a user invocation.
+	UserInvoked bool
 	// Parallel indicates the action is running as a sub-step of a parallel
 	// group. In that mode all child output is routed through StepWriter
 	// (never directly to os.Stdout / os.Stderr), no PTY is allocated, and
@@ -183,9 +193,11 @@ func buildDweCmd(ctx context.Context, dweArg, workDir, shell, dweBin string, ski
 // runCommandByID as a nested, non-user invocation, so it never hands a
 // container a TTY. The mark sits here rather than in RunWithOptions because
 // `dwe reset step` calls ExecAction directly; ExecAction is strictly wider and
-// costs nothing (execCommandAction never sets UserInvoked, so the zero value
-// already stands for a `type: command` step — see
-// TestExecCommandAction_LeavesUserInvokedFalse).
+// costs nothing. Marking the process does not decide the step's own TTY —
+// execCommandAction reads ActionContext.UserInvoked for that, which is false
+// for every pipeline caller and true only for `dwe reset step`'s body (see
+// TestExecCommandAction_LeavesUserInvokedFalse and
+// TestExecCommandAction_UserInvokedPropagates).
 //
 // Deliberate gap: files_gate commands and shell when: predicates evaluated
 // BEFORE the first ExecAction of the process run unmarked, so a `dwe cmd`
@@ -321,6 +333,9 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
 	rctx.UnderParallel = actx.Parallel
+	// Almost always false: only `dwe reset step` sets it, and only for the
+	// step body. See ActionContext.UserInvoked.
+	rctx.UserInvoked = actx.UserInvoked && !actx.Parallel
 	if actx.Translator != nil {
 		rctx.Translator = actx.Translator
 		rctx.Locale = actx.Locale

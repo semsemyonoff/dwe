@@ -362,6 +362,13 @@ func TestResolveDaemonWorkdirUser_cliUserFallback(t *testing.T) {
 // TestResolveDaemonWorkdirUser_workdirFromNonString pins that a dot-path
 // pointing at a non-string value still fails the step loudly — only a nil
 // (absent) value falls through.
+// TestResolveDaemonWorkdirUser_workdirFromNonString pins the DIAGNOSTIC, not
+// the local type assertion: config.LookupDotPath already rejects a non-string
+// value, so the `resolved value is not a string` branch below it is
+// unreachable today and deleting it leaves this test green. What the test does
+// guard is that a non-string dot-path still surfaces as a workdir_from error
+// rather than being swallowed into an empty workdir — which is what would
+// happen if the wrap were dropped or LookupDotPath were ever loosened.
 func TestResolveDaemonWorkdirUser_workdirFromNonString(t *testing.T) {
 	cfg := &config.DweConfig{Raw: map[string]any{
 		"services": map[string]any{"main": map[string]any{"ports": map[string]any{"http": 8080}}},
