@@ -247,24 +247,46 @@ point can only ever be conservative. A single predicate,
 - **Colour forcing is a mandatory paired change, not a follow-up.** Suppressing
   the TTY in a deploy would otherwise turn every command's output grey.
 
-### Blast radius (measured across nine local workspaces, 224 service commands)
+### Blast radius (re-measured in task 1; nine local workspaces, 238 service commands)
 
-- **workdir**: 24 commands have no `workdir:`. 10 target `type: infra`
-  services (unaffected), 3 target a service with no `workspace/services/`
-  folder (unaffected), 6 genuinely change cwd — laravel and magento log
-  commands, which survive only because their paths are absolute. Daemons were
-  never counted; task 1 fixes that before commit A lands.
-- **TTY**: 119 of 224 (53%) carry no `compose_args` at all — but this figure is
-  a **lower bound and must be recomputed** (task 1). The set that moves is
-  "commands whose *effective* flags carry no TTY flag", which also includes
-  every command whose `compose_args` holds only unrelated flags, and excludes
-  every service whose `docker.yml` `args.exec` / `args.run` already supplies
-  one. Counting by "has a `compose_args` list at all" measures the wrong thing.
-  Those 119 move from a
-  container TTY to `-T` inside `dwe deploy run`. This is the riskiest item of
-  the three.
-- **mode**: 206 of 224 already declare `exec-or-run`; 2 commands in one
-  workspace rely on the strict default.
+Measured by parsing every `workspace/commands/**/*.yml` and
+`workspace/services/*/service.yml` and applying the planned classifiers. The
+corpus is 238 `service_exec`/`service_run` commands — larger than the 224 of the
+first sweep, which did not reach the per-service command files under
+`workspace/commands/services/`.
+
+- **TTY**: **124 of 238 (52%)** move from a container TTY to `-T`. The
+  effective-flag recount changed the method but not the shape of the number:
+  **no** command in the corpus has a non-empty `compose_args` without a TTY flag
+  (so the "no `compose_args` at all" proxy happened to be exact), and **no**
+  workspace sets `docker.yml` `args.exec` / `args.run` at all. The refinement
+  stays in the implementation because it is the correct rule, but it buys
+  nothing on today's corpus. The remaining 114 all carry `compose_args: ["-T"]`.
+- **workdir**: 31 commands have no explicit `workdir` / `workdir_from`. 21 are
+  unaffected (`type: infra` services, or a service with no
+  `workspace/services/` folder, or a templated `service: ${param.service}` that
+  resolves only at runtime — cueBreaker's `execcontract.assert`). **10 change
+  cwd**, and 4 of those are the deliberate probe commands added while taking
+  the baseline (`probe.*` / `runner-probe.cwd` in AlbFetcharr, alto, beetDeck,
+  ficbird) — they exist to observe exactly this. The 6 user-facing ones are the
+  laravel and magento log commands, which survive only because their paths are
+  absolute. Unchanged from the first sweep.
+- **mode**: 7 of 238 declare no `mode:` and take the new default.
+- **daemons**: **exactly one** in the entire corpus
+  (`laravel:workspace/commands/services/main.yml:queue`), and it declares both
+  `workdir` and `user` explicitly. Neither its cwd nor its uid moves. **Task 1's
+  stop condition is satisfied**: no file-writing daemon changes uid, so the
+  `cli.user` half of task 5 lands as planned.
+- **wrapper commands** (a host-side command re-entering `dwe cmd <id>`): 7
+  call sites, of which **2 matter**. `magento:varnish.enable` and
+  `varnish.disable` (`type: shell`) invoke `services.magento.config.set` and
+  `services.magento.cache.flush`, both `service_exec` with no `compose_args` —
+  so a user typing the outer command at a terminal now gets `-T` on the inner
+  one. Neither inner command is interactive, so the practical impact is nil,
+  but this is the pattern to watch. The other five are inert:
+  AlbFetcharr's `library.restore` targets two `type: shell` commands, and
+  ficbird's `docs.sync-openapi` targets `admin.gen-api`, which already declares
+  `compose_args: ["-T"]`.
 
 `dwe deploy run` is not the only caller that loses the container TTY. Four
 other sites build a `RunContext`, and three of them run under a real terminal
@@ -527,34 +549,40 @@ code lands, not after.
 - Modify: `docs/plans/20260901-service-exec-runtime-defaults.md` (record the
   numbers in the Blast radius section)
 
-- [ ] recount the TTY blast radius by **effective flags**, not by "has a
+- [x] recount the TTY blast radius by **effective flags**, not by "has a
       `compose_args` list": a command moves when neither its `compose_args` nor
       its service's `docker.yml` `args.exec` / `args.run` carries a TTY flag.
       The current figure of 119/224 counts only commands with no `compose_args`
       at all and is a lower bound
-- [ ] count the **wrapper** case the blast radius does not yet name: a
+- [x] count the **wrapper** case the blast radius does not yet name: a
       `type: dwe` or `type: shell` command whose text invokes
       `dwe cmd|commands <id>` against a `service_exec` command. Under the
       process-global marker, a user typing the *outer* command at a terminal now
       gets `-T` on the inner one — correct by the design's own rules, and
       exactly how an interactive wrapper (`db.cli` → `db.psql`) breaks. If any
       exist, add one as a sixth cell of the manual TTY matrix in tasks 2 and 16
-- [ ] enumerate every `type: daemon` command across the local workspaces
-- [ ] for each, record whether it declares `workdir` / `workdir_from` / `user`
-- [ ] for those declaring none, record whether the target service has
+- [x] enumerate every `type: daemon` command across the local workspaces
+- [x] for each, record whether it declares `workdir` / `workdir_from` / `user`
+- [x] for those declaring none, record whether the target service has
       `cli.workdir`, `work_dir_internal` or `dir_internal` set — those are the
       ones whose cwd changes
-- [ ] separately record daemons whose target service has `cli.user` set —
+- [x] separately record daemons whose target service has `cli.user` set —
       those change the uid they run as, which changes the ownership of files
       they write
-- [ ] write the counts into the Blast radius section of this plan
-- [ ] apply the stop condition: if any daemon that **writes files** would
+- [x] write the counts into the Blast radius section of this plan
+- [x] apply the stop condition: if any daemon that **writes files** would
       change uid under the new `cli.user` fallback, do not land that half
       blind — either exclude the `cli.user` fallback from the daemon path in
       commit A (keeping only the workdir chain) or fix the affected service's
       `cli.user`. Record the decision here with a ⚠️ note naming the daemon.
       A changed uid changes the ownership of everything the daemon writes, and
       that is not recoverable by re-running anything.
+
+**Result.** The corpus holds exactly one daemon,
+`laravel:workspace/commands/services/main.yml:queue`, and it declares both
+`workdir` and `user` explicitly — so neither its cwd nor its uid moves. No
+daemon writes files under a changing uid. **Stop condition clear: task 5 lands
+both halves as planned.** Full numbers are in the Blast radius section.
 
 ### Task 2: Capture the "before" snapshot of the container TTY matrix
 
@@ -566,23 +594,83 @@ must be captured while the tree is still clean.
 - Modify: `docs/plans/20260901-service-exec-runtime-defaults.md` (record the
   observations)
 
-- [ ] pick a live project and a command that needs a terminal (shell, REPL, or
+- [x] pick a live project and a command that needs a terminal (shell, REPL, or
       an interactive installer); if none exists, add a throwaway
       `type: service_exec` command whose `cmd:` prints `tty` and
       `ls -la /proc/self/fd/0 /proc/self/fd/1 /proc/self/fd/2`
-- [ ] cell 1 — run it as `dwe cmd <id>` from a real terminal; record the three
+- [x] cell 1 — run it as `dwe cmd <id>` from a real terminal; record the three
       fds and whether output is coloured
-- [ ] cell 2 — run it as a `type: command` step inside `dwe deploy run`; record
+- [x] cell 2 — run it as a `type: command` step inside `dwe deploy run`; record
       the same
-- [ ] cell 3 — run it over the host bridge from inside a container; record the
+- [x] cell 3 — run it over the host bridge from inside a container; record the
       same
-- [ ] cell 4 — run `dwe cmd <id> | cat`; record the same
-- [ ] cell 5 — run it as a step of a snapshot workflow (`dwe snapshot …`) from
+- [x] cell 4 — run `dwe cmd <id> | cat`; record the same
+- [x] cell 5 — run it as a step of a snapshot workflow (`dwe snapshot …`) from
       a real terminal; record the same. This is the most user-facing of the
       four sites deliberately left at the zero value, and the only one likely
       to be noticed
-- [ ] paste the results into this plan under a "TTY matrix — before" heading
+- [x] paste the results into this plan under a "TTY matrix — before" heading
       — five cells, or six if task 1 found a wrapper command
+
+**Harness.** Measured in a throwaway project (`/tmp/ttyprobe`: one alpine
+service `box`, a `probe.tty` `service_exec` command declaring **no**
+`compose_args`, a `wrap.tty` `type: shell` wrapper, a one-step snapshot
+workflow, and a `type: command` deploy step). No developer project was touched.
+The binary is `bin/dwe` built from this branch **before any code change**, so
+the snapshot is the exact pre-change behaviour of the binary the change lands
+in. A real terminal is simulated with `script -q /dev/null`, which allocates a
+genuine PTY.
+
+**TTY matrix — before** (`v0.5.0-31-gab5bc2bd`)
+
+| # | invocation | container fds | `tty(1)` | colour forcing |
+| --- | --- | --- | --- | --- |
+| 1 | `dwe cmd probe.tty` at a terminal | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/0` | none |
+| 2 | `type: command` step in `dwe deploy run`, **host stdout piped** | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | none |
+| 2a | the same **at a real terminal** | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/0` | **none** |
+| 3 | bridged, `docker exec -it … dwe cmd probe.tty` | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/1` | **`CLICOLOR_FORCE=1 FORCE_COLOR=1`** |
+| 4 | `dwe cmd probe.tty \| cat` | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | none |
+| 5 | snapshot workflow step at a terminal | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/0` | none |
+| 6 | wrapper: `dwe cmd wrap.tty` at a terminal (`type: shell` re-entering `dwe cmd probe.tty`) | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/0` | none |
+
+Three things this pins that the design was only reasoning about:
+
+- **Cell 4 confirms the finding the whole design rests on.** With dwe's own
+  streams piped, the container already gets `pipe` on all three fds — compose
+  degrades on its own. So today's container TTY inside a pipeline comes from
+  `childIO`'s fabricated PTY, not from any decision the runner makes.
+- **Cell 6 makes the wrapper regression concrete, not theoretical.** A
+  `type: shell` command the user typed at a terminal today hands its nested
+  `dwe cmd` a real `/dev/pts`. Under the process-global marker that becomes
+  `-T`. An interactive wrapper (`db.cli` → `db.psql`) breaks here, and this is
+  the row that will show it.
+- **Cell 3 shows colour forcing is already active on the bridge** and cells 1,
+  5, 6 show it is *not* active on a terminal — which is exactly the asymmetry
+  the paired `colorForceActive` change has to preserve.
+
+**Cell 2a settles the premise: it holds.** Inside `dwe deploy run` launched
+from a real terminal, the container gets `/dev/pts/0` on all three fds today.
+So the plan's TTY blast radius stands as measured — those 124 of 238 commands
+really do move from a container TTY to `-T`, and commit B really is the
+riskiest of the three items.
+
+Two details in that row are worth carrying into the implementation:
+
+- Cell 2 (the same step with dwe's stdout redirected) reads `pipe`. The
+  difference between cell 2 and 2a is entirely `childIO`'s `stdoutIsTTY()` gate
+  (`executor.go:81`), which confirms the fabricated PTY — not the runner — is
+  what hands the container a terminal today.
+- Cell 2a shows `CLICOLOR_FORCE=<unset> FORCE_COLOR=<unset>`. Colour is **not**
+  forced on that path today, because the container has a real TTY and needs no
+  help. The moment commit B appends `-T`, that child sees a pipe *and* gets no
+  forcing — grey output in every deploy. This is the empirical case for the
+  paired `colorForceActive` change being mandatory rather than a nicety.
+
+**Harness reuse.** `/tmp/ttyprobe` is left in place for task 16's "after"
+snapshot (stack stopped, bridge daemon stopped). Its composition is described
+above, so it can be rebuilt from scratch if it is gone by then. The deploy gate
+skips the pipeline once it is up to date — task 16 must pass `--force`, which is
+how cell 2a was taken.
 
 ### Task 3: Add the shared service-lookup helpers to `project/config`
 
