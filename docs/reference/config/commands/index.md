@@ -140,7 +140,6 @@ db.create:
   type: service_exec
   description: Create a database in the db container
   service: db
-  mode: exec-or-run
   params:
     database:
       type: string

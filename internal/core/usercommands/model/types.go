@@ -268,18 +268,20 @@ const (
 	// containers are an easy source of confusion (state not persisted, no shared
 	// network with other compose services, etc.).
 	ExecModeExecOrRun ExecMode = "exec-or-run"
-	// ExecModeExecOrFail (default) pre-checks the target service and refuses
-	// with a clear dwe-level error when the container is not running.
-	// Prevents the silent compose-fallback that ExecModeExecOrRun does for
-	// tools that legitimately work as ephemeral runs (mc, composer, etc.).
+	// ExecModeExecOrFail pre-checks the target service and refuses with a clear
+	// dwe-level error when the container is not running. It is the only mode
+	// that pre-probes purely to produce that error, and the opt-in for commands
+	// that must never create a container — the ephemeral fallback of
+	// ExecModeExecOrRun (the default) is wrong for them.
 	ExecModeExecOrFail ExecMode = "exec-or-fail"
 )
 
 // DefaultExecMode is the ExecMode used when a service_exec command does not
-// specify mode. It is exec-or-fail rather than exec so that a "service not
-// running" condition surfaces as an actionable dwe error rather than a raw
-// compose stderr trace.
-const DefaultExecMode = ExecModeExecOrFail
+// specify mode. It is exec-or-run because that is what nearly every service
+// command declares by hand: the tool should work whether or not the stack
+// happens to be up, and the fallback announces itself with a warning. Commands
+// that must not create a container opt into ExecModeExecOrFail explicitly.
+const DefaultExecMode = ExecModeExecOrRun
 
 // IsValid reports whether m is one of the canonical ExecMode values.
 // The empty string is considered valid (interpreted as the default at the

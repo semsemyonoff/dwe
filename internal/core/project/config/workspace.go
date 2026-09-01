@@ -1457,6 +1457,50 @@ func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// ServiceByContainer returns the service whose Container field equals the given
+// compose service name. The match is on Container and NOT on the services map
+// key: the folder `main` may declare `container: app-main`, and every runtime
+// caller (a command's `service:`, `docker compose exec <name>`) speaks the
+// compose service name, so a key-based lookup would miss it.
+//
+// Keys are iterated sorted because two services may legally share one Container
+// value and cfg.Services is a map — first-match-wins must not depend on
+// randomized map order.
+func ServiceByContainer(cfg *DweConfig, container string) (ServiceConfig, bool) {
+	if cfg == nil || container == "" {
+		return ServiceConfig{}, false
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
+		if svc := cfg.Services[name]; svc.Container == container {
+			return svc, true
+		}
+	}
+	return ServiceConfig{}, false
+}
+
+// ContainerWorkdirFallback resolves the directory a container command should
+// land in when the command declares no workdir of its own:
+// cli.workdir → work_dir_internal → dir_internal, first non-empty wins, "" when
+// none is set or the container is unknown.
+//
+// This is the chain `dwe shell` already applies (resolveShellOptions), which is
+// what makes a service command and a shell session into the same service agree
+// on where they land. The lookup is by Container, not by map key — see
+// ServiceByContainer.
+func ContainerWorkdirFallback(cfg *DweConfig, container string) string {
+	svc, ok := ServiceByContainer(cfg, container)
+	if !ok {
+		return ""
+	}
+	if svc.CLI.WorkDir != "" {
+		return svc.CLI.WorkDir
+	}
+	if svc.WorkDirInternal != "" {
+		return svc.WorkDirInternal
+	}
+	return svc.DirInternal
+}
+
 // RuntimeConfig describes runtime settings that are not service-specific.
 // Per-service host/port have moved to ServiceConfig.Hosts/Ports.
 type RuntimeConfig struct {

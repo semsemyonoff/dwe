@@ -11,6 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
@@ -77,6 +78,42 @@ func TestRunWorkflow_PropagatesSnapshotVarsToShellLeaf(t *testing.T) {
 	}
 	if !strings.Contains(got, "NAME=snapname") {
 		t.Errorf("stdout missing NAME=snapname\nstdout: %s\nstderr: %s", got, errBuf.String())
+	}
+}
+
+// TestRunWorkflow_LeavesUserInvokedFalse pins the snapshot path's contribution
+// to the container-TTY decision. `dwe snapshot create` is user-invoked, but the
+// service_exec leaves its workflow dispatches are not — one runtime invoking
+// another — so they must get `-T` and forced colour rather than a container
+// terminal. Nothing else observes this: the flag is invisible to every snapshot
+// assertion, so without this test a later flip in either direction is silent.
+func TestRunWorkflow_LeavesUserInvokedFalse(t *testing.T) {
+	reg := registry.NewEmptyRegistry()
+	registerShellEcho(t, reg, "fake.echo", `echo hi`)
+
+	var captured runtime.RunContext
+	prev := runtime.TestSnapshotRC
+	runtime.TestSnapshotRC = func(rc runtime.RunContext) { captured = rc }
+	t.Cleanup(func() { runtime.TestSnapshotRC = prev })
+	captured = runtime.RunContext{UserInvoked: true} // must be overwritten
+
+	tmp := t.TempDir()
+	var out, errBuf bytes.Buffer
+	err := RunWorkflow(context.Background(), ExecParams{
+		Cfg:      testCfg(),
+		Registry: reg,
+		BaseDir:  tmp,
+		Workflow: &config.SnapshotWorkflow{Steps: []model.WorkflowStep{{Command: "fake.echo"}}},
+		Vars:     meta.BuildSnapshotVars("snapname", filepath.Join(tmp, "snap"), "", "", time.Time{}),
+		Scope:    tpl.SnapshotScopeCreate,
+		Stdout:   &out,
+		Stderr:   &errBuf,
+	})
+	if err != nil {
+		t.Fatalf("RunWorkflow: %v (stderr=%s)", err, errBuf.String())
+	}
+	if captured.UserInvoked {
+		t.Error("UserInvoked = true; want false — snapshot workflow leaves are runtime-invoked, not user-invoked")
 	}
 }
 

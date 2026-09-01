@@ -40,7 +40,7 @@ func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
-	colorEnv := runio.ColorForceEnv(rc)
+	colorEnv := runio.ColorForceEnv(rc, false) // host-side child: no container TTY to suppress
 	if len(envMap) > 0 || len(colorEnv) > 0 {
 		cmd.Env = os.Environ()
 		for k, v := range envMap {

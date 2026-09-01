@@ -134,6 +134,11 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   A new per-service file type must also join `knownServiceFiles` in the `services-folder` validator, or `dwe validate` warns in every project that adopts it.
   See § Core — Foundation (`project/config/`) and § Core — Validation.
 
+- **Service workdir chain + exec-mode default** — a container command with no `workdir:` inherits the service's `cli.workdir` → `work_dir_internal` → `dir_internal` (the chain `dwe shell` uses); `workdir: internal` is the opt-out sentinel and the ONE value that outranks `workdir_from`.
+  Resolve a service with `config.ServiceByContainer` (by the `container:` field, sorted keys — never `range cfg.Services` on the map key) and its fallback with `config.ContainerWorkdirFallback`; `docker_daemon_start` runs the same chain.
+  `mode:` defaults to `exec-or-run`, so a `type: command` `check:` over a mode-less `service_exec` command CREATES a container — such a check must declare `mode: exec-or-fail`.
+  See § Service Workdir & Exec Mode Contract.
+
 - **Snapshot template scope gate** — `${snapshot.*}` resolves only inside snapshot workflow blocks; `tpl.RenderCommand` calls `validateSnapshotScope` BEFORE `CompileVarSyntax`.
   Never add scope logic to `CompileVarSyntax` — it has no error path and must stay pure-syntactic.
   See § `internal/shared/tpl/`.
@@ -192,6 +197,11 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   The workflow runner never consults `BridgeHidden` — a bridged workflow executes non-bridged sub-commands host-side.
   The `.dwe/compose.bridge.yml` overlay step ALWAYS runs (regenerate or delete).
   See § CLI (container command policy), § Core — Bridge and § Core — User Commands.
+
+- **Container TTY** — a service command keeps a container terminal only when `RunContext.UserInvoked` is true and its own streams are terminals (or it is bridged); pipeline steps, `parallel:` sub-steps, `check:` probes and piped output all get `-T`.
+  `UserInvoked` is set in exactly ONE place — `runCommandByID`, as `!bridgeclient.NestedRuntime()` read BEFORE that same call writes the process-global `DWE_NESTED_RUNTIME` marker, which MUST stay in `bridgeclient.StripEnv` or a container-set one kills the TTY on every bridged `dwe cmd`.
+  Injecting `-T` also forces colour via `ColorForceEnv(rc, ttySuppressed && !detached)`; dropping the `!detached` guard bakes ANSI into the Docker logs permanently.
+  See § Container TTY Contract.
 
 - **`dwe vars` + comment-preserving `local.yml` writer** — `local/local_node.go` is the SINGLE `local.yml` write path, and `ApplyOverlayToNode` derives `Tag`/`Style` from the coerced NEW value, not the old node — keeping the old `DoubleQuoted` style would make `vars set x true` write a quoted string forever.
   `vars set` coerces through the PINNED `varsusage.CoerceScalar` grammar, and per-layer resolution goes through `config.LoadLayers`/`ResolveLayeredPath` so `LoadConfig` and `vars inspect` cannot drift.

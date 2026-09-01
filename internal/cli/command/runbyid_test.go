@@ -14,6 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 )
 
 // stubOrchestratorSeams replaces the four package-level seams in runbyid.go
@@ -981,5 +982,90 @@ func TestRunCommandByID_PassThroughArgsReachRenderContext(t *testing.T) {
 				t.Errorf("Render.Args = %v, want %v", s.runRC.Render.Args, tt.wantArgs)
 			}
 		})
+	}
+}
+
+// --- nested-runtime marker / UserInvoked ---------------------------------
+//
+// These are the consumption half of the nested-runtime contract; the
+// propagation half (that a pipeline's children actually inherit
+// DWE_NESTED_RUNTIME) lives in package pipeline, because the child is a
+// separate process whose in-process UserInvoked no test here can observe.
+//
+// EVERY test below must clear the marker with t.Setenv(…, ""):
+// runCommandByID's os.Setenv is process-global and never cleared, and ~30
+// other tests in this file call runCommandByID. t.Setenv also forbids
+// t.Parallel — which stubOrchestratorSeams already requires anyway.
+
+// runMarkerProbe runs a trivial command through runCommandByID and returns the
+// UserInvoked value the runner saw.
+func runMarkerProbe(t *testing.T, s *orchestratorStubs) bool {
+	t.Helper()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db",
+		Type: usercommands.CommandTypeShell, Cmd: "echo hi",
+	}
+	reg := newTestRegistry(def)
+	before := s.runCalls
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.up", runOpts{Yes: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.runCalls != before+1 {
+		t.Fatalf("runner should be invoked once; got %d calls", s.runCalls-before)
+	}
+	return s.runRC.UserInvoked
+}
+
+// TestRunCommandByID_UserInvoked_ReadsMarkerBeforeWriting pins the ordering: a
+// top-level invocation must not be classified nested by its own assignment,
+// and the second call — a stand-in for anything this command spawns and
+// re-enters with — must be.
+func TestRunCommandByID_UserInvoked_ReadsMarkerBeforeWriting(t *testing.T) {
+	t.Setenv(bridgeclient.EnvNestedRuntime, "")
+	s := stubOrchestratorSeams(t)
+	s.installRunner()
+
+	if got := runMarkerProbe(t, s); !got {
+		t.Errorf("first (top-level) invocation: UserInvoked = false, want true")
+	}
+	if got := runMarkerProbe(t, s); got {
+		t.Errorf("second invocation (marker now set): UserInvoked = true, want false")
+	}
+}
+
+// TestRunCommandByID_UserInvoked_NestedMarkerSuppresses is the consumption
+// assertion: a dwe re-entered from a pipeline step (or from a type: shell
+// snippet calling back through DWE_BIN) inherits the marker and must not hand
+// a container a TTY.
+func TestRunCommandByID_UserInvoked_NestedMarkerSuppresses(t *testing.T) {
+	t.Setenv(bridgeclient.EnvNestedRuntime, "1")
+	s := stubOrchestratorSeams(t)
+	s.installRunner()
+
+	if got := runMarkerProbe(t, s); got {
+		t.Errorf("UserInvoked = true with the marker set, want false")
+	}
+}
+
+// TestRunCommandByID_UserInvoked_BridgedStaysUserInvoked pins that the bridge
+// path does NOT set the marker: core/bridge/exec.go re-execs `dwe <argv…>` as
+// a plain subprocess that lands on this same line, and a bridged `dwe cmd` IS
+// a user invocation — the whole reason bridgedTTYChildIO exists. Note the
+// forced DWE_NONINTERACTIVE=1: the daemon sets it on every forked dwe, so the
+// predicate must never key off NonInteractive.
+func TestRunCommandByID_UserInvoked_BridgedStaysUserInvoked(t *testing.T) {
+	t.Setenv(bridgeclient.EnvNestedRuntime, "")
+	t.Setenv(bridgeclient.EnvInvokedFrom, bridgeclient.InvokedFromContainer)
+	t.Setenv(bridgeclient.EnvNonInteractive, "1")
+	s := stubOrchestratorSeams(t)
+	s.installRunner()
+
+	if got := runMarkerProbe(t, s); !got {
+		t.Errorf("bridged invocation: UserInvoked = false, want true")
+	}
+	if !s.runRC.NonInteractive {
+		t.Errorf("sanity: bridged invocation should be non-interactive")
 	}
 }

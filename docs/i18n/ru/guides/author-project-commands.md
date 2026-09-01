@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ 97608a86a125
+> Translated from: guides/author-project-commands.md @ 3ba6ecad1ead
 
 # Авторство проектных команд
 
@@ -97,7 +97,7 @@ commands:
     type: service_exec
     description: Create a database in the db container
     service: db
-    mode: exec-or-run
+    mode: exec-or-fail   # база — персистентное состояние, одноразовую создавать нельзя
     params:
       database:
         type: string
@@ -112,12 +112,12 @@ commands:
 
 - **`service:`** — имя compose-сервиса.
 - **`mode:`** — что делать, если контейнер не запущен:
-  - `exec-or-fail` (по умолчанию) — отказ с действенной ошибкой и подсказкой `dwe docker up <svc>`.
-  - `exec-or-run` — фолбэк на свежий `docker compose run --rm`-контейнер с предупреждением об эфемерном запуске.
+  - `exec-or-run` (по умолчанию) — фолбэк на свежий `docker compose run --rm`-контейнер с предупреждением об эфемерном запуске.
+  - `exec-or-fail` — отказ с действенной ошибкой и подсказкой `dwe docker up <svc>`.
   - `exec` — голый `docker compose exec`; docker эмитит свою ошибку, если контейнер лёг.
   - `run` — всегда поднимать свежий контейнер.
 
-  Берите `exec-or-fail` для инструментов, зависящих от постоянного состояния (БД, app-серверы); `exec-or-run` — только когда инструмент честно работает one-off (composer install на свежем чек-ауте и т.п.).
+  Не пишите `mode:` вовсе, если инструмент честно работает и как one-off (composer install на свежем чек-ауте и т.п.). Объявляйте `mode: exec-or-fail` для инструментов, зависящих от постоянного состояния контейнера (БД, app-серверы), — тех, которым нельзя молча поднять контейнер за вашей спиной.
 - **`user:`** — `current` запускает от UID:GID хоста (для команд, пишущих в bind-mount); `root` — для привилегированных контейнерных операций; либо литерал `name` / `1000` / `1000:1000`. Опустите — наследуется `cli.user` сервиса.
 - **`workdir_from:`** — dot-путь в собранный конфиг (например, `services.main.work_dir_internal`). Предпочтительнее жёсткого `workdir:`, потому что это позволяет оверрайдам из `local.yml` доходить до команд.
 

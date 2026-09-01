@@ -5594,4 +5594,117 @@ func TestAllowedRootKeysSubsetOfKnownVarHeads(t *testing.T) {
 	}
 }
 
+func TestServiceByContainer(t *testing.T) {
+	cfg := &DweConfig{Services: map[string]ServiceConfig{
+		"main":  {Container: "main", DirInternal: "/main"},
+		"queue": {Container: "app-queue", DirInternal: "/queue"},
+	}}
+
+	tests := []struct {
+		name      string
+		cfg       *DweConfig
+		container string
+		wantFound bool
+		wantDir   string
+	}{
+		{name: "match by container equal to key", cfg: cfg, container: "main", wantFound: true, wantDir: "/main"},
+		{name: "container differs from key", cfg: cfg, container: "app-queue", wantFound: true, wantDir: "/queue"},
+		{name: "map key is not a container", cfg: cfg, container: "queue"},
+		{name: "no match", cfg: cfg, container: "nope"},
+		{name: "nil config", cfg: nil, container: "main"},
+		{name: "empty container", cfg: cfg, container: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, ok := ServiceByContainer(tt.cfg, tt.container)
+			if ok != tt.wantFound {
+				t.Fatalf("found = %v, want %v", ok, tt.wantFound)
+			}
+			if svc.DirInternal != tt.wantDir {
+				t.Fatalf("dir_internal = %q, want %q", svc.DirInternal, tt.wantDir)
+			}
+		})
+	}
+}
+
+// TestServiceByContainer_CollisionIsStable pins the sorted-key iteration: two
+// services may legally declare the same container, and a map range would pick
+// a different winner between runs.
+func TestServiceByContainer_CollisionIsStable(t *testing.T) {
+	cfg := &DweConfig{Services: map[string]ServiceConfig{
+		"alpha": {Container: "shared", DirInternal: "/alpha"},
+		"beta":  {Container: "shared", DirInternal: "/beta"},
+		"gamma": {Container: "shared", DirInternal: "/gamma"},
+	}}
+	for i := range 200 {
+		svc, ok := ServiceByContainer(cfg, "shared")
+		if !ok {
+			t.Fatalf("iteration %d: not found", i)
+		}
+		if svc.DirInternal != "/alpha" {
+			t.Fatalf("iteration %d: dir_internal = %q, want /alpha", i, svc.DirInternal)
+		}
+	}
+}
+
+func TestContainerWorkdirFallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		svc       ServiceConfig
+		container string
+		want      string
+	}{
+		{
+			name:      "cli.workdir wins",
+			svc:       ServiceConfig{Container: "main", CLI: ServiceCLIConfig{WorkDir: "/cli"}, WorkDirInternal: "/work", DirInternal: "/dir"},
+			container: "main",
+			want:      "/cli",
+		},
+		{
+			name:      "work_dir_internal wins without cli.workdir",
+			svc:       ServiceConfig{Container: "main", WorkDirInternal: "/work", DirInternal: "/dir"},
+			container: "main",
+			want:      "/work",
+		},
+		{
+			name:      "dir_internal is the last rung",
+			svc:       ServiceConfig{Container: "main", DirInternal: "/dir"},
+			container: "main",
+			want:      "/dir",
+		},
+		{
+			name:      "all three empty",
+			svc:       ServiceConfig{Container: "main"},
+			container: "main",
+			want:      "",
+		},
+		{
+			name:      "container differs from map key",
+			svc:       ServiceConfig{Container: "app-main", WorkDirInternal: "/work"},
+			container: "app-main",
+			want:      "/work",
+		},
+		{
+			name:      "unknown container",
+			svc:       ServiceConfig{Container: "main", DirInternal: "/dir"},
+			container: "other",
+			want:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &DweConfig{Services: map[string]ServiceConfig{"main": tt.svc}}
+			if got := ContainerWorkdirFallback(cfg, tt.container); got != tt.want {
+				t.Fatalf("ContainerWorkdirFallback = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestContainerWorkdirFallback_NilConfig(t *testing.T) {
+	if got := ContainerWorkdirFallback(nil, "main"); got != "" {
+		t.Fatalf("ContainerWorkdirFallback = %q, want empty", got)
+	}
+}
+
 var _ = sampleToolsServicesYML

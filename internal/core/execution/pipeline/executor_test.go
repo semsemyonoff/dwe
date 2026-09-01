@@ -18,6 +18,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 )
 
 // --- mockReporter records all reporter events for assertion ---
@@ -2720,5 +2721,214 @@ func TestFormatFilesGate(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// installStubDocker puts a stub `docker` at the head of PATH and returns an
+// accessor for the argv (space-joined, one entry per invocation) of every call
+// the test provoked.
+//
+// execCommandAction calls usercommands.RunCommand with no seam, so a
+// service_exec command really shells out to `docker compose`. PATH is what
+// makes that affordable: exec.Command resolves the binary through LookPath
+// against the *process* environment at construction time, so the service
+// runner overwriting cmd.Env with docker.MergeEnv(...) afterwards cannot
+// defeat it. The heavier `.dwe/config` route (installFakeDocker in
+// internal/cli/lifecycle) is not usable here — the binary_docker override
+// lives in an unexported userConfig that only config.LoadConfig populates, and
+// no pipeline test loads config from disk.
+//
+// t.Setenv forbids t.Parallel in every test using this harness.
+func installStubDocker(t *testing.T) func() []string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "docker-args.log")
+	// shellQuote: t.TempDir() sits under TMPDIR, which can carry whitespace or
+	// shell metacharacters — an unquoted redirection target would silently log
+	// somewhere else and the stub would report no calls at all.
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + shellQuote(logPath) + "\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub docker: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	return func() []string {
+		data, err := os.ReadFile(logPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			t.Fatalf("read stub docker log: %v", err)
+		}
+		var calls []string
+		for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
+			if line != "" {
+				calls = append(calls, line)
+			}
+		}
+		return calls
+	}
+}
+
+// TestExecAction_CommandCheck_ServiceWorkdirFallback pins that the service
+// workdir fallback reaches a command dispatched as a step's check:. A check is
+// a full config.Action going through the same ExecAction switch, so a check
+// command whose cmd uses a relative path silently changes meaning with the
+// fallback — that is worth a test at the executor level, not only at the
+// runner level.
+//
+// The fixture declares mode: exec so no container probe runs.
+func TestExecAction_CommandCheck_ServiceWorkdirFallback(t *testing.T) {
+	dockerCalls := installStubDocker(t)
+
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{
+		ID:      "app.check",
+		Type:    usercommands.CommandTypeServiceExec,
+		Service: "app-main",
+		Mode:    usercommands.ExecModeExec,
+		Cmd:     "test -f composer.json",
+	})
+
+	cfg := &config.DweConfig{
+		Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
+		Services: map[string]config.ServiceConfig{
+			"main": {Container: "app-main", WorkDirInternal: "/var/www/html"},
+		},
+		Raw: map[string]any{},
+	}
+	actx := ActionContext{
+		WorkDir:     t.TempDir(),
+		Cfg:         cfg,
+		Reg:         reg,
+		SkipConfirm: true,
+		CallerCtx:   builtin.CtxPredicate,
+	}
+
+	if err := ExecAction(context.Background(), config.Action{Type: "command", Cmd: "app.check"}, actx); err != nil {
+		t.Fatalf("ExecAction: %v", err)
+	}
+
+	calls := dockerCalls()
+	if len(calls) != 1 {
+		t.Fatalf("expected exactly one docker invocation, got %d: %v", len(calls), calls)
+	}
+	// The -T is the runner's container-TTY decision: a pipeline step is not a
+	// user invocation, so the container process gets no terminal.
+	if !strings.Contains(calls[0], "compose -p dwe-laravel exec -T --workdir /var/www/html app-main") {
+		t.Fatalf("check command did not inherit the service workdir: %s", calls[0])
+	}
+}
+
+// TestExecAction_CommandCheck_DefaultModeCreatesContainer pins the consequence
+// of the flipped exec-mode default at the level where it bites: a step's
+// `check:` — a postcondition, something a pipeline evaluates to decide whether
+// to do work — dispatched at a mode-less service_exec command against a stopped
+// service now CREATES a container via `docker compose run --rm` instead of
+// refusing. That is the intended trade, and it is pinned here rather than left
+// to be discovered in a project; a check that must stay side-effect-free has to
+// declare `mode: exec-or-fail` explicitly.
+//
+// The stub docker is what makes "stopped" reachable from package pipeline: it
+// prints nothing, and empty `compose ps` output is how isContainerRunning
+// spells "not running". The containerRunningFn seam is unexported and lives in
+// package service.
+//
+// Assertions stay -T-agnostic on purpose (see the same rule in
+// service_test.go): this context has UserInvoked == false, so a full-argv
+// comparison would hard-code the container-TTY decision from a separate commit.
+func TestExecAction_CommandCheck_DefaultModeCreatesContainer(t *testing.T) {
+	dockerCalls := installStubDocker(t)
+
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{
+		ID:      "app.check",
+		Type:    usercommands.CommandTypeServiceExec,
+		Service: "app-main",
+		Cmd:     "test -f composer.json",
+	})
+
+	cfg := &config.DweConfig{
+		Project:  config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
+		Services: map[string]config.ServiceConfig{"main": {Container: "app-main"}},
+		Raw:      map[string]any{},
+	}
+	actx := ActionContext{
+		WorkDir:     t.TempDir(),
+		Cfg:         cfg,
+		Reg:         reg,
+		SkipConfirm: true,
+		CallerCtx:   builtin.CtxPredicate,
+	}
+
+	if err := ExecAction(context.Background(), config.Action{Type: "command", Cmd: "app.check"}, actx); err != nil {
+		t.Fatalf("ExecAction: %v", err)
+	}
+
+	calls := dockerCalls()
+	if len(calls) != 2 {
+		t.Fatalf("expected the container probe plus the command, got %d: %v", len(calls), calls)
+	}
+	if !strings.Contains(calls[0], " ps ") {
+		t.Errorf("first invocation is not the container probe: %s", calls[0])
+	}
+	// `--no-deps --entrypoint` is the run branch's own signature; `--rm` comes
+	// from docker.yml's args.run, which this fixture does not load.
+	if !strings.Contains(calls[1], " run ") || !strings.Contains(calls[1], "--no-deps") {
+		t.Errorf("mode-less check did not fall back to an ephemeral run: %s", calls[1])
+	}
+	if strings.Contains(calls[1], " exec ") {
+		t.Errorf("expected the run branch, got an exec: %s", calls[1])
+	}
+}
+
+// TestRunWithOptions_MarksNestedRuntime pins the propagation half of the
+// nested-runtime contract: a pipeline marks its own process, so every child it
+// spawns — by any mechanism — inherits DWE_NESTED_RUNTIME and re-enters
+// runCommandByID as a nested, non-user invocation.
+//
+// It is deliberately split from the consumption half (package command): the
+// child is a SEPARATE PROCESS whose in-process UserInvoked no test here can
+// observe, and a real `type: dwe` re-exec resolves resolveDweBin →
+// os.Executable() → the test binary.
+//
+// The `type: shell` case is the one a per-spawn env list would have missed:
+// execShellAction never assigns cmd.Env at all, and DWE_BIN is exported into
+// shell/script children on purpose so project code can call dwe again.
+func TestRunWithOptions_MarksNestedRuntime(t *testing.T) {
+	// Process-global and never cleared — clear it first so the assertion is
+	// about this pipeline's own mark, not another test's leftover.
+	t.Setenv(bridgeclient.EnvNestedRuntime, "")
+
+	var log bytes.Buffer
+	rep := &mockReporter{}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	step := config.DeployStep{Name: "echo-marker", Type: "shell", Cmd: "printenv DWE_NESTED_RUNTIME"}
+
+	err := RunWithOptions(RunOptions{
+		Steps:     buildResolvedSteps(phase, []config.DeployStep{step}),
+		Reporter:  rep,
+		Name:      "test",
+		Config:    cfg,
+		WorkDir:   t.TempDir(),
+		LogWriter: &log,
+	})
+	if err != nil {
+		t.Fatalf("RunWithOptions: %v", err)
+	}
+
+	// A `type: shell` child inherits os.Environ() verbatim, so printenv both
+	// proves the variable reached the child and that it is non-empty (the read
+	// predicate is `!= ""`, not LookupEnv).
+	if got := strings.TrimSpace(log.String()); got != "1" {
+		t.Errorf("shell child saw DWE_NESTED_RUNTIME=%q, want %q", got, "1")
+	}
+
+	// A `type: dwe` child is built by buildDweCmd, which assigns an explicit
+	// cmd.Env — verify the process-global marker survives that too.
+	cmd := buildDweCmd(context.Background(), "status", t.TempDir(), "sh", "", false)
+	if !slices.Contains(cmd.Env, bridgeclient.EnvNestedRuntime+"=1") {
+		t.Errorf("buildDweCmd env lacks %s=1", bridgeclient.EnvNestedRuntime)
 	}
 }

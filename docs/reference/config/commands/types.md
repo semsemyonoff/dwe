@@ -221,9 +221,9 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 | `service` | yes | Compose service name |
 | `cmd` / `argv` | one of | Shell command string OR raw argv |
 | `argv_append_from` | optional | Shell expression whose stdout lines are appended to `argv`. Runs on the **host**, not in the container — see [Computed arguments](directives.md#computed-arguments-argv_append_from) |
-| `mode` | optional | `exec-or-fail` (default), `exec`, `run`, or `exec-or-run` — see [mode resolution](#mode-resolution) |
+| `mode` | optional | `exec-or-run` (default), `exec-or-fail`, `exec`, or `run` — see [mode resolution](#mode-resolution) |
 | `user` | optional | Container user to run as. See [User resolution](#user-resolution) for the full list of accepted values and the fallback rules. |
-| `workdir` | optional | Container workdir; rendered with templates |
+| `workdir` | optional | Container workdir; rendered with templates. Omitted → falls back to the target service's own workdir; `internal` opts out entirely. See [Workdir resolution](#workdir-resolution) |
 | `workdir_from` | optional | Dot-path into merged config resolving to the workdir string |
 | `compose_args` | optional | Extra flags forwarded to `docker compose exec/run` (templated) |
 
@@ -231,12 +231,20 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 
 | Mode | When container is running | When container is not running |
 |------|---------------------------|-------------------------------|
-| `exec-or-fail` (default) | runs via `docker compose exec` | refuses with a clear DWE error suggesting `dwe docker up <svc>` |
+| `exec-or-run` (default) | runs via `docker compose exec` | falls back to `docker compose run --rm`; emits a yellow warning so the ephemeral-container behaviour is visible |
+| `exec-or-fail` | runs via `docker compose exec` | refuses with a clear DWE error suggesting `dwe docker up <svc>` |
 | `exec` | runs via `docker compose exec` | calls `compose exec` anyway; docker emits its own (cryptic) error |
 | `run` | always runs a fresh ephemeral container via `docker compose run --rm` | same |
-| `exec-or-run` | runs via `docker compose exec` | silently falls back to `docker compose run --rm`; emits a yellow warning so the ephemeral-container behaviour is visible |
 
-Pick `exec-or-fail` (the default) for normal interactive tools that depend on persistent container state (databases, application servers, etc.) — a missing container should surface as an actionable error, not a side-effecting one-off run. Pick `exec-or-run` only for tools that legitimately work as ephemeral runs (mc, composer install on a fresh checkout, etc.) and where you understand that no state will persist between invocations. `runner.mode` follows the same enum and same precedence rules as `runner.user`.
+Omitting `mode:` gives you `exec-or-run`: the command works against the live container when the stack is up, and still does something useful on a stopped stack instead of stopping the author to ask which of four spellings they meant. That is what almost every project already declared by hand.
+
+Declare `mode: exec-or-fail` for tools that **depend on persistent container state** and must never create a container — a database client, an application server's console, anything whose value comes from the running instance's memory, sockets or accumulated files. For those, a stopped container should surface as an actionable error, not as a fresh ephemeral one that silently sees none of that state. `exec` and `run` stay the two unconditional escapes: `exec` when you want docker's own error, `run` when a fresh container is the point.
+
+The two `exec-or-*` modes differ in exactly **one** observable state: the running-container probe succeeded and reported the container stopped. When the probe itself fails — Docker unreachable, daemon down — both modes end at plain `compose exec` and you get the same raw compose failure either way, before and after this default changed.
+
+`runner.mode` follows the same enum and same precedence rules as `runner.user`.
+
+> **If you write a `type: command` `check:`.** A step's `check:` is a full action dispatched through the same executor, so it can point at a user command of any type — including a `service_exec` one. Such a check inherits this default, which makes it container-*creating* rather than failing when the service is down, and a check is supposed to be a side-effect-free postcondition. Declare `mode: exec-or-fail` on any command you reference from a `check:`. No existing project is affected: across the workspaces surveyed for this change, every `check:` was a `builtin`, `shell` or `auto` action and none was a `type: command`.
 
 ### User resolution
 
@@ -281,7 +289,7 @@ db.create:
   type: service_exec
   description: Create a database in the db container
   service: db
-  mode: exec-or-run
+  mode: exec-or-fail   # a database is persistent state — never create a throwaway one
   params:
     database: { required: true, pattern: ^[a-zA-Z0-9_-]+$ }
   env:
@@ -291,14 +299,39 @@ db.create:
 
 ### compose_args
 
-`compose_args` is a list of extra flags inserted **before** the runner-generated `--user` / `--workdir` / `-e` flags. Use it for `-T`, `-d`, `--name`, `--rm`, etc.
+`compose_args` is a list of extra flags inserted **before** the runner-generated `--user` / `--workdir` / `-e` flags. Use it for flags the runner does not manage itself — `-d`, `--name`, `--rm`, `--no-deps`, and any other `docker compose exec` / `run` flag.
+
+`-T` is no longer one of them. The runner decides the container TTY on its own (see [Container TTY](#container-tty) below) and appends `-T` whenever a terminal is not warranted, so a hand-written `-T` "for piping" is now redundant.
 
 ```yaml
 compose_args:
-  - "-T"                    # disable TTY (useful when piping)
   - "--name"
   - "${param.database}_loader"
 ```
+
+### Container TTY
+
+The runner allocates a TTY inside the container only for a run the user launched themselves, with terminals on both ends:
+
+- **Gets a container TTY** — a top-level `dwe commands <id>` (alias `dwe cmd <id>`, and the same command started from the command browser) whose own stdin *and* stdout are a terminal; plus the same command run over the host bridge from inside a container, where the bridge fabricates the terminal itself.
+- **Gets `-T`** — everything else. A `type: command` step inside `dwe deploy run` or any other pipeline; a sub-step of a workflow `parallel:` block; a `check:` probe; a run whose output is piped or redirected (`dwe cmd foo | grep …`); and a nested re-entry into dwe — a `type: dwe` step, or a `type: shell` / `type: script` step calling back through `$DWE_BIN`. The one command that runs a pipeline step *as* a user invocation is `dwe reset step`, which you typed yourself: it keeps the terminal for the step body, though not for the step's `check:`.
+
+Suppressing the TTY does not cost you colour: when the runner takes the terminal away from a child whose output still reaches yours, it forwards `CLICOLOR_FORCE=1` / `FORCE_COLOR=1` / `COLORTERM=truecolor` into the container so isatty-keyed tools keep emitting ANSI. A detached child (`-d`) is deliberately excluded — its output goes to the Docker logs, where forced colour would bake escape sequences in permanently.
+
+#### Overriding the decision
+
+An explicit TTY flag anywhere in the **effective** flag vector wins, and the auto-detection stands down entirely. "Effective" means `docker.yml`'s `args.exec` / `args.run` defaults **plus** this command's own rendered `compose_args` — a flag declared in either place counts. The recognised forms are `-T`, `-T=<value>`, `--no-tty` with or without a value, and `T` inside a bundle of short flags such as `-dT`. Compose spells the long form lowercase, and it is matched case-insensitively so an author who wrote `--no-TTY` is still heard; the short `-T` is case-sensitive, because compose has no `-t`.
+
+Control is handed over on the *presence* of such a flag, regardless of its value. That is what makes forcing a TTY possible: there is no dedicated schema field for it, so
+
+```yaml
+compose_args:
+  - "--no-tty=false"        # ask for a container TTY where the runner would not give one
+```
+
+is the explicit — and deliberately awkward — way to request a terminal inside a pipeline.
+
+Unrelated flags do **not** suppress the auto-detection. `-d`, `--name`, `--rm` and friends say nothing about the terminal, so a command carrying them still gets `-T` when it is not user-invoked.
 
 ### Env injection in service runners
 
@@ -606,6 +639,16 @@ commands:
 
 `service`, `workdir`/`workdir_from`, `user`, `env`, `params`, `argv`, `compose_args` follow the same semantics as [`type: service_run`](#type-service_run). The daemon-specific configuration lives entirely under the `daemon:` block.
 
+For `workdir` and `user` that is now literally true — the daemon runs the same resolvers as the service runners:
+
+- **`workdir`** goes through the full [seven-rung chain](#the-service-runner-chain), including the `internal` sentinel and the `cli.workdir` → `work_dir_internal` → `dir_internal` service fallback. A daemon that declares no `workdir` therefore starts in the same directory `dwe shell <svc>` lands in, instead of the image's `WORKDIR`.
+- **`user`** falls back to `services.<svc>.cli.user` of the target service when the command sets no `user:`, and `user: internal` opts out of that fallback — see [User resolution](#user-resolution).
+
+Two daemon-specific behaviours changed with that alignment, and both are visible from the outside:
+
+- **`workdir_from` now beats a literal `workdir`.** The daemon used to do the opposite (the literal won, and `workdir_from` was consulted only when `workdir` was empty), which contradicted the precedence documented for the service runners. A daemon that sets **both** fields now starts in the `workdir_from` directory.
+- **A `workdir_from` dot-path that resolves to nothing no longer fails the daemon.** `.start` used to abort with `workdir_from "…": path not found in config`; it now falls through to the remaining rungs. That turns a hard error into a *success in a different directory* — if a daemon of yours relied on that error to catch a typo'd or renamed dot-path, nothing will report it any more. A non-string value at the dot-path is still a hard error.
+
 ### `daemon:` block fields
 
 | Field | Required | Default | Description |
@@ -705,23 +748,54 @@ dwe stop
 workdir_from: services.main.work_dir_internal
 ```
 
-When both `workdir` and `workdir_from` are set, `workdir_from` wins — the same "config wins, literal is the safety net" pattern as `params.*.default_from`. Inside a `runner:` block the same rule applies between `runner.workdir_from` and `runner.workdir`.
+When both `workdir` and `workdir_from` are set, `workdir_from` wins — the same "config wins, literal is the safety net" pattern as `params.*.default_from`. Inside a `runner:` block the same rule applies between `runner.workdir_from` and `runner.workdir`. The one exception is the `internal` sentinel, described below.
+
+### The service-runner chain
+
+`service_exec`, `service_run`, and `daemon` resolve the container workdir through a single seven-rung chain. The first rung that yields a non-empty value wins:
+
+| # | Rung | Result |
+|---|------|--------|
+| 1 | `workdir: internal` (or `runner.workdir: internal`) | No `--workdir` flag, **and** the whole fallback is skipped. Stop. |
+| 2 | `runner.workdir_from` → `workdir_from` | The string the dot-path resolves to |
+| 3 | `runner.workdir` → `workdir` | The literal path |
+| 4 | `services.<svc>.cli.workdir` | The service's declared CLI workdir |
+| 5 | `services.<svc>.work_dir_internal` | The service's internal work directory |
+| 6 | `services.<svc>.dir_internal` | The service's internal project directory |
+| 7 | _(nothing matched)_ | No `--workdir` flag — the image's own `WORKDIR` applies |
+
+Rungs 4–6 are the same order `dwe shell` applies, so a shell session and a command targeting the same service finally land in the same directory. Before this, a command without an explicit `workdir` landed in the image's `WORKDIR` while `dwe shell` into the same service landed in the service's work directory.
+
+The service for rungs 4–6 is looked up by its `container:` value, not by the `workspace/services/<name>/` folder key — `service: app-main` reads the fallback from the service folder whose `service.yml` declares `container: app-main`. The lookup happens **after** the `runner.service` redirect, exactly like the `cli.user` fallback.
+
+`workdir_from` still hard-errors when the dot-path resolves to a non-string value (a configuration bug). A dot-path that is simply **absent** from the merged config is not an error: it yields nothing and resolution falls through to the next rung.
+
+### `workdir: internal` outranks `workdir_from`
+
+For this one value the published "`workdir_from` wins" rule **inverts**. `internal` is not a path, it is an explicit "give this command no `--workdir` and do not guess one either", and there is no other way to express that — so the resolver stops at rung 1 even when `workdir_from` is set and resolves to a perfectly good string. Every other literal `workdir` value keeps the normal precedence: `workdir_from` beats `workdir`.
+
+This is the deliberate symmetry with [`user: internal`](#user-resolution), which likewise emits no `--user` flag and skips the `services.<svc>.cli.user` fallback. One sentinel word, one meaning, on both fields.
 
 Resolution order:
 
 ```mermaid
-flowchart LR
-    F[workdir_from] -- non-string --> X[error]
-    F -- empty/missing --> W[workdir]
+flowchart TD
+    S{workdir is internal} -- yes --> N[no --workdir flag]
+    S -- no --> F[workdir_from]
+    F -- non-string --> X[error]
     F -- string value --> U[use it]
-    W -- empty --> N[no --workdir flag]
+    F -- empty/missing --> W[workdir]
     W -- non-empty --> U
+    W -- empty --> A[cli.workdir]
+    A -- non-empty --> U
+    A -- empty --> B[work_dir_internal]
+    B -- non-empty --> U
+    B -- empty --> C[dir_internal]
+    C -- non-empty --> U
+    C -- empty --> N
 ```
 
-- `workdir_from` resolves to a non-empty string → use it.
-- `workdir_from` is missing in config or resolves to an empty string → fall back to the literal `workdir`.
-- `workdir_from` resolves to a non-string value → hard error (configuration bug).
-- Neither set → the runner does not pass `--workdir` (container default applies).
+Host runners (`type: shell`, `type: script`) have no target service to fall back to and reject `workdir_from` at load time: only the literal `workdir` applies, and an unset `workdir` means the project root.
 
 ### Templated service / workdir / workdir_from
 

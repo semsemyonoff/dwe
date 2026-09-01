@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
+
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 )
@@ -57,21 +59,21 @@ func TestColorForceEnv_gates(t *testing.T) {
 
 	t.Run("parallel always forces", func(t *testing.T) {
 		stubStdoutTTY(t, true)
-		if env := ColorForceEnv(spec.RunContext{UnderParallel: true}); len(env) == 0 {
+		if env := ColorForceEnv(spec.RunContext{UnderParallel: true}, false); len(env) == 0 {
 			t.Error("parallel sub-step must force color env")
 		}
 	})
 	t.Run("sequential on a terminal stays auto", func(t *testing.T) {
 		stubStdoutTTY(t, true)
 		t.Setenv("CLICOLOR_FORCE", "1")
-		if env := ColorForceEnv(spec.RunContext{}); env != nil {
+		if env := ColorForceEnv(spec.RunContext{}, false); env != nil {
 			t.Errorf("terminal children auto-detect; want nil, got %v", env)
 		}
 	})
 	t.Run("color-forced pipe forces", func(t *testing.T) {
 		stubStdoutTTY(t, false)
 		t.Setenv("CLICOLOR_FORCE", "1")
-		env := ColorForceEnv(spec.RunContext{})
+		env := ColorForceEnv(spec.RunContext{}, false)
 		if len(env) == 0 {
 			t.Fatal("color-forced pipe must force child color env")
 		}
@@ -84,14 +86,61 @@ func TestColorForceEnv_gates(t *testing.T) {
 	})
 	t.Run("plain pipe stays auto", func(t *testing.T) {
 		stubStdoutTTY(t, false)
-		if env := ColorForceEnv(spec.RunContext{}); env != nil {
+		if env := ColorForceEnv(spec.RunContext{}, false); env != nil {
 			t.Errorf("unforced pipe must not coerce; want nil, got %v", env)
 		}
 	})
 	t.Run("NO_COLOR wins over parallel", func(t *testing.T) {
 		stubStdoutTTY(t, false)
 		t.Setenv("NO_COLOR", "1")
-		if env := ColorForceEnv(spec.RunContext{UnderParallel: true}); env != nil {
+		if env := ColorForceEnv(spec.RunContext{UnderParallel: true}, false); env != nil {
+			t.Errorf("NO_COLOR must suppress forcing; got %v", env)
+		}
+	})
+}
+
+// TestColorForceEnv_suppressedTTY covers the third disjunct — the caller told
+// us it is about to take the child's terminal away (the service runner's `-T`).
+//
+// The nil-stdout row is the one that pins the deliberate asymmetry with
+// WantContainerTTY: this disjunct probes the RAW rc.Stdout, so an internal
+// caller that never set it — and is very likely parsing the output — is not
+// handed forced colour just because the process's own os.Stdout is a terminal.
+func TestColorForceEnv_suppressedTTY(t *testing.T) {
+	ttyOut := &fakeStream{"tty-stdout"}
+	pipeOut := &fakeStream{"pipe-stdout"}
+
+	tests := []struct {
+		name      string
+		stdout    io.Writer
+		suppress  bool
+		terminals []any
+		want      bool
+	}{
+		{"terminal stdout, tty suppressed", ttyOut, true, []any{ttyOut, os.Stdout}, true},
+		{"terminal stdout, tty not suppressed", ttyOut, false, []any{ttyOut, os.Stdout}, false},
+		{"piped stdout, tty suppressed", pipeOut, true, nil, false},
+		{"nil stdout, tty suppressed, process stdout is a terminal", nil, true, []any{os.Stdout}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorVars(t)
+			stubStdoutTTY(t, false)
+			stubIsTerminal(t, tt.terminals...)
+
+			env := ColorForceEnv(spec.RunContext{Stdout: tt.stdout}, tt.suppress)
+			if got := len(env) > 0; got != tt.want {
+				t.Errorf("ColorForceEnv() forced = %v, want %v (env=%v)", got, tt.want, env)
+			}
+		})
+	}
+
+	t.Run("NO_COLOR wins over a suppressed tty", func(t *testing.T) {
+		clearColorVars(t)
+		stubStdoutTTY(t, false)
+		stubIsTerminal(t, ttyOut)
+		t.Setenv("NO_COLOR", "1")
+		if env := ColorForceEnv(spec.RunContext{Stdout: ttyOut}, true); env != nil {
 			t.Errorf("NO_COLOR must suppress forcing; got %v", env)
 		}
 	})
@@ -151,6 +200,179 @@ func TestBridgedTTYActive_gates(t *testing.T) {
 			t.Error("parallel sub-steps use ParallelChildIO, not the bridged path")
 		}
 	})
+}
+
+// stubIsTerminal pins the per-stream tty probe for one test: every stream
+// listed reads as a terminal, everything else as a pipe.
+func stubIsTerminal(t *testing.T, terminals ...any) {
+	t.Helper()
+	set := make(map[any]bool, len(terminals))
+	for _, s := range terminals {
+		set[s] = true
+	}
+	restore := isTerminal
+	isTerminal = func(stream any) bool { return set[stream] }
+	t.Cleanup(func() { isTerminal = restore })
+}
+
+// fakeStream is a comparable stand-in for a stdio stream; identity is all the
+// stubbed probe needs.
+type fakeStream struct{ name string }
+
+func (*fakeStream) Write(p []byte) (int, error) { return len(p), nil }
+func (*fakeStream) Read([]byte) (int, error)    { return 0, io.EOF }
+
+// TestIsTerminal_probe pins the production probe: only an *os.File on a real
+// terminal qualifies.
+func TestIsTerminal_probe(t *testing.T) {
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("pty.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = tty.Close(); _ = ptmx.Close() })
+
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	t.Cleanup(func() { _ = pr.Close(); _ = pw.Close() })
+
+	tests := []struct {
+		name   string
+		stream any
+		want   bool
+	}{
+		{"pty slave", tty, true},
+		{"pty master", ptmx, true},
+		{"pipe write end", pw, false},
+		{"pipe read end", pr, false},
+		{"bytes.Buffer", &bytes.Buffer{}, false},
+		{"nil *os.File", (*os.File)(nil), false},
+		{"untyped nil", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isTerminal(tt.stream); got != tt.want {
+				t.Errorf("isTerminal(%s) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWantContainerTTY walks UserInvoked × bridged-env × terminal/pipe stdout
+// × terminal/pipe stdin, plus the nil-stream fallbacks and a non-*os.File
+// writer. The stream probe is stubbed by identity so the matrix is
+// independent of how `go test` happens to wire its own stdio.
+func TestWantContainerTTY(t *testing.T) {
+	ttyOut := &fakeStream{"tty-stdout"}
+	pipeOut := &fakeStream{"pipe-stdout"}
+	ttyIn := &fakeStream{"tty-stdin"}
+	pipeIn := &fakeStream{"pipe-stdin"}
+	bufOut := &bytes.Buffer{}
+
+	tests := []struct {
+		name        string
+		userInvoked bool
+		bridged     bool
+		stdout      io.Writer
+		stdin       io.Reader
+		terminals   []any
+		want        bool
+	}{
+		{"user, both terminals", true, false, ttyOut, ttyIn, []any{ttyOut, ttyIn}, true},
+		{"user, piped stdout", true, false, pipeOut, ttyIn, []any{ttyIn}, false},
+		{"user, piped stdin", true, false, ttyOut, pipeIn, []any{ttyOut}, false},
+		{"user, both piped", true, false, pipeOut, pipeIn, nil, false},
+		{"not user-invoked, both terminals", false, false, ttyOut, ttyIn, []any{ttyOut, ttyIn}, false},
+		{"not user-invoked, both piped", false, false, pipeOut, pipeIn, nil, false},
+		{"bridged, user, piped streams", true, true, pipeOut, pipeIn, nil, true},
+		{"bridged, user, terminals", true, true, ttyOut, ttyIn, []any{ttyOut, ttyIn}, true},
+		{"bridged, not user-invoked", false, true, pipeOut, pipeIn, nil, false},
+		{"nil stdout, process stdout is a terminal", true, false, nil, ttyIn, []any{os.Stdout, ttyIn}, true},
+		{"nil stdout, process stdout is a pipe", true, false, nil, ttyIn, []any{ttyIn}, false},
+		{"nil stdin, process stdin is a terminal", true, false, ttyOut, nil, []any{ttyOut, os.Stdin}, true},
+		{"nil stdin, process stdin is a pipe", true, false, ttyOut, nil, []any{ttyOut}, false},
+		{"both nil, process streams are terminals", true, false, nil, nil, []any{os.Stdout, os.Stdin}, true},
+		{"bytes.Buffer stdout is never a terminal", true, false, bufOut, ttyIn, []any{ttyIn}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorVars(t)
+			stubStdoutTTY(t, false)
+			if tt.bridged {
+				t.Setenv("CLICOLOR_FORCE", "1")
+				t.Setenv(bridgeclient.EnvBridgeStdinTTY, "1")
+			}
+			stubIsTerminal(t, tt.terminals...)
+
+			rc := spec.RunContext{UserInvoked: tt.userInvoked, Stdout: tt.stdout, Stdin: tt.stdin}
+			if got := WantContainerTTY(rc); got != tt.want {
+				t.Errorf("WantContainerTTY() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWantContainerTTY_realStreams runs the predicate against genuine streams
+// with the probe unstubbed, so the *os.File rule is exercised end to end.
+func TestWantContainerTTY_realStreams(t *testing.T) {
+	clearColorVars(t)
+	stubStdoutTTY(t, false)
+
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("pty.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = tty.Close(); _ = ptmx.Close() })
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	t.Cleanup(func() { _ = pr.Close(); _ = pw.Close() })
+
+	tests := []struct {
+		name   string
+		stdout io.Writer
+		stdin  io.Reader
+		want   bool
+	}{
+		{"pty on both ends", tty, tty, true},
+		{"piped stdout", pw, tty, false},
+		{"piped stdin", tty, pr, false},
+		{"bytes.Buffer stdout", &bytes.Buffer{}, tty, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rc := spec.RunContext{UserInvoked: true, Stdout: tt.stdout, Stdin: tt.stdin}
+			if got := WantContainerTTY(rc); got != tt.want {
+				t.Errorf("WantContainerTTY() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBridgedTTYActive_readsProcessStdout pins that the bridge probe answers
+// off the PROCESS stdout, not off rc.Stdout: the bridge shape is a property of
+// how this dwe was launched, and repointing it at the RunContext would
+// silently change which sessions get a fabricated PTY.
+func TestBridgedTTYActive_readsProcessStdout(t *testing.T) {
+	clearColorVars(t)
+	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv(bridgeclient.EnvBridgeStdinTTY, "1")
+
+	rcStdout := &fakeStream{"rc-stdout"}
+	stubIsTerminal(t, rcStdout) // rc.Stdout reads as a terminal throughout
+	rc := spec.RunContext{Stdout: rcStdout, Stdin: rcStdout}
+
+	stubStdoutTTY(t, true)
+	if bridgedTTYActive(rc) {
+		t.Error("a terminal process stdout must deactivate the bridge path even when rc.Stdout is a terminal")
+	}
+
+	stubStdoutTTY(t, false)
+	if !bridgedTTYActive(rc) {
+		t.Error("a piped process stdout must activate the bridge path regardless of rc.Stdout")
+	}
 }
 
 // TestWireChildIO_bridgedPTY runs a real child through the bridged PTY path

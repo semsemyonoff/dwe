@@ -45,14 +45,14 @@ Schema → `dwe docs show config/commands/index --lang en`.
 
 `type:` is one of `service_exec · service_run · shell · script · dwe · workflow · builtin · daemon`. One short example each below; full schema → `dwe docs show config/commands/types --lang en`.
 
-**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `mode:` + `workdir_from:` + `argv:`/`cmd:`. Example:
+**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `argv:`/`cmd:`; `mode:` defaults to `exec-or-run` and `workdir` falls back to the service's own, so declare either only to override. Example:
 
 ```yaml
 db-seed:
   type: service_exec
   description: Run database seeders (php artisan db:seed [--class=<Seeder>])
   service: app-main
-  mode: exec-or-run                              # exec if up, else throwaway run
+  mode: exec-or-run                              # the default; spell it out only to override
   workdir_from: services.main.work_dir_internal
   params:
     class: { type: string, description: Seeder class, pattern: '^[A-Za-z][A-Za-z0-9_]*$' }

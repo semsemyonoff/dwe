@@ -58,13 +58,46 @@ func ColorForced() bool {
 // stdoutIsTerminal is the production tty probe; injectable for tests.
 var stdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
 
+// isTerminal reports whether an arbitrary stdio stream — an io.Writer or an
+// io.Reader — is backed by a terminal. Only an *os.File can be one; anything
+// else (a bytes.Buffer, the workflow's LineTee, an io.MultiWriter, nil) is
+// not. Injectable for tests.
+//
+// Deliberately a SECOND seam beside stdoutIsTerminal rather than a
+// generalisation of it: stdoutIsTerminal answers for the process's own
+// os.Stdout, which is what colorForceActive and bridgedTTYActive mean, while
+// this one answers for whichever stream a particular RunContext carries.
+var isTerminal = func(stream any) bool {
+	f, ok := stream.(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(f.Fd())
+}
+
 // colorForceActive reports whether child processes need explicit color
 // coercion: inside a workflow parallel sub-step (children write through a
-// LineTee, never a tty) or when this dwe itself runs color-forced on a pipe
-// (the host-bridge shape). On a real terminal children inherit the tty and
-// auto-detect correctly.
-func colorForceActive(rc spec.RunContext) bool {
-	return rc.UnderParallel || (ColorForced() && !stdoutIsTerminal())
+// LineTee, never a tty), when this dwe itself runs color-forced on a pipe
+// (the host-bridge shape), or when the caller is about to deny the child the
+// terminal it would otherwise have inherited. On a real terminal children
+// inherit the tty and auto-detect correctly.
+//
+// forceOnSuppressedTTY is supplied by the caller, not derived here: only the
+// service runner can see the effective compose flag vector, and therefore only
+// it knows whether it just injected `-T` (and whether the child is detached,
+// in which case its output never reaches rc.Stdout at all).
+//
+// The third disjunct probes the RAW rc.Stdout, deliberately NOT the
+// StdoutOf(rc) default that WantContainerTTY resolves through. The asymmetry
+// is load-bearing: an internal caller that leaves Stdout nil (or points it at
+// io.Discard, as validate/checks/loader.go does) parses the child's output, so
+// it must never be handed forced colour just because the process's own
+// os.Stdout happens to be a terminal. A later "consistency" cleanup unifying
+// the two would inject ANSI escapes into parsed output.
+func colorForceActive(rc spec.RunContext, forceOnSuppressedTTY bool) bool {
+	return rc.UnderParallel ||
+		(ColorForced() && !stdoutIsTerminal()) ||
+		(forceOnSuppressedTTY && isTerminal(rc.Stdout))
 }
 
 // ColorForceEnv returns env entries that coerce common CLI tools to keep
@@ -75,8 +108,12 @@ func colorForceActive(rc spec.RunContext) bool {
 //
 // Returns nil when no coercion is needed (real terminal, or NO_COLOR) so
 // those runs keep the existing auto-detection behaviour.
-func ColorForceEnv(rc spec.RunContext) []string {
-	if !colorForceActive(rc) {
+//
+// forceOnSuppressedTTY lets a caller that is itself taking the child's
+// terminal away ask for the coercion; see colorForceActive. Host-side runners
+// have no container TTY to suppress and pass false.
+func ColorForceEnv(rc spec.RunContext, forceOnSuppressedTTY bool) []string {
+	if !colorForceActive(rc, forceOnSuppressedTTY) {
 		return nil
 	}
 	if os.Getenv("NO_COLOR") != "" {
@@ -196,6 +233,40 @@ func bridgedTTYActive(rc spec.RunContext) bool {
 		ColorForced() &&
 		!stdoutIsTerminal() &&
 		os.Getenv(bridgeclient.EnvBridgeStdinTTY) == "1"
+}
+
+// WantContainerTTY reports whether a service command runner should let the
+// container process keep a terminal (compose's default) instead of forcing it
+// off with `-T`. True only for a run the user launched themselves whose own
+// streams are terminals on BOTH ends, or for the bridged-interactive shape.
+//
+// Why the bridge arm short-circuits the stream probe: over the host bridge
+// this dwe's own streams are pipes, and the PTY the child ends up with is
+// fabricated by bridgedTTYChildIO inside WireChildIO — that is, AFTER
+// BuildCommand has already fixed the argv. Probing the streams at argv-build
+// time would answer "pipe" and emit `-T` for a session that is about to be
+// handed a real terminal.
+//
+// Why this is not a plain terminal probe: pipeline.childIO fabricates a PTY
+// for a sequential step whenever dwe's own stdout is a terminal and hands it
+// to the runner as rc.Stdout/rc.Stderr, so a bare probe answers "yes" in
+// exactly the non-interactive case this predicate exists to catch — a
+// `type: command` deploy step run from a terminal. Confirmed empirically:
+// cells 2 vs 2a of the "TTY matrix — before" table in
+// docs/plans/20260901-service-exec-runtime-defaults.md differ only by
+// childIO's stdout-tty gate. UserInvoked is what separates the two; the
+// pipeline executor and the workflow runner leave it false on the inner
+// RunContext they build.
+//
+// Streams resolve through StdoutOf/StdinOrOS because RunContext.Stdout is a
+// nil-able io.Writer and .Stdin a nil-able io.Reader: reading the raw fields
+// would answer "not a terminal" for a top-level `dwe cmd` whose caller left
+// them unset, which is the one case the predicate exists for.
+func WantContainerTTY(rc spec.RunContext) bool {
+	if !rc.UserInvoked {
+		return false
+	}
+	return bridgedTTYActive(rc) || (isTerminal(StdoutOf(rc)) && isTerminal(StdinOrOS(rc)))
 }
 
 // bridgedTTYChildIO allocates a full PTY (stdin+stdout+stderr) for a
