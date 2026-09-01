@@ -3,10 +3,16 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/term"
+	"github.com/creack/pty"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
@@ -1304,5 +1310,328 @@ func TestRunRunner_BuildCommand_WorkdirChain(t *testing.T) {
 	}
 	if args := strings.Join(c.Args, " "); strings.Contains(args, "--workdir") {
 		t.Fatalf("expected the internal sentinel to suppress --workdir, got: %s", args)
+	}
+}
+
+// clearColorEnv guarantees the colour-control vars are absent for one test, so
+// the only thing that can force colours is the suppressed-TTY disjunct.
+func clearColorEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", "DWE_BRIDGE_STDIN_TTY"} {
+		t.Setenv(name, "x")
+		_ = os.Unsetenv(name)
+	}
+}
+
+// countArg returns how many times an exact argv token appears.
+func countArg(args []string, want string) int {
+	n := 0
+	for _, a := range args {
+		if a == want {
+			n++
+		}
+	}
+	return n
+}
+
+// openPTY returns a pty slave usable as a terminal-backed stdio stream.
+func openPTY(t *testing.T) *os.File {
+	t.Helper()
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("pty.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = tty.Close(); _ = ptmx.Close() })
+	return tty
+}
+
+// TestExecRunner_BuildCommand_ContainerTTY walks the auto-detect: a run the
+// user did not launch themselves gets `-T`, an interactive one does not, and
+// any TTY flag already present in compose_args hands the decision back to the
+// author whatever its value.
+func TestExecRunner_BuildCommand_ContainerTTY(t *testing.T) {
+	tty := openPTY(t)
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	t.Cleanup(func() { _ = pr.Close(); _ = pw.Close() })
+
+	tests := []struct {
+		name        string
+		composeArgs []string
+		userInvoked bool
+		stdout      io.Writer
+		stdin       io.Reader
+		wantT       int
+	}{
+		{"pipeline step gets -T", nil, false, nil, nil, 1},
+		{"user invocation on a terminal keeps the tty", nil, true, tty, tty, 0},
+		{"user invocation on a pipe gets -T", nil, true, pw, pr, 1},
+		{"explicit -T is not duplicated", []string{"-T"}, false, nil, nil, 1},
+		{"-T=false suppresses the injection", []string{"-T=false"}, false, nil, nil, 0},
+		{"--no-tty suppresses the injection", []string{"--no-tty"}, false, nil, nil, 0},
+		{"--no-tty=false is the force-a-tty escape hatch", []string{"--no-tty=false"}, false, nil, nil, 0},
+		{"--no-TTY matches case-insensitively", []string{"--no-TTY"}, false, nil, nil, 0},
+		{"an unrelated flag does not suppress the injection", []string{"--name", "box"}, false, nil, nil, 1},
+		{"-d is orthogonal to the tty decision", []string{"-d"}, false, nil, nil, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorEnv(t)
+			ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+			ctx.Cmd.ComposeArgs = tt.composeArgs
+			ctx.UserInvoked = tt.userInvoked
+			ctx.Stdout = tt.stdout
+			ctx.Stdin = tt.stdin
+
+			r := &ExecRunner{}
+			c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := countArg(c.Args, "-T"); got != tt.wantT {
+				t.Errorf("-T count = %d, want %d; args: %v", got, tt.wantT, c.Args)
+			}
+		})
+	}
+}
+
+// TestExecRunner_BuildCommand_ContainerTTY_Bridged pins the bridge arm: this
+// dwe's own streams are pipes, yet the far side sits at a real terminal and
+// WireChildIO will fabricate a PTY after the argv is fixed — so no `-T`.
+func TestExecRunner_BuildCommand_ContainerTTY_Bridged(t *testing.T) {
+	if term.IsTerminal(os.Stdout.Fd()) {
+		t.Skip("the bridged shape requires this process's own stdout to be a pipe")
+	}
+	clearColorEnv(t)
+	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("DWE_BRIDGE_STDIN_TTY", "1")
+
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	t.Cleanup(func() { _ = pr.Close(); _ = pw.Close() })
+
+	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+	ctx.UserInvoked = true
+	ctx.Stdout = pw
+	ctx.Stdin = pr
+
+	r := &ExecRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := countArg(c.Args, "-T"); got != 0 {
+		t.Errorf("bridged-interactive run must keep the container tty; args: %v", c.Args)
+	}
+}
+
+// TestRunRunner_BuildCommand_ContainerTTY proves service_run inherits the same
+// behaviour — it shares buildDockerComposeCmd with the exec runner.
+func TestRunRunner_BuildCommand_ContainerTTY(t *testing.T) {
+	tty := openPTY(t)
+
+	tests := []struct {
+		name        string
+		composeArgs []string
+		userInvoked bool
+		stdout      io.Writer
+		stdin       io.Reader
+		wantT       int
+	}{
+		{"pipeline step gets -T", nil, false, nil, nil, 1},
+		{"user invocation on a terminal keeps the tty", nil, true, tty, tty, 0},
+		{"--no-tty=false suppresses the injection", []string{"--no-tty=false"}, false, nil, nil, 0},
+		{"-d is orthogonal", []string{"-d"}, false, nil, nil, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorEnv(t)
+			ctx := RunContext{
+				Cmd: &CommandDef{
+					Type:        CommandTypeServiceRun,
+					Service:     "app-main",
+					Cmd:         "php -v",
+					ComposeArgs: tt.composeArgs,
+				},
+				Render:      &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
+				Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
+				Params:      map[string]any{},
+				Context:     map[string]any{},
+				UserInvoked: tt.userInvoked,
+				Stdout:      tt.stdout,
+				Stdin:       tt.stdin,
+			}
+			r := &RunRunner{}
+			c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := countArg(c.Args, "-T"); got != tt.wantT {
+				t.Errorf("-T count = %d, want %d; args: %v", got, tt.wantT, c.Args)
+			}
+		})
+	}
+}
+
+// TestBuildCommand_ContainerTTY_FromDockerConfigArgs pins that the classifier
+// reads the EFFECTIVE flag vector: docker.yml's args.exec / args.run defaults
+// are appended before compose_args and must be just as visible.
+func TestBuildCommand_ContainerTTY_FromDockerConfigArgs(t *testing.T) {
+	composeWith := func(key string, defaults []string) *docker.Compose {
+		return &docker.Compose{
+			ProjectName: "dwe-laravel",
+			CommandArgs: map[string][]string{key: defaults},
+		}
+	}
+
+	t.Run("exec: --no-tty=false in args.exec suppresses the injection", func(t *testing.T) {
+		clearColorEnv(t)
+		ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+		c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, composeWith("exec", []string{"--no-tty=false"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := countArg(c.Args, "-T"); got != 0 {
+			t.Errorf("args.exec TTY flag must hand the decision to the author; args: %v", c.Args)
+		}
+	})
+
+	t.Run("run: --no-tty=false in args.run suppresses the injection", func(t *testing.T) {
+		clearColorEnv(t)
+		ctx := makeServiceExecCtx("app-main", "", "", ExecModeRun, "id", nil)
+		c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, composeWith("run", []string{"--no-tty=false"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := countArg(c.Args, "-T"); got != 0 {
+			t.Errorf("args.run TTY flag must hand the decision to the author; args: %v", c.Args)
+		}
+	})
+
+	t.Run("exec: -d in args.exec suppresses the forced colour but not -T", func(t *testing.T) {
+		clearColorEnv(t)
+		ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+		ctx.Stdout = openPTY(t)
+		c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, composeWith("exec", []string{"-d"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := countArg(c.Args, "-T"); got != 1 {
+			t.Errorf("detach is orthogonal to the tty decision; args: %v", c.Args)
+		}
+		assertNoForcedColor(t, c)
+	})
+}
+
+// assertForcedColor / assertNoForcedColor inspect both surfaces the colour
+// trio reaches: the `-e KEY` forwarding flags and the child's own env.
+func assertForcedColor(t *testing.T, c *exec.Cmd) {
+	t.Helper()
+	joined := strings.Join(c.Args, " ")
+	for _, key := range []string{"CLICOLOR_FORCE", "FORCE_COLOR", "COLORTERM"} {
+		if !strings.Contains(joined, "-e "+key) {
+			t.Errorf("expected -e %s to be forwarded, got: %s", key, joined)
+		}
+	}
+	if !slices.Contains(c.Env, "CLICOLOR_FORCE=1") {
+		t.Errorf("expected CLICOLOR_FORCE=1 in child env, got: %v", c.Env)
+	}
+}
+
+func assertNoForcedColor(t *testing.T, c *exec.Cmd) {
+	t.Helper()
+	joined := strings.Join(c.Args, " ")
+	for _, key := range []string{"CLICOLOR_FORCE", "FORCE_COLOR", "COLORTERM"} {
+		if strings.Contains(joined, key) {
+			t.Errorf("did not expect %s to be forwarded, got: %s", key, joined)
+		}
+	}
+	if slices.Contains(c.Env, "CLICOLOR_FORCE=1") {
+		t.Errorf("did not expect CLICOLOR_FORCE=1 in child env, got: %v", c.Env)
+	}
+}
+
+// TestBuildCommand_SuppressedTTYForcesColor covers the paired half of the `-T`
+// injection: taking the container's terminal away also takes its colours away
+// unless dwe forces them back — except when the child is detached, where its
+// output goes to the Docker logs and ANSI escapes would be permanent.
+func TestBuildCommand_SuppressedTTYForcesColor(t *testing.T) {
+	tests := []struct {
+		name        string
+		mode        ExecMode
+		runner      string
+		composeArgs []string
+		stdout      bool // true → pty-backed rc.Stdout
+		wantColor   bool
+	}{
+		{"exec, tty suppressed", ExecModeExec, "exec", nil, true, true},
+		{"exec, detached", ExecModeExec, "exec", []string{"-d"}, true, false},
+		{"exec, --detach", ExecModeExec, "exec", []string{"--detach"}, true, false},
+		{"exec, piped stdout", ExecModeExec, "exec", nil, false, false},
+		{"run, tty suppressed", ExecModeRun, "exec", nil, true, true},
+		{"run, detached", ExecModeRun, "exec", []string{"-d"}, true, false},
+		{"service_run, tty suppressed", "", "run", nil, true, true},
+		{"service_run, detached", "", "run", []string{"-d"}, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorEnv(t)
+			pr, pw, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("os.Pipe: %v", err)
+			}
+			t.Cleanup(func() { _ = pr.Close(); _ = pw.Close() })
+
+			var stdout io.Writer = pw
+			if tt.stdout {
+				stdout = openPTY(t)
+			}
+
+			ctx := makeServiceExecCtx("app-main", "", "", tt.mode, "id", nil)
+			ctx.Cmd.ComposeArgs = tt.composeArgs
+			ctx.Stdout = stdout
+
+			var c *exec.Cmd
+			if tt.runner == "run" {
+				ctx.Cmd.Type = CommandTypeServiceRun
+				c, err = (&RunRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+			} else {
+				c, err = (&ExecRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantColor {
+				assertForcedColor(t, c)
+			} else {
+				assertNoForcedColor(t, c)
+			}
+		})
+	}
+}
+
+// TestExecRunner_BuildCommand_ContainerTTYPositioning pins that the injected
+// -T lands after compose_args and before the flags the runner derives, so an
+// author's own compose_args keep their documented position.
+func TestExecRunner_BuildCommand_ContainerTTYPositioning(t *testing.T) {
+	clearColorEnv(t)
+	ctx := makeServiceExecCtx("app-main", UserModeRoot, "/srv", ExecModeExec, "id", nil)
+	ctx.Cmd.ComposeArgs = []string{"--name", "box"}
+
+	c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	idx := func(want string) int { return slices.Index(c.Args, want) }
+	nameIdx, tIdx, userIdx, svcIdx := idx("--name"), idx("-T"), idx("--user"), idx("app-main")
+	if nameIdx < 0 || tIdx < 0 || userIdx < 0 || svcIdx < 0 {
+		t.Fatalf("missing expected args in %v", c.Args)
+	}
+	if nameIdx >= tIdx || tIdx >= userIdx || userIdx >= svcIdx {
+		t.Errorf("expected --name < -T < --user < service, got %d/%d/%d/%d in %v", nameIdx, tIdx, userIdx, svcIdx, c.Args)
 	}
 }

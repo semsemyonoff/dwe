@@ -291,14 +291,39 @@ db.create:
 
 ### compose_args
 
-`compose_args` is a list of extra flags inserted **before** the runner-generated `--user` / `--workdir` / `-e` flags. Use it for `-T`, `-d`, `--name`, `--rm`, etc.
+`compose_args` is a list of extra flags inserted **before** the runner-generated `--user` / `--workdir` / `-e` flags. Use it for flags the runner does not manage itself — `-d`, `--name`, `--rm`, `--no-deps`, and any other `docker compose exec` / `run` flag.
+
+`-T` is no longer one of them. The runner decides the container TTY on its own (see [Container TTY](#container-tty) below) and appends `-T` whenever a terminal is not warranted, so a hand-written `-T` "for piping" is now redundant.
 
 ```yaml
 compose_args:
-  - "-T"                    # disable TTY (useful when piping)
   - "--name"
   - "${param.database}_loader"
 ```
+
+### Container TTY
+
+The runner allocates a TTY inside the container only for a run the user launched themselves, with terminals on both ends:
+
+- **Gets a container TTY** — a top-level `dwe commands <id>` (alias `dwe cmd <id>`, and the same command started from the command browser) whose own stdin *and* stdout are a terminal; plus the same command run over the host bridge from inside a container, where the bridge fabricates the terminal itself.
+- **Gets `-T`** — everything else. A `type: command` step inside `dwe deploy run` or any other pipeline; a sub-step of a workflow `parallel:` block; a `check:` probe; a run whose output is piped or redirected (`dwe cmd foo | grep …`); and any nested re-entry into dwe — a `type: dwe` step, or a `type: shell` / `type: script` step calling back through `$DWE_BIN`.
+
+Suppressing the TTY does not cost you colour: when the runner takes the terminal away from a child whose output still reaches yours, it forwards `CLICOLOR_FORCE=1` / `FORCE_COLOR=1` / `COLORTERM=truecolor` into the container so isatty-keyed tools keep emitting ANSI. A detached child (`-d`) is deliberately excluded — its output goes to the Docker logs, where forced colour would bake escape sequences in permanently.
+
+#### Overriding the decision
+
+An explicit TTY flag anywhere in the **effective** flag vector wins, and the auto-detection stands down entirely. "Effective" means `docker.yml`'s `args.exec` / `args.run` defaults **plus** this command's own rendered `compose_args` — a flag declared in either place counts. The recognised forms are `-T`, `-T=<value>`, and `--no-tty` (compose spells it lowercase) with or without a value, matched case-insensitively.
+
+Control is handed over on the *presence* of such a flag, regardless of its value. That is what makes forcing a TTY possible: there is no dedicated schema field for it, so
+
+```yaml
+compose_args:
+  - "--no-tty=false"        # ask for a container TTY where the runner would not give one
+```
+
+is the explicit — and deliberately awkward — way to request a terminal inside a pipeline.
+
+Unrelated flags do **not** suppress the auto-detection. `-d`, `--name`, `--rm` and friends say nothing about the terminal, so a command carrying them still gets `-T` when it is not user-invoked.
 
 ### Env injection in service runners
 

@@ -24,6 +24,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -174,7 +175,27 @@ func buildDweCmd(ctx context.Context, dweArg, workDir, shell, dweBin string, ski
 // Does NOT handle reporter calls, when evaluation, hooks, or check orchestration —
 // those stay in Run. The supplied ctx propagates cancellation into child processes
 // via exec.CommandContext.
+//
+// It marks the process as a nested dwe runtime (see
+// bridgeclient.EnvNestedRuntime) before dispatching: every child a step spawns
+// — `sh -c` for type: shell, a re-execed dwe for type: dwe, a project script
+// calling back through DWE_BIN — inherits the marker and re-enters
+// runCommandByID as a nested, non-user invocation, so it never hands a
+// container a TTY. The mark sits here rather than in RunWithOptions because
+// `dwe reset step` calls ExecAction directly; ExecAction is strictly wider and
+// costs nothing (execCommandAction never sets UserInvoked, so the zero value
+// already stands for a `type: command` step — see
+// TestExecCommandAction_LeavesUserInvokedFalse).
+//
+// Deliberate gap: files_gate commands and shell when: predicates evaluated
+// BEFORE the first ExecAction of the process run unmarked, so a `dwe cmd`
+// re-entry from one of those is classified user-invoked. Later ones ARE marked
+// — the marker is process-global and never cleared, and evalFilesGate runs per
+// step. Accepted: the failure mode is today's behaviour (no -T), i.e.
+// conservative. Do not pin a test on "gates are always unmarked".
 func ExecAction(ctx context.Context, a config.Action, actx ActionContext) error {
+	bridgeclient.MarkNestedRuntime()
+
 	switch a.Type {
 	case "builtin":
 		return execBuiltinAction(ctx, a, actx)

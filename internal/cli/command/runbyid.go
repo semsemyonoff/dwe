@@ -18,6 +18,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
@@ -156,6 +157,25 @@ func runCommandByID(
 	if err != nil {
 		return fmt.Errorf("building run context: %w", err)
 	}
+
+	// Provenance, read BEFORE it is written: this invocation is the user's own
+	// unless a dwe process above us already marked the environment. The mark
+	// then goes out process-globally, so everything this command spawns — a
+	// workflow sub-step's child, a type: shell snippet calling back through
+	// DWE_BIN — re-enters here as nested. UserInvoked gates container TTY
+	// allocation only (see runio.WantContainerTTY).
+	//
+	// This one assignment covers every entry point: runCommandByID is the
+	// single execution path for both `dwe commands <id>` and the TUI run flow,
+	// and the host bridge reaches this SAME line — core/bridge/exec.go re-execs
+	// `dwe <argv…>` as a plain subprocess. That is also why the predicate must
+	// never key off NonInteractive: the daemon force-sets
+	// DWE_NONINTERACTIVE=1 on every forked dwe, so a bridged `dwe cmd` — which
+	// IS a user invocation, and the reason bridgedTTYChildIO exists — would be
+	// misclassified as nested. The bridge never sets the marker, and the
+	// daemon strips a container-sent one (bridgeclient.EnvNestedRuntime).
+	rctx.UserInvoked = !bridgeclient.NestedRuntime()
+	bridgeclient.MarkNestedRuntime()
 
 	rctx.Stdin = stdin
 	rctx.Stdout = stdout

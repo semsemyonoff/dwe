@@ -18,6 +18,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 )
 
 // --- mockReporter records all reporter events for assertion ---
@@ -2809,7 +2810,60 @@ func TestExecAction_CommandCheck_ServiceWorkdirFallback(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("expected exactly one docker invocation, got %d: %v", len(calls), calls)
 	}
-	if !strings.Contains(calls[0], "compose -p dwe-laravel exec --workdir /var/www/html app-main") {
+	// The -T is the runner's container-TTY decision: a pipeline step is not a
+	// user invocation, so the container process gets no terminal.
+	if !strings.Contains(calls[0], "compose -p dwe-laravel exec -T --workdir /var/www/html app-main") {
 		t.Fatalf("check command did not inherit the service workdir: %s", calls[0])
+	}
+}
+
+// TestRunWithOptions_MarksNestedRuntime pins the propagation half of the
+// nested-runtime contract: a pipeline marks its own process, so every child it
+// spawns — by any mechanism — inherits DWE_NESTED_RUNTIME and re-enters
+// runCommandByID as a nested, non-user invocation.
+//
+// It is deliberately split from the consumption half (package command): the
+// child is a SEPARATE PROCESS whose in-process UserInvoked no test here can
+// observe, and a real `type: dwe` re-exec resolves resolveDweBin →
+// os.Executable() → the test binary.
+//
+// The `type: shell` case is the one a per-spawn env list would have missed:
+// execShellAction never assigns cmd.Env at all, and DWE_BIN is exported into
+// shell/script children on purpose so project code can call dwe again.
+func TestRunWithOptions_MarksNestedRuntime(t *testing.T) {
+	// Process-global and never cleared — clear it first so the assertion is
+	// about this pipeline's own mark, not another test's leftover.
+	t.Setenv(bridgeclient.EnvNestedRuntime, "")
+
+	var log bytes.Buffer
+	rep := &mockReporter{}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	step := config.DeployStep{Name: "echo-marker", Type: "shell", Cmd: "printenv DWE_NESTED_RUNTIME"}
+
+	err := RunWithOptions(RunOptions{
+		Steps:     buildResolvedSteps(phase, []config.DeployStep{step}),
+		Reporter:  rep,
+		Name:      "test",
+		Config:    cfg,
+		WorkDir:   t.TempDir(),
+		LogWriter: &log,
+	})
+	if err != nil {
+		t.Fatalf("RunWithOptions: %v", err)
+	}
+
+	// A `type: shell` child inherits os.Environ() verbatim, so printenv both
+	// proves the variable reached the child and that it is non-empty (the read
+	// predicate is `!= ""`, not LookupEnv).
+	if got := strings.TrimSpace(log.String()); got != "1" {
+		t.Errorf("shell child saw DWE_NESTED_RUNTIME=%q, want %q", got, "1")
+	}
+
+	// A `type: dwe` child is built by buildDweCmd, which assigns an explicit
+	// cmd.Env — verify the process-global marker survives that too.
+	cmd := buildDweCmd(context.Background(), "status", t.TempDir(), "sh", "", false)
+	if !slices.Contains(cmd.Env, bridgeclient.EnvNestedRuntime+"=1") {
+		t.Errorf("buildDweCmd env lacks %s=1", bridgeclient.EnvNestedRuntime)
 	}
 }

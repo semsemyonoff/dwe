@@ -251,6 +251,52 @@ func buildServiceArgv(ctx context.Context, rc spec.RunContext) ([]string, error)
 	return runio.AppendArgvFrom(ctx, rc, argv)
 }
 
+// flagNamePart returns the name part of a command-line argument: everything
+// before the first "=" ("--no-tty=false" → "--no-tty"). Arguments that are not
+// flags come back unchanged and simply match nothing.
+func flagNamePart(arg string) string {
+	if eq := strings.IndexByte(arg, '='); eq > 0 {
+		return arg[:eq]
+	}
+	return arg
+}
+
+// hasTTYFlag reports whether the flag vector already carries an explicit TTY
+// decision: `-T`, `-T=<value>`, or `--no-tty` in any case with or without a
+// value. Both forms are boolean flags, so `-T=false`, `--no-tty=false` and
+// `--no-tty=true` are all things a project can legitimately have written.
+//
+// `--no-tty` is compared case-INSENSITIVELY on purpose. The compose flag is
+// spelled lowercase (`-T, --no-tty` on both `exec` and `run`) and pflag is
+// case-sensitive, so an uppercase-only matcher would recognise nothing a
+// project can actually have written — while a case-insensitive one still
+// catches an author who typed `--no-TTY` and would otherwise be silently
+// overridden.
+func hasTTYFlag(args []string) bool {
+	for _, a := range args {
+		name := flagNamePart(a)
+		if name == "-T" || strings.EqualFold(name, "--no-tty") {
+			return true
+		}
+	}
+	return false
+}
+
+// hasDetachFlag reports whether the flag vector asks for a detached container
+// (`-d` / `--detach`, valid on both `exec` and `run`). Any occurrence counts,
+// including `-d=false`: the only consumer is the colour-forcing gate, where
+// staying quiet is the safe direction — a false positive costs one uncoloured
+// run, a false negative bakes ANSI escapes into the Docker logs.
+func hasDetachFlag(args []string) bool {
+	for _, a := range args {
+		name := flagNamePart(a)
+		if name == "-d" || strings.EqualFold(name, "--detach") {
+			return true
+		}
+	}
+	return false
+}
+
 // buildDockerComposeCmd assembles the full docker compose exec/run command.
 func buildDockerComposeCmd(
 	ctx context.Context,
@@ -275,20 +321,41 @@ func buildDockerComposeCmd(
 
 	args = append(args, compose.GlobalArgs...)
 
+	var commandDefaults []string
 	if useExec {
 		args = append(args, "exec")
-		if defaults, ok := compose.CommandArgs["exec"]; ok {
-			args = append(args, defaults...)
-		}
+		commandDefaults = compose.CommandArgs["exec"]
+		args = append(args, commandDefaults...)
 	} else {
 		args = append(args, "run")
-		if defaults, ok := compose.CommandArgs["run"]; ok {
-			args = append(args, defaults...)
-		}
+		commandDefaults = compose.CommandArgs["run"]
+		args = append(args, commandDefaults...)
 		args = append(args, "--no-deps", "--entrypoint", "")
 	}
 
 	args = append(args, composeArgs...)
+
+	// Decide the container TTY here rather than leaving it to whoever wired the
+	// stdio: unless this is a run the user launched themselves with terminals on
+	// both ends, the container process gets `-T` (no TTY).
+	//
+	// The classifier runs over the EFFECTIVE flag vector — docker.yml's
+	// `args.exec` / `args.run` defaults plus the command's own rendered
+	// compose_args — because a `--no-tty=false` declared in docker.yml is
+	// otherwise invisible here. Any occurrence of a TTY flag, whatever its
+	// value, hands the decision back to the author; `--no-tty=false` is the
+	// deliberate force-a-TTY escape hatch. Only TTY flags suppress the
+	// auto-detect: `-d`, `--name`, `--rm` and friends stay orthogonal on
+	// purpose, since none of them says anything about the terminal.
+	effectiveFlags := make([]string, 0, len(commandDefaults)+len(composeArgs))
+	effectiveFlags = append(effectiveFlags, commandDefaults...)
+	effectiveFlags = append(effectiveFlags, composeArgs...)
+
+	ttySuppressed := false
+	if !hasTTYFlag(effectiveFlags) && !runio.WantContainerTTY(rc) {
+		args = append(args, "-T")
+		ttySuppressed = true
+	}
 
 	switch user {
 	case model.UserModeCurrent:
@@ -312,10 +379,17 @@ func buildDockerComposeCmd(
 	// sub-steps (LineTee failure dumps + always_show_output) and color-forced
 	// bridge runs alike. The child keeps its colours even though docker
 	// compose attaches a pipe rather than a TTY.
+	//
+	// The `-T` injected above is the third such case, and the runner is the only
+	// place that knows about it — hence the explicit flag. `!detached` is
+	// load-bearing: `-d` is valid on both exec and run, a detached child's
+	// output never reaches rc.Stdout, and forcing colour there would write ANSI
+	// escapes into the Docker logs permanently.
+	detached := hasDetachFlag(effectiveFlags)
 	if envVars == nil {
 		envVars = make(map[string]string)
 	}
-	for _, kv := range runio.ColorForceEnv(rc) {
+	for _, kv := range runio.ColorForceEnv(rc, ttySuppressed && !detached) {
 		// kv is "KEY=VALUE"; split once.
 		if eq := strings.IndexByte(kv, '='); eq > 0 {
 			k, v := kv[:eq], kv[eq+1:]

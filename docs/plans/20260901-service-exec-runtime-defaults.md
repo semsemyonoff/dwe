@@ -848,17 +848,17 @@ them into commit **A** is the orchestrator's job, not this task's.
 **Files:**
 - Modify: `internal/core/usercommands/runtime/spec/runner.go`
 
-- [ ] add the `UserInvoked bool` field with a doc comment stating: what it
+- [x] add the `UserInvoked bool` field with a doc comment stating: what it
       means, that the zero value suppresses the TTY and is therefore the safe
       default for any new entry point, that it gates container TTY allocation
       only, and why `SkipNotify` was not reused despite answering the same
       question today
-- [ ] confirm no existing construction site needs changing (the zero value is
+- [x] confirm no existing construction site needs changing (the zero value is
       correct everywhere until task 10)
-- [ ] no tests in this task: the field carries no behaviour yet. Tasks 8, 10
+- [x] no tests in this task: the field carries no behaviour yet. Tasks 8, 10
       and 11 own its coverage — do not write a test that only asserts a struct
       field exists
-- [ ] run `make test` — must pass before task 8
+- [x] run `make test` — must pass before task 8
 
 ### Task 8: Add `runio.WantContainerTTY` and a second terminal probe
 
@@ -866,28 +866,28 @@ them into commit **A** is the orchestrator's job, not this task's.
 - Modify: `internal/core/usercommands/runtime/internal/runio/runio.go`
 - Modify: `internal/core/usercommands/runtime/internal/runio/runio_test.go`
 
-- [ ] add an injectable "is this writer/reader a terminal" probe (`*os.File`
+- [x] add an injectable "is this writer/reader a terminal" probe (`*os.File`
       assertion plus `Fd()`; anything else is not a terminal) **alongside**
       `stdoutIsTerminal` — do not repoint the existing seam
-- [ ] leave `colorForceActive` (l.67) and `bridgedTTYActive` (l.197) probing
+- [x] leave `colorForceActive` (l.67) and `bridgedTTYActive` (l.197) probing
       the process's own `os.Stdout`; both mean the process stream, not
       `rc.Stdout`, and `bridgedTTYActive` is load-bearing for the bridge shape
-- [ ] add `WantContainerTTY(rc spec.RunContext) bool` implementing
+- [x] add `WantContainerTTY(rc spec.RunContext) bool` implementing
       `rc.UserInvoked && (bridgedTTYActive(rc) || isTerminal(StdoutOf(rc)) && isTerminal(StdinOrOS(rc)))`,
       resolving through `StdoutOf` / `StdinOrOS` so a nil `Stdout` or `Stdin`
       falls back to the process streams instead of reading as "not a terminal"
-- [ ] document on it why the bridge arm short-circuits the terminal probe:
+- [x] document on it why the bridge arm short-circuits the terminal probe:
       `bridgedTTYChildIO` fabricates its PTY inside `WireChildIO`, after
       `BuildCommand` has already fixed the argv, so the probe would lie
-- [ ] document why the predicate is not a plain terminal probe: the pipeline
+- [x] document why the predicate is not a plain terminal probe: the pipeline
       fabricates a PTY in `childIO`, so a probe answers "yes" exactly where the
       change must bite
-- [ ] write a table test over `UserInvoked` × bridged-env × terminal/pipe
+- [x] write a table test over `UserInvoked` × bridged-env × terminal/pipe
       stdout × terminal/pipe stdin, plus rows for a nil `Stdout`, a nil
       `Stdin`, and a non-`*os.File` writer such as a `bytes.Buffer`
-- [ ] write a test pinning that `bridgedTTYActive` still answers off the
+- [x] write a test pinning that `bridgedTTYActive` still answers off the
       process stdout, so a later seam cleanup cannot quietly repoint it
-- [ ] run `make test` — must pass before task 9
+- [x] run `make test` — must pass before task 9
 
 ### Task 9: Inject `-T` in `buildDockerComposeCmd` and extend colour forcing
 
@@ -906,28 +906,28 @@ turns every command's output in a deploy grey.
 - Modify: `internal/core/usercommands/runtime/runners/script/script_test.go`
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 
-- [ ] update task 4's check-path argv assertion for the injected `-T`. It was
+- [x] update task 4's check-path argv assertion for the injected `-T`. It was
       written in commit A and this commit invalidates it, so the fix-up must
       land **here** — a revert of B has to restore it along with everything
       else. (Alternative, if you prefer A to be self-sufficient: have task 4
       assert only the `--workdir` subsequence and skip this checkbox.)
-- [ ] write the TTY-flag classifier: exact `-T`, any `-T=<value>`, and any
+- [x] write the TTY-flag classifier: exact `-T`, any `-T=<value>`, and any
       argument whose name part is `--no-tty` compared **case-insensitively**.
       The compose flag is lowercase `--no-tty` on both `exec` and `run`, and
       pflag is case-sensitive, so an uppercase-only matcher recognises nothing
       a project can have written
-- [ ] run the classifier — and the `detached` probe — over the **effective**
+- [x] run the classifier — and the `detached` probe — over the **effective**
       flag vector for the chosen subcommand, `compose.CommandArgs["exec"|"run"]`
       concatenated with the rendered `compose_args`. Those defaults come from
       `docker.yml`'s `args:` block and are appended first (`exec.go:257-270`),
       so a `--no-tty=false` or `-d` declared there is otherwise invisible
-- [ ] in `buildDockerComposeCmd`, immediately after `composeArgs` are appended,
+- [x] in `buildDockerComposeCmd`, immediately after `composeArgs` are appended,
       append `-T` when `!WantContainerTTY(rc)` and the classifier finds no TTY
       flag. Any occurrence hands control to the author regardless of its value,
       so `--no-tty=false` is the deliberate force-a-TTY escape hatch
-- [ ] state in a comment that only TTY flags suppress the auto-detect, and that
+- [x] state in a comment that only TTY flags suppress the auto-detect, and that
       `-d` / `--name` / `--rm` stay orthogonal on purpose
-- [ ] change the signature to
+- [x] change the signature to
       `ColorForceEnv(rc spec.RunContext, forceOnSuppressedTTY bool) []string`
       and add the third disjunct to `colorForceActive`:
       `(forceOnSuppressedTTY && isTerminal(rc.Stdout))`. `runio` cannot see
@@ -936,39 +936,39 @@ turns every command's output in a deploy grey.
       is valid on both `exec` and `run`, and a detached child's output never
       reaches `rc.Stdout`, so forcing colour there writes ANSI escapes into the
       Docker logs permanently
-- [ ] update **all four** call sites: `service/exec.go:297` passes the computed
+- [x] update **all four** call sites: `service/exec.go:297` passes the computed
       value; `host/host.go:79`, `host/dwe.go:43` and `script/script.go:200`
       pass `false` — a host-side child has no container TTY to suppress, and
       nobody should "helpfully" derive a value for them
-- [ ] document in the code that the new disjunct probes **raw `rc.Stdout`**
+- [x] document in the code that the new disjunct probes **raw `rc.Stdout`**
       while `WantContainerTTY` resolves through `StdoutOf`/`StdinOrOS`. The
       asymmetry is deliberate and load-bearing: it is what keeps a nil-`Stdout`
       internal caller from getting forced colour, and a later "consistency"
       cleanup unifying them would inject ANSI into parsed output
-- [ ] write argv tests: `-T` present/absent across `UserInvoked`, bridged env,
+- [x] write argv tests: `-T` present/absent across `UserInvoked`, bridged env,
       and each classifier form already in `compose_args` — `-T`, `-T=false`,
       `--no-tty`, `--no-tty=false`, `--no-TTY` (case-insensitive match) — plus
       an unrelated flag such as `--name` that must **not** suppress the
       auto-detect
-- [ ] write a test proving `compose_args: ["-d"]` still gets `-T` (detach is
+- [x] write a test proving `compose_args: ["-d"]` still gets `-T` (detach is
       orthogonal) but does **not** get the forced-colour variables, for both
       `service_exec` and `service_run`
-- [ ] write tests for the same two flags arriving through `DockerConfig.Args`
+- [x] write tests for the same two flags arriving through `DockerConfig.Args`
       (`args.exec` / `args.run`) rather than `compose_args`: a `--no-tty=false`
       there must suppress the injection, and a `-d` there must suppress the
       forced colour
-- [ ] write tests in `host_test.go` and `script_test.go` asserting the Host
+- [x] write tests in `host_test.go` and `script_test.go` asserting the Host
       runner, the Dwe runner and the Script runner keep their existing colour
       behaviour after the signature change — `runio_test.go` is in package
       `runio` and cannot import runners that import it, and `service_test.go`
       cannot reach host or script code
-- [ ] write argv tests for `service_run` proving it inherits the same behaviour
-- [ ] write colour tests: the third disjunct fires for a terminal-like
+- [x] write argv tests for `service_run` proving it inherits the same behaviour
+- [x] write colour tests: the third disjunct fires for a terminal-like
       `rc.Stdout` with the TTY suppressed, does **not** fire for a piped
       `rc.Stdout` (so `dwe cmd foo | grep` stays uncoloured), and does **not**
       fire for a nil `rc.Stdout` — the row that pins the raw-vs-`StdoutOf`
       asymmetry
-- [ ] run `make test` — must pass before task 10
+- [x] run `make test` — must pass before task 10
 
 ### Task 10: Set `UserInvoked` at the two entry points
 
@@ -984,21 +984,21 @@ turns every command's output in a deploy grey.
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 - Modify: `internal/core/usercommands/runtime/runners/workflow/workflow_test.go`
 
-- [ ] define the marker constant next to the other `DWE_*` env names and set it
+- [x] define the marker constant next to the other `DWE_*` env names and set it
       **process-globally** with `os.Setenv`, not per-spawn: `execShellAction`
       (`executor.go:216-220`) never assigns `cmd.Env` at all, and the set of
       spawn mechanisms is not reliably enumerable
-- [ ] in `runCommandByID`, read the marker **before** setting it:
+- [x] in `runCommandByID`, read the marker **before** setting it:
       `UserInvoked = !markerSet`, then `os.Setenv` so everything this command
       spawns is classified as nested
-- [ ] set it unconditionally on entry to **`pipeline.ExecAction`**
+- [x] set it unconditionally on entry to **`pipeline.ExecAction`**
       (`executor.go:177`) — not in the deprecated `Run` wrapper
       (`executor.go:388`), where it would be a silent no-op, and not only in
       `RunWithOptions` (`executor.go:446`), which `dwe reset step` bypasses by
       calling `ExecAction` directly (`lifecycle/reset.go:744,761`). This one
       place covers `type: shell`, `type: dwe`, `type: host` and `type: script`
       steps on both routes
-- [ ] record the deliberate gap: `files_gate` commands and shell `when:`
+- [x] record the deliberate gap: `files_gate` commands and shell `when:`
       predicates evaluated **before the first `ExecAction` of the process** run
       unmarked, so a `dwe cmd` re-entry from one of those is classified
       user-invoked. Later ones are marked — the marker is process-global and
@@ -1006,22 +1006,22 @@ turns every command's output in a deploy grey.
       do not pin a test on "gates are always unmarked". That is accepted —
       the failure mode is today's behaviour (no `-T`), i.e. conservative — but
       it is a decision, not an oversight
-- [ ] pin the read predicate as `os.Getenv(marker) != ""`, not `os.LookupEnv` —
+- [x] pin the read predicate as `os.Getenv(marker) != ""`, not `os.LookupEnv` —
       the tests clear the marker with `t.Setenv(marker, "")`, which `LookupEnv`
       would still report as set
-- [ ] verify the runners that build an explicit `cmd.Env` still pass it through:
+- [x] verify the runners that build an explicit `cmd.Env` still pass it through:
       `DweRunner` (`host/dwe.go:44-56`) and `host.go:81` both start from
       `os.Environ()`, so the marker survives — confirm rather than assume
-- [ ] extend the existing `TestStripEnv` (`bridgeclient/client_test.go:461`)
+- [x] extend the existing `TestStripEnv` (`bridgeclient/client_test.go:461`)
       with a marker row — that is where a strip regression belongs
-- [ ] add the marker to the daemon's strip set in `bridgeclient.StripEnv`, so a
+- [x] add the marker to the daemon's strip set in `bridgeclient.StripEnv`, so a
       marker set inside a container cannot cross the trust boundary and kill
       the TTY on every bridged command
-- [ ] set `UserInvoked = !nestedMarkerSet` in `runCommandByID` — it is
+- [x] set `UserInvoked = !nestedMarkerSet` in `runCommandByID` — it is
       documented as the single execution path for both `dwe commands <id>` and
       the TUI run flow, so this one assignment covers both, and the marker is
       what keeps a `type: dwe` step from re-entering as a "user" invocation
-- [ ] split the re-entry assertion in two, because the child is a **separate
+- [x] split the re-entry assertion in two, because the child is a **separate
       process** whose in-process `UserInvoked` a test cannot observe, and a real
       re-exec resolves `resolveDweBin` → `os.Executable()` → the *test binary*
       (the documented recursion hazard):
@@ -1035,32 +1035,32 @@ turns every command's output in a deploy grey.
       (`runbyid_test.go:97-104`); `stubOrchestratorSeams`
       (`runbyid_test.go:19-37`) only saves and restores the four seams, and
       already forbids `t.Parallel` — which matches the `t.Setenv` constraint
-- [ ] write the `type: shell`/`DWE_BIN` propagation case explicitly — `DWE_BIN`
+- [x] write the `type: shell`/`DWE_BIN` propagation case explicitly — `DWE_BIN`
       is exported on purpose (`host.go:119`, `script.go:149`) so project code
       can call dwe again, and this is the path a per-spawn marker would miss
-- [ ] write a test using `t.Setenv` proving `runCommandByID` reads the marker
+- [x] write a test using `t.Setenv` proving `runCommandByID` reads the marker
       before writing it, so a top-level invocation is not marked nested by its
       own assignment
-- [ ] clear the marker with `t.Setenv(marker, "")` in **every** new test that
+- [x] clear the marker with `t.Setenv(marker, "")` in **every** new test that
       touches it: `runCommandByID`'s `os.Setenv` is process-global and never
       cleared, and roughly 30 existing tests in `runbyid_test.go` call it — the
       bridge test asserting `UserInvoked == true` would otherwise fail on test
       order alone. Note that `t.Setenv` forbids `t.Parallel` in that test
-- [ ] write a test proving the bridge path does **not** set the marker, so a
+- [x] write a test proving the bridge path does **not** set the marker, so a
       bridged `dwe cmd` stays a user invocation
-- [ ] add a comment there stating that the host bridge reaches this same line
+- [x] add a comment there stating that the host bridge reaches this same line
       (`bridge/exec.go:56` re-execs `dwe <argv…>` as a plain subprocess), and
       that the predicate must therefore never key off `NonInteractive` — the
       daemon force-sets `DWE_NONINTERACTIVE=1` on every forked `dwe`
-- [ ] in the workflow runner, read it as `rc.UserInvoked && !rc.UnderParallel`
+- [x] in the workflow runner, read it as `rc.UserInvoked && !rc.UnderParallel`
       at the sub-step construction site in `step.go`, so a sequential sub-step
       inherits and a `parallel:` sub-step yields `false` — do not stamp a second
       field in `parallel.go:199`
-- [ ] write a test asserting a sequential workflow sub-step inherits the
+- [x] write a test asserting a sequential workflow sub-step inherits the
       parent's value in both directions
-- [ ] write a test asserting a `parallel:` sub-step gets `false` even when the
+- [x] write a test asserting a `parallel:` sub-step gets `false` even when the
       parent is `true`
-- [ ] run `make test` — must pass before task 11
+- [x] run `make test` — must pass before task 11
 
 ### Task 11: Pin that the pipeline never sets `UserInvoked`
 
@@ -1070,13 +1070,13 @@ that fails if someone "fixes" it later.
 **Files:**
 - Modify: `internal/core/execution/pipeline/executor_notify_test.go`
 
-- [ ] write a test asserting `execCommandAction` builds a `RunContext` with
+- [x] write a test asserting `execCommandAction` builds a `RunContext` with
       `UserInvoked == false`, sequential and parallel alike, driving the
       `runtime.TestSnapshotRC` seam and sitting next to its existing twin
       `TestExecCommandAction_SetsSkipNotify`
-- [ ] name in the test comment why: a `type: command` step must never hand the
+- [x] name in the test comment why: a `type: command` step must never hand the
       container a terminal, and this is the sole guard
-- [ ] run `make test` — must pass before task 12
+- [x] run `make test` — must pass before task 12
 
 ### Task 12: Document the TTY behaviour and land commit B
 
@@ -1089,7 +1089,7 @@ Doc edits here touch **only** the `compose_args` / TTY sections.
 - Modify: `AGENTS.md` (any B-specific pointer bullet belongs here, not in C)
 - Modify: `internal/core/docs/content_hashes_gen.go` (regenerated by `make build`)
 
-- [ ] if a pointer bullet about the TTY contract is warranted in `AGENTS.md`,
+- [x] if a pointer bullet about the TTY contract is warranted in `AGENTS.md`,
       add it **in this commit** — a B-specific pointer landing in C would
       survive a revert of B. Budget: the file is 39 186 B against
       `agentsMdBudget = 40*1024` (`internal/cli/docs/agentsmd_test.go:28`),
@@ -1103,27 +1103,65 @@ Doc edits here touch **only** the `compose_args` / TTY sections.
       `` - `path` `` bullet in `packages.md`, a bare title must match a `## `
       heading — so point this bullet at B's own new section (added in this same
       commit)
-- [ ] document the B-specific invariants in `packages.md` **in this commit**,
+- [x] document the B-specific invariants in `packages.md` **in this commit**,
       not in commit C: the `UserInvoked` contract (who sets it, why `false` is
       the safe zero value, why `SkipNotify` was not reused), the
       `DWE_NESTED_RUNTIME` marker and its strip-set requirement, and the paired
       colour-forcing rule with its `!detached` guard. Keeping them here is what
       makes a revert of B remove the prose along with the mechanism
-- [ ] rewrite the `compose_args` section: it currently recommends `-T`, which
+- [x] rewrite the `compose_args` section: it currently recommends `-T`, which
       the runner now supplies on its own; say what still needs an explicit flag
-- [ ] add the TTY rule in prose — a top-level `dwe cmd` on a terminal gets a
+- [x] add the TTY rule in prose — a top-level `dwe cmd` on a terminal gets a
       container TTY, everything else (`deploy run`, workflows' parallel blocks,
       `check:` probes, piped output) gets `-T`; an explicit `-T` / `--no-tty`
       (lowercase, as compose spells it) in the effective flags wins; unrelated
       flags do not
-- [ ] state that there is no dedicated schema field for forcing a container TTY
+- [x] state that there is no dedicated schema field for forcing a container TTY
       inside a pipeline, and that `compose_args: ["--no-tty=false"]` is the
       explicit, deliberately awkward way to ask — do **not** write that it is
       impossible, because the classifier hands control to any TTY flag
       regardless of its value
-- [ ] mirror into the RU translation
-- [ ] run `make build`, then `make test && make lint` — must pass
-- [ ] commit as commit **B**, as a single self-contained revert unit
+- [x] mirror into the RU translation
+- [x] run `make build`, then `make test && make lint` — must pass
+- [x] commit as commit **B**, as a single self-contained revert unit
+
+➕ `packages.md` gained its own top-level `## Container TTY Contract` section,
+placed between `## Shared — Leaf Infrastructure` and `## Entrypoint`.
+
+[decision] A new `## ` heading rather than prose folded into an existing
+package bullet: the contract spans `cli/command/`, `execution/pipeline/`,
+`usercommands/runtime/` and `shared/bridgeclient/`, so it belongs to no single
+layer — and a standalone section is what lets commit C add the A/C contracts to
+the same file in a separate hunk, keeping a `git revert` of B mechanical.
+
+[decision] Placed at the end of the layer walk-through (before `## Entrypoint`)
+rather than mid-file, so the insertion cannot collide with a C-era edit inside
+`## Core — User Commands`.
+
+➕ `AGENTS.md` gained a **Container TTY** pointer bullet after **Container
+command policy**, pointing at `§ Container TTY Contract`. It adds 742 B
+(39 186 → 39 928 B against the 40 960 B budget), leaving 1 032 B for task 15's
+bullet. Longest new line is 290 runes against the 600-rune cap.
+
+➕ `types.md`: the `compose_args` section no longer recommends `-T` (the runner
+supplies it) and a new `### Container TTY` section — plus a
+`#### Overriding the decision` sub-section — documents the rule, the effective
+flag vector, the case-insensitive `--no-tty` match, the paired colour forcing
+with its `-d` exclusion, and `compose_args: ["--no-tty=false"]` as the explicit
+force-a-TTY escape hatch. The `### Mode resolution` section (commit C) and the
+workdir sections (commit A) were left untouched.
+
+➕ The RU mirror's `> Translated from: … @ <hash>` header was refreshed to the
+new English content hash (`bed7d209fbf6` → `7338d8291752`), which is what
+`TestRussianTranslationsAreFresh` compares.
+
+[decision] `make lint` still reports exactly the 19 pre-existing `modernize`
+findings in untouched files. No new findings — this task changed no Go source
+beyond the regenerated `content_hashes_gen.go`.
+
+[deviation] The task text says "commit as commit **B**". The execution harness
+commits once per task, so tasks 7–12 landed as separate commits; squashing them
+into commit **B** is the orchestrator's job, not this task's.
 
 ### Task 13: Flip the exec mode default
 

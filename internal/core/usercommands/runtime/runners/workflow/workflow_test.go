@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
@@ -906,5 +907,80 @@ func TestWorkflowRunner_HiddenTarget_SkipsStep(t *testing.T) {
 	data, _ := readFileBytes(logFile)
 	if len(data) != 0 {
 		t.Errorf("hidden command body must not run; log: %q", string(data))
+	}
+}
+
+// captureSubStepRC swaps RunCommandFn for one that records every sub-step
+// RunContext instead of dispatching it, restoring the seam on cleanup.
+func captureSubStepRC(t *testing.T, seen *[]RunContext) {
+	t.Helper()
+	var mu sync.Mutex
+	orig := RunCommandFn
+	t.Cleanup(func() { RunCommandFn = orig })
+	RunCommandFn = func(_ context.Context, rc RunContext) error {
+		mu.Lock()
+		defer mu.Unlock()
+		*seen = append(*seen, rc)
+		return nil
+	}
+}
+
+// TestWorkflowRunner_SubStepUserInvoked pins the provenance a sub-step
+// inherits. A sequential sub-step of a user-invoked workflow still owns the
+// terminal, so it inherits UserInvoked in both directions; a sub-step under a
+// parallel: block never does, because its I/O is fanned into per-step writers.
+// The rule is derived once at the sub-step construction site in step.go
+// (rc.UserInvoked && !rc.UnderParallel), not stamped again in parallel.go.
+func TestWorkflowRunner_SubStepUserInvoked(t *testing.T) {
+	leaf := &CommandDef{
+		Type: CommandTypeShell, ID: "wf.leaf", Group: "wf", LocalName: "leaf", Cmd: "true",
+	}
+
+	tests := []struct {
+		name        string
+		userInvoked bool
+		parallel    bool
+		want        bool
+	}{
+		{name: "sequential inherits true", userInvoked: true, want: true},
+		{name: "sequential inherits false", userInvoked: false, want: false},
+		{name: "parallel drops true", userInvoked: true, parallel: true, want: false},
+		{name: "parallel stays false", userInvoked: false, parallel: true, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var seen []RunContext
+			captureSubStepRC(t, &seen)
+
+			step := WorkflowStep{Command: "wf.leaf"}
+			if tt.parallel {
+				step = WorkflowStep{Parallel: &WorkflowParallel{Steps: []WorkflowStep{{Command: "wf.leaf"}}}}
+			}
+			wf := &CommandDef{
+				Type: CommandTypeWorkflow, ID: "wf.run", Group: "wf", LocalName: "run",
+				Steps: []WorkflowStep{step},
+			}
+
+			rc := RunContext{
+				Cmd:         wf,
+				Params:      map[string]any{},
+				Context:     map[string]any{},
+				Render:      &tpl.RenderContext{Params: map[string]any{}},
+				Registry:    buildWorkflowRegistry(wf, leaf),
+				ProjectRoot: t.TempDir(),
+				Stdout:      io.Discard,
+				Stderr:      io.Discard,
+				UserInvoked: tt.userInvoked,
+			}
+			if err := (&WorkflowRunner{}).Run(context.Background(), rc); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if len(seen) != 1 {
+				t.Fatalf("expected 1 sub-step dispatch, got %d", len(seen))
+			}
+			if seen[0].UserInvoked != tt.want {
+				t.Errorf("sub-step UserInvoked = %v, want %v", seen[0].UserInvoked, tt.want)
+			}
+		})
 	}
 }

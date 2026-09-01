@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
@@ -494,5 +498,118 @@ func TestHostRunner_BuildCommand_ArgvAppendFrom_EmptySkips(t *testing.T) {
 	}
 	if _, err := r.BuildCommand(context.Background(), rc); !errors.Is(err, spec.ErrArgvAppendEmpty) {
 		t.Fatalf("err = %v, want spec.ErrArgvAppendEmpty", err)
+	}
+}
+
+// clearColorEnv guarantees the colour-control vars are absent for one test, so
+// nothing but the runner's own decision can force colours.
+func clearColorEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", "DWE_BRIDGE_STDIN_TTY"} {
+		t.Setenv(name, "x")
+		_ = os.Unsetenv(name)
+	}
+}
+
+// openPTY returns a pty slave usable as a terminal-backed stdio stream.
+func openPTY(t *testing.T) *os.File {
+	t.Helper()
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("pty.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = tty.Close(); _ = ptmx.Close() })
+	return tty
+}
+
+// TestHostRunner_ColorForceEnv pins that the host runner's colour behaviour is
+// unchanged by the ColorForceEnv signature change: it passes
+// forceOnSuppressedTTY=false, because a host-side child has no container TTY to
+// suppress. The terminal-stdout row is the one that would flip if somebody
+// "helpfully" derived a value for it.
+func TestHostRunner_ColorForceEnv(t *testing.T) {
+	tests := []struct {
+		name          string
+		underParallel bool
+		terminalOut   bool
+		want          bool
+	}{
+		{"parallel sub-step forces colour", true, false, true},
+		{"sequential on a buffer stays auto", false, false, false},
+		{"sequential on a terminal stays auto", false, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorEnv(t)
+			rc := spec.RunContext{
+				Cmd:           &model.CommandDef{Type: model.CommandTypeShell, Cmd: "true"},
+				Render:        &tpl.RenderContext{},
+				UnderParallel: tt.underParallel,
+				Stdout:        &bytes.Buffer{},
+			}
+			if tt.terminalOut {
+				rc.Stdout = openPTY(t)
+			}
+			c, err := (&Runner{}).BuildCommand(context.Background(), rc)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := slices.Contains(c.Env, "CLICOLOR_FORCE=1"); got != tt.want {
+				t.Errorf("CLICOLOR_FORCE forced = %v, want %v; env: %v", got, tt.want, c.Env)
+			}
+		})
+	}
+}
+
+// TestDweRunner_ColorForceEnv covers the same contract for the type=dwe runner,
+// which has no BuildCommand seam — the child itself reports the env it got.
+//
+// The command text is prefixed to the resolved dwe binary, which under `go
+// test` is the test binary itself: `-test.list` with a regexp that matches
+// nothing makes it exit 0 without running anything, and the interesting half
+// runs afterwards in the same shell, which carries exactly the env the runner
+// assembled.
+func TestDweRunner_ColorForceEnv(t *testing.T) {
+	tests := []struct {
+		name          string
+		underParallel bool
+		terminalOut   bool
+		want          string
+	}{
+		{"parallel sub-step forces colour", true, false, "[1]"},
+		{"sequential on a buffer stays auto", false, false, "[]"},
+		{"sequential on a terminal stays auto", false, true, "[]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorEnv(t)
+			dir := t.TempDir()
+			out := filepath.Join(dir, "color.txt")
+
+			rc := spec.RunContext{
+				Cmd: &model.CommandDef{
+					Type: model.CommandTypeDwe,
+					Cmd:  `-test.list=NOMATCHINGTEST >/dev/null 2>&1; printf '[%s]' "${CLICOLOR_FORCE}" > ` + out,
+				},
+				Render:        &tpl.RenderContext{},
+				ProjectRoot:   dir,
+				UnderParallel: tt.underParallel,
+				Stdout:        &bytes.Buffer{},
+				Stderr:        &bytes.Buffer{},
+			}
+			if tt.terminalOut {
+				rc.Stdout = openPTY(t)
+			}
+			if err := (&DweRunner{}).Run(context.Background(), rc); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatalf("read probe output: %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("CLICOLOR_FORCE = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }
