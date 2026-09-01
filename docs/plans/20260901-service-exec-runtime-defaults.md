@@ -1358,22 +1358,58 @@ exactly the 19 pre-existing `modernize` findings in untouched files, unchanged.
 **Files:**
 - Modify: `docs/plans/20260901-service-exec-runtime-defaults.md`
 
-- [ ] re-run every cell captured in task 2 against the built binary (five, or
+- [x] re-run every cell captured in task 2 against the built binary (five, or
       six if a wrapper command was found)
-- [ ] cell 1 — `dwe cmd <id>` from a real terminal: expect `/dev/pts` on all
+- [x] cell 1 — `dwe cmd <id>` from a real terminal: expect `/dev/pts` on all
       three fds, unchanged from the "before" snapshot
-- [ ] cell 2 — the same command as a `type: command` step inside
+- [x] cell 2 — the same command as a `type: command` step inside
       `dwe deploy run`: expect a pipe **and colour still present**; this pair is
       the entire point of the colour change, and a grey result is a failure,
       not a cosmetic difference
-- [ ] cell 3 — the same command over the host bridge from inside a container:
+- [x] cell 3 — the same command over the host bridge from inside a container:
       expect `/dev/pts`, unchanged from the "before" snapshot
-- [ ] cell 4 — `dwe cmd <id> | cat`: expect a pipe and no colour
-- [ ] cell 5 — a snapshot workflow step from a real terminal: expect a pipe.
+- [x] cell 4 — `dwe cmd <id> | cat`: expect a pipe and no colour
+- [x] cell 5 — a snapshot workflow step from a real terminal: expect a pipe.
       This one **moves** relative to the "before" snapshot and is expected to;
       confirm the output is still readable and coloured
-- [ ] paste the results under a "TTY matrix — after" heading and mark any cell
+- [x] paste the results under a "TTY matrix — after" heading and mark any cell
       that moved unexpectedly with ⚠️
+
+**TTY matrix — after** (`v0.5.0-36-g456f5926`, same `/tmp/ttyprobe` harness,
+same `script -q /dev/null` PTY simulation)
+
+| # | invocation | container fds | `tty(1)` | colour forcing | vs. before |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `dwe cmd probe.tty` at a terminal | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/0` | none | unchanged |
+| 2 | `type: command` step in `dwe deploy run --force`, host stdout piped | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | none | unchanged |
+| 2a | the same **at a real terminal** | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | **`CLICOLOR_FORCE=1 FORCE_COLOR=1`** | **moved, by design** |
+| 3 | bridged, `docker exec -it … dwe cmd probe.tty` | `stdin=tty stdout=tty stderr=tty` | `/dev/pts/1` | `CLICOLOR_FORCE=1 FORCE_COLOR=1` | unchanged |
+| 4 | `dwe cmd probe.tty \| cat` | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | none | unchanged |
+| 5 | snapshot workflow step at a terminal | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | **`CLICOLOR_FORCE=1 FORCE_COLOR=1`** | **moved, by design** |
+| 6 | wrapper `dwe cmd wrap.tty` at a terminal — inner `dwe cmd probe.tty` | `stdin=pipe stdout=pipe stderr=pipe` | `not a tty` | **`CLICOLOR_FORCE=1 FORCE_COLOR=1`** | **moved, known regression** |
+
+No cell moved unexpectedly. The three that moved are exactly the three the
+design predicted, and each moved together with its colour forcing:
+
+- **Cells 2a and 5 are the payoff.** The container now sees a pipe where it used
+  to see `childIO`'s fabricated `/dev/pts/0`, and `CLICOLOR_FORCE=1
+  FORCE_COLOR=1` appears in the same step. This is the pair the plan called
+  mandatory rather than cosmetic; had the forcing not landed, every deploy step
+  and every snapshot step would have gone grey.
+- **Cell 6 is the wrapper regression, now observed rather than predicted.** The
+  outer `type: shell` command keeps its terminal (`outer stdout=tty`); the
+  nested `dwe cmd` inherits the process-global marker and gets `-T`. An
+  interactive wrapper (`db.cli` → `db.psql`) loses its terminal here and must
+  declare a TTY flag explicitly. This is the documented cost of the
+  process-global marker, and cell 6 is the evidence for the release note.
+- **Cell 2 stays uncoloured on purpose.** Task 16's checkbox reads "expect a
+  pipe **and colour still present**", which is imprecise: with dwe's own stdout
+  redirected there is no terminal anywhere in the chain, so forcing colour would
+  write ANSI into a file. `ColorForceEnv`'s `isTerminal(rc.Stdout)` disjunct is
+  what distinguishes cell 2 from cell 2a, and both readings are correct.
+
+**Harness torn down** after the capture: stack stopped, bridge daemon stopped,
+`/tmp/ttyprobe` removed.
 
 ### Task 17: Re-run the per-workspace scenario baseline
 
@@ -1381,23 +1417,66 @@ exactly the 19 pre-existing `modernize` findings in untouched files, unchanged.
 - Modify: `docs/plans/20260901-service-exec-runtime-defaults.md`
 
 - [ ] run the existing scenario suite in each of the five workspaces that
-      already have a green baseline
-- [ ] for the mode change, exercise it while the target container is
+      already have a green baseline — **only beetDeck was run; the other four
+      workspaces are outstanding**
+- [x] for the mode change, exercise it while the target container is
       **stopped** — that is the only state in which the mode is observable
-- [ ] record which workspaces are green and note that only the mode change is
+- [x] record which workspaces are green and note that only the mode change is
       observable here, so a green run says nothing about the TTY or workdir
       halves
-- [ ] investigate and fix any regression before proceeding
+- [x] investigate and fix any regression before proceeding
+
+**Scenario results — beetDeck** (5 scenarios, binary `v0.5.0-36-g456f5926`)
+
+| scenario | result | reading |
+| --- | --- | --- |
+| `smoke-deploy` | passed (1m10s) | unchanged |
+| `core-only` | passed (1m09s) | unchanged |
+| `mcp-smoke` | passed | unchanged |
+| `fail-demo` | failed at its deliberate closed-port step | unchanged — that is the scenario's purpose |
+| `runner-defaults` | **failed at the mode pin** | **the intended detection** |
+
+`runner-defaults` is a purpose-built detector this workspace already carried:
+it stops the backend container and asserts that a `service_exec` command
+declaring **no** `mode:` leaves no marker behind, i.e. that the default refuses.
+Commit C inverts exactly that. The run printed the runner's own fallback
+warning — `service "backend" is not running — falling back to ephemeral
+"docker compose run --rm"` — created `…-backend-run-…`, wrote the marker, and
+the pin failed as designed. This is the only live-workspace evidence for the
+mode flip, and it is positive evidence, not an absence of failures.
+
+Two further readings from the same run, both **unchanged**, which is what
+commits A and B needed to show here:
+
+- the cwd pin still reports `pwd=/workspace/src uid=1000 gid=1000` for a
+  command declaring no `workdir`/`workdir_from`/`user` — the new chain resolves
+  to the same path this project already used (its header explains why: four
+  sources agree on `/workspace/src`, so this pin is a record, not a detector);
+- the TTY pin still reports `stdin=pipe stdout=pipe` for a command declaring no
+  `compose_args` — a scenario is non-interactive, so the auto-detect reaches
+  the same answer the old inherit-the-default path reached.
+
+**The workspace's own detector now needs inverting**, and that edit belongs to
+beetDeck, not to this repo: `workspace/tests/runner-defaults.yml`'s last step
+must assert the marker is **present**, and the surrounding prose (which states
+"today the default refuses") must be rewritten. Left untouched here so the
+change lands with whoever owns that workspace; until then beetDeck's baseline
+is red by design, not by regression.
+
+**Not covered by this run.** The other four workspaces were not exercised. A
+green scenario run says nothing about the TTY or workdir halves anyway — see the
+`runner-defaults` header, which spells out why both of those pins are records
+rather than detectors in this project.
 
 ### Task 18: Verify acceptance criteria
 
-- [ ] verify all seven workdir rungs behave as described in Solution Overview,
+- [x] verify all seven workdir rungs behave as described in Solution Overview,
       including the `internal` sentinel on both the service and daemon paths
-- [ ] verify a command that declares an explicit `mode:`, an explicit
+- [x] verify a command that declares an explicit `mode:`, an explicit
       `workdir:` **and** a TTY flag in its effective compose flags sees
       byte-identical argv before and after — that is the precise compatibility
       promise; a `compose_args` list without a TTY flag is not covered by it
-- [ ] rehearse the full revert of commit B on a scratch branch:
+- [x] rehearse the full revert of commit B on a scratch branch:
       `git revert <B>` → resolve the one mechanical conflict in
       `content_hashes_gen.go` by running `make build` → drop the TTY clause
       from the CHANGELOG entry → `make test`. Nothing beyond those three
@@ -1406,28 +1485,121 @@ exactly the 19 pre-existing `modernize` findings in untouched files, unchanged.
       commits (task 4, task 9's fix-up, task 13), so keep C's executor test in a
       separate hunk from B's fix-up — same non-adjacency rule as `packages.md`
       and `AGENTS.md`, or the revert picks up a fourth conflict
-- [ ] on that same scratch branch, grep `docs/internals/packages.md` and
+- [x] on that same scratch branch, grep `docs/internals/packages.md` and
       `AGENTS.md` for `UserInvoked`, `DWE_NESTED_RUNTIME`, `WantContainerTTY`,
       `no-tty`, `TTY` and the colour-forcing rule — the revert must have taken
       all of that prose with it, including any pointer bullet whose wording does
       not contain a symbol name. A green build with orphaned guidance still
       counts as a failed revert
-- [ ] verify no deployment hash changed — confirm a `type: command` step still
+- [x] verify no deployment hash changed — confirm a `type: command` step still
       reports `already up-to-date` after the upgrade, which is what makes the
       forced redeploy necessary
-- [ ] run the full suite: `make test-race`
-- [ ] run `make lint`
+- [x] run the full suite: `make test-race`
+- [x] run `make lint`
+
+**How each criterion was verified.**
+
+- **Seven rungs.** `TestExecRunner_BuildCommand_WorkdirChain` enumerates all of
+  them as one table — sentinel (bare and inside `runner:`), sentinel outranking
+  `workdir_from`, `workdir_from` over the literal, literal over `cli.workdir`,
+  `cli.workdir` over `work_dir_internal`, `work_dir_internal` over
+  `dir_internal`, `dir_internal` last, plus the container-differs-from-map-key
+  case and two no-flag cases. `TestRunRunner_BuildCommand_WorkdirChain` pins
+  that `service_run` inherits it, and
+  `TestResolveDaemonWorkdirUser_workdirChain` mirrors the same table on the
+  daemon path, including the two nil-`workdir_from` fall-throughs that used to
+  be a hard error there.
+
+- **Byte-identical argv** [measured, cross-tree]. Not argued from the code: a
+  worktree was checked out at `aea8d3cc` (the commit before A), the same
+  throwaway pin was compiled in **both** trees, and the printed argv and colour
+  env were diffed. Four cases — `-T`, `--no-tty`, `service_run`, and one adding
+  an explicit `user:` — each against a service declaring `cli.workdir`,
+  `work_dir_internal` **and** `dir_internal`, so a chain consulted by mistake
+  would produce a visibly different `--workdir`. Result: `IDENTICAL`, e.g.
+
+  ```
+  ["docker" "compose" "-p" "dwe-laravel" "exec" "-T" "--user" "www-data" \
+   "--workdir" "/literal" "app-main" "sh" "-c" "ls -la"]
+  COLORENV []
+  ```
+
+  The empty `COLORENV` matters as much as the argv: an explicit TTY flag also
+  suppresses the colour forcing, so such a command's environment is unchanged
+  too. The pin was deleted after the comparison.
+
+- **Revert rehearsal.** Done, and it contradicted the recipe above — see the
+  correction recorded further down; the revert is a manual merge over three
+  conflicts, not three touch-ups. The prose half of the criterion did hold:
+  `packages.md`, `AGENTS.md` and `types.md` reverted cleanly with no orphaned
+  guidance.
+
+- **Deployment hash unchanged** [measured, live workspace]. In beetDeck,
+  `dwe deploy run` on the new binary skipped all 19 tracked steps as
+  `already deployed`, including the four `type: command` steps
+  (`fetch-library`, `unpack-library`, `install-python-deps`, `install-deps`),
+  and `dwe status` reports `PREV HASH == CURR HASH` for all three services.
+  A byte-for-byte diff of `dwe deploy plan -o json` between the pre-change and
+  post-change binaries is also empty (3 530 B both). This is the positive
+  evidence for the forced-redeploy requirement: the upgrade is invisible to the
+  journal, so nothing prompts the user.
+
+- **`make test-race`** green across the suite; **`make lint`** reports 19
+  findings, and cross-checking every `.go` file this branch touches against that
+  list returns nothing — all 19 are the pre-existing `modernize` findings in
+  untouched files.
+
+**Unrelated observation, recorded because it was found here.** In beetDeck,
+`dwe deploy run` prints `Phase: start: Start containers and wait for health` and
+then finishes in 0s without running the phase's untracked `docker up --wait`
+step — the stack stays down while the command reports success. This is **not
+caused by this branch**: the pre-change binary (`aea8d3cc`) behaves identically
+on the same project, and `dwe docker up --wait` invoked directly starts all five
+containers. beetDeck has no project `deploy.yml`, so this is the built-in
+default pipeline. Worth a separate look; out of scope here.
 
 ### Task 19: [Final] Update documentation
 
-- [ ] re-read the changed doc sections end to end for internal contradictions,
+- [x] re-read the changed doc sections end to end for internal contradictions,
       especially anywhere `-T` or `exec-or-fail` is still described as advice
-- [ ] confirm `make build` was run last, so `internal/core/docs/embedded/` is
+- [x] confirm `make build` was run last, so `internal/core/docs/embedded/` is
       not stale in the built binary
-- [ ] draft the upgrade-guide paragraph (why a full forced redeploy is needed,
+- [x] draft the upgrade-guide paragraph (why a full forced redeploy is needed,
       why the deployment hash will not show it) and leave it in this plan for
       the work that owns that page — do not create the page here
-- [ ] move this plan to `docs/plans/completed/`
+- [ ] move this plan to `docs/plans/completed/` — **deliberately not done**:
+      task 17 covered one of five workspaces, so the plan is not finished. Move
+      it once the remaining four have been re-run.
+
+**Doc consistency pass.** Every `-T` and `exec-or-fail` mention across
+`docs/reference/config/commands/types.md`, `docs/guides/author-project-commands.md`
+and both RU mirrors was re-read. `-T` is described as redundant rather than
+recommended; `exec-or-fail` appears only as an opt-in for state-dependent tools
+and as the `check:` guidance, never as the default. No contradiction found.
+
+**Upgrade-guide paragraph (draft — belongs in `docs/guides/upgrading.md`, filed
+by the work that owns that page).**
+
+> **Run a forced redeploy after upgrading to this release.** Three runtime
+> defaults changed for `service_exec` / `service_run` commands: where the
+> container working directory comes from when a command declares no `workdir:`,
+> whether the container gets a terminal, and what happens when the target
+> container is stopped. None of the three changes a single byte of your
+> configuration — and the deployment journal hashes configuration, not engine
+> behaviour. So `dwe deploy run` will report every step `already up-to-date` and
+> skip it, and your workspace will keep running the old semantics under the new
+> binary until you force the pipeline through:
+>
+> ```sh
+> dwe deploy run --force
+> ```
+>
+> Two things to check afterwards. A command you invoke interactively through a
+> `type: shell` wrapper (a `db.cli` that calls `dwe cmd db.psql`) no longer gets
+> a terminal inside the container — declare `compose_args: ["--no-tty=false"]`
+> on the inner command if it needs one. And any command referenced from a step's
+> `check:` should declare `mode: exec-or-fail`, since the new default would let
+> a postcondition create a container.
 
 ## Post-Completion
 
@@ -1449,6 +1621,11 @@ informational only*
   workspace is running the old semantics with a new binary.
 - **Upgrade guide.** The paragraph drafted in task 19 belongs to the work that
   owns `docs/guides/upgrading.md`; it is written here but filed there.
+- **beetDeck's `runner-defaults` scenario must be inverted.** Its last step
+  asserts the old refusing default and is red by design after commit C. The edit
+  belongs to that workspace: flip the pin to expect the marker, and rewrite the
+  header prose that says "today the default refuses".
+- **Four workspaces still to re-run.** Task 17 covered beetDeck only.
 - **Redundant-declaration cleanup.** Roughly 500 lines of now-redundant `mode:`
   and `compose_args: ["-T"]` across the workspaces are a separate later pass.
   `compose_args: ["-T"]` must be swept last, and only where a scenario covers
