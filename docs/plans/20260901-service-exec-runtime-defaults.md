@@ -141,8 +141,31 @@ consequences bind the implementation:
   it is what makes the revert a three-step procedure rather than one command;
 - commit C must not write any test that hard-codes B's argv. See task 13.
 
-So the revert of B is: `git revert <B>` → `make build` → drop the TTY clause
-from the CHANGELOG entry → `make test`. Task 18 rehearses exactly this on a
+⚠️ **REHEARSED, AND THE CLAIM BELOW IS TOO OPTIMISTIC.** A `git revert` of the
+landed commit B produces **three** conflicts, not one:
+
+- `internal/core/docs/content_hashes_gen.go` — mechanical, resolved by
+  `make build`, as predicted;
+- `internal/core/execution/pipeline/executor_test.go` — commits A, B and C all
+  add tests to this file and the hunks are adjacent despite the placement rule;
+- `internal/core/usercommands/runtime/runners/service/service_test.go` — same
+  shape: A's workdir-chain table, B's `-T` argv table and C's mode tests sit
+  next to each other.
+
+Neither test conflict is semantically hard — the resolution is "keep A's and
+C's tests, drop B's" — but the revert is a manual merge, not a three-step
+recipe. The section-splitting discipline worked for the prose files
+(`types.md`, `packages.md`, `AGENTS.md` all reverted cleanly); it does not
+carry to test files, where new tests naturally cluster at the end.
+
+If a one-command revert of B is a hard requirement, the fix is to give each
+commit its OWN test file (e.g. `executor_tty_test.go`, `service_tty_test.go`)
+rather than appending to the shared one. That was not foreseen when the plan
+was written and is recorded here rather than acted on.
+
+So the revert of B is: `git revert <B>` → `make build` → resolve two test-file
+conflicts by dropping B's tests → drop the TTY clause from the CHANGELOG entry
+→ `make test`. Task 18 rehearses exactly this on a
 scratch branch, and checks the resulting `packages.md` for orphaned prose
 rather than only checking that the build and tests are green.
 
