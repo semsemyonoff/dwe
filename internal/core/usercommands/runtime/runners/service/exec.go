@@ -99,8 +99,28 @@ func (e *ExecRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	return c.Run()
 }
 
+// workdirInternal is the workdir opt-out sentinel, mirroring
+// model.UserModeInternal: emit no --workdir flag AND skip the service fallback,
+// so the image's own WORKDIR applies.
+const workdirInternal = "internal"
+
 // resolveServiceFields returns the effective service, user, workdir, and mode
 // for the command, applying runner overrides when present.
+//
+// The workdir chain, first non-empty wins:
+//
+//  1. workdir (or runner.workdir) == "internal" — no flag, fallback skipped, stop
+//  2. runner.workdir_from → workdir_from
+//  3. runner.workdir → workdir
+//  4. services.<svc>.cli.workdir
+//  5. services.<svc>.work_dir_internal
+//  6. services.<svc>.dir_internal
+//  7. no --workdir flag — the image's WORKDIR applies
+//
+// Rungs 4-6 are config.ContainerWorkdirFallback, the same chain `dwe shell`
+// applies, so a shell session and a command into one service land together.
+// The sentinel outranks workdir_from because opting out cannot be expressed
+// any other way — for that one value the "workdir_from wins" rule inverts.
 //
 // The string-valued fields (service, workdir, workdir_from) are rendered as
 // command-template expressions so they can reference ${param.*}, ${context.*},
@@ -133,16 +153,21 @@ func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode,
 		return
 	}
 
-	if wdFrom != "" {
-		var resolved string
-		resolved, err = resolveWorkdirFrom(wdFrom, ctx)
-		if err != nil {
-			return
+	if wdLiteral != workdirInternal {
+		if wdFrom != "" {
+			var resolved string
+			resolved, err = resolveWorkdirFrom(wdFrom, ctx)
+			if err != nil {
+				return
+			}
+			workdir = resolved
 		}
-		workdir = resolved
-	}
-	if workdir == "" {
-		workdir = wdLiteral
+		if workdir == "" {
+			workdir = wdLiteral
+		}
+		if workdir == "" {
+			workdir = config.ContainerWorkdirFallback(ctx.Config, svc)
+		}
 	}
 
 	if user == "" {
@@ -161,15 +186,11 @@ func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode,
 // Container field matches the given compose service name, or "" when no match
 // is found (or the matched entry has no cli.user set).
 func lookupServiceCLIUser(cfg *config.DweConfig, container string) string {
-	if cfg == nil || container == "" {
+	svc, ok := config.ServiceByContainer(cfg, container)
+	if !ok {
 		return ""
 	}
-	for _, s := range cfg.Services {
-		if s.Container == container {
-			return s.CLI.User
-		}
-	}
-	return ""
+	return svc.CLI.User
 }
 
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns

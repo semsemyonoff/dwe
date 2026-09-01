@@ -2722,3 +2722,94 @@ func TestFormatFilesGate(t *testing.T) {
 		})
 	}
 }
+
+// installStubDocker puts a stub `docker` at the head of PATH and returns an
+// accessor for the argv (space-joined, one entry per invocation) of every call
+// the test provoked.
+//
+// execCommandAction calls usercommands.RunCommand with no seam, so a
+// service_exec command really shells out to `docker compose`. PATH is what
+// makes that affordable: exec.Command resolves the binary through LookPath
+// against the *process* environment at construction time, so the service
+// runner overwriting cmd.Env with docker.MergeEnv(...) afterwards cannot
+// defeat it. The heavier `.dwe/config` route (installFakeDocker in
+// internal/cli/lifecycle) is not usable here — the binary_docker override
+// lives in an unexported userConfig that only config.LoadConfig populates, and
+// no pipeline test loads config from disk.
+//
+// t.Setenv forbids t.Parallel in every test using this harness.
+func installStubDocker(t *testing.T) func() []string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "docker-args.log")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub docker: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	return func() []string {
+		data, err := os.ReadFile(logPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			t.Fatalf("read stub docker log: %v", err)
+		}
+		var calls []string
+		for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
+			if line != "" {
+				calls = append(calls, line)
+			}
+		}
+		return calls
+	}
+}
+
+// TestExecAction_CommandCheck_ServiceWorkdirFallback pins that the service
+// workdir fallback reaches a command dispatched as a step's check:. A check is
+// a full config.Action going through the same ExecAction switch, so a check
+// command whose cmd uses a relative path silently changes meaning with the
+// fallback — that is worth a test at the executor level, not only at the
+// runner level.
+//
+// The fixture declares mode: exec so no container probe runs.
+func TestExecAction_CommandCheck_ServiceWorkdirFallback(t *testing.T) {
+	dockerCalls := installStubDocker(t)
+
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{
+		ID:      "app.check",
+		Type:    usercommands.CommandTypeServiceExec,
+		Service: "app-main",
+		Mode:    usercommands.ExecModeExec,
+		Cmd:     "test -f composer.json",
+	})
+
+	cfg := &config.DweConfig{
+		Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
+		Services: map[string]config.ServiceConfig{
+			"main": {Container: "app-main", WorkDirInternal: "/var/www/html"},
+		},
+		Raw: map[string]any{},
+	}
+	actx := ActionContext{
+		WorkDir:     t.TempDir(),
+		Cfg:         cfg,
+		Reg:         reg,
+		SkipConfirm: true,
+		CallerCtx:   builtin.CtxPredicate,
+	}
+
+	if err := ExecAction(context.Background(), config.Action{Type: "command", Cmd: "app.check"}, actx); err != nil {
+		t.Fatalf("ExecAction: %v", err)
+	}
+
+	calls := dockerCalls()
+	if len(calls) != 1 {
+		t.Fatalf("expected exactly one docker invocation, got %d: %v", len(calls), calls)
+	}
+	if !strings.Contains(calls[0], "compose -p dwe-laravel exec --workdir /var/www/html app-main") {
+		t.Fatalf("check command did not inherit the service workdir: %s", calls[0])
+	}
+}

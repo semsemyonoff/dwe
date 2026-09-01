@@ -678,21 +678,25 @@ how cell 2a was taken.
 - Modify: `internal/core/project/config/workspace.go`
 - Modify: `internal/core/project/config/workspace_test.go`
 
-- [ ] add `ServiceByContainer(cfg *DweConfig, container string) (ServiceConfig, bool)`,
+- [x] add `ServiceByContainer(cfg *DweConfig, container string) (ServiceConfig, bool)`,
       matching on the `Container` field rather than the services map key,
       iterating **sorted** keys so a `Container` collision resolves stably, and
       returning `false` for a nil config or an empty container name
-- [ ] add `ContainerWorkdirFallback(cfg *DweConfig, container string) string`
+- [x] add `ContainerWorkdirFallback(cfg *DweConfig, container string) string`
       implementing `cli.workdir → work_dir_internal → dir_internal`
-- [ ] document on both helpers why the lookup is by `Container` and not by map
+- [x] document on both helpers why the lookup is by `Container` and not by map
       key (`service: app-main` must resolve to the folder `main`)
-- [ ] write tests for `ServiceByContainer`: match by container, the
+- [x] write tests for `ServiceByContainer`: match by container, the
       container-differs-from-key case, **two services sharing one `Container`
       resolving to the same service on repeated runs**, no match, nil config,
       empty name
-- [ ] write tests for `ContainerWorkdirFallback`: each of the three rungs wins
+- [x] write tests for `ContainerWorkdirFallback`: each of the three rungs wins
       in turn, all three empty returns `""`, unknown container returns `""`
-- [ ] run `make test` — must pass before task 4
+- [x] run `make test` — must pass before task 4
+
+⚠️ `make lint` reports 19 pre-existing `modernize` findings (`errorsastype`,
+`stringscut`, `reflecttypeassert`) in files untouched by this work — the linter
+is newer than the code. Not fixed here; out of scope for this plan.
 
 ### Task 4: Extend `resolveServiceFields` with the workdir chain and the `internal` sentinel
 
@@ -701,7 +705,7 @@ how cell 2a was taken.
 - Modify: `internal/core/usercommands/runtime/runners/service/service_test.go`
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 
-- [ ] **first**, build the fake-docker harness this task and task 13 need in
+- [x] **first**, build the fake-docker harness this task and task 13 need in
       package `pipeline`. `execCommandAction` calls `usercommands.RunCommand`
       directly (`executor.go:314`) with no seam, and `runtime.TestSnapshotRC`
       only *observes* — execution continues into a real `docker compose`, which
@@ -719,38 +723,38 @@ how cell 2a was taken.
       the override lives in the unexported `userConfig` and is only populated by
       `config.LoadConfig`, so a struct-literal fixture always resolves the real
       `docker`
-- [ ] note for scope: the repo already has this pattern via the heavier
+- [x] note for scope: the repo already has this pattern via the heavier
       `.dwe/config` route (`installFakeDocker`,
       `internal/cli/lifecycle/reset_test.go:360`, and `logs/logs_test.go:85-94`)
       — read it before writing the stub, but no pipeline test loads config from
       disk today, so the PATH seam is the cheaper fit
-- [ ] mind `goleak.VerifyTestMain` in package `pipeline` (`main_test.go:10`):
+- [x] mind `goleak.VerifyTestMain` in package `pipeline` (`main_test.go:10`):
       these stub-docker tests execute a real child through
       `childIO`/`WireChildIO`, so their cleanups must complete inside the test
       or the whole package goes red on a leaked PTY-copy goroutine
-- [ ] note also: the rung tests below need **no** stub. `service_test.go`
+- [x] note also: the rung tests below need **no** stub. `service_test.go`
       never calls a runner's `.Run(` — every test asserts on `BuildCommand`'s
       `*exec.Cmd`. Only the two package-`pipeline` tests (this task's check-path
       test and task 13's executor test) actually execute a child
-- [ ] treat a rendered `workdir` (or `runner.workdir`) equal to `internal` as
+- [x] treat a rendered `workdir` (or `runner.workdir`) equal to `internal` as
       the opt-out sentinel: emit no `--workdir` flag and skip the fallback
       entirely, mirroring `model.UserModeInternal`
-- [ ] after the existing `workdir_from` → `workdir` resolution, fall back to
+- [x] after the existing `workdir_from` → `workdir` resolution, fall back to
       `config.ContainerWorkdirFallback` when the result is still empty
-- [ ] replace `lookupServiceCLIUser`'s hand-rolled loop with
+- [x] replace `lookupServiceCLIUser`'s hand-rolled loop with
       `config.ServiceByContainer`, keeping the existing `cli.user` fallback
       behaviour byte-identical
-- [ ] update the `resolveServiceFields` doc comment to state the full
+- [x] update the `resolveServiceFields` doc comment to state the full
       seven-step chain in order
-- [ ] write a table test covering all seven rungs, including: the `internal`
+- [x] write a table test covering all seven rungs, including: the `internal`
       sentinel at both the top level and inside `runner:`, a service whose
       `Container` differs from its map key, and a service with
       `work_dir_internal` but **no** `cli.workdir` — a configuration that
       exists in no local workspace, which is why unit coverage is the only
       coverage this rung will ever get
-- [ ] write tests asserting `service_run` inherits the same chain through the
+- [x] write tests asserting `service_run` inherits the same chain through the
       shared helper
-- [ ] write a test **in package `pipeline`** (`executor_test.go`) covering a
+- [x] write a test **in package `pipeline`** (`executor_test.go`) covering a
       `service_exec` command reached as a `check:` action — a check goes through
       the same `ExecAction` switch, so the new cwd applies there too, and a
       check whose command uses a relative path silently changes meaning. It
@@ -760,7 +764,7 @@ how cell 2a was taken.
       probe — the probe seam is commit C's problem (task 13), not commit A's.
       Drive it through the stub-docker harness above and assert on the recorded
       argv
-- [ ] run `make test` — must pass before task 5
+- [x] run `make test` — must pass before task 5
 
 ### Task 5: Give `docker_daemon_start` the same workdir chain and `cli.user` fallback
 
@@ -772,31 +776,31 @@ claim.
 - Modify: `internal/core/execution/builtin/containers/daemon_start.go`
 - Modify: `internal/core/execution/builtin/containers/daemon_test.go`
 
-- [ ] **first**, extract the resolution into a pure function —
+- [x] **first**, extract the resolution into a pure function —
       `resolveDaemonWorkdirUser(cfg, service, user, workdir, workdirFrom) (string, string, error)`
       feeding `startArgsInput`. Today it sits inline in `Run`
       (`daemon_start.go:117-137`), which shells out to docker, and
       `daemon_test.go` only ever exercises the pure `buildStartExtraArgs`.
       Without the extraction this task's two test checkboxes have no surface
-- [ ] flip the daemon's `workdir_from` vs `workdir` precedence at l.124 from
+- [x] flip the daemon's `workdir_from` vs `workdir` precedence at l.124 from
       `if workdir == "" && workdirFrom != ""` to the service runner's rule —
       `workdir_from` wins — and align the nil handling (a dot-path resolving to
       nil yields `""` and falls through, rather than hard-erroring). The docs
       at `types.md:702,708` already promise this; today's code contradicts them
-- [ ] apply the same `internal` sentinel and the same
+- [x] apply the same `internal` sentinel and the same
       `config.ContainerWorkdirFallback` chain after that resolution
-- [ ] add the `cli.user` fallback via `config.ServiceByContainer`, matching the
+- [x] add the `cli.user` fallback via `config.ServiceByContainer`, matching the
       service runner's precedence exactly — unless task 1 recorded a
       file-writing daemon whose uid would move, in which case follow the
       decision recorded there
-- [ ] write tests for the workdir chain on the daemon path, including the
+- [x] write tests for the workdir chain on the daemon path, including the
       sentinel, the container-differs-from-key case, and `workdir_from`
       beating a literal `workdir` (the precedence that just flipped)
-- [ ] write tests for the `cli.user` fallback, including an explicit `user:`
+- [x] write tests for the `cli.user` fallback, including an explicit `user:`
       winning over `cli.user` and `user: internal` suppressing both
-- [ ] pin uid assertions against `${host.uid}`, never against the host shell's
+- [x] pin uid assertions against `${host.uid}`, never against the host shell's
       `id -u`
-- [ ] run `make test` — must pass before task 6
+- [x] run `make test` — must pass before task 6
 
 ### Task 6: Document the workdir chain and land commit A
 
@@ -808,24 +812,36 @@ commit B cannot conflict with them.
 - Modify: `docs/i18n/ru/reference/config/commands/types.md`
 - Modify: `internal/core/docs/content_hashes_gen.go` (regenerated by `make build`)
 
-- [ ] rewrite the workdir-resolution section for the seven-step chain,
+- [x] rewrite the workdir-resolution section for the seven-step chain,
       including the `internal` sentinel and its symmetry with `user: internal`
-- [ ] replace the mermaid diagram, which currently draws the old two-step fork
-- [ ] state explicitly that `workdir: internal` outranks `workdir_from` — for
+- [x] replace the mermaid diagram, which currently draws the old two-step fork
+- [x] state explicitly that `workdir: internal` outranks `workdir_from` — for
       that one value it inverts the published "`workdir_from` wins" rule
       (`types.md:708`), and an undocumented inversion is a trap
-- [ ] update the daemon field list so it describes what the daemon now actually
+- [x] update the daemon field list so it describes what the daemon now actually
       does for `user` and `workdir`
-- [ ] state the daemon nil-handling change made in task 5: a `workdir_from`
+- [x] state the daemon nil-handling change made in task 5: a `workdir_from`
       dot-path that resolved to nothing used to hard-fail the daemon
       (`daemon_start.go:129-131`) and now falls through to the new chain, so it
       starts in a different directory instead of erroring. An error turning
       into a different-directory success is exactly what users must read about — the existing claim at l.702/708 becomes
       true only after task 5
-- [ ] mirror both edits into the RU translation
-- [ ] run `make build` so the embedded docs tree is re-synced
-- [ ] run `make test && make lint` — must pass
-- [ ] commit as commit **A**
+- [x] mirror both edits into the RU translation
+- [x] run `make build` so the embedded docs tree is re-synced
+- [x] run `make test && make lint` — must pass
+- [x] commit as commit **A**
+
+➕ The RU mirror carries a `> Translated from: … @ <hash>` header pinned by
+`TestRussianTranslationsAreFresh`; it was refreshed to the new English content
+hash as part of this task.
+
+[decision] `make lint` still reports exactly the 19 pre-existing `modernize`
+findings in untouched files (recorded in task 3). No new findings — this task
+changed no Go source beyond the regenerated `content_hashes_gen.go`.
+
+[deviation] The task text says "commit as commit **A**". The execution harness
+commits once per task, so tasks 3–6 landed as four separate commits; squashing
+them into commit **A** is the orchestrator's job, not this task's.
 
 ### Task 7: Add `RunContext.UserInvoked`
 

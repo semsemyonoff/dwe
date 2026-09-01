@@ -4,6 +4,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 func TestBuildStartExtraArgs_orderAndFlags(t *testing.T) {
@@ -144,6 +147,228 @@ func TestBuildStartExtraArgs_secretValueNeverInArgv(t *testing.T) {
 		if strings.Contains(a, "PASSWORD=") || strings.Contains(a, "secret") {
 			t.Fatalf("env value leaked into argv: %q", a)
 		}
+	}
+}
+
+// TestResolveDaemonWorkdirUser_workdirChain walks every rung of the workdir
+// chain the daemon now shares with the service runners, including the `internal`
+// opt-out sentinel, the container-differs-from-map-key lookup, and workdir_from
+// beating a literal workdir.
+func TestResolveDaemonWorkdirUser_workdirChain(t *testing.T) {
+	rawDirInternal := map[string]any{
+		"services": map[string]any{
+			"main": map[string]any{"dir_internal": "/from/config"},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		workdir     string
+		workdirFrom string
+		services    map[string]config.ServiceConfig
+		raw         map[string]any
+		want        string // "" means: no --workdir flag at all
+	}{
+		{
+			name:    "sentinel skips the fallback",
+			workdir: "internal",
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", CLI: config.ServiceCLIConfig{WorkDir: "/cli"}},
+			},
+		},
+		{
+			name:        "sentinel outranks workdir_from",
+			workdir:     "internal",
+			workdirFrom: "services.main.dir_internal",
+			raw:         rawDirInternal,
+		},
+		{
+			name:        "workdir_from beats the literal",
+			workdir:     "/literal",
+			workdirFrom: "services.main.dir_internal",
+			raw:         rawDirInternal,
+			want:        "/from/config",
+		},
+		{
+			name:        "workdir_from resolving to nil falls through to the literal",
+			workdir:     "/literal",
+			workdirFrom: "services.missing.dir_internal",
+			raw:         rawDirInternal,
+			want:        "/literal",
+		},
+		{
+			name:        "workdir_from resolving to nil falls through to the service fallback",
+			workdirFrom: "services.missing.dir_internal",
+			raw:         rawDirInternal,
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", DirInternal: "/dir"},
+			},
+			want: "/dir",
+		},
+		{
+			name:    "literal beats cli.workdir",
+			workdir: "/literal",
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", CLI: config.ServiceCLIConfig{WorkDir: "/cli"}},
+			},
+			want: "/literal",
+		},
+		{
+			name: "cli.workdir beats work_dir_internal",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Container:       "app-main",
+					CLI:             config.ServiceCLIConfig{WorkDir: "/cli"},
+					WorkDirInternal: "/work",
+					DirInternal:     "/dir",
+				},
+			},
+			want: "/cli",
+		},
+		{
+			name: "work_dir_internal without cli.workdir",
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", WorkDirInternal: "/work", DirInternal: "/dir"},
+			},
+			want: "/work",
+		},
+		{
+			name: "dir_internal is the last rung",
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", DirInternal: "/dir"},
+			},
+			want: "/dir",
+		},
+		{
+			name: "container differs from the services map key",
+			services: map[string]config.ServiceConfig{
+				"other": {Container: "app-other", DirInternal: "/other"},
+				"main":  {Container: "app-main", DirInternal: "/dir"},
+			},
+			want: "/dir",
+		},
+		{
+			name: "no service entry leaves the image WORKDIR alone",
+			services: map[string]config.ServiceConfig{
+				"other": {Container: "app-other", DirInternal: "/other"},
+			},
+		},
+		{
+			name: "nothing declared anywhere",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.DweConfig{Services: tt.services, Raw: tt.raw}
+			gotWorkdir, _, err := resolveDaemonWorkdirUser(cfg, "app-main", "", tt.workdir, tt.workdirFrom)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotWorkdir != tt.want {
+				t.Fatalf("workdir = %q, want %q", gotWorkdir, tt.want)
+			}
+
+			args := buildStartExtraArgs(startArgsInput{
+				FullName:    "proj-x",
+				Service:     "app-main",
+				Workdir:     gotWorkdir,
+				ProjectFull: "proj",
+			})
+			if tt.want == "" {
+				if slices.Contains(args, "--workdir") {
+					t.Fatalf("expected no --workdir flag, got: %v", args)
+				}
+				return
+			}
+			if !hasPair(args, "--workdir", tt.want) {
+				t.Fatalf("expected '--workdir %s', got: %v", tt.want, args)
+			}
+		})
+	}
+}
+
+// TestResolveDaemonWorkdirUser_cliUserFallback pins the daemon's user chain:
+// an explicit user: wins, "internal" suppresses both the flag and the fallback,
+// and services.<svc>.cli.user fills in otherwise.
+func TestResolveDaemonWorkdirUser_cliUserFallback(t *testing.T) {
+	services := map[string]config.ServiceConfig{
+		"other": {Container: "app-other", CLI: config.ServiceCLIConfig{User: "nobody"}},
+		"main":  {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
+	}
+
+	tests := []struct {
+		name string
+		user string
+		want string
+	}{
+		{"cli.user fills in when the daemon declares none", "", "www-data"},
+		{"explicit user beats cli.user", "root", "root"},
+		{"internal suppresses cli.user", "internal", "internal"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.DweConfig{Services: services}
+			_, gotUser, err := resolveDaemonWorkdirUser(cfg, "app-main", tt.user, "", "")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotUser != tt.want {
+				t.Fatalf("user = %q, want %q", gotUser, tt.want)
+			}
+		})
+	}
+
+	t.Run("no service entry leaves the image USER alone", func(t *testing.T) {
+		cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+			"other": {Container: "app-other", CLI: config.ServiceCLIConfig{User: "nobody"}},
+		}}
+		_, gotUser, err := resolveDaemonWorkdirUser(cfg, "app-main", "", "", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotUser != "" {
+			t.Fatalf("user = %q, want empty", gotUser)
+		}
+		args := buildStartExtraArgs(startArgsInput{FullName: "proj-x", Service: "app-main", User: gotUser, ProjectFull: "proj"})
+		if slices.Contains(args, "--user") {
+			t.Fatalf("expected no --user flag, got: %v", args)
+		}
+	})
+
+	// A cli.user of "current" travels through the fallback and is expanded by
+	// buildStartExtraArgs into the ${host.uid}:${host.gid} pair — never the host
+	// shell's `id -u`, which differs from what dwe exports into containers.
+	t.Run("cli.user current expands to the host uid:gid pair", func(t *testing.T) {
+		cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+			"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "current"}},
+		}}
+		_, gotUser, err := resolveDaemonWorkdirUser(cfg, "app-main", "", "", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotUser != "current" {
+			t.Fatalf("user = %q, want %q", gotUser, "current")
+		}
+		args := buildStartExtraArgs(startArgsInput{FullName: "proj-x", Service: "app-main", User: gotUser, ProjectFull: "proj"})
+		h := tpl.CurrentHostInfo()
+		if !hasPair(args, "--user", h.UID+":"+h.GID) {
+			t.Fatalf("expected '--user %s:%s', got: %v", h.UID, h.GID, args)
+		}
+	})
+}
+
+// TestResolveDaemonWorkdirUser_workdirFromNonString pins that a dot-path
+// pointing at a non-string value still fails the step loudly — only a nil
+// (absent) value falls through.
+func TestResolveDaemonWorkdirUser_workdirFromNonString(t *testing.T) {
+	cfg := &config.DweConfig{Raw: map[string]any{
+		"services": map[string]any{"main": map[string]any{"ports": map[string]any{"http": 8080}}},
+	}}
+	_, _, err := resolveDaemonWorkdirUser(cfg, "app-main", "", "", "services.main.ports")
+	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
+		t.Fatalf("got err=%v, want a workdir_from diagnostic", err)
 	}
 }
 

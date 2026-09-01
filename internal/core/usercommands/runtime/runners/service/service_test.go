@@ -1122,3 +1122,187 @@ func TestExecRunner_BuildCommand_ProbesBeforeArgvAppendFrom(t *testing.T) {
 		t.Fatal("argv_append_from ran despite the service being down")
 	}
 }
+
+// TestExecRunner_BuildCommand_WorkdirChain walks every rung of the workdir
+// chain documented on resolveServiceFields, including the two rungs no local
+// workspace exercises (work_dir_internal without cli.workdir, and the
+// `internal` opt-out sentinel).
+func TestExecRunner_BuildCommand_WorkdirChain(t *testing.T) {
+	rawDirInternal := map[string]any{
+		"services": map[string]any{
+			"main": map[string]any{"dir_internal": "/from/config"},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		cmd      *CommandDef
+		services map[string]config.ServiceConfig
+		raw      map[string]any
+		want     string // "" means: no --workdir flag at all
+	}{
+		{
+			name: "sentinel skips the fallback",
+			cmd:  &CommandDef{Workdir: "internal"},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", CLI: config.ServiceCLIConfig{WorkDir: "/cli"}},
+			},
+		},
+		{
+			name: "sentinel inside runner block",
+			cmd:  &CommandDef{Runner: &RunnerDef{Workdir: "internal"}},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", CLI: config.ServiceCLIConfig{WorkDir: "/cli"}},
+			},
+		},
+		{
+			name: "sentinel outranks workdir_from",
+			cmd:  &CommandDef{Workdir: "internal", WorkdirFrom: "services.main.dir_internal"},
+			raw:  rawDirInternal,
+		},
+		{
+			name: "workdir_from beats the literal",
+			cmd:  &CommandDef{Workdir: "/literal", WorkdirFrom: "services.main.dir_internal"},
+			raw:  rawDirInternal,
+			want: "/from/config",
+		},
+		{
+			name: "literal beats cli.workdir",
+			cmd:  &CommandDef{Workdir: "/literal"},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", CLI: config.ServiceCLIConfig{WorkDir: "/cli"}},
+			},
+			want: "/literal",
+		},
+		{
+			name: "cli.workdir beats work_dir_internal",
+			cmd:  &CommandDef{},
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Container:       "app-main",
+					CLI:             config.ServiceCLIConfig{WorkDir: "/cli"},
+					WorkDirInternal: "/work",
+					DirInternal:     "/dir",
+				},
+			},
+			want: "/cli",
+		},
+		{
+			name: "work_dir_internal without cli.workdir",
+			cmd:  &CommandDef{},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", WorkDirInternal: "/work", DirInternal: "/dir"},
+			},
+			want: "/work",
+		},
+		{
+			name: "dir_internal is the last rung",
+			cmd:  &CommandDef{},
+			services: map[string]config.ServiceConfig{
+				"main": {Container: "app-main", DirInternal: "/dir"},
+			},
+			want: "/dir",
+		},
+		{
+			name: "container differs from the services map key",
+			cmd:  &CommandDef{},
+			services: map[string]config.ServiceConfig{
+				"other": {Container: "app-other", DirInternal: "/other"},
+				"main":  {Container: "app-main", DirInternal: "/dir"},
+			},
+			want: "/dir",
+		},
+		{
+			name: "no service entry leaves the image WORKDIR alone",
+			cmd:  &CommandDef{},
+			services: map[string]config.ServiceConfig{
+				"other": {Container: "app-other", DirInternal: "/other"},
+			},
+		},
+		{
+			name: "nothing declared anywhere",
+			cmd:  &CommandDef{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			def := *tt.cmd
+			def.Type = CommandTypeServiceExec
+			def.Service = "app-main"
+			def.Mode = ExecModeExec
+			def.Cmd = "ls"
+
+			ctx := RunContext{
+				Cmd:    &def,
+				Render: &tpl.RenderContext{},
+				Config: &config.DweConfig{
+					Project:  config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
+					Services: tt.services,
+					Raw:      tt.raw,
+				},
+				Params:  map[string]any{},
+				Context: map[string]any{},
+			}
+
+			r := &ExecRunner{}
+			c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			args := strings.Join(c.Args, " ")
+			if tt.want == "" {
+				if strings.Contains(args, "--workdir") {
+					t.Fatalf("expected no --workdir flag, got: %s", args)
+				}
+				return
+			}
+			if !strings.Contains(args, "--workdir "+tt.want) {
+				t.Fatalf("expected '--workdir %s', got: %s", tt.want, args)
+			}
+		})
+	}
+}
+
+// TestRunRunner_BuildCommand_WorkdirChain pins that service_run inherits the
+// same chain through the shared resolveServiceFields helper.
+func TestRunRunner_BuildCommand_WorkdirChain(t *testing.T) {
+	services := map[string]config.ServiceConfig{
+		"main": {Container: "app-main", WorkDirInternal: "/work"},
+	}
+
+	newCtx := func(workdir string) RunContext {
+		return RunContext{
+			Cmd: &CommandDef{
+				Type:    CommandTypeServiceRun,
+				Service: "app-main",
+				Workdir: workdir,
+				Cmd:     "composer install",
+			},
+			Render: &tpl.RenderContext{},
+			Config: &config.DweConfig{
+				Project:  config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
+				Services: services,
+			},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		}
+	}
+
+	r := &RunRunner{}
+	c, err := r.BuildCommand(context.Background(), newCtx(""), testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args := strings.Join(c.Args, " "); !strings.Contains(args, "--workdir /work") {
+		t.Fatalf("expected the service fallback to apply to service_run, got: %s", args)
+	}
+
+	c, err = r.BuildCommand(context.Background(), newCtx("internal"), testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if args := strings.Join(c.Args, " "); strings.Contains(args, "--workdir") {
+		t.Fatalf("expected the internal sentinel to suppress --workdir, got: %s", args)
+	}
+}

@@ -223,7 +223,7 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 | `argv_append_from` | optional | Shell expression whose stdout lines are appended to `argv`. Runs on the **host**, not in the container — see [Computed arguments](directives.md#computed-arguments-argv_append_from) |
 | `mode` | optional | `exec-or-fail` (default), `exec`, `run`, or `exec-or-run` — see [mode resolution](#mode-resolution) |
 | `user` | optional | Container user to run as. See [User resolution](#user-resolution) for the full list of accepted values and the fallback rules. |
-| `workdir` | optional | Container workdir; rendered with templates |
+| `workdir` | optional | Container workdir; rendered with templates. Omitted → falls back to the target service's own workdir; `internal` opts out entirely. See [Workdir resolution](#workdir-resolution) |
 | `workdir_from` | optional | Dot-path into merged config resolving to the workdir string |
 | `compose_args` | optional | Extra flags forwarded to `docker compose exec/run` (templated) |
 
@@ -606,6 +606,16 @@ commands:
 
 `service`, `workdir`/`workdir_from`, `user`, `env`, `params`, `argv`, `compose_args` follow the same semantics as [`type: service_run`](#type-service_run). The daemon-specific configuration lives entirely under the `daemon:` block.
 
+For `workdir` and `user` that is now literally true — the daemon runs the same resolvers as the service runners:
+
+- **`workdir`** goes through the full [seven-rung chain](#the-service-runner-chain), including the `internal` sentinel and the `cli.workdir` → `work_dir_internal` → `dir_internal` service fallback. A daemon that declares no `workdir` therefore starts in the same directory `dwe shell <svc>` lands in, instead of the image's `WORKDIR`.
+- **`user`** falls back to `services.<svc>.cli.user` of the target service when the command sets no `user:`, and `user: internal` opts out of that fallback — see [User resolution](#user-resolution).
+
+Two daemon-specific behaviours changed with that alignment, and both are visible from the outside:
+
+- **`workdir_from` now beats a literal `workdir`.** The daemon used to do the opposite (the literal won, and `workdir_from` was consulted only when `workdir` was empty), which contradicted the precedence documented for the service runners. A daemon that sets **both** fields now starts in the `workdir_from` directory.
+- **A `workdir_from` dot-path that resolves to nothing no longer fails the daemon.** `.start` used to abort with `workdir_from "…": path not found in config`; it now falls through to the remaining rungs. That turns a hard error into a *success in a different directory* — if a daemon of yours relied on that error to catch a typo'd or renamed dot-path, nothing will report it any more. A non-string value at the dot-path is still a hard error.
+
 ### `daemon:` block fields
 
 | Field | Required | Default | Description |
@@ -705,23 +715,54 @@ dwe stop
 workdir_from: services.main.work_dir_internal
 ```
 
-When both `workdir` and `workdir_from` are set, `workdir_from` wins — the same "config wins, literal is the safety net" pattern as `params.*.default_from`. Inside a `runner:` block the same rule applies between `runner.workdir_from` and `runner.workdir`.
+When both `workdir` and `workdir_from` are set, `workdir_from` wins — the same "config wins, literal is the safety net" pattern as `params.*.default_from`. Inside a `runner:` block the same rule applies between `runner.workdir_from` and `runner.workdir`. The one exception is the `internal` sentinel, described below.
+
+### The service-runner chain
+
+`service_exec`, `service_run`, and `daemon` resolve the container workdir through a single seven-rung chain. The first rung that yields a non-empty value wins:
+
+| # | Rung | Result |
+|---|------|--------|
+| 1 | `workdir: internal` (or `runner.workdir: internal`) | No `--workdir` flag, **and** the whole fallback is skipped. Stop. |
+| 2 | `runner.workdir_from` → `workdir_from` | The string the dot-path resolves to |
+| 3 | `runner.workdir` → `workdir` | The literal path |
+| 4 | `services.<svc>.cli.workdir` | The service's declared CLI workdir |
+| 5 | `services.<svc>.work_dir_internal` | The service's internal work directory |
+| 6 | `services.<svc>.dir_internal` | The service's internal project directory |
+| 7 | _(nothing matched)_ | No `--workdir` flag — the image's own `WORKDIR` applies |
+
+Rungs 4–6 are exactly the chain `dwe shell` applies, so a shell session and a command targeting the same service finally land in the same directory. Before this, a command without an explicit `workdir` landed in the image's `WORKDIR` while `dwe shell` into the same service landed in the service's work directory.
+
+The service for rungs 4–6 is looked up by its `container:` value, not by the `workspace/services/<name>/` folder key — `service: app-main` reads the fallback from the service folder whose `service.yml` declares `container: app-main`. The lookup happens **after** the `runner.service` redirect, exactly like the `cli.user` fallback.
+
+`workdir_from` still hard-errors when the dot-path resolves to a non-string value (a configuration bug). A dot-path that is simply **absent** from the merged config is not an error: it yields nothing and resolution falls through to the next rung.
+
+### `workdir: internal` outranks `workdir_from`
+
+For this one value the published "`workdir_from` wins" rule **inverts**. `internal` is not a path, it is an explicit "give this command no `--workdir` and do not guess one either", and there is no other way to express that — so the resolver stops at rung 1 even when `workdir_from` is set and resolves to a perfectly good string. Every other literal `workdir` value keeps the normal precedence: `workdir_from` beats `workdir`.
+
+This is the deliberate symmetry with [`user: internal`](#user-resolution), which likewise emits no `--user` flag and skips the `services.<svc>.cli.user` fallback. One sentinel word, one meaning, on both fields.
 
 Resolution order:
 
 ```mermaid
-flowchart LR
-    F[workdir_from] -- non-string --> X[error]
-    F -- empty/missing --> W[workdir]
+flowchart TD
+    S{workdir is internal} -- yes --> N[no --workdir flag]
+    S -- no --> F[workdir_from]
+    F -- non-string --> X[error]
     F -- string value --> U[use it]
-    W -- empty --> N[no --workdir flag]
+    F -- empty/missing --> W[workdir]
     W -- non-empty --> U
+    W -- empty --> A[cli.workdir]
+    A -- non-empty --> U
+    A -- empty --> B[work_dir_internal]
+    B -- non-empty --> U
+    B -- empty --> C[dir_internal]
+    C -- non-empty --> U
+    C -- empty --> N
 ```
 
-- `workdir_from` resolves to a non-empty string → use it.
-- `workdir_from` is missing in config or resolves to an empty string → fall back to the literal `workdir`.
-- `workdir_from` resolves to a non-string value → hard error (configuration bug).
-- Neither set → the runner does not pass `--workdir` (container default applies).
+Host runners (`type: shell`, `type: script`) have no target service to fall back to and reject `workdir_from` at load time: only the literal `workdir` applies, and an unset `workdir` means the project root.
 
 ### Templated service / workdir / workdir_from
 
