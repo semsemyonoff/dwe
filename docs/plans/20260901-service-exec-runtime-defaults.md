@@ -1416,9 +1416,10 @@ design predicted, and each moved together with its colour forcing:
 **Files:**
 - Modify: `docs/plans/20260901-service-exec-runtime-defaults.md`
 
-- [ ] run the existing scenario suite in each of the five workspaces that
-      already have a green baseline — **only beetDeck was run; the other four
-      workspaces are outstanding**
+- [x] run the existing scenario suite in each of the five workspaces that
+      already have a green baseline — plus three more; `ficbird` was skipped
+      (active development there) and `tbm` was skipped (VPN-gated, 60–90 min per
+      scenario)
 - [x] for the mode change, exercise it while the target container is
       **stopped** — that is the only state in which the mode is observable
 - [x] record which workspaces are green and note that only the mode change is
@@ -1463,10 +1464,86 @@ must assert the marker is **present**, and the surrounding prose (which states
 change lands with whoever owns that workspace; until then beetDeck's baseline
 is red by design, not by regression.
 
-**Not covered by this run.** The other four workspaces were not exercised. A
-green scenario run says nothing about the TTY or workdir halves anyway — see the
-`runner-defaults` header, which spells out why both of those pins are records
-rather than detectors in this project.
+**Scenario results — the remaining workspaces** (same binary; each run on an
+isolated `dwe test` copy, no live stack touched)
+
+| workspace | scenario | result | reading |
+| --- | --- | --- | --- |
+| AlbFetcharr | `exec-semantics` | failed at `mode-default-must-not-fall-back-to-run` | **mode-flip detection** |
+| alto | `exec-runner-defaults` | failed at `no ephemeral fallback happened` | **mode-flip detection** |
+| cueBreaker | `exec-contract` | failed at `no ephemeral container ran` (11/12 green) | **mode-flip detection** |
+| laravel | `smoke`, `tools`, `debug` | all three passed | no surface for the change |
+| podlapka | `full` | failed in the pre-scenario deploy | environmental |
+| magento | `smoke` | failed at `stack-up` | environmental |
+
+**Four independent detections of the mode flip.** beetDeck, AlbFetcharr, alto
+and cueBreaker each carry a purpose-built probe declaring no `mode:`, each stops
+its target container, and each asserts the old refusing default. All four failed
+at exactly that assertion, and all four logged the runner's own warning —
+`service "<name>" is not running — falling back to ephemeral "docker compose
+run --rm"` — followed by the ephemeral container being created. alto's probe
+went further and printed a container hostname differing from the earlier exec
+run's, proving the body executed in a throwaway container rather than the
+original one. This is positive evidence, not an absence of failures.
+
+**One genuine TTY detection.** cueBreaker's scenario asserts
+`[ ! -t 0 ] && [ ! -t 1 ] && [ ! -t 2 ]` on three pipeline-invoked steps; all
+three passed, so commit B did not leak a terminal into a pipeline step. No
+workspace has a probe that can observe the user-invoked-vs-pipeline distinction
+in the other direction — that is what the `/tmp/ttyprobe` matrix in task 16 is
+for.
+
+**No workspace can discriminate the workdir chain.** Every scenario reported the
+same cwd as before, and every scenario header says why: in these projects the
+old "pass no `--workdir`" path and the new chain resolve to the *same* directory
+(`cli.workdir` equals `work_dir_internal` equals the compose `working_dir`), or
+the target service declares none of the three. Commit A is shown non-breaking
+here; it is **not** validated by these runs. The unit table in task 18 is the
+only place it is.
+
+**The two environmental failures were both proven environmental, not assumed.**
+
+- podlapka died in the pre-scenario deploy: `glitchtip` exits because its
+  database does not exist. A control run on the released `0.5.0` binary failed
+  identically at the same step. The project-side cause is real and worth its own
+  fix — `glitchtip` was added on 2026-08-28, is `enabled: true` in the
+  developer's `local.yml` (which `dwe test` seeds into the copy), has no
+  `deploy.yml` and no pipeline phase, and its own header documents a manual
+  `dwe cmd db.ensure-glitchtip` bootstrap that no step performs. Every test copy
+  has been broken since that date.
+- magento died on a port conflict: `dwe-ficbird-redis` holds `127.0.0.1:6379`.
+  `dwe test`'s port remapping never moved it, because `db`, `valkey` and
+  `opensearch` are compose-only services with no `workspace/services/<name>/`
+  folder, so `AllocatePorts` has no entry to remap; the single automatic retry
+  re-picked the same port. Verified directly: those three folders do not exist,
+  and ficbird's live redis holds the port. A pre-existing `dwe test` isolation
+  gap, unrelated to this branch.
+
+**Where the change has no surface at all.** laravel declares `mode:` on all 34
+of its `service_exec` commands (31 `exec-or-run`, 3 `exec-or-fail`) and
+`workdir_from:` on 30 of 36, so its three green scenarios show only that nothing
+broke. magento is the same: every `service_exec` declares `mode: exec-or-run`,
+and its `db`/`valkey`/`opensearch` targets have no service folder and therefore
+no chain to inherit.
+
+**The wrapper regression was inventoried in magento, the project most likely to
+have one.** Four `type: shell`/`type: script` sites re-enter dwe. Two
+(`varnish.enable`/`disable`) call non-interactive inner commands with `--yes`
+and are wired as service hooks that were never interactive. Two go through
+`dwe docker exec`, a different code path that passes `-i -T` explicitly, and the
+one genuinely stdin-dependent case — `gunzip -c dump.gz | dwe docker exec … 
+mariadb` — is unaffected because commit B only ever appends `-T` and never
+touches `-i`. No command in that project loses anything that matters.
+
+**Four more workspace scenarios now need inverting**, alongside beetDeck's:
+AlbFetcharr's `exec-semantics`, alto's `exec-runner-defaults` and cueBreaker's
+`exec-contract` all pin the old refusing default. Each of their headers already
+names this outcome as the expected signal that the default changed, so the edit
+is anticipated — but it is a workspace-side edit, not a repo one.
+
+**Not covered.** `ficbird` (active development), `ficbird-main` (a second
+checkout of the same project, sharing images and external volumes with it) and
+`tbm` (every scenario is a VPN-gated 60–90 min full deploy).
 
 ### Task 18: Verify acceptance criteria
 
@@ -1621,11 +1698,20 @@ informational only*
   workspace is running the old semantics with a new binary.
 - **Upgrade guide.** The paragraph drafted in task 19 belongs to the work that
   owns `docs/guides/upgrading.md`; it is written here but filed there.
-- **beetDeck's `runner-defaults` scenario must be inverted.** Its last step
-  asserts the old refusing default and is red by design after commit C. The edit
-  belongs to that workspace: flip the pin to expect the marker, and rewrite the
-  header prose that says "today the default refuses".
-- **Four workspaces still to re-run.** Task 17 covered beetDeck only.
+- **Four workspace scenarios must be inverted.** beetDeck's `runner-defaults`,
+  AlbFetcharr's `exec-semantics`, alto's `exec-runner-defaults` and cueBreaker's
+  `exec-contract` all assert the old refusing default and are red by design
+  after commit C. Each edit belongs to its workspace: flip the pin to expect the
+  marker, and rewrite the header prose that says the default refuses.
+- **Three workspaces still unexercised:** `ficbird` and `ficbird-main` (active
+  development; the two share images and external volumes) and `tbm` (VPN-gated,
+  60–90 min per scenario).
+- **Two unrelated project-side gaps found while running the suite**, both
+  pre-existing and both proven so: podlapka's `glitchtip` needs a database
+  bootstrap that no pipeline step performs, so every `dwe test` copy has failed
+  since 2026-08-28; and `dwe test` does not remap host ports for compose-only
+  services that have no `workspace/services/<name>/` folder, which is what let
+  magento's `valkey` collide with a foreign live stack on 6379.
 - **Redundant-declaration cleanup.** Roughly 500 lines of now-redundant `mode:`
   and `compose_args: ["-T"]` across the workspaces are a separate later pass.
   `compose_args: ["-T"]` must be swept last, and only where a scenario covers
