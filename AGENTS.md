@@ -134,6 +134,11 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   A new per-service file type must also join `knownServiceFiles` in the `services-folder` validator, or `dwe validate` warns in every project that adopts it.
   See § Core — Foundation (`project/config/`) and § Core — Validation.
 
+- **Service workdir chain + exec-mode default** — a container command with no `workdir:` inherits the service's `cli.workdir` → `work_dir_internal` → `dir_internal` (the chain `dwe shell` uses); `workdir: internal` is the opt-out sentinel and the ONE value that outranks `workdir_from`.
+  Resolve a service with `config.ServiceByContainer` (by the `container:` field, sorted keys — never `range cfg.Services` on the map key) and its fallback with `config.ContainerWorkdirFallback`; `docker_daemon_start` runs the same chain.
+  `mode:` defaults to `exec-or-run`, so a `type: command` `check:` over a mode-less `service_exec` command CREATES a container — such a check must declare `mode: exec-or-fail`.
+  See § Service Workdir & Exec Mode Contract.
+
 - **Snapshot template scope gate** — `${snapshot.*}` resolves only inside snapshot workflow blocks; `tpl.RenderCommand` calls `validateSnapshotScope` BEFORE `CompileVarSyntax`.
   Never add scope logic to `CompileVarSyntax` — it has no error path and must stay pure-syntactic.
   See § `internal/shared/tpl/`.

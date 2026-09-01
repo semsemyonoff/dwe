@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -1633,5 +1634,133 @@ func TestExecRunner_BuildCommand_ContainerTTYPositioning(t *testing.T) {
 	}
 	if nameIdx >= tIdx || tIdx >= userIdx || userIdx >= svcIdx {
 		t.Errorf("expected --name < -T < --user < service, got %d/%d/%d/%d in %v", nameIdx, tIdx, userIdx, svcIdx, c.Args)
+	}
+}
+
+// composeSubcommand returns the compose subcommand ("exec" or "run") the
+// runner picked, by scanning past the `docker compose` prefix and the project
+// flag. Tests use it instead of comparing a full argv so they stay agnostic to
+// the flags the runner derives (notably the container-TTY `-T`).
+func composeSubcommand(t *testing.T, args []string) string {
+	t.Helper()
+	for _, a := range args[1:] {
+		if a == "exec" || a == "run" {
+			return a
+		}
+	}
+	t.Fatalf("no compose subcommand in %v", args)
+	return ""
+}
+
+// stubContainerRunning replaces the container probe seam for the duration of
+// the test. The real probe shells out to `docker compose ps`, which is why the
+// mode-dependent branches are otherwise untestable in-process.
+func stubContainerRunning(t *testing.T, running bool, err error) *int {
+	t.Helper()
+	calls := 0
+	prev := containerRunningFn
+	containerRunningFn = func(*docker.Compose, string) (bool, error) {
+		calls++
+		return running, err
+	}
+	t.Cleanup(func() { containerRunningFn = prev })
+	return &calls
+}
+
+// TestExecRunner_BuildCommand_DefaultModeFallsBackToRun pins the flipped
+// default: a command that declares no `mode:` takes the exec-or-run branch, so
+// a stopped service produces an ephemeral `docker compose run --rm` plus the
+// warning that says so, rather than the exec-or-fail refusal.
+func TestExecRunner_BuildCommand_DefaultModeFallsBackToRun(t *testing.T) {
+	stubContainerRunning(t, false, nil)
+
+	var stderr bytes.Buffer
+	ctx := makeServiceExecCtx("app-main", "", "", "", "php artisan migrate", nil)
+	ctx.Stderr = &stderr
+
+	c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := composeSubcommand(t, c.Args); got != "run" {
+		t.Errorf("compose subcommand = %q, want run (the exec-or-run fallback)", got)
+	}
+	if !slices.Contains(c.Args, "--rm") {
+		t.Errorf("expected the ephemeral --rm in %v", c.Args)
+	}
+	if warn := stderr.String(); !strings.Contains(warn, "is not running") ||
+		!strings.Contains(warn, "ephemeral") {
+		t.Errorf("missing the exec-or-run fallback warning, stderr = %q", warn)
+	}
+}
+
+// TestExecRunner_BuildCommand_DefaultModeUsesExecWhenRunning is the other half
+// of the default: a running container still gets a plain exec, and no warning.
+func TestExecRunner_BuildCommand_DefaultModeUsesExecWhenRunning(t *testing.T) {
+	stubContainerRunning(t, true, nil)
+
+	var stderr bytes.Buffer
+	ctx := makeServiceExecCtx("app-main", "", "", "", "php artisan migrate", nil)
+	ctx.Stderr = &stderr
+
+	c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := composeSubcommand(t, c.Args); got != "exec" {
+		t.Errorf("compose subcommand = %q, want exec", got)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("no fallback happened, but stderr = %q", stderr.String())
+	}
+}
+
+// TestExecRunner_BuildCommand_ExplicitExecOrFailStillRefuses proves opting back
+// in works: with the default flipped to exec-or-run, `mode: exec-or-fail` is
+// how a command declares that it must never create a container, and it still
+// refuses with the dwe-level error rather than a raw compose trace.
+func TestExecRunner_BuildCommand_ExplicitExecOrFailStillRefuses(t *testing.T) {
+	stubContainerRunning(t, false, nil)
+
+	ctx := makeServiceExecCtx("app-main", "", "", model.ExecModeExecOrFail, "php artisan migrate", nil)
+
+	_, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+	if err == nil {
+		t.Fatal("expected the exec-or-fail refusal, got nil")
+	}
+	if !strings.Contains(err.Error(), "is not running") ||
+		!strings.Contains(err.Error(), "exec-or-fail") {
+		t.Errorf("err = %v, want the exec-or-fail not-running diagnostic", err)
+	}
+}
+
+// TestExecRunner_BuildCommand_ProbeErrorSelectsExec pins that a probe *error*
+// (as opposed to a "not running" answer) selects exec on BOTH probing modes and
+// emits no warning — compose is left to report the real problem itself. This is
+// pre-existing behaviour on both branches; flipping the default must not
+// change it.
+func TestExecRunner_BuildCommand_ProbeErrorSelectsExec(t *testing.T) {
+	for _, mode := range []ExecMode{"", model.ExecModeExecOrRun, model.ExecModeExecOrFail} {
+		t.Run(string(mode), func(t *testing.T) {
+			calls := stubContainerRunning(t, false, errors.New("docker daemon unreachable"))
+
+			var stderr bytes.Buffer
+			ctx := makeServiceExecCtx("app-main", "", "", mode, "php artisan migrate", nil)
+			ctx.Stderr = &stderr
+
+			c, err := (&ExecRunner{}).BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+			if err != nil {
+				t.Fatalf("a probe error must not fail the build: %v", err)
+			}
+			if *calls != 1 {
+				t.Errorf("probe called %d times, want 1", *calls)
+			}
+			if got := composeSubcommand(t, c.Args); got != "exec" {
+				t.Errorf("compose subcommand = %q, want exec", got)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("a probe error must not warn about an ephemeral fallback, stderr = %q", stderr.String())
+			}
+		})
 	}
 }

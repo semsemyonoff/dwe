@@ -221,7 +221,7 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 | `service` | yes | Compose service name |
 | `cmd` / `argv` | one of | Shell command string OR raw argv |
 | `argv_append_from` | optional | Shell expression whose stdout lines are appended to `argv`. Runs on the **host**, not in the container — see [Computed arguments](directives.md#computed-arguments-argv_append_from) |
-| `mode` | optional | `exec-or-fail` (default), `exec`, `run`, or `exec-or-run` — see [mode resolution](#mode-resolution) |
+| `mode` | optional | `exec-or-run` (default), `exec-or-fail`, `exec`, or `run` — see [mode resolution](#mode-resolution) |
 | `user` | optional | Container user to run as. See [User resolution](#user-resolution) for the full list of accepted values and the fallback rules. |
 | `workdir` | optional | Container workdir; rendered with templates. Omitted → falls back to the target service's own workdir; `internal` opts out entirely. See [Workdir resolution](#workdir-resolution) |
 | `workdir_from` | optional | Dot-path into merged config resolving to the workdir string |
@@ -231,12 +231,20 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 
 | Mode | When container is running | When container is not running |
 |------|---------------------------|-------------------------------|
-| `exec-or-fail` (default) | runs via `docker compose exec` | refuses with a clear DWE error suggesting `dwe docker up <svc>` |
+| `exec-or-run` (default) | runs via `docker compose exec` | falls back to `docker compose run --rm`; emits a yellow warning so the ephemeral-container behaviour is visible |
+| `exec-or-fail` | runs via `docker compose exec` | refuses with a clear DWE error suggesting `dwe docker up <svc>` |
 | `exec` | runs via `docker compose exec` | calls `compose exec` anyway; docker emits its own (cryptic) error |
 | `run` | always runs a fresh ephemeral container via `docker compose run --rm` | same |
-| `exec-or-run` | runs via `docker compose exec` | silently falls back to `docker compose run --rm`; emits a yellow warning so the ephemeral-container behaviour is visible |
 
-Pick `exec-or-fail` (the default) for normal interactive tools that depend on persistent container state (databases, application servers, etc.) — a missing container should surface as an actionable error, not a side-effecting one-off run. Pick `exec-or-run` only for tools that legitimately work as ephemeral runs (mc, composer install on a fresh checkout, etc.) and where you understand that no state will persist between invocations. `runner.mode` follows the same enum and same precedence rules as `runner.user`.
+Omitting `mode:` gives you `exec-or-run`: the command works against the live container when the stack is up, and still does something useful on a stopped stack instead of stopping the author to ask which of four spellings they meant. That is what almost every project already declared by hand.
+
+Declare `mode: exec-or-fail` for tools that **depend on persistent container state** and must never create a container — a database client, an application server's console, anything whose value comes from the running instance's memory, sockets or accumulated files. For those, a stopped container should surface as an actionable error, not as a fresh ephemeral one that silently sees none of that state. `exec` and `run` stay the two unconditional escapes: `exec` when you want docker's own error, `run` when a fresh container is the point.
+
+The two `exec-or-*` modes differ in exactly **one** observable state: the running-container probe succeeded and reported the container stopped. When the probe itself fails — Docker unreachable, daemon down — both modes end at plain `compose exec` and you get the same raw compose failure either way, before and after this default changed.
+
+`runner.mode` follows the same enum and same precedence rules as `runner.user`.
+
+> **If you write a `type: command` `check:`.** A step's `check:` is a full action dispatched through the same executor, so it can point at a user command of any type — including a `service_exec` one. Such a check inherits this default, which makes it container-*creating* rather than failing when the service is down, and a check is supposed to be a side-effect-free postcondition. Declare `mode: exec-or-fail` on any command you reference from a `check:`. No existing project is affected: across the workspaces surveyed for this change, every `check:` was a `builtin`, `shell` or `auto` action and none was a `type: command`.
 
 ### User resolution
 

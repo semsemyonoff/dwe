@@ -110,12 +110,12 @@ Key fields:
 
 - **`service:`** — compose service name to target.
 - **`mode:`** — what to do if the container is not running:
-  - `exec-or-fail` (default) — refuse with an actionable error suggesting `dwe docker up <svc>`.
-  - `exec-or-run` — fall back to a fresh `docker compose run --rm` container and warn about the ephemeral run.
+  - `exec-or-run` (default) — fall back to a fresh `docker compose run --rm` container and warn about the ephemeral run.
+  - `exec-or-fail` — refuse with an actionable error suggesting `dwe docker up <svc>`.
   - `exec` — bare `docker compose exec`; docker emits its own error if the container is down.
   - `run` — always start a fresh container.
 
-  Pick `exec-or-fail` for tools that depend on persistent state (databases, app servers); pick `exec-or-run` only when the tool genuinely works as a one-off (composer install on a fresh checkout, etc.).
+  Omit `mode:` for anything that works as a one-off too (composer install on a fresh checkout, etc.). Declare `mode: exec-or-fail` for tools that depend on persistent container state (databases, app servers) and must never create a container behind your back.
 - **`user:`** — `current` runs as the host UID:GID (use for commands that write into bind mounts), `root` for privileged container ops, or any literal `name` / `1000` / `1000:1000`. Omit to inherit the service's `cli.user`.
 - **`workdir_from:`** — dot-path into the merged config (e.g. `services.main.work_dir_internal`). Preferred over hard-coding `workdir:` because it lets `local.yml` overrides reach commands.
 

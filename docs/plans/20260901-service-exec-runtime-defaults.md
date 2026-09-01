@@ -1172,33 +1172,33 @@ into commit **B** is the orchestrator's job, not this task's.
 - Modify: `internal/core/usercommands/runtime/runners/service/service_test.go`
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 
-- [ ] **first**, introduce the probe seam this task's tests depend on:
+- [x] **first**, introduce the probe seam this task's tests depend on:
       `isContainerRunning` (`exec.go:325`) is unexported and shells out to
       `docker compose ps`, which is why every existing test in
       `service_test.go` uses `ExecModeExec` or `ExecModeRun` and never the
       default. Add `var containerRunningFn = isContainerRunning`, call through
       it, and restore it with `t.Cleanup` in tests. Without this seam the three
       probe-dependent checkboxes below cannot be written at all
-- [ ] set `DefaultExecMode = ExecModeExecOrRun` and update its doc comment
-- [ ] update the `ExecModeExecOrFail` doc comment: it is no longer the default,
+- [x] set `DefaultExecMode = ExecModeExecOrRun` and update its doc comment
+- [x] update the `ExecModeExecOrFail` doc comment: it is no longer the default,
       and it is the only mode that pre-probes for a clean dwe error
-- [ ] fix the two stale "default" statements in `exec.go`: the `ExecRunner`
+- [x] fix the two stale "default" statements in `exec.go`: the `ExecRunner`
       doc comment (l.26, "exec-or-fail (default): refuses…") and the error
       string at l.59, whose advice to "set `mode: exec-or-run`" inverts once
       that is the default — it should point at `mode: exec-or-fail` as the
       opt-in, or drop the suggestion. The package doc (l.1-6) lists the modes
       but claims no default; do not go hunting for text that is not there
-- [ ] update the existing test asserting the old default
-- [ ] write a test proving a command with no `mode:` takes the `exec-or-run`
+- [x] update the existing test asserting the old default
+- [x] write a test proving a command with no `mode:` takes the `exec-or-run`
       branch, falls back to an ephemeral run when the container is stopped, and
       emits the warning
-- [ ] write a test proving an explicit `mode: exec-or-fail` still refuses with
+- [x] write a test proving an explicit `mode: exec-or-fail` still refuses with
       the dwe error, so opting back in works
-- [ ] write a test pinning that **both** modes select `exec` after a probe
+- [x] write a test pinning that **both** modes select `exec` after a probe
       *error* — that is today's behaviour on both branches
       (`exec.go:57-61` and `exec.go:63-67`), and the flip must not be
       documented as changing it
-- [ ] add an executor-level test **in package `pipeline`**
+- [x] add an executor-level test **in package `pipeline`**
       (`executor_test.go` — `service_test.go` cannot import `pipeline` without
       an import cycle): a step whose `check:` is a `type: command` action
       pointing at a mode-less `service_exec` command, with the service stopped.
@@ -1208,19 +1208,26 @@ into commit **B** is the orchestrator's job, not this task's.
       `service`. It must show the new default turning a postcondition into a
       container-creating action, so the consequence is pinned rather than
       discovered in a project
-- [ ] keep this test `-T`-agnostic like the rest of task 13 — it runs in the
+- [x] keep this test `-T`-agnostic like the rest of task 13 — it runs in the
       pipeline, where `UserInvoked` is false and commit B's `-T` is present
-- [ ] inventory the `check:` actions across the local workspaces that reference
+- [x] inventory the `check:` actions across the local workspaces that reference
       a `service_exec` command without an explicit `mode:`; record the count
       here and add explicit `mode: exec-or-fail` to any check that must not
-      create a container
-- [ ] **constraint for revert safety**: these tests assert the exec-vs-run
+      create a container — **count: 0**, so no workspace edit was needed. The
+      cut happens one step earlier than expected: across the 9 local workspaces
+      there are 38 `check:` actions in total (34 `type: builtin`, 3
+      `type: shell`, 1 `auto`) and **none** is `type: command`. `type: command`
+      is used 104 times, but always as a step's own type, never inside a
+      `check:`/`when:` action. The other side of the intersection does exist —
+      7 of the 228 `service_exec` commands declare no `mode:` — but none of
+      them is reachable from a check
+- [x] **constraint for revert safety**: these tests assert the exec-vs-run
       *branch* and the warning text, never a full argv slice. `service_test.go`
       by now contains commit B's `-T` assertions, and every context here has
       `UserInvoked == false`, so any full-argv assertion written in C would
       hard-code B's output and fail the moment B is reverted — the exact
       failure task 18 exists to catch
-- [ ] run `make test` — must pass before task 14
+- [x] run `make test` — must pass before task 14
 
 ### Task 14: Document the mode default
 
@@ -1234,30 +1241,30 @@ Doc edits here touch **only** the mode-resolution section.
 - Modify: `skills/dwe/references/authoring-commands.md`
 - Modify: `internal/core/docs/content_hashes_gen.go` (regenerated by `make build`)
 
-- [ ] update the `mode` row in the fields table
-- [ ] rewrite the mode-resolution prose — the paragraph beginning "Pick
+- [x] update the `mode` row in the fields table
+- [x] rewrite the mode-resolution prose — the paragraph beginning "Pick
       `exec-or-fail` (the default)…" now contradicts the shipped default, and
       the guidance inverts: declare `exec-or-fail` for tools that depend on
       persistent container state
-- [ ] state that the observable difference is confined to one state — the probe
+- [x] state that the observable difference is confined to one state — the probe
       succeeds and reports the container stopped. Do **not** claim a
       probe-error consequence: both modes already end at `exec` when the probe
       fails, so an unreachable Docker daemon behaves identically before and
       after
-- [ ] state that a `type: command` `check:` referencing a mode-less
+- [x] state that a `type: command` `check:` referencing a mode-less
       `service_exec` command becomes container-creating, and that such checks
       should declare `mode: exec-or-fail`
-- [ ] mirror both files into the RU translations
-- [ ] update the `mode: exec-or-run` comment in the authoring reference so it
+- [x] mirror both files into the RU translations
+- [x] update the `mode: exec-or-run` comment in the authoring reference so it
       no longer implies the value must be written out, and fix line 48 of the
       same file — "Needs `service:` + `mode:` + `workdir_from:`" is wrong on two
       counts after this work: commit A makes `workdir_from` optional and this
       commit makes `mode` optional
-- [ ] decide about the `mode: exec-or-run` line in the worked example at
+- [x] decide about the `mode: exec-or-run` line in the worked example at
       `docs/reference/config/commands/index.md:143` and its RU mirror (`:145`):
       it is not wrong after the flip, just redundant. Either drop it or state
       here that it stays deliberately, so the next reader does not re-open it
-- [ ] run `make build && make test` — must pass before task 15
+- [x] run `make build && make test` — must pass before task 15
 
 ### Task 15: Record the invariants and land commit C
 
@@ -1267,31 +1274,31 @@ Doc edits here touch **only** the mode-resolution section.
 - Modify: `AGENTS.md` (A/C pointer bullets only — no B content; see task 12)
 - Modify: `internal/core/docs/content_hashes_gen.go` (regenerated by `make build`)
 
-- [ ] document in `packages.md` **only the A and C contracts**: the two new
+- [x] document in `packages.md` **only the A and C contracts**: the two new
       `project/config` helpers with the by-`Container` lookup rule and the
       sorted-iteration requirement, and the exec-mode default with its reach
       into `check:` actions. The B contracts already landed in commit B (task
       12) precisely so that reverting B removes them. Commit A's contract
       living here is a deliberate asymmetry: C is the last commit and carries
       no revert requirement, unlike B
-- [ ] place this prose in a **separate `§` section** from commit B's block in
+- [x] place this prose in a **separate `§` section** from commit B's block in
       `packages.md`. Both commits edit that one file, and appending adjacent to
       B's text would make `git revert B` conflict there too — contradicting
       task 18's "nothing beyond the three touch-ups"
-- [ ] add **one** `## [Unreleased]` CHANGELOG entry, prefixed `**Breaking:**`
+- [x] add **one** `## [Unreleased]` CHANGELOG entry, prefixed `**Breaking:**`
       per the existing convention in that file, covering all three changes as a
       single aggregate behaviour change: the workdir chain, the TTY rule and
       the mode default. Do **not** write a probe-error clause — there is no
       probe-error behaviour change, and task 14 spells out why
-- [ ] state in the entry that the `workdir: internal` sentinel means a service
+- [x] state in the entry that the `workdir: internal` sentinel means a service
       command whose container workdir is literally the relative path `internal`
       changes behaviour — the one exception to this work's
       already-explicit-declarations-are-unchanged promise
-- [ ] note inside that entry that the TTY half lands as its own commit and that
+- [x] note inside that entry that the TTY half lands as its own commit and that
       reverting it requires editing this entry
-- [ ] state in the entry that a full forced redeploy is needed and that the
+- [x] state in the entry that a full forced redeploy is needed and that the
       deployment hash will not signal it
-- [ ] add at most a pointer bullet to `AGENTS.md` for the A and C contracts —
+- [x] add at most a pointer bullet to `AGENTS.md` for the A and C contracts —
       the write-up itself stays in `packages.md`, and anything B-specific
       already landed in task 12. Together with that bullet you have 1 774 B of
       headroom against `agentsMdBudget`; keep this one under 800 B, respect
@@ -1299,8 +1306,29 @@ Doc edits here touch **only** the mode-resolution section.
       `§ <target>` resolve to C's own `packages.md` section so
       `TestAgentsMdPointersResolve` stays green. Place it **non-adjacent** to
       commit B's bullet, for the same revert reason as the `packages.md` rule
-- [ ] run `make build && make test && make lint` — must pass
-- [ ] commit as commit **C**
+- [x] run `make build && make test && make lint` — must pass
+- [x] commit as commit **C**
+
+[deviation] "commit as commit **C**" — the harness commits once per task, so
+tasks 13–15 landed as separate commits; squashing them into commit **C** is the
+orchestrator's job, same as for **B**.
+
+[decision] The new `packages.md` section sits between `## Core — User Commands`
+and `## Core — Validation` — topically adjacent to the runner it describes and
+separated from commit B's `## Container TTY Contract` (which sits between
+`## Shared` and `## Entrypoint`) by six whole sections, so `git revert B` cannot
+conflict with it. The `AGENTS.md` bullet sits after **Per-service folder
+symmetry**, likewise far from B's **Container TTY** bullet.
+
+[decision] The section deliberately carries no `§ Container TTY Contract`
+cross-reference. An earlier draft ended the `containerRunningFn` bullet with
+one; it would dangle the moment B is reverted, so the same point is now made
+without naming B's section.
+
+[measured] `AGENTS.md` after the bullet: 40 688 B against the 40 960 B budget
+(272 B headroom); the bullet itself is 760 B over four lines, longest 292 runes
+against the 600-rune cap. `make build && make test` green; `make lint` reports
+exactly the 19 pre-existing `modernize` findings in untouched files, unchanged.
 
 ### Task 16: Capture the "after" TTY matrix and compare
 

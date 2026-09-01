@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ 055fe21afec8
+> Translated from: reference/config/commands/index.md @ 1a28e96011da
 
 # commands/
 
@@ -142,7 +142,6 @@ db.create:
   type: service_exec
   description: Create a database in the db container
   service: db
-  mode: exec-or-run
   params:
     database:
       type: string

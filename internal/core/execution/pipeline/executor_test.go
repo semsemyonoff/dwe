@@ -2817,6 +2817,68 @@ func TestExecAction_CommandCheck_ServiceWorkdirFallback(t *testing.T) {
 	}
 }
 
+// TestExecAction_CommandCheck_DefaultModeCreatesContainer pins the consequence
+// of the flipped exec-mode default at the level where it bites: a step's
+// `check:` — a postcondition, something a pipeline evaluates to decide whether
+// to do work — dispatched at a mode-less service_exec command against a stopped
+// service now CREATES a container via `docker compose run --rm` instead of
+// refusing. That is the intended trade, and it is pinned here rather than left
+// to be discovered in a project; a check that must stay side-effect-free has to
+// declare `mode: exec-or-fail` explicitly.
+//
+// The stub docker is what makes "stopped" reachable from package pipeline: it
+// prints nothing, and empty `compose ps` output is how isContainerRunning
+// spells "not running". The containerRunningFn seam is unexported and lives in
+// package service.
+//
+// Assertions stay -T-agnostic on purpose (see the same rule in
+// service_test.go): this context has UserInvoked == false, so a full-argv
+// comparison would hard-code the container-TTY decision from a separate commit.
+func TestExecAction_CommandCheck_DefaultModeCreatesContainer(t *testing.T) {
+	dockerCalls := installStubDocker(t)
+
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{
+		ID:      "app.check",
+		Type:    usercommands.CommandTypeServiceExec,
+		Service: "app-main",
+		Cmd:     "test -f composer.json",
+	})
+
+	cfg := &config.DweConfig{
+		Project:  config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
+		Services: map[string]config.ServiceConfig{"main": {Container: "app-main"}},
+		Raw:      map[string]any{},
+	}
+	actx := ActionContext{
+		WorkDir:     t.TempDir(),
+		Cfg:         cfg,
+		Reg:         reg,
+		SkipConfirm: true,
+		CallerCtx:   builtin.CtxPredicate,
+	}
+
+	if err := ExecAction(context.Background(), config.Action{Type: "command", Cmd: "app.check"}, actx); err != nil {
+		t.Fatalf("ExecAction: %v", err)
+	}
+
+	calls := dockerCalls()
+	if len(calls) != 2 {
+		t.Fatalf("expected the container probe plus the command, got %d: %v", len(calls), calls)
+	}
+	if !strings.Contains(calls[0], " ps ") {
+		t.Errorf("first invocation is not the container probe: %s", calls[0])
+	}
+	// `--no-deps --entrypoint` is the run branch's own signature; `--rm` comes
+	// from docker.yml's args.run, which this fixture does not load.
+	if !strings.Contains(calls[1], " run ") || !strings.Contains(calls[1], "--no-deps") {
+		t.Errorf("mode-less check did not fall back to an ephemeral run: %s", calls[1])
+	}
+	if strings.Contains(calls[1], " exec ") {
+		t.Errorf("expected the run branch, got an exec: %s", calls[1])
+	}
+}
+
 // TestRunWithOptions_MarksNestedRuntime pins the propagation half of the
 // nested-runtime contract: a pipeline marks its own process, so every child it
 // spawns — by any mechanism — inherits DWE_NESTED_RUNTIME and re-enters

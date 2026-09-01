@@ -23,9 +23,9 @@ import (
 
 // ExecRunner executes type=service_exec commands via `docker compose exec`.
 // The behaviour when the target container is not running depends on Mode:
-//   - exec-or-fail (default): refuses with a clear dwe error.
-//   - exec-or-run: silently falls back to `docker compose run --rm` (with a
-//     warning written to stderr so the ephemeral-container behaviour is visible).
+//   - exec-or-run (default): falls back to `docker compose run --rm`, with a
+//     warning written to stderr so the ephemeral-container behaviour is visible.
+//   - exec-or-fail: refuses with a clear dwe error.
 //   - exec / run: forced; exec lets compose emit its own error if the container
 //     is missing.
 type ExecRunner struct{}
@@ -54,13 +54,13 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 	case model.ExecModeExecOrFail:
 		// Pre-check so that "service not running" surfaces as a clean dwe
 		// error rather than a raw compose stderr trace.
-		running, checkErr := isContainerRunning(compose, svc)
+		running, checkErr := containerRunningFn(compose, svc)
 		if checkErr == nil && !running {
-			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `dwe docker up %s`, or set `mode: exec-or-run` if a one-off ephemeral container is acceptable", svc, svc)
+			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `dwe docker up %s`, or drop `mode: exec-or-fail` if a one-off ephemeral container is acceptable", svc, svc)
 		}
 		// On probe error we proceed; compose will fail with its own error if needed.
 	case model.ExecModeExecOrRun:
-		running, checkErr := isContainerRunning(compose, svc)
+		running, checkErr := containerRunningFn(compose, svc)
 		if checkErr != nil {
 			running = true
 		}
@@ -415,6 +415,12 @@ func buildDockerComposeCmd(
 	cmd.Env = docker.MergeEnv(combined)
 	return cmd
 }
+
+// containerRunningFn is the container-probe seam. The real implementation
+// shells out to `docker compose ps`, which is why tests that need to reach a
+// probing mode (exec-or-run — the default — or exec-or-fail) replace it and
+// restore it with t.Cleanup rather than staging a fake docker binary.
+var containerRunningFn = isContainerRunning
 
 // isContainerRunning checks whether the named service container is running.
 func isContainerRunning(compose *docker.Compose, service string) (bool, error) {

@@ -61,8 +61,8 @@ func TestExecModeConstants(t *testing.T) {
 			t.Errorf("ExecMode[%d] = %q, want %q", i, m, want[i])
 		}
 	}
-	if DefaultExecMode != ExecModeExecOrFail {
-		t.Errorf("DefaultExecMode = %q, want %q", DefaultExecMode, ExecModeExecOrFail)
+	if DefaultExecMode != ExecModeExecOrRun {
+		t.Errorf("DefaultExecMode = %q, want %q", DefaultExecMode, ExecModeExecOrRun)
 	}
 }
 
