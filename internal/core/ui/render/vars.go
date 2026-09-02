@@ -6,17 +6,21 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/varsusage"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"gopkg.in/yaml.v3"
 )
 
 // VarListItem is one row in the `dwe vars list` table: a leaf dot-path, its
 // effective value, and the layer badge naming where that value originates
-// ("local" / "default" / "" when unresolved).
+// ("local" / "default" / "" when unresolved). Encrypted marks a leaf whose
+// origin layer holds an ENC[age:…] marker that could not be decrypted — the
+// value renders as EncryptedPlaceholder and the badge carries a suffix.
 type VarListItem struct {
-	Path  string
-	Value any
-	Layer string
+	Path      string
+	Value     any
+	Layer     string
+	Encrypted bool
 }
 
 // VarInspect carries the per-layer resolution and static usages for a single
@@ -32,12 +36,77 @@ type VarInspect struct {
 	CurrentOK bool
 	// Origin is the (display-ready) file path supplying the current value.
 	Origin string
+	// Secret is the one-line encrypted-secret note ("decrypted via keyfile
+	// (…)" / "unresolved — no identity for age1…"), empty for a var that is
+	// not an encrypted secret at its origin layer.
+	Secret string
 	Usages []varsusage.Usage
 }
 
 // usageCaveat is appended to inspect output: the static scan cannot follow
 // dynamically-built dot-paths or Go-template field access (.Vars.x).
 const usageCaveat = "Note: dynamically-built var paths are not tracked."
+
+// EncryptedPlaceholder replaces an undecrypted ENC[age:…] marker everywhere
+// the `dwe vars` surfaces would otherwise print it. The ciphertext itself is
+// committed and harmless, but showing it as a value is noise the user cannot
+// act on — the placeholder plus `dwe secrets status` is the actionable form.
+const EncryptedPlaceholder = "<encrypted>"
+
+// MaskSecretValue replaces every undecrypted marker inside a var value with
+// EncryptedPlaceholder, recursing through mappings and sequences so a
+// namespace subtree is masked leaf by leaf. It reports whether anything was
+// masked. Composites are copied only when they actually contain a marker, so
+// the common (no secrets) path returns the original value untouched.
+func MaskSecretValue(value any) (any, bool) {
+	switch t := value.(type) {
+	case string:
+		if secrets.IsMarker(t) {
+			return EncryptedPlaceholder, true
+		}
+		return t, false
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		masked := false
+		for k, v := range t {
+			mv, m := MaskSecretValue(v)
+			out[k] = mv
+			masked = masked || m
+		}
+		if !masked {
+			return t, false
+		}
+		return out, true
+	case []any:
+		out := make([]any, len(t))
+		masked := false
+		for i, v := range t {
+			mv, m := MaskSecretValue(v)
+			out[i] = mv
+			masked = masked || m
+		}
+		if !masked {
+			return t, false
+		}
+		return out, true
+	default:
+		return value, false
+	}
+}
+
+// VarLayerBadge is the plain-text layer badge for a var row: the origin layer
+// name with an " (encrypted)" suffix when that layer supplies an undecrypted
+// secret. Shared by the list renderer and the TUI browser's type badge so both
+// spell the state the same way.
+func VarLayerBadge(layer string, encrypted bool) string {
+	if !encrypted {
+		return layer
+	}
+	if layer == "" {
+		return "encrypted"
+	}
+	return layer + " (encrypted)"
+}
 
 // DisplayVarPath strips the leading `vars.` namespace for DISPLAY only — under
 // `dwe vars` every path is a var, so the prefix is noise on screen. Storage,
@@ -169,10 +238,14 @@ func VarsList(items []VarListItem, namespace string) string {
 		sb.WriteString(styles.StyleKey(disp))
 		sb.WriteString(pad)
 		sb.WriteString("  ")
-		sb.WriteString(styles.TextStyle().Render(inlineValue(it.Value)))
-		if it.Layer != "" {
+		// Masking is value-driven here as well as flag-driven: the renderer is
+		// the last stop before the terminal, so a caller that forgets the flag
+		// still cannot print ciphertext.
+		masked, _ := MaskSecretValue(it.Value)
+		sb.WriteString(styles.TextStyle().Render(inlineValue(masked)))
+		if badge := VarLayerBadge(it.Layer, it.Encrypted); badge != "" {
 			sb.WriteString("  ")
-			sb.WriteString(styleLayerBadge(it.Layer))
+			sb.WriteString(styleLayerBadge(badge))
 		}
 		sb.WriteByte('\n')
 	}
@@ -184,7 +257,7 @@ func VarsList(items []VarListItem, namespace string) string {
 // accent color; `default` stays muted to recede.
 func styleLayerBadge(layer string) string {
 	label := "[" + layer + "]"
-	if layer == "local" {
+	if strings.HasPrefix(layer, "local") {
 		return styles.AccentStyle().Render(label)
 	}
 	return styles.MutedStyle().Render(label)
@@ -210,6 +283,13 @@ func VarInspectView(in VarInspect, width int) string {
 		sb.WriteString(styles.MutedStyle().Render("Origin"))
 		sb.WriteString(": ")
 		sb.WriteString(styles.TextStyle().Render(in.Origin))
+		sb.WriteByte('\n')
+	}
+	if in.Secret != "" {
+		sb.WriteString("  ")
+		sb.WriteString(styles.MutedStyle().Render("Secret"))
+		sb.WriteString(": ")
+		sb.WriteString(styles.TextStyle().Render(in.Secret))
 		sb.WriteByte('\n')
 	}
 
@@ -250,7 +330,8 @@ func layerLine(label string, value any, ok bool) string {
 	if !ok {
 		rhs = styles.MutedStyle().Render("(not set)")
 	} else {
-		rhs = styles.TextStyle().Render(inlineValue(value))
+		masked, _ := MaskSecretValue(value)
+		rhs = styles.TextStyle().Render(inlineValue(masked))
 	}
 	return "  " + styles.AccentStyle().Render(label) + pad + styles.MutedStyle().Render(styles.DefSep) + " " + rhs + "\n"
 }

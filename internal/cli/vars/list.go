@@ -16,10 +16,13 @@ type varsListJSON struct {
 
 // varListEntryJSON is one leaf row: its dot-path, effective value, and the
 // layer badge naming where the value originates ("local" / "default" / "").
+// Encrypted is omitted unless the origin layer holds an undecrypted secret, so
+// a project without secrets emits byte-identical JSON to before.
 type varListEntryJSON struct {
-	Path  string `json:"path"`
-	Value any    `json:"value"`
-	Layer string `json:"layer"`
+	Path      string `json:"path"`
+	Value     any    `json:"value"`
+	Layer     string `json:"layer"`
+	Encrypted bool   `json:"encrypted,omitempty"`
 }
 
 func newVarsListCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -76,10 +79,12 @@ func runVarsList(cmd *cobra.Command, flags *cmdctx.RootFlags, namespace string) 
 	items := make([]uirender.VarListItem, 0, len(leaves))
 	for _, path := range leaves {
 		value, _ := varsusage.ResolveVar(cfg, path)
+		badge, encrypted := leafBadge(layers, cfg.SecretsState, localPath, path)
 		items = append(items, uirender.VarListItem{
-			Path:  path,
-			Value: value,
-			Layer: layerBadge(layers, localPath, path),
+			Path:      path,
+			Value:     value,
+			Layer:     badge,
+			Encrypted: encrypted,
 		})
 	}
 
@@ -97,10 +102,12 @@ func buildVarsListJSON(items []uirender.VarListItem, namespace string) varsListJ
 		if !namespaceContains(it.Path, namespace) {
 			continue
 		}
+		value, _ := uirender.MaskSecretValue(it.Value)
 		entries = append(entries, varListEntryJSON{
-			Path:  it.Path,
-			Value: it.Value,
-			Layer: it.Layer,
+			Path:      it.Path,
+			Value:     value,
+			Layer:     it.Layer,
+			Encrypted: it.Encrypted,
 		})
 	}
 	return varsListJSON{Vars: entries}
@@ -117,23 +124,39 @@ func namespaceContains(path, namespace string) bool {
 		path[:len(namespace)] == namespace && path[len(namespace)] == '.'
 }
 
-// layerBadge returns the origin layer badge for a leaf: "local" when the
-// local.yml layer supplies the effective value, "default" when an author layer
-// does, and "" when the path is unresolved everywhere. The highest-precedence
-// non-nil layer wins (mirroring deepMerge's nil-skip via ResolvePath).
-func layerBadge(layers []config.Layer, localPath, path string) string {
-	origin := ""
+// leafOrigin returns the file path of the layer supplying a leaf's effective
+// value ("" when the path is unresolved everywhere) and whether THAT layer
+// holds an undecrypted secret at the path. The highest-precedence non-nil
+// layer wins (mirroring deepMerge's nil-skip via ResolvePath).
+//
+// The encrypted answer is deliberately origin-scoped rather than "any layer
+// carries a marker": a defaults.yml marker overridden by a plaintext local.yml
+// value renders as plaintext, while a local.yml marker over a plaintext
+// default renders as <encrypted>.
+func leafOrigin(layers []config.Layer, state config.SecretsState, path string) (origin string, encrypted bool) {
 	for _, l := range layers {
 		if v, ok := config.ResolvePath(l.Data, path); ok && v != nil {
 			origin = l.Path
 		}
 	}
+	if origin == "" {
+		return "", false
+	}
+	return origin, state.UnresolvedAt(origin, path)
+}
+
+// leafBadge maps a leaf's origin layer onto the display badge ("local" /
+// "default" / "") and reports whether that origin is an undecrypted secret.
+// Shared by `vars list` and the TUI browser so both attribute a leaf the same
+// way.
+func leafBadge(layers []config.Layer, state config.SecretsState, localPath, path string) (badge string, encrypted bool) {
+	origin, encrypted := leafOrigin(layers, state, path)
 	switch origin {
 	case "":
-		return ""
+		return "", false
 	case localPath:
-		return "local"
+		return "local", encrypted
 	default:
-		return "default"
+		return "default", encrypted
 	}
 }
