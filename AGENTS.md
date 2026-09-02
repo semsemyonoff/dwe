@@ -86,7 +86,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Foundation (`project/config/`) and § `internal/shared/git/`.
 
 - **Validation framework** — domains register via an `All()` constructor collected by `buildRegistry`; validators are per-file and independent, so `dwe validate` proceeds past a failed config load instead of going blind on every other file.
-  Only `env/` + `checks/` (plus the cherry-picked `config.validate` validator) run in preflight — a content mistake in any other domain must never block a lifecycle command.
+  Only `env/` + `checks/` (plus the cherry-picked `config.validate` and `secrets.unresolved`) run in preflight — a content mistake in any other domain must never block a lifecycle command.
   See § Core — Validation.
 
 - **Preflight + locks ordering** — lifecycle commands call `preflight.Run` before any side effect *including the locks*, so a `type: command` check never runs under an operation lock; only then the project locks (deploy.lock → snapshot.lock, released in reverse).

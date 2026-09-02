@@ -320,7 +320,7 @@ file keeps whatever mode the repository gave it.
 
 ```
 dwe secrets key export
-dwe secrets key import [--file PATH]
+dwe secrets key import [--file|-f PATH]
 ```
 
 The identity is never in git — it travels through a password manager or another

@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ e831978047a0
+> Translated from: reference/config/secrets.md @ 3bd3f3ac7e93
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -331,7 +331,7 @@ dwe secrets decrypt <file.age> [--out PATH|-] [--force]
 
 ```
 dwe secrets key export
-dwe secrets key import [--file PATH]
+dwe secrets key import [--file|-f PATH]
 ```
 
 Identity никогда не лежит в git — он передаётся через менеджер паролей или
