@@ -73,13 +73,15 @@ memory at load time, so ${vars.*} and exports.env see plaintext), and a whole
 Without a usable identity the project still loads — markers stay literal,
 ` + "`dwe vars`" + ` shows <encrypted>, and the lifecycle commands stop with a named
 fix instead of writing ciphertext into a config file.`,
-		Example: `  dwe secrets init
+		Example: `  dwe secrets status
+  dwe secrets init
   dwe secrets key export
   dwe secrets key import --file identity.txt`,
 		SilenceUsage: true,
 	}
 
 	cmd.AddCommand(newInitCmd(flags))
+	cmd.AddCommand(newStatusCmd(flags))
 	cmd.AddCommand(newKeyCmd(flags))
 	return cmd
 }
