@@ -3,6 +3,7 @@ package bridgeclient
 import (
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -12,6 +13,25 @@ func TestStripEnv_ForwardsBridgeService(t *testing.T) {
 	want := []string{"DWE_BRIDGE_SERVICE=main", "TERM=xterm"}
 	if !slices.Equal(got, want) {
 		t.Errorf("StripEnv(%v) = %v, want %v (DWE_BRIDGE_SERVICE is host-consumed, must pass)", in, got, want)
+	}
+}
+
+func TestStripEnv_StripsAgeIdentity(t *testing.T) {
+	in := []string{
+		"DWE_AGE_KEY=AGE-SECRET-KEY-1EVIL",
+		"DWE_AGE_KEY_FILE=/workspace/evil.key",
+		"DWE_BRIDGE_SERVICE=main",
+		"TERM=xterm",
+	}
+	got := StripEnv(in)
+	want := []string{"DWE_BRIDGE_SERVICE=main", "TERM=xterm"}
+	if !slices.Equal(got, want) {
+		t.Errorf("StripEnv(%v) = %v, want %v (age identity vars must never reach the host dwe)", in, got, want)
+	}
+	for _, kv := range got {
+		if strings.Contains(kv, "AGE-SECRET-KEY-") {
+			t.Errorf("StripEnv forwarded identity material: %q", kv)
+		}
 	}
 }
 

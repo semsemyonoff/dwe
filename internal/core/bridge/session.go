@@ -296,7 +296,18 @@ var dangerousEnvPrefixes = []string{"LD_", "DYLD_"}
 // the docker CLI to the default unix:///var/run/docker.sock, which does not
 // exist on a Docker Desktop / OrbStack mac. Client values are dropped; the
 // daemon's own values are appended instead (absent ones stay absent).
-var hostIdentityEnvNames = []string{"HOME", "USER", "LOGNAME", "TMPDIR", "SSH_AUTH_SOCK"}
+//
+// DWE_AGE_KEY / DWE_AGE_KEY_FILE belong here for the same reason plus a
+// sharper one: DWE_AGE_KEY_FILE names a HOST path the forked dwe opens and
+// parses as an age identity, so honoring a client value would let a container
+// pick which host file is read. Membership here means the daemon drops the
+// client's value AND appends its own, which is what keeps a host that runs
+// with an env-only identity (CI) working for bridged `render config` /
+// `vars get`. The shim strips both names too (bridgeclient.StripEnv).
+var hostIdentityEnvNames = []string{
+	"HOME", "USER", "LOGNAME", "TMPDIR", "SSH_AUTH_SOCK",
+	"DWE_AGE_KEY", "DWE_AGE_KEY_FILE",
+}
 
 // hostIdentityEnvPrefixes are the variable families steering how the host
 // talks to docker (DOCKER_HOST, DOCKER_CONFIG, DOCKER_CONTEXT, COMPOSE_* …)
