@@ -133,6 +133,40 @@ func LoadLayersWithSecrets(workspacePath string) ([]Layer, SecretsState, error) 
 	return layers, state, nil
 }
 
+// Marker is one encrypted scalar as written on disk: where it lives plus the
+// ENC[age:…] text itself.
+type Marker struct {
+	SecretRef
+	Value string
+}
+
+// CollectMarkers returns every encrypted scalar in the given layers, ordered by
+// layer then by path — the same order SecretsState uses. It is meant for raw
+// layers (LoadRawLayers): on decrypted layers only unresolved markers remain.
+//
+// This is the single marker inventory: the secrets validators, `dwe secrets
+// status` and `rekey` all read the tree through it rather than re-rolling a
+// walk that could disagree about sequence indices or key order.
+func CollectMarkers(layers []Layer) []Marker {
+	var out []Marker
+	for _, layer := range layers {
+		walkScalars(layer.Data, "", func(path, s string) (string, bool) {
+			if secrets.IsMarker(s) {
+				out = append(out, Marker{SecretRef: SecretRef{Layer: layer.Path, Path: path}, Value: s})
+			}
+			return s, false
+		})
+	}
+	return out
+}
+
+// RecipientFromLayers reads secrets.recipient out of a raw layer set. Exported
+// for callers that work before (or without) a merged config — the secrets
+// validators diagnose a malformed recipient precisely when LoadConfig refused
+// to produce a *DweConfig. The value is returned as written; validity is the
+// caller's question.
+func RecipientFromLayers(layers []Layer) string { return recipientFromLayers(layers) }
+
 // recipientFromLayers reads secrets.recipient from the workspace.yml layer.
 // ValidateLayerRoots has already rejected the block anywhere else and rejected
 // a malformed value, so a non-empty result here always parses.

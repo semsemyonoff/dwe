@@ -20,6 +20,7 @@ import (
 	valchecks "github.com/semsemyonoff/dwe/internal/core/validate/checks"
 	valconfig "github.com/semsemyonoff/dwe/internal/core/validate/config"
 	valenv "github.com/semsemyonoff/dwe/internal/core/validate/env"
+	valsecrets "github.com/semsemyonoff/dwe/internal/core/validate/secrets"
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
@@ -137,6 +138,13 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 			break
 		}
 	}
+	// Second (and only other) cherry-pick: secrets.unresolved is READINESS, not
+	// content. A lifecycle command that runs with an undecryptable secret would
+	// either write ciphertext into a rendered file or fail deep inside a
+	// pipeline; blocking here reports the missing key once, with the fix. The
+	// rest of the secrets domain (secrets.recipient) stays in `dwe validate`
+	// only, like every other content validator.
+	reg.Register(valsecrets.UnresolvedValidator())
 	// Pass nil loadErr: config.validate (registered above) already emits the
 	// parse error diagnostic. Passing it here too would produce a duplicate
 	// row in the preflight table and double-count it in the summary.

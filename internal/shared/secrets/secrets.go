@@ -39,6 +39,12 @@ import (
 // MarkerPrefix opens an encrypted scalar marker.
 const MarkerPrefix = "ENC[age:"
 
+// fileHeader is the first line of every age file (binary format). It is the
+// cheapest identity-free evidence that a payload really is age ciphertext,
+// which is what lets a validator report a corrupt marker on a machine that
+// holds no key at all.
+const fileHeader = "age-encryption.org/v1"
+
 // Sentinel errors. Callers map them to the SecretsState unresolved reasons
 // (no_identity / wrong_identity / corrupt), so every failure path in this
 // package must wrap exactly one of them.
@@ -66,6 +72,25 @@ func IsMarker(s string) bool { return markerRe.MatchString(s) }
 // ContainsMarker reports whether s contains a marker anywhere. Renderers use
 // it to refuse materializing an undecrypted secret into an output file.
 func ContainsMarker(s string) bool { return embeddedMarkerRe.MatchString(s) }
+
+// CheckMarker reports whether s is a well-formed marker whose payload really is
+// an age file, WITHOUT needing an identity: the shape, the base64 and the age
+// header are all public. It is what `dwe validate secrets` uses to tell "you
+// have no key" apart from "this value is damaged" on a machine with no key.
+// Every failure wraps ErrCorrupt.
+func CheckMarker(s string) error {
+	if !IsMarker(s) {
+		return fmt.Errorf("%w: not an %s…] marker", ErrCorrupt, MarkerPrefix)
+	}
+	raw, err := base64.StdEncoding.DecodeString(s[len(MarkerPrefix) : len(s)-1])
+	if err != nil {
+		return fmt.Errorf("%w: payload is not valid base64: %v", ErrCorrupt, err)
+	}
+	if !bytes.HasPrefix(raw, []byte(fileHeader)) {
+		return fmt.Errorf("%w: payload is not an age file (no %q header)", ErrCorrupt, fileHeader)
+	}
+	return nil
+}
 
 // Encrypt encrypts plain to recipient and returns the scalar marker.
 func Encrypt(plain string, recipient string) (string, error) {

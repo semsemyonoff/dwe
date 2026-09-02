@@ -15,6 +15,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate/env"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/setup"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -311,4 +312,50 @@ func TestIsEmptyLocal(t *testing.T) {
 			assert.Equal(t, tc.expected, got)
 		})
 	}
+}
+
+// TestRunPreWizardPreflight_SecretsUnresolvedBlocks mirrors the preflight.Run
+// pin: the early gate must refuse before the user answers wizard questions, and
+// go quiet once the identity is available. Only the secrets rows are asserted —
+// the env probes report whatever the host looks like.
+func TestRunPreWizardPreflight_SecretsUnresolvedBlocks(t *testing.T) {
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	configPath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n"), 0o644))
+
+	load := func(t *testing.T) *config.DweConfig {
+		t.Helper()
+		cfg, err := config.LoadConfig(configPath)
+		require.NoError(t, err)
+		return cfg
+	}
+
+	t.Run("without an identity", func(t *testing.T) {
+		t.Setenv(secrets.EnvKey, "")
+		t.Setenv(secrets.EnvKeyFile, "")
+		t.Setenv("HOME", t.TempDir())
+
+		var errOut bytes.Buffer
+		err := runPreWizardPreflight(context.Background(), load(t), root, &errOut)
+		require.Error(t, err, "the pre-wizard gate must block on an unresolved secret")
+		assert.Contains(t, errOut.String(), "vars.token")
+		assert.NotContains(t, errOut.String(), "s3cr3t-value")
+	})
+
+	t.Run("with the identity", func(t *testing.T) {
+		t.Setenv(secrets.EnvKey, id.Export())
+		t.Setenv(secrets.EnvKeyFile, "")
+
+		var errOut bytes.Buffer
+		_ = runPreWizardPreflight(context.Background(), load(t), root, &errOut)
+		assert.NotContains(t, errOut.String(), "vars.token")
+		assert.NotContains(t, errOut.String(), "s3cr3t-value")
+	})
 }

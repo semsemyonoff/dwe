@@ -561,3 +561,101 @@ func TestLoadConfig_encryptedProjectNameDecrypts(t *testing.T) {
 		t.Errorf("Decrypted = %+v, want project.name", cfg.SecretsState.Decrypted)
 	}
 }
+
+// CollectMarkers is the single marker inventory shared by the secrets
+// validators, `dwe secrets status` and rekey: it must list every marker in
+// layer order then path order, and carry the ciphertext as written.
+func TestCollectMarkers_orderAndValues(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+	wsToken := mustEncrypt(t, "ws-token", r)
+	defB := mustEncrypt(t, "def-b", r)
+	defA := mustEncrypt(t, "def-a", r)
+	localItem := mustEncrypt(t, "list-item", r)
+
+	ws := writeLayerFixture(t,
+		"secrets:\n  recipient: "+r+"\nvars:\n  token: "+wsToken+"\n",
+		"vars:\n  b: "+defB+"\n  a: "+defA+"\n  plain: not-a-secret\n",
+		"vars:\n  tokens:\n    - "+localItem+"\n    - plain\n",
+	)
+
+	raw, err := LoadRawLayers(ws)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	markers := CollectMarkers(raw)
+
+	var got []string
+	for _, m := range markers {
+		got = append(got, filepath.Base(m.Layer)+":"+m.Path)
+	}
+	want := []string{
+		"workspace.yml:vars.token",
+		"defaults.yml:vars.a",
+		"defaults.yml:vars.b",
+		"local.yml:vars.tokens.0",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("marker order = %v, want %v", got, want)
+	}
+	if markers[0].Value != wsToken {
+		t.Errorf("marker value = %q, want the ciphertext as written", markers[0].Value)
+	}
+}
+
+// The decrypt pass runs on a copy, so a decrypting load leaves the raw layers
+// (and therefore the inventory) untouched.
+func TestCollectMarkers_emptyOnDecryptedLayers(t *testing.T) {
+	id := newTestIdentity(t)
+	ws := writeLayerFixture(t,
+		"secrets:\n  recipient: "+id.Recipient()+"\nvars:\n  token: "+mustEncrypt(t, "v", id.Recipient())+"\n", "", "")
+
+	decrypted, err := LoadLayers(ws)
+	if err != nil {
+		t.Fatalf("LoadLayers: %v", err)
+	}
+	if got := CollectMarkers(decrypted); len(got) != 0 {
+		t.Errorf("CollectMarkers on decrypted layers = %v, want none", got)
+	}
+	raw, err := LoadRawLayers(ws)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	if got := CollectMarkers(raw); len(got) != 1 {
+		t.Errorf("CollectMarkers on raw layers = %d markers, want 1", len(got))
+	}
+}
+
+func TestRecipientFromLayers(t *testing.T) {
+	id := newTestIdentity(t)
+
+	ws := writeLayerFixture(t, "secrets:\n  recipient: "+id.Recipient()+"\n", "", "")
+	raw, err := LoadRawLayers(ws)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	if got := RecipientFromLayers(raw); got != id.Recipient() {
+		t.Errorf("RecipientFromLayers = %q, want %q", got, id.Recipient())
+	}
+
+	// No secrets: block at all.
+	plain := writeLayerFixture(t, "vars:\n  a: 1\n", "", "")
+	rawPlain, err := LoadRawLayers(plain)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	if got := RecipientFromLayers(rawPlain); got != "" {
+		t.Errorf("RecipientFromLayers = %q, want empty", got)
+	}
+
+	// A malformed value is returned as written — validity is the caller's
+	// question, and the secrets.recipient validator is the one that asks it.
+	bad := writeLayerFixture(t, "secrets:\n  recipient: age1-nope\n", "", "")
+	rawBad, err := LoadRawLayers(bad)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	if got := RecipientFromLayers(rawBad); got != "age1-nope" {
+		t.Errorf("RecipientFromLayers = %q, want the raw value", got)
+	}
+}

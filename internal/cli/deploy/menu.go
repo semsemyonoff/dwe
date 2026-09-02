@@ -24,6 +24,7 @@ import (
 	valchecks "github.com/semsemyonoff/dwe/internal/core/validate/checks"
 	valconfig "github.com/semsemyonoff/dwe/internal/core/validate/config"
 	valenv "github.com/semsemyonoff/dwe/internal/core/validate/env"
+	valsecrets "github.com/semsemyonoff/dwe/internal/core/validate/secrets"
 	valsetup "github.com/semsemyonoff/dwe/internal/core/validate/setup"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
@@ -695,6 +696,10 @@ func runPreWizardPreflight(ctx context.Context, cfg *config.DweConfig, baseDir s
 			break
 		}
 	}
+	// Mirrors preflight.Run's second cherry-pick: readiness, not content. An
+	// undecryptable secret must stop the user before the wizard, not after the
+	// questions have been answered.
+	reg.Register(valsecrets.UnresolvedValidator())
 	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, "deploy", cfg.Services, false) {
 		reg.Register(v)
 	}

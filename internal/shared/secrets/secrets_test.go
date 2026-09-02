@@ -236,3 +236,47 @@ func TestMarkerPayloadOpensWithPlainAge(t *testing.T) {
 		t.Fatalf("got %q, want %q", plain, "hunter2")
 	}
 }
+
+// CheckMarker is the identity-free damage check: it must accept anything
+// Encrypt produced and reject payloads that are not age files, so a machine
+// with no key can still tell "I have no key" from "this value is broken".
+func TestCheckMarker(t *testing.T) {
+	id := testIdentity(t)
+	real, err := Encrypt("hunter2", id.Recipient())
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	truncated := MarkerPrefix + base64.StdEncoding.EncodeToString(
+		[]byte("age-encryption.org/v1\n-> X25519 tru")) + "]"
+
+	cases := []struct {
+		name    string
+		in      string
+		wantErr bool
+	}{
+		{"generated marker", real, false},
+		// Truncation is invisible without a key: the header is intact, so
+		// CheckMarker must pass it and leave the failure to the decrypt.
+		{"truncated age file", truncated, false},
+		{"not a marker", "plain value", true},
+		{"invalid base64", "ENC[age:YWJj=====]", true},
+		{"valid base64, not an age file", "ENC[age:" + base64.StdEncoding.EncodeToString([]byte("nope")) + "]", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckMarker(tc.in)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("CheckMarker(%q) = nil, want an error", tc.in)
+				}
+				if !errors.Is(err, ErrCorrupt) {
+					t.Fatalf("CheckMarker(%q) error %v does not wrap ErrCorrupt", tc.in, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CheckMarker(%q) = %v, want nil", tc.in, err)
+			}
+		})
+	}
+}

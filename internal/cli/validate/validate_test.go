@@ -12,6 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/scaffold"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/stretchr/testify/require"
 )
@@ -1375,4 +1376,98 @@ func TestValidateFilterHint_SuppressedInJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Greater(t, len(got.Diagnostics), filterHintThreshold,
 		"fixture must exceed the threshold or the JSON suppression is untested")
+}
+
+// writeSecretsFixture creates a project whose single var is an ENC[age:…]
+// marker for a recipient no identity is available for.
+func writeSecretsFixture(t *testing.T) (workspacePath string, recipient string) {
+	t.Helper()
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	t.Setenv(secrets.EnvKey, "")
+	t.Setenv(secrets.EnvKeyFile, "")
+	t.Setenv("HOME", t.TempDir())
+
+	workspacePath = filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n"), 0o644))
+	return workspacePath, id.Recipient()
+}
+
+func TestValidateSecretsSubcommand(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{})
+	secretsCmd, _, _ := cmd.Find([]string{"secrets"})
+	require.NotNil(t, secretsCmd)
+	require.Equal(t, "secrets", secretsCmd.Name())
+	require.NotNil(t, secretsCmd.Args)
+	require.True(t, secretsCmd.SilenceUsage)
+}
+
+// A keyless project still LOADS; `dwe validate` must therefore report the
+// unreadable secret as diagnostics-as-data, not as a config load failure.
+func TestValidateSecretsScopedReportsUnresolved(t *testing.T) {
+	workspacePath, _ := writeSecretsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 1, got.Summary.Error)
+	require.Len(t, got.Diagnostics, 1)
+	require.Equal(t, "secrets/secrets.unresolved:no_identity", got.Diagnostics[0].Scope)
+	require.Contains(t, got.Diagnostics[0].Message, "vars.token")
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "main config did not load")
+}
+
+func TestValidateFullRunIncludesSecretsDomain(t *testing.T) {
+	workspacePath, _ := writeSecretsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath)
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	var scopes []string
+	for _, d := range got.Diagnostics {
+		if strings.HasPrefix(d.Scope, "secrets/") {
+			scopes = append(scopes, d.Scope)
+		}
+	}
+	require.Equal(t, []string{"secrets/secrets.unresolved:no_identity"}, scopes)
+}
+
+// A malformed recipient makes LoadConfig fail; the scoped run must still name
+// the problem rather than going blind on a nil cfg.
+func TestValidateSecretsScopedMalformedRecipientWithFailedLoad(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: age1-not-a-real-key\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 1, got.Summary.Error)
+	require.Equal(t, "secrets/secrets.recipient", got.Diagnostics[0].Scope)
+	require.Contains(t, got.Diagnostics[0].Message, "not a valid age recipient")
+}
+
+// A project with no secrets: block and no markers must add no secrets rows.
+func TestValidateSecretsSilentWithoutSecrets(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("project:\n  name: test\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 0, got.Summary.Error)
+	require.Empty(t, got.Diagnostics)
 }
