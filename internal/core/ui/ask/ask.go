@@ -29,6 +29,9 @@ const (
 	FieldMultiselect
 	// FieldConfirm is a yes/no confirmation field.
 	FieldConfirm
+	// FieldPassword is a free-text input field that echoes a mask instead of
+	// the typed characters. Behaves exactly like FieldInput otherwise.
+	FieldPassword
 )
 
 // Option represents a single choice in a select or multiselect field.
@@ -42,7 +45,7 @@ type Field struct {
 	Key         string             // field key, used in Result
 	Title       string             // prompt title
 	Description string             // additional help text
-	Kind        FieldKind          // field type (input/select/multiselect/confirm)
+	Kind        FieldKind          // field type (input/password/select/multiselect/confirm)
 	Required    bool               // if true, huh validates non-empty on submit
 	Default     string             // prefilled value (scalar); for multiselect this is the joined default
 	Defaults    []string           // pre-selected values (multiselect only)
@@ -257,7 +260,9 @@ func detectKinds(fields []Field) presentKinds {
 	var p presentKinds
 	for _, f := range fields {
 		switch f.Kind {
-		case FieldInput:
+		case FieldInput, FieldPassword:
+			// A password field is an input field that hides its echo: it owns
+			// the same keymap slots, so it drives the same hijacks.
 			p.input = true
 		case FieldSelect:
 			p.selectKind = true
@@ -328,13 +333,17 @@ func buildHuhField(f Field, hasQuit bool) (huh.Field, fieldBinding, error) {
 	}
 
 	switch f.Kind {
-	case FieldInput:
+	case FieldInput, FieldPassword:
 		val := f.Default
 		field := huh.NewInput().
 			Key(f.Key).
 			Title(f.Title).
 			Description(f.Description).
 			Value(&val)
+
+		if f.Kind == FieldPassword {
+			field = field.EchoMode(huh.EchoModePassword)
+		}
 
 		if hasQuit {
 			// Enable suggestions so huh.Input.KeyBinds() exposes the

@@ -929,3 +929,187 @@ func TestRunShowHelpTriState(t *testing.T) {
 		})
 	}
 }
+
+// inputEchoMode reads the echo mode off the huh.Input's embedded bubbles
+// textinput.Model. huh exposes EchoMode as a setter only, so reflection is
+// the only way to verify the mask was actually applied (the field itself is
+// an exported int-kind field on an unexported struct field, so no unsafe is
+// needed to read it).
+func inputEchoMode(t *testing.T, field huh.Field) int64 {
+	t.Helper()
+	rv := reflect.ValueOf(field)
+	if rv.Kind() == reflect.Pointer {
+		rv = rv.Elem()
+	}
+	ti := rv.FieldByName("textinput")
+	if !ti.IsValid() {
+		t.Fatalf("textinput field not found on %T", field)
+	}
+	mode := ti.FieldByName("EchoMode")
+	if !mode.IsValid() {
+		t.Fatalf("EchoMode field not found on %T's textinput", field)
+	}
+	return mode.Int()
+}
+
+// TestBuildHuhFieldPassword verifies a password field builds, binds a string
+// and masks its echo, while a plain input keeps the normal echo mode.
+func TestBuildHuhFieldPassword(t *testing.T) {
+	f := Field{
+		Key:         "token",
+		Kind:        FieldPassword,
+		Title:       "Secret value",
+		Description: "Input is hidden",
+		Default:     "seed",
+	}
+
+	huhField, binding, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	if huhField == nil {
+		t.Fatal("huhField should not be nil")
+	}
+	if binding.key != "token" {
+		t.Errorf("binding.key = %q, want token", binding.key)
+	}
+	if _, ok := binding.ptr.(*string); !ok {
+		t.Errorf("binding.ptr should be *string for FieldPassword, got %T", binding.ptr)
+	}
+	if got := inputEchoMode(t, huhField); got != int64(huh.EchoModePassword) {
+		t.Errorf("echo mode = %d, want EchoModePassword (%d)", got, huh.EchoModePassword)
+	}
+
+	plain, _, err := buildHuhField(Field{Key: "i", Kind: FieldInput}, false)
+	if err != nil {
+		t.Fatalf("buildHuhField(FieldInput) returned error: %v", err)
+	}
+	if got := inputEchoMode(t, plain); got != int64(huh.EchoModeNormal) {
+		t.Errorf("FieldInput echo mode = %d, want EchoModeNormal (%d)", got, huh.EchoModeNormal)
+	}
+}
+
+// TestFormResultPasswordIsString verifies a password field harvests as a
+// plain string through Result, like any other input.
+func TestFormResultPasswordIsString(t *testing.T) {
+	form, err := Build("Title", []Field{{Key: "token", Kind: FieldPassword}}, RunOptions{Output: io.Discard})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+	for _, b := range form.bindings {
+		if v, ok := b.ptr.(*string); ok {
+			*v = "s3cret"
+		}
+	}
+	result := form.Result()
+	if got := result.String("token"); got != "s3cret" {
+		t.Errorf("Result.String(token) = %q, want s3cret", got)
+	}
+}
+
+// TestBuildHuhFieldPasswordValidation verifies Required and a custom Validate
+// reach the built field: Blur runs the validator and stores the error.
+func TestBuildHuhFieldPasswordValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   Field
+		wantErr string
+	}{
+		{
+			name:    "required empty",
+			field:   Field{Key: "token", Kind: FieldPassword, Required: true},
+			wantErr: "required",
+		},
+		{
+			name:  "required with value",
+			field: Field{Key: "token", Kind: FieldPassword, Required: true, Default: "v"},
+		},
+		{
+			name: "custom validate rejects",
+			field: Field{Key: "token", Kind: FieldPassword, Default: "short", Validate: func(s string) error {
+				if len(s) < 8 {
+					return errors.New("too short")
+				}
+				return nil
+			}},
+			wantErr: "too short",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			huhField, _, err := buildHuhField(tt.field, false)
+			if err != nil {
+				t.Fatalf("buildHuhField returned error: %v", err)
+			}
+			huhField.Blur()
+			got := huhField.Error()
+			switch {
+			case tt.wantErr == "" && got != nil:
+				t.Errorf("Error() = %v, want nil", got)
+			case tt.wantErr != "" && got == nil:
+				t.Errorf("Error() = nil, want %q", tt.wantErr)
+			case tt.wantErr != "" && got != nil && !strings.Contains(got.Error(), tt.wantErr):
+				t.Errorf("Error() = %v, want it to contain %q", got, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestBuildHuhFieldPasswordFilterableRejected pins that Filterable stays
+// multiselect-only for the new kind too.
+func TestBuildHuhFieldPasswordFilterableRejected(t *testing.T) {
+	yes := true
+	if _, _, err := buildHuhField(Field{Key: "token", Kind: FieldPassword, Filterable: &yes}, false); err == nil {
+		t.Error("Filterable should be rejected for FieldPassword")
+	}
+}
+
+// TestDetectKindsPasswordCountsAsInput verifies a password-only form drives
+// the same keymap slots as an input-only form: the SubmitHelp relabel lands
+// on Input.Next and the quit hint hijacks Input.AcceptSuggestion.
+func TestDetectKindsPasswordCountsAsInput(t *testing.T) {
+	fields := []Field{{Key: "token", Kind: FieldPassword}}
+
+	if kinds := detectKinds(fields); !kinds.input {
+		t.Error("detectKinds should classify FieldPassword as an input kind")
+	}
+
+	km := buildKeyMap(RunOptions{SubmitHelp: "save"}, fields)
+	if got := km.Input.Next.Help().Desc; got != "save" {
+		t.Errorf("Input.Next.Help().Desc = %q, want %q", got, "save")
+	}
+
+	quit := &QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
+	km = buildKeyMap(RunOptions{Quit: quit}, fields)
+	if !bindingKeysEqual(km.Input.AcceptSuggestion, quit.Keys) {
+		t.Errorf("Input.AcceptSuggestion.Keys() = %v, want %v", km.Input.AcceptSuggestion.Keys(), quit.Keys)
+	}
+	if got := km.Input.AcceptSuggestion.Help().Desc; got != "cancel" {
+		t.Errorf("Input.AcceptSuggestion.Help().Desc = %q, want %q", got, "cancel")
+	}
+}
+
+// TestBuildHuhFieldPasswordSuggestionsGatedByHasQuit verifies the password
+// field shares FieldInput's quit-hint suggestion trick.
+func TestBuildHuhFieldPasswordSuggestionsGatedByHasQuit(t *testing.T) {
+	f := Field{Key: "token", Kind: FieldPassword}
+
+	withoutQuit, _, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("buildHuhField(hasQuit=false) returned error: %v", err)
+	}
+	withoutQuit = withoutQuit.WithKeyMap(huh.NewDefaultKeyMap())
+	if got := len(withoutQuit.KeyBinds()); got != 3 {
+		t.Errorf("hasQuit=false: KeyBinds() len = %d, want 3 (no AcceptSuggestion)", got)
+	}
+
+	withQuit, _, err := buildHuhField(f, true)
+	if err != nil {
+		t.Fatalf("buildHuhField(hasQuit=true) returned error: %v", err)
+	}
+	withQuit = withQuit.WithKeyMap(huh.NewDefaultKeyMap())
+	if got := len(withQuit.KeyBinds()); got != 4 {
+		t.Errorf("hasQuit=true: KeyBinds() len = %d, want 4 (AcceptSuggestion present)", got)
+	}
+}
