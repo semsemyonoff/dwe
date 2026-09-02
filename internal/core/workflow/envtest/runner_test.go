@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // noopReporter implements pipeline.Reporter with no-op methods, so runner
@@ -1577,5 +1580,96 @@ func TestRunScenario_ReportCollectedBeforeTeardown(t *testing.T) {
 	}
 	if !containsStep(order, "compose_down") {
 		t.Fatalf("expected teardown steps to follow: %v", order)
+	}
+}
+
+// writeSecretRunnerFixtureProject is writeRunnerFixtureProject plus a secrets:
+// block and a single encrypted var, so the copy's config.LoadConfigOrWrap
+// decrypts a marker and registers its plaintext with the trace redactor.
+func writeSecretRunnerFixtureProject(t *testing.T, name, scenarioYAML, recipient, plain string) string {
+	t.Helper()
+	dir := writeRunnerFixtureProject(t, name, scenarioYAML)
+	marker, err := secrets.Encrypt(plain, recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	body := "schema_version: \"1\"\nproject:\n  name: runnertest\n  prefix: dwe\nsecrets:\n  recipient: " +
+		recipient + "\nvars:\n  token: \"" + marker + "\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(body), 0o644); err != nil {
+		t.Fatalf("writing workspace.yml: %v", err)
+	}
+	return dir
+}
+
+// TestRunScenario_ParallelScenariosUnionRedaction pins the union property of the
+// process-global trace redactor under the concurrency `dwe test --parallel`
+// actually produces: two scenarios in two projects each load their own config
+// with a different plaintext, and once both loads are done a diagnostic line
+// carrying either value is redacted. A replacing (rather than union-merging)
+// registration would leave the first scenario's value in the clear.
+func TestRunScenario_ParallelScenariosUnionRedaction(t *testing.T) {
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	t.Setenv(secrets.EnvKey, id.Export())
+
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+
+	const plainA = "scenario-a-plaintext"
+	const plainB = "scenario-b-plaintext"
+	dirs := map[string]string{
+		plainA: writeSecretRunnerFixtureProject(t, "smoke", noStepsScenario, id.Recipient(), plainA),
+		plainB: writeSecretRunnerFixtureProject(t, "smoke", noStepsScenario, id.Recipient(), plainB),
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan error, len(dirs))
+	for _, dir := range dirs {
+		wg.Add(1)
+		go func(dir string) {
+			defer wg.Done()
+			var execCalls []string
+			var teardownOrder []string
+			r := &Runner{
+				execDwe:       stubExecDwe(nil, &execCalls),
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(&teardownOrder, nil)
+				},
+				clock: time.Now,
+			}
+			res, runErr := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        "smoke",
+				ReporterFactory: noopReporterFactory,
+			})
+			if runErr != nil {
+				results <- runErr
+				return
+			}
+			if res.Status != StatusPassed {
+				results <- errors.New("scenario status = " + string(res.Status))
+				return
+			}
+			results <- nil
+		}(dir)
+	}
+	wg.Wait()
+	close(results)
+	for runErr := range results {
+		if runErr != nil {
+			t.Fatalf("RunScenario: %v", runErr)
+		}
+	}
+
+	var buf bytes.Buffer
+	trace.Configure(&buf, trace.LevelVerbose)
+	defer trace.Configure(nil, trace.LevelOff)
+	trace.Decision(context.Background(), "a=%s b=%s", plainA, plainB)
+
+	if got, want := buf.String(), "a=*** b=***\n"; got != want {
+		t.Fatalf("line = %q, want %q — both scenarios' plaintexts must stay registered", got, want)
 	}
 }
