@@ -75,6 +75,8 @@ Without a usable identity the project still loads — markers stay literal,
 fix instead of writing ciphertext into a config file.`,
 		Example: `  dwe secrets status
   dwe secrets init
+  dwe secrets set vars.telegram.token
+  dwe secrets get vars.telegram.token
   dwe secrets key export
   dwe secrets key import --file identity.txt`,
 		SilenceUsage: true,
@@ -82,6 +84,8 @@ fix instead of writing ciphertext into a config file.`,
 
 	cmd.AddCommand(newInitCmd(flags))
 	cmd.AddCommand(newStatusCmd(flags))
+	cmd.AddCommand(newSetCmd(flags))
+	cmd.AddCommand(newGetCmd(flags))
 	cmd.AddCommand(newKeyCmd(flags))
 	return cmd
 }
@@ -110,13 +114,7 @@ func requireRecipient(flags *cmdctx.RootFlags) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	recipient := config.RecipientFromLayers(layers)
-	if recipient == "" {
-		return "", cmdctx.Err("secrets_no_recipient",
-			"this project has no secrets.recipient in workspace.yml").
-			WithHint("run 'dwe secrets init' to mint a project key pair")
-	}
-	return recipient, nil
+	return recipientOrErr(layers)
 }
 
 // identitySet is every identity this machine can offer for a project: the one
@@ -188,6 +186,30 @@ func (s identitySet) classifyMarker(marker string) (state, reason string) {
 		return stateUnresolved, config.ReasonWrongIdentity
 	}
 	return stateUnresolved, s.reason()
+}
+
+// decrypt opens a marker with whatever this machine holds: the configured
+// identity first, then the stragglers (a half-rekeyed tree). A damaged payload
+// is reported as such without a key, so the failure names the real cause
+// instead of blaming a missing identity.
+func (s identitySet) decrypt(marker string) (string, error) {
+	if err := secrets.CheckMarker(marker); err != nil {
+		return "", err
+	}
+	if s.err == nil {
+		if plain, err := secrets.Decrypt(marker, s.primary); err == nil {
+			return plain, nil
+		}
+	}
+	for _, id := range s.others {
+		if plain, err := secrets.Decrypt(marker, id); err == nil {
+			return plain, nil
+		}
+	}
+	if s.err != nil {
+		return "", s.err
+	}
+	return "", fmt.Errorf("%w: this value is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
 }
 
 // classifyBytes is classifyMarker for a native age file.

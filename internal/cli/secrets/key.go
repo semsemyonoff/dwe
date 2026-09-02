@@ -189,7 +189,7 @@ func readIdentityText(cmd *cobra.Command, file string) (string, error) {
 // identityError turns a LoadIdentity failure into the typed envelope, naming
 // every place the lookup looked so the fix does not depend on knowing the
 // precedence rules.
-func identityError(recipient string, err error) error {
+func identityError(recipient string, err error) *cmdctx.CodedError {
 	return cmdctx.ErrWrap("secrets_no_identity", err).
 		WithDetail("recipient", recipient).
 		WithHint(fmt.Sprintf("run 'dwe secrets key import' to store the identity at %s, or set %s / %s",
