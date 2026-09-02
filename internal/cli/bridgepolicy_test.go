@@ -63,6 +63,19 @@ func TestBridgeCommandAllowed_table(t *testing.T) {
 		{"dwe validate", false},
 		{"dwe validate config", false},
 
+		// The whole `secrets` subtree is host-only: no container may mint,
+		// rekey or export the project identity. Decrypted READS stay reachable
+		// through `vars get` (above) — the same exposure the container already
+		// has through its rendered .env.
+		{"dwe secrets", false},
+		{"dwe secrets init", false},
+		{"dwe secrets status", false},
+		{"dwe secrets set", false},
+		{"dwe secrets get", false},
+		{"dwe secrets key export", false},
+		{"dwe secrets key import", false},
+		{"dwe secrets rekey", false},
+
 		// The single nested exception inside an otherwise blocked subtree.
 		{"dwe bridge status", true},
 		{"dwe bridge", false},
