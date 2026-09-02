@@ -37,8 +37,7 @@ func TestRunDeployMenu_NonTTY_PrintsHelpAndExits(t *testing.T) {
 	}
 
 	// Should be a usageError with exit code 2
-	var ue usageError
-	if !errors.As(err, &ue) {
+	if _, ok := errors.AsType[usageError](err); !ok {
 		t.Errorf("expected usageError, got %T", err)
 	}
 }

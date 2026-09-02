@@ -24,17 +24,21 @@ func secretsStateFor(flags *cmdctx.RootFlags) config.SecretsState {
 // the value at (originLayer, path) was decrypted, or why it could not be. It
 // returns "" when the var is not an encrypted secret at its origin layer —
 // which is every var in a project that uses none.
+//
+// config.PathCovers, not equality: inspecting a sequence or a subtree resolves
+// one node whose masked value carries markers recorded at descendant paths
+// (`vars.tokens.0`), and those must still be annotated.
 func secretNote(state config.SecretsState, originLayer, path string) string {
 	if originLayer == "" {
 		return ""
 	}
 	for _, u := range state.Unresolved {
-		if u.Layer == originLayer && u.Path == path {
+		if u.Layer == originLayer && config.PathCovers(path, u.Path) {
 			return unresolvedNote(u.Reason, state.Recipient)
 		}
 	}
 	for _, d := range state.Decrypted {
-		if d.Layer == originLayer && d.Path == path {
+		if d.Layer == originLayer && config.PathCovers(path, d.Path) {
 			return "decrypted via " + identitySourceDisplay(state)
 		}
 	}

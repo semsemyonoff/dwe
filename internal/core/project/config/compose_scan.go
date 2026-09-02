@@ -188,8 +188,7 @@ func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
 		}
 		var doc composeScanDoc
 		if err := yaml.Unmarshal(data, &doc); err != nil {
-			var typeErr *yaml.TypeError
-			if !errors.As(err, &typeErr) {
+			if _, ok := errors.AsType[*yaml.TypeError](err); !ok {
 				continue
 			}
 		}

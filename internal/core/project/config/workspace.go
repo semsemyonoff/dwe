@@ -1710,6 +1710,13 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Harvest the plaintexts BEFORE assembleConfig: deepMerge stores the first
+	// layer's nested maps into the merged map by reference and then mutates them
+	// in place while merging the higher layers, so afterwards a lower layer's
+	// decrypted scalar reads back as whatever shadowed it. Registering that
+	// would redact an unrelated override value everywhere and leave the secret
+	// itself unregistered.
+	redactValues := collectDecryptedValues(configLayers, state)
 	cfg, err := assembleConfig(workspacePath, configLayers, state)
 	if err != nil {
 		return nil, err
@@ -1719,15 +1726,15 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// so registering here is what makes `dwe … -v` echo *** instead of a
 	// decrypted value regardless of which command ran. LoadConfigSanitized
 	// registers nothing — it never held plaintext.
-	registerSecretRedaction(configLayers, state)
+	registerSecretRedaction(redactValues)
 	return cfg, nil
 }
 
 // registerSecretRedaction feeds every decrypted plaintext to the process-global
 // trace redactor. Values shorter than secrets.MinRedactRunes are dropped by the
 // redactor itself.
-func registerSecretRedaction(layers []Layer, state SecretsState) {
-	if values := collectDecryptedValues(layers, state); len(values) > 0 {
+func registerSecretRedaction(values []string) {
+	if len(values) > 0 {
 		trace.RegisterRedaction(values)
 	}
 }

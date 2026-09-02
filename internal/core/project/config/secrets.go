@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // SecretsConfig is the formalized top-level secrets: block. It carries the
 // project's age recipient (the public half of the key pair), which is
 // committed: anyone with the repository can ADD a secret, only identity
@@ -60,16 +62,32 @@ func (s SecretsState) HasSecrets() bool {
 }
 
 // UnresolvedAt reports whether the given layer file carries an unresolved
-// marker at path. `dwe vars` uses it to decide whether the ORIGIN layer of a
-// leaf is encrypted — a marker shadowed by a plaintext override must still
-// render as plaintext.
+// marker at path, or anywhere beneath it. `dwe vars` uses it to decide whether
+// the ORIGIN layer of a leaf is encrypted — a marker shadowed by a plaintext
+// override must still render as plaintext.
+//
+// The "beneath it" half is what keeps the flag in step with the rendered value
+// for a SEQUENCE: `varsusage.EnumerateVars` stops at a sequence and reports the
+// leaf as `vars.tokens`, while the decrypt walk records each element with its
+// index (`vars.tokens.0`), so an exact match would report a masked value as not
+// encrypted.
 func (s SecretsState) UnresolvedAt(layer, path string) bool {
 	for _, u := range s.Unresolved {
-		if u.Layer == layer && u.Path == path {
+		if u.Layer == layer && PathCovers(path, u.Path) {
 			return true
 		}
 	}
 	return false
+}
+
+// PathCovers reports whether the dot-path leaf is ref itself or one of its
+// ancestors, matching only at a real dot boundary so "vars.db" covers
+// "vars.db.pass" but not "vars.dbx".
+func PathCovers(leaf, ref string) bool {
+	if leaf == ref {
+		return true
+	}
+	return len(ref) > len(leaf) && strings.HasPrefix(ref, leaf) && ref[len(leaf)] == '.'
 }
 
 // SecretsRecipient returns the configured recipient, or "" when no secrets:

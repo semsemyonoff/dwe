@@ -96,16 +96,19 @@ func statusView(d statusJSON) render.SecretsStatusView {
 		Markers:   make([]render.SecretsMarkerRow, len(d.Markers)),
 		Files:     make([]render.SecretsFileRow, len(d.Files)),
 	}
+	// A reason on a readable row is the stale-key qualifier: this machine can
+	// open the value but the CONFIGURED identity cannot, so the loader still
+	// reports it unresolved. Amber, not green — the row is a to-do.
 	for i, m := range d.Markers {
 		v.Markers[i] = render.SecretsMarkerRow{
 			Layer: m.Layer, Path: m.Path, State: m.State, Reason: m.Reason,
-			OK: m.State == stateDecrypted,
+			OK: m.State == stateDecrypted && m.Reason == "",
 		}
 	}
 	for i, f := range d.Files {
 		v.Files[i] = render.SecretsFileRow{
 			File: f.File, State: f.State, Reason: f.Reason,
-			OK: f.State == stateDecryptable,
+			OK: f.State == stateDecryptable && f.Reason == "",
 		}
 	}
 	return v

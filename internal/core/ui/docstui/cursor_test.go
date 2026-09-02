@@ -108,7 +108,7 @@ func TestApplyCursorGlyphOnlyWhenViewportFocused(t *testing.T) {
 	// Viewport focused: glyph on the cursor row, width preserved.
 	b.active = panelViewport
 	out = b.applyCursorGlyph(b.Viewport.View(), 10)
-	firstRow := strings.Split(out, "\n")[0]
+	firstRow, _, _ := strings.Cut(out, "\n")
 	if !strings.Contains(ansi.Strip(firstRow), cursorGlyph) {
 		t.Errorf("cursor glyph missing on cursor row: %q", ansi.Strip(firstRow))
 	}

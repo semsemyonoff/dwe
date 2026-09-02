@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ 7fc9fa0b49c9
+> Translated from: reference/concepts/project-layout.md @ c2f49aa986b9
 
 # Раскладка проекта
 
@@ -256,7 +256,7 @@ workspace/docker.local.yml
 
 | Путь | Назначение | Отслеживается |
 |------|------------|---------------|
-| `~/.config/dwe/config.yml` | Пользовательские настройки: переопределения бинарей, язык, тема mermaid — см. [Пользовательский конфиг](../config/userconfig.md) | никогда |
+| `~/.config/dwe/config` | Пользовательские настройки (плоский `key = value`, не YAML): переопределения бинарей, язык, тема mermaid — см. [Пользовательский конфиг](../config/userconfig.md) | никогда |
 | `~/.config/dwe/keys/<recipient>.key` | Приватный age-identity одного проекта, `0600`. Директория — `0700`. Пишется командами `dwe secrets init` / `key import` / `rekey` | никогда |
 
 Keyfile называется по **публичному recipient**, которому он принадлежит, поэтому одна машина может держать identity любого числа проектов рядом. `DWE_AGE_KEY` (текст identity) и `DWE_AGE_KEY_FILE` (путь) перекрывают поиск keyfile для CI. См. [`secrets.md` → Ключи](../config/secrets.md#ключи-где-живёт-identity).

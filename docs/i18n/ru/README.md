@@ -1,4 +1,4 @@
-> Translated from: README.md @ a0c2b70df743
+> Translated from: README.md @ 5054aaa0c311
 
 # DWE — Dev Workspace Engine
 
@@ -211,7 +211,7 @@ my-project/
 Справочная документация живёт в `docs/reference/` и также встроена в бинарник. Просматривайте её офлайн через `dwe docs` (интерактивный TUI) или `dwe docs show <topic>` (обычный текст).
 
 - [Концепции](../../reference/concepts/index.md) — высокоуровневая ориентация: начало работы, архитектура, раскладка проекта, интеграция с Docker, интеграция с Git, пайплайны, состояние и блокировки.
-- [Конфигурация](../../reference/config/index.md) — справочник по полям для `workspace.yml`, сервисов, команд, пайплайнов deploy/reset/lifecycle, snapshot, info, validate, setup, styles, UI, state, i18n, нотификаций, docker.
+- [Конфигурация](../../reference/config/index.md) — справочник по полям для `workspace.yml`, сервисов, команд, vars, зашифрованных секретов, пайплайнов deploy/reset/lifecycle, snapshot, info, validate, setup, styles, UI, state, i18n, нотификаций, docker.
 - [Render-паки](../../reference/render/index.md) — `dwe render env / ide / ai / git / config` — схема манифеста, политики коллизий, локальные оверрайды.
 - [Подсистема документации](../../reference/docs/index.md) — браузер `dwe docs`, неинтерактивные подкоманды, переводы, проверка свежести через хэш контента.
 - [Шаблоны](../../reference/templates.md) — общий шаблонизатор: `{{ ... }}` против `${ ... }`, реестры sprout, контекст рендеринга по местам использования.

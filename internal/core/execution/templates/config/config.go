@@ -15,6 +15,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -347,15 +348,17 @@ func renderTemplateFile(absRoot, packName, rel string, ctx *tpl.RenderContext, d
 	if encryptedSource {
 		mode = 0o600
 	}
-	if err := os.WriteFile(absDest, []byte(out), mode); err != nil {
-		return false, fmt.Errorf("write %s: %w", dest, err)
-	}
 	if encryptedSource {
 		// os.WriteFile keeps the mode of a pre-existing file; an output whose
-		// source was encrypted must not stay world-readable.
-		if err := os.Chmod(absDest, mode); err != nil {
+		// source was encrypted must not stay world-readable. Tighten BEFORE the
+		// write, or the plaintext sits at the old 0644 for the length of it.
+		// A not-yet-existing target is fine — WriteFile creates it at 0600.
+		if err := os.Chmod(absDest, mode); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return false, fmt.Errorf("chmod %s: %w", dest, err)
 		}
+	}
+	if err := os.WriteFile(absDest, []byte(out), mode); err != nil {
+		return false, fmt.Errorf("write %s: %w", dest, err)
 	}
 	return fromOverride, nil
 }

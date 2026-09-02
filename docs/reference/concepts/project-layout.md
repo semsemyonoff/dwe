@@ -254,7 +254,7 @@ Two things live in the user's config directory rather than in the project, becau
 
 | Path | Purpose | Tracked |
 |------|---------|---------|
-| `~/.config/dwe/config.yml` | User-level preferences: binary overrides, language, mermaid theme — see [User config](../config/userconfig.md) | never |
+| `~/.config/dwe/config` | User-level preferences (flat `key = value`, not YAML): binary overrides, language, mermaid theme — see [User config](../config/userconfig.md) | never |
 | `~/.config/dwe/keys/<recipient>.key` | The private age identity for one project, `0600`. The directory is `0700`. Written by `dwe secrets init` / `key import` / `rekey` | never |
 
 A keyfile is named after the **public recipient** it belongs to, so one machine can hold identities for any number of projects side by side. `DWE_AGE_KEY` (the identity text) and `DWE_AGE_KEY_FILE` (a path) override the keyfile lookup for CI. See [`secrets.md` → Keys](../config/secrets.md#keys-where-the-identity-lives).

@@ -69,7 +69,7 @@ service expects. Encryption needs only the committed recipient, so anyone with
 the repository can add an encrypted file; reading one back needs the identity.`,
 		Example: `  dwe secrets encrypt workspace/templates/config/bot/creds.json
   dwe secrets encrypt creds.json --out workspace/templates/config/bot/creds.json` + ageExt + `
-  cat creds.json | dwe secrets encrypt /dev/stdin --out -`,
+  dwe secrets encrypt creds.json --out -`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -348,15 +348,18 @@ func writeOutputFile(path string, data []byte, mode os.FileMode, force bool) err
 		return cmdctx.ErrWrap("secrets_output_write_failed", err)
 	}
 
-	if err := os.WriteFile(path, data, mode); err != nil {
-		return cmdctx.ErrWrap("secrets_output_write_failed", err)
-	}
 	// Only tighten: an overwritten ciphertext file keeps whatever the repository
 	// gave it, while a decrypted plaintext file is always forced down to 0600.
+	// The chmod runs BEFORE the write — os.WriteFile keeps a pre-existing mode,
+	// so tightening afterwards would leave the plaintext world-readable for the
+	// length of the write (and permanently if the process dies in between).
 	if existed && mode == plaintextMode {
 		if err := os.Chmod(path, mode); err != nil {
 			return cmdctx.ErrWrap("secrets_output_write_failed", err)
 		}
+	}
+	if err := os.WriteFile(path, data, mode); err != nil {
+		return cmdctx.ErrWrap("secrets_output_write_failed", err)
 	}
 	return nil
 }

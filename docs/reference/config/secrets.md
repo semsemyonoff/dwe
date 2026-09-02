@@ -159,8 +159,9 @@ Then `${vars.telegram.token}` resolves to the plaintext everywhere, and
 ## Subcommands
 
 All writers take the project locks (`deploy.lock` → `snapshot.lock`) and run
-**no preflight** — they are config edits, not stack mutations. `status`, `get`,
-`decrypt` and `key export` are read-only.
+**no preflight** — they are config edits, not stack mutations. `status`, `get`
+and `key export` write nothing at all. `decrypt` takes no locks either — it
+does not touch the config — but it does write a plaintext file (see below).
 
 ### `dwe secrets init`
 
@@ -204,7 +205,8 @@ causes rather than lumping them together:
 
 | State | Meaning |
 |-------|---------|
-| `decrypted` / `decryptable` | This machine can read it |
+| `decrypted` / `decryptable` | The configured identity reads it |
+| `decrypted: stale_key` / `decryptable: stale_key` | Readable here, but only with an *older* keyfile — the configured identity does not open it |
 | `unresolved: no_identity` | No identity for this recipient is available here |
 | `unresolved: wrong_identity` | An identity was found, but it does not open this value |
 | `unresolved: corrupt` | The payload is damaged — not a key problem |
@@ -214,9 +216,13 @@ keyless developer is never sent hunting for a key that would not have helped.
 
 A half-rekeyed tree is reported **per value**: the configured identity is tried
 first, then every other keyfile in the keys directory, so `status` says which
-values still need the old key rather than failing wholesale. A `*.age`
-candidate that fails the path discipline (a symlink, a device) is reported as
-`not decryptable` with the refusal as its reason — never silently skipped.
+values still need the old key rather than failing wholesale. Those rows are the
+`stale_key` ones, and they render amber — the config loader tries the
+*configured* identity alone, so such a value is still `wrong_identity` at load
+time and `secrets.unresolved` still blocks the lifecycle commands until
+`dwe secrets rekey` finishes. A `*.age` candidate that fails the path
+discipline (a symlink, a device) is reported as `not decryptable` with the
+refusal as its reason — never silently skipped.
 
 Rows are sorted (layer order, then path), so the output is stable across runs
 and diffable.
@@ -378,12 +384,17 @@ literal in the config, and:
 | `dwe status`, `dwe docs`, `dwe validate`, `dwe prompt`, `dwe commands` | Work normally |
 | `dwe vars list` / `get` / `inspect`, the TUI browser | Show `<encrypted>` — never the ciphertext |
 | `dwe secrets status` | Reports every value and its reason; exits 0 |
-| `dwe run`, `dwe deploy`, `dwe reset`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator, naming the fix |
+| `dwe run`, `dwe deploy`, `dwe reset`, `dwe stop`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator, naming the fix |
 | `dwe render env`, `dwe render config` | **Fail** naming the value that would have been written |
 | `dwe render ide` / `ai` / `git` | Work — they render against a sanitized config and emit the marker |
 
 A missing key never renders a secret as `""`, and never writes a marker into an
 output file.
+
+`dwe stop` is on the blocked list because it runs the `lifecycle.yml` stop
+hooks, which are ordinary user commands and may reference `${vars.*}`; it
+shares the `stop` preflight stage with `dwe reset`. Pass `--skip-preflight` to
+tear a stack down on a machine that has no key.
 
 An encrypted `project.name` / `project.prefix` is treated as **unset** by the
 `dwe prompt` hot path (which has its own lenient parser and never loads the

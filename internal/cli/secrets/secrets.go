@@ -45,6 +45,16 @@ const (
 	stateNotDecryptable = "not decryptable"
 )
 
+// reasonStaleKey qualifies a readable row that only a STRAGGLER keyfile opened
+// — the configured recipient's identity does not.
+//
+// It is what makes the half-rekeyed report actionable. The config loader tries
+// the configured identity alone, so such a value is `wrong_identity` at load
+// time and `secrets.unresolved` blocks the lifecycle commands; without this
+// qualifier `status` printed the row green and empty, i.e. "nothing to do", in
+// exactly the recovery scenario `rekey`'s resume hint sends the user here for.
+const reasonStaleKey = "stale_key"
+
 // configPackKind is the only template-pack kind that may carry .age sources:
 // ide/ai/git pack outputs are git-tracked and render against a sanitized
 // config, so an encrypted source there would have nowhere safe to land.
@@ -180,7 +190,7 @@ func (s identitySet) classifyMarker(marker string) (state, reason string) {
 	}
 	for _, id := range s.others {
 		if _, err := secrets.Decrypt(marker, id); err == nil {
-			return stateDecrypted, ""
+			return stateDecrypted, reasonStaleKey
 		}
 	}
 	if s.err == nil {
@@ -243,7 +253,7 @@ func (s identitySet) classifyBytes(data []byte) (state, reason string) {
 	}
 	for _, id := range s.others {
 		if _, err := secrets.DecryptBytes(data, id); err == nil {
-			return stateDecryptable, ""
+			return stateDecryptable, reasonStaleKey
 		}
 	}
 	if s.err == nil {

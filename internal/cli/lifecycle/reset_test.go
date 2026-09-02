@@ -1846,3 +1846,59 @@ func TestResetRunFlags_ClearGeneratedExists(t *testing.T) {
 		t.Error("missing --clear-generated flag on reset run")
 	}
 }
+
+// TestResetStepCmd_UserInvoked pins the two hand-written lines in resetStepCmd
+// that decide whether a `type: command` step gets a container terminal.
+//
+// The BODY is a user invocation: `dwe reset step` runs one step at the terminal
+// with confirm prompts on and the real os.Stdout, so an interactive
+// service_exec (a psql, a tinker) must keep its TTY — that is the whole reason
+// the flag is set here and nowhere else in the pipeline.
+//
+// The check: is a postcondition probe and must NOT, even though the body just
+// did. execCommandAction does not derive either value; without this test both
+// lines can be deleted with the suite still green.
+func TestResetStepCmd_UserInvoked(t *testing.T) {
+	dir := writeResetStepFixture(t, "",
+		"phases:\n  - name: probe\n    steps:\n      - name: act\n        type: command\n        cmd: noop.body\n"+
+			"        check:\n          type: command\n          cmd: noop.check\n",
+	)
+	commandsDir := filepath.Join(dir, "workspace", "commands")
+	if err := os.MkdirAll(commandsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(commandsDir, "noop.yml"), []byte(
+		"commands:\n  body:\n    type: shell\n    cmd: \"true\"\n  check:\n    type: shell\n    cmd: \"true\"\n"),
+		0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]bool{}
+	prev := runtime.TestSnapshotRC
+	runtime.TestSnapshotRC = func(rc runtime.RunContext) {
+		if rc.Cmd != nil {
+			got[rc.Cmd.ID] = rc.UserInvoked
+		}
+	}
+	t.Cleanup(func() { runtime.TestSnapshotRC = prev })
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := resetStepCmd(cmd, flags, "probe/act", false); err != nil {
+		t.Fatalf("resetStepCmd: %v", err)
+	}
+
+	want := map[string]bool{"noop.body": true, "noop.check": false}
+	for id, wantInvoked := range want {
+		invoked, ran := got[id]
+		if !ran {
+			t.Fatalf("%s never ran (captured: %+v)", id, got)
+		}
+		if invoked != wantInvoked {
+			t.Errorf("%s: UserInvoked = %t, want %t", id, invoked, wantInvoked)
+		}
+	}
+}

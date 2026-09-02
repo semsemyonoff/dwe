@@ -151,7 +151,9 @@ func TestStatus_JSON_Keyless(t *testing.T) {
 
 // TestStatus_JSON_HalfRekeyed pins decision 11's recovery property end to end:
 // after an interrupted rekey both recipients' values still report as readable,
-// because a straggler keyfile opens the stale ones.
+// because a straggler keyfile opens the stale ones — and the one that ONLY a
+// straggler opens is qualified with stale_key, because the config loader tries
+// the configured identity alone and therefore still blocks on it.
 func TestStatus_JSON_HalfRekeyed(t *testing.T) {
 	isolateHome(t)
 	cfgPath, root := writeFixture(t)
@@ -188,9 +190,29 @@ func TestStatus_JSON_HalfRekeyed(t *testing.T) {
 	if len(got.Markers) != 2 {
 		t.Fatalf("markers = %+v, want 2", got.Markers)
 	}
+	// vars.a was re-encrypted to the new (configured) recipient; vars.b is the
+	// straggler the interrupted rekey left behind.
+	wantReason := map[string]string{"vars.a": "", "vars.b": reasonStaleKey}
 	for _, m := range got.Markers {
 		if m.State != stateDecrypted {
 			t.Errorf("%s: state = %q (%s), want %q", m.Path, m.State, m.Reason, stateDecrypted)
+		}
+		want, ok := wantReason[m.Path]
+		if !ok {
+			t.Errorf("unexpected marker path %q", m.Path)
+			continue
+		}
+		if m.Reason != want {
+			t.Errorf("%s: reason = %q, want %q", m.Path, m.Reason, want)
+		}
+	}
+
+	// The report must agree with the loader: the straggler value is what
+	// secrets.unresolved blocks on, so its row cannot render as "all good".
+	view := statusView(got)
+	for _, row := range view.Markers {
+		if wantOK := row.Path == "vars.a"; row.OK != wantOK {
+			t.Errorf("%s: row OK = %t, want %t", row.Path, row.OK, wantOK)
 		}
 	}
 }

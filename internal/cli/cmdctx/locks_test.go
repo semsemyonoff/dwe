@@ -135,8 +135,7 @@ func TestAcquireProjectLocksSilent_GenericErrorWrapped(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	var phe *lock.ProjectLockHeldError
-	if errors.As(err, &phe) {
+	if _, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
 		t.Fatalf("expected generic-wrapped error, got *lock.ProjectLockHeldError: %v", err)
 	}
 	if !strings.HasPrefix(err.Error(), "acquiring project locks: ") {
@@ -158,8 +157,7 @@ func TestAcquireProjectLocksOrReport_GenericErrorWrapped(t *testing.T) {
 	}
 
 	// Must NOT be a ProjectLockHeldError.
-	var phe *lock.ProjectLockHeldError
-	if errors.As(err, &phe) {
+	if _, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
 		t.Fatalf("expected generic-wrapped error, got *lock.ProjectLockHeldError: %v", err)
 	}
 

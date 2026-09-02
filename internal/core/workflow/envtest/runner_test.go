@@ -839,8 +839,7 @@ func TestRunScenario_FlockHeld(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error, got result %+v", result)
 	}
-	var heldErr *lock.HeldError
-	if !errors.As(err, &heldErr) {
+	if _, ok := errors.AsType[*lock.HeldError](err); !ok {
 		t.Fatalf("expected error to wrap *lock.HeldError, got %v", err)
 	}
 }

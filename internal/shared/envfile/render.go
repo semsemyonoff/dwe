@@ -98,8 +98,13 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 // renders .env *before* its preflight), so the guard lives here: a missing
 // identity must never silently publish ciphertext as if it were the
 // credential.
+//
+// ContainsMarker, not IsMarker — matching the sibling guard in
+// execution/templates/config. A rule whose from: resolves to a map or a
+// sequence is formatted with %v, so an unresolved marker arrives embedded in
+// `map[password:ENC[age:…]]` and an exact-match test would wave it through.
 func checkNotMarker(label, source, value string) error {
-	if !secrets.IsMarker(value) {
+	if !secrets.ContainsMarker(value) {
 		return nil
 	}
 	if source == "" {

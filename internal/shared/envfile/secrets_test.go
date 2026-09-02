@@ -96,3 +96,30 @@ func TestWrite_tightensPreExistingMode(t *testing.T) {
 		t.Errorf("mode = %v, want 0600", perm)
 	}
 }
+
+// TestBuildContent_refusesMarkerInsideCompositeValue pins that the guard is a
+// contains-test, not an exact-match one. A rule whose from: resolves to a map or
+// a sequence is rendered with %v, so the marker arrives embedded in
+// `map[password:ENC[age:…]]` — an exact match would write the ciphertext into
+// the one plaintext sink the container reads.
+func TestBuildContent_refusesMarkerInsideCompositeValue(t *testing.T) {
+	marker := testMarker(t, "s3cr3t-value")
+	for name, raw := range map[string]map[string]any{
+		"map":      {"vars": map[string]any{"db": map[string]any{"password": marker}}},
+		"sequence": {"vars": map[string]any{"db": []any{marker}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := makeEnvCfg([]config.ExportRule{{Name: "DB", From: "vars.db"}}, raw)
+			out, err := BuildContent(cfg)
+			if err == nil {
+				t.Fatalf("expected an error, got output:\n%s", out)
+			}
+			if !strings.Contains(err.Error(), "DB") || !strings.Contains(err.Error(), "vars.db") {
+				t.Errorf("error %q does not name the variable and its source", err)
+			}
+			if strings.Contains(out, secrets.MarkerPrefix) {
+				t.Errorf("output carries the marker: %s", out)
+			}
+		})
+	}
+}

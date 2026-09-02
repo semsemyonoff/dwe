@@ -659,3 +659,76 @@ func TestRecipientFromLayers(t *testing.T) {
 		t.Errorf("RecipientFromLayers = %q, want the raw value", got)
 	}
 }
+
+// TestLoadConfig_redactsTheSecretNotItsShadow pins that the plaintexts are
+// harvested BEFORE assembleConfig's deepMerge. deepMerge stores the first
+// layer's nested maps into the merged map by reference and then mutates them in
+// place, so a post-merge re-walk of workspace.yml reads back whatever local.yml
+// shadowed the marker with — which used to register the unrelated override for
+// global redaction and leave the secret itself unregistered.
+func TestLoadConfig_redactsTheSecretNotItsShadow(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+
+	ws := writeLayerFixture(t,
+		"secrets:\n  recipient: "+r+"\nvars:\n"+
+			"  shadowed: "+mustEncrypt(t, "shadowed-secret", r)+"\n"+
+			"  live: "+mustEncrypt(t, "live-secret", r)+"\n",
+		"",
+		"vars:\n  shadowed: an-override-value\n")
+
+	if _, err := LoadConfig(ws); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	// The secret that lost the merge is still a secret on this machine, and the
+	// one that won must be redacted.
+	for _, plain := range []string{"shadowed-secret", "live-secret"} {
+		if got := traceLine(t, plain); strings.Contains(got, plain) {
+			t.Errorf("trace of %q = %q, want it redacted", plain, got)
+		}
+	}
+	// The plaintext override is NOT a secret and must not be redacted — doing so
+	// replaces every unrelated occurrence of a common word in -v output.
+	if got := traceLine(t, "an-override-value"); !strings.Contains(got, "an-override-value") {
+		t.Errorf("trace of the plaintext override = %q, want it verbatim", got)
+	}
+}
+
+// TestUnresolvedAt_coversSequenceElements pins the dot-boundary coverage rule:
+// the decrypt walk records a sequence element with its index, while
+// varsusage.EnumerateVars stops at the sequence, so `dwe vars list` asks about
+// the parent path and must still get true.
+func TestUnresolvedAt_coversSequenceElements(t *testing.T) {
+	hideIdentity(t)
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	r := id.Recipient()
+	ws := writeLayerFixture(t,
+		"secrets:\n  recipient: "+r+"\nvars:\n  tokens:\n    - "+mustEncrypt(t, "seq-secret", r)+"\n", "", "")
+
+	_, state, err := LoadLayersWithSecrets(ws)
+	if err != nil {
+		t.Fatalf("LoadLayersWithSecrets: %v", err)
+	}
+	if len(state.Unresolved) != 1 || state.Unresolved[0].Path != "vars.tokens.0" {
+		t.Fatalf("Unresolved = %+v, want one entry at vars.tokens.0", state.Unresolved)
+	}
+	if !state.UnresolvedAt(ws, "vars.tokens") {
+		t.Errorf("UnresolvedAt(vars.tokens) = false, want true (the element is beneath it)")
+	}
+	if !state.UnresolvedAt(ws, "vars.tokens.0") {
+		t.Errorf("UnresolvedAt(vars.tokens.0) = false, want true")
+	}
+	// Only at a real dot boundary.
+	if state.UnresolvedAt(ws, "vars.token") {
+		t.Errorf("UnresolvedAt(vars.token) = true, want false — prefix without a dot boundary")
+	}
+	if state.UnresolvedAt(ws, "vars.tokensx") {
+		t.Errorf("UnresolvedAt(vars.tokensx) = true, want false")
+	}
+}
