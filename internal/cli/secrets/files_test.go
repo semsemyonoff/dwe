@@ -3,12 +3,14 @@ package secrets
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -337,6 +339,28 @@ func TestEncrypt_NoRecipient(t *testing.T) {
 	}
 	if !strings.Contains(coded.Hint, "secrets init") {
 		t.Errorf("hint = %q, want it to point at 'dwe secrets init'", coded.Hint)
+	}
+}
+
+// TestEncrypt_ReadsRecipientUnderTheLock pins the ordering `set` also keeps: the
+// recipient is read AFTER the project locks, so a `rekey` finishing in between
+// cannot leave the new file encrypted to the retired recipient. Held locks are
+// therefore reported before the missing recipient is — reverse the two and this
+// project (which has no recipient) answers secrets_no_recipient instead.
+func TestEncrypt_ReadsRecipientUnderTheLock(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	release, err := lock.AcquireProjectLocks(root)
+	if err != nil {
+		t.Fatalf("holding the project locks: %v", err)
+	}
+	defer release()
+
+	src := writePlainFile(t, root, "creds.json", "hello")
+	if _, _, err := runSecrets(t, flags, "encrypt", src); !errors.As(err, new(*lock.ProjectLockHeldError)) {
+		t.Fatalf("encrypt error = %v, want a held-lock refusal taken before the recipient read", err)
 	}
 }
 

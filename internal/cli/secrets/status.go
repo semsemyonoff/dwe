@@ -42,8 +42,11 @@ config-pack source under workspace/templates/config. Each one is actually
 decrypted, so the report distinguishes "no key on this machine" from "encrypted
 to somebody else" from "the payload is damaged".
 
-Read-only, and always exits 0: this is the report you run to find out why
-something is blocked, not another thing that blocks.`,
+Read-only, and never fails over an encrypted value: a missing key, a value
+encrypted to somebody else and a damaged payload are all reported as rows and
+still exit 0. This is the report you run to find out why something is blocked,
+not another thing that blocks. A config that does not load at all is still an
+error — there would be no inventory to report.`,
 		Example:      `  dwe secrets status`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

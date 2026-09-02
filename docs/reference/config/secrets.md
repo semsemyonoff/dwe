@@ -190,8 +190,9 @@ dwe secrets status
 ```
 
 The report you run to find out why something is blocked. It never blocks
-anything itself: **always exits 0**, even with no key and every value
-unreadable.
+anything itself: **no encrypted value can make it fail** — with no key and every
+value unreadable it still exits 0, reporting each one as a row. (A config that
+does not load at all is still an error: there would be no inventory to report.)
 
 It shows the configured recipient, the identity this machine holds (and, when
 there is none, where the lookup looked), and two inventories:

@@ -33,10 +33,10 @@ generated from commit subjects and stay on the
 - **New `dwe secrets` command tree** in the configuration group: `init`,
   `status`, `set`, `get`, `encrypt`, `decrypt`, `key export`, `key import` and
   `rekey`. All of them support `--output json`. `secrets status` is read-only
-  and always exits 0 — it decrypts every marker and `.age` source individually,
-  so it distinguishes "no key on this machine" from "encrypted to somebody
-  else" from "the payload is damaged", and reports a half-rekeyed tree per
-  value. `secrets set` takes the value from an argument, `--stdin` or a hidden
+  and no encrypted value can make it fail — it decrypts every marker and `.age`
+  source individually, so it distinguishes "no key on this machine" from
+  "encrypted to somebody else" from "the payload is damaged", and reports a
+  half-rekeyed tree per value. `secrets set` takes the value from an argument, `--stdin` or a hidden
   prompt, writes only under `vars.`, and never coerces types.
   `dwe secrets` is **not** reachable from a bridged container.
 - **New `secrets` validation domain**, with `dwe validate secrets`.

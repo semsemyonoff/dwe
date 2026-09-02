@@ -122,11 +122,6 @@ func runEncrypt(cmd *cobra.Command, flags *cmdctx.RootFlags, input, out string, 
 	if err := checkStreamMode(flags, out); err != nil {
 		return err
 	}
-	recipient, err := requireRecipient(flags)
-	if err != nil {
-		return err
-	}
-
 	root := flags.ProjectRoot()
 	src, err := resolveFilePath(root, input, roleInput)
 	if err != nil {
@@ -137,14 +132,20 @@ func runEncrypt(cmd *cobra.Command, flags *cmdctx.RootFlags, input, out string, 
 		return err
 	}
 
-	// The locks are held for the write only: the plaintext is already in memory
-	// and the recipient cannot change under us afterwards.
+	// The locks cover the recipient read as well as the write: a concurrent
+	// `rekey` between the two would otherwise leave a file encrypted to the
+	// retired recipient while workspace.yml already advertises the new one.
 	w := render.NewWriter(cmd.ErrOrStderr())
 	release, err := cmdctx.AcquireProjectLocksOrReport(root, w)
 	if err != nil {
 		return err
 	}
 	defer release()
+
+	recipient, err := requireRecipient(flags)
+	if err != nil {
+		return err
+	}
 
 	data, err := secrets.EncryptBytes(plain, recipient)
 	if err != nil {
