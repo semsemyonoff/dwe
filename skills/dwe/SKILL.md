@@ -40,7 +40,7 @@ Both carry a `CLAUDE.md` symlink next to them. The generated one says so in its 
 
 What lives where (paths, not schemas — look up any schema with the slug noted):
 
-- **3-layer config**, later wins, maps deep-merge: `workspace.yml` (identity only — `project`, `update`, `compose`) → `workspace/defaults.yml` (git-tracked: `services` toggles, `runtime`, the `vars` sandbox, `exports`, `bridge`) → `workspace/local.yml` (gitignored per-dev overrides; tool-written). The merged root is **strict** — free-form values live **only** under `vars:`; a bare custom root key is a hard load error.
+- **3-layer config**, later wins, maps deep-merge: `workspace.yml` (identity only — `project`, `update`, `compose`) → `workspace/defaults.yml` (git-tracked: `services` toggles, `runtime`, the `vars` sandbox, `exports`, `bridge`) → `workspace/local.yml` (gitignored per-dev overrides; tool-written). The merged root is **strict** — free-form values live **only** under `vars:`; a bare custom root key is a hard load error. A `vars.*` string may be an `ENC[age:…]` marker — a committed secret decrypted in memory at load time (`secrets.recipient` in `workspace.yml`, identity in `~/.config/dwe/keys/`); `dwe docs show config/secrets --lang en`.
 - **Services = folders**: `workspace/services/<name>/service.yml`; the folder name **is** the map key (no `name:` field). The real container lives in the compose base or an overlay.
 - **User commands**: `workspace/commands/**.yml`; path + filename + key = a dot-ID; run with `dwe cmd <id>`. Params go through `--set key=value`; a command that declares `${args}` also takes pass-through arguments after `--` (`dwe cmd site.test -- --run x.test.ts`). `dwe cmd -i <id>` reports which of the two a command accepts — read that instead of opening its YAML.
 - **Render packs**: `workspace/templates/{config,ide,ai,git}/`; `config` writes runtime files into the service hub, `ide`/`ai`/`git` write hub dotfiles (devcontainer, the generated `AGENTS.md`, git hooks).
@@ -98,6 +98,7 @@ pass validation either way, and are the ones a fresh project gets wrong.
 | Diagnose configuration | `dwe validate --output json` |
 | Search docs / read one topic | `dwe docs search <term> --lang en` · `dwe docs show <topic> --lang en` |
 | Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` — that writes `local.yml` (this dev only). Hand-edit `defaults.yml` **only** when the new value is right for everyone who clones the repo; a machine-local one there breaks every clean deploy. |
+| Read the encrypted-secret inventory | `dwe secrets status --output json` — read-only, always exits 0. Reports every `ENC[age:…]` marker and `*.age` pack source as `decrypted`/`decryptable` or `unresolved: no_identity\|wrong_identity\|corrupt`. Run it FIRST when `dwe vars` shows `<encrypted>` or a lifecycle command is blocked by `secrets.unresolved`. |
 | **Populate a fresh repo from git URL(s)** | `references/populate-init-repo.md` (ends in user-run `dwe deploy run`) |
 | **Add a service / tool / infra** | `references/add-service-and-tools.md` |
 | **Author a command or background daemon** | `references/authoring-commands.md` |
@@ -160,6 +161,7 @@ You MAY run READ commands without asking (all read-only — they don't mutate or
 - `snapshot list|current|inspect`
 - `compose argv|files`, `docker ps|logs|project-name`, `bridge status|logs`
 - `vars get|list|inspect`, `commands list` / `commands -i <id>`, `services list`
+- `secrets status` — the encrypted-secret inventory. Read-only, exits 0 even when nothing decrypts, and prints **no** plaintext and **no** key material. `secrets get <path>` and `secrets key export` DO print secret material — treat them as a handoff, not a read.
 - `render env` **bare only** (no `--out`) — prints the resolved `.env` to stdout, writes nothing. **Always scope it**: the unfiltered body is the project's whole exported secret set, so run `dwe render env | grep -E '^<NAME>='` (or `grep -q` for a presence check), never the bare form on its own. Host-only (the container allowlist admits only `render config`) and it ignores `--output json` — always dotenv text. With `--out` it is a write; see `references/render-and-vars.md` § 6.
 - `docs show|search|list|llms-txt` — read-only doc access.
 - `test list` — list integration-test scenarios (lock-free, no Docker). `test list -o json` also carries each scenario's **cost profile**, which is what decides whether you may run it — see the gate below. `test clean --dry-run` is also safe to run without asking (it previews a sweep and destroys nothing), but is NOT strictly lock-free/Docker-free: it does a read-only `docker ps` orphan probe and briefly acquires-then-releases each scenario's flock. (`validate tests` sits in the `validate` family above; `test run` and the real `test clean` are gated/handed off below.)
@@ -247,6 +249,7 @@ You MUST NOT invoke these MUTATING commands yourself. Prepare the change, then a
 - `dwe deploy run` — run the deploy pipeline (the right command after editing a service's config/deploy steps or adding a service; ends with `docker up --wait`). The `--service <name>` form requires that service's own `deploy.yml` and **skips** the final stack up — see the recipes before recommending it.
 - `dwe run` / `stop` / `restart` — runtime lifecycle (no deploy steps); `dwe reset run` — destructive.
 - `dwe services enable|disable <name> --apply` — toggle a service.
+- `dwe secrets init|set|encrypt|decrypt|rekey|key import|key export|get` — every one either writes a config layer / a keyfile, or prints secret material to the terminal. `secrets status` is the read (see the READ list above).
 - `dwe vars set`, `dwe render config|ide|ai|git`, `dwe render env --out <path>` (the bare form is a read — see the READ list above), `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
 - `dwe cmd <id>` / `dwe shell <service> -c '…'` **when the task they carry mutates** — see the judgement rule above. A verifying task through either one is not on this list.
 - `dwe test clean` (without `--dry-run`) — the integration-test sweeper: it tears down kept or crashed runs. Manifest-driven, but still a teardown — hand it over.
@@ -259,6 +262,7 @@ Pattern: **edit yml files yourself → show the diff → tell the user the exact
 - Do NOT bypass the dwe lifecycle: use `dwe deploy run` / `dwe run` / `stop` / `restart` (whichever fits — see the table). NEVER run `docker compose up/down`, `dwe docker up`, or `dwe compose` write ops directly — DWE tracks state and holds file locks; bypassing breaks both.
 - Do NOT hand-edit generated artifacts: `.dwe/**`, `.env`, `workspace/local.yml`, or rendered hub files (incl. the **hub** `AGENTS.md` — the **root** one is scaffolded and yours to edit, see above). Edit the **source** (export rule / var / template / ai pack) and hand off the render/deploy.
 - Do NOT put a free-form key at the config root — the strict root hard-fails the load. It goes under `vars:`.
+- Do NOT "fix" an `<encrypted>` value or a `secrets.unresolved` block by editing yml. A marker means this machine lacks the project's age identity, not that the config is wrong — `dwe secrets status` names the cause, and the fix is `dwe secrets key import` (ask the user for the identity) or `DWE_AGE_KEY`. Rewriting the marker as plaintext commits the credential; deleting it breaks everyone else.
 - Do NOT assume config shape. Before editing any yml under `workspace/`, verify the schema with `dwe docs show config/<area> --lang en`.
 - Do NOT enumerate pending-op consumers from memory after `dwe services …` without `--apply` — run `dwe status` and follow its banner; that banner is authoritative.
 

@@ -11,6 +11,7 @@ Generate `.env` content from the merged config. Output goes to stdout by default
   - [Evaluation order](#evaluation-order)
 - [Value resolution](#value-resolution)
 - [Truthiness](#truthiness)
+- [Encrypted values and the marker guard](#encrypted-values-and-the-marker-guard)
 - [Output format](#output-format)
 - [Worked example](#worked-example)
 - [Common pitfalls](#common-pitfalls)
@@ -150,6 +151,37 @@ Example: `when: services.adminer.enabled` skips the rule whenever the service is
 
 **Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Per-service values live under `services.<name>.*` for every type — e.g. `from: services.adminer.ports.http`, `from: services.mailpit.hosts.web`, `from: services.main.container`, `when: services.adminer.enabled`.
 
+## Encrypted values and the marker guard
+
+The `.env` file is the one plaintext sink the container reads, and it is
+gitignored and written `0600` (an existing looser file is tightened on every
+write). A rule may therefore export an
+[encrypted `vars.*` value](../config/secrets.md) — the config loader decrypts it
+in memory, so `from: vars.telegram.token` emits the plaintext exactly like any
+other value.
+
+When the value **cannot** be decrypted on this machine, `render env` **fails**
+rather than publishing ciphertext as if it were the credential:
+
+```text
+exports.env[TELEGRAM_TOKEN]: value at vars.telegram.token is an undecrypted secret — see 'dwe secrets status'
+```
+
+The check covers every emitted value — the three system variables (`PROJECT`
+comes from `project.name`) **and** every export rule, including a value that
+came from a rule's `default:` rather than its `from:`. The guard lives here
+rather than in preflight because none of the `.env` write paths run preflight:
+
+- `dwe render env`
+- the automatic regeneration before `dwe docker up` / `run` / `exec` /
+  `restart` / `build`
+- `dwe services enable` / `disable`
+- the `.env` render `dwe run` performs **before** its own preflight — so on a
+  keyless machine this is the first thing `dwe run` reports
+
+All four fail identically and name the fix. See
+[`secrets.md` → Output guards](../config/secrets.md#output-guards-no-marker-ever-reaches-a-rendered-file).
+
 ## Output format
 
 ```text
@@ -260,4 +292,5 @@ Walk-through:
 
 - [`exports.env` rule schema](../config/workspace.md#exportsenv) — full field reference, formats
 - [Dot-path resolution](../config/workspace.md#dot-path-resolution) — how `from` and `when` paths navigate the merged config
+- [secrets](../config/secrets.md) — encrypted `vars.*` values, keys, and why an undecrypted one is a hard error here
 - Run `dwe render env --help` for the live CLI surface

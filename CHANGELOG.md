@@ -16,7 +16,64 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+### Added
+
+- **Encrypted secrets committed to the repository**, so a value the whole team
+  shares — a bot token, a service-account JSON — can live in git without
+  sitting there in the open. One X25519 [age](https://age-encryption.org) key
+  pair per project: the public recipient is committed as `secrets.recipient` in
+  `workspace.yml` (so anyone with the repo can **add** a secret), the private
+  identity lives in `~/.config/dwe/keys/<recipient>.key` or in `DWE_AGE_KEY` /
+  `DWE_AGE_KEY_FILE` for CI (so only identity holders can **read** one).
+  Secrets take two shapes: an `ENC[age:…]` scalar in any config layer, and a
+  whole `*.age` file used as a `render config` pack source. Markers are
+  decrypted in memory at load time, so `${vars.*}`, `exports.env`, the
+  deployment hash and every other consumer of the merged config see plaintext
+  and behave exactly as before.
+- **New `dwe secrets` command tree** in the configuration group: `init`,
+  `status`, `set`, `get`, `encrypt`, `decrypt`, `key export`, `key import` and
+  `rekey`. All of them support `--output json`. `secrets status` is read-only
+  and always exits 0 — it decrypts every marker and `.age` source individually,
+  so it distinguishes "no key on this machine" from "encrypted to somebody
+  else" from "the payload is damaged", and reports a half-rekeyed tree per
+  value. `secrets set` takes the value from an argument, `--stdin` or a hidden
+  prompt, writes only under `vars.`, and never coerces types.
+  `dwe secrets` is **not** reachable from a bridged container.
+- **New `secrets` validation domain**, with `dwe validate secrets`.
+  `secrets.recipient` reports a missing / malformed recipient and damaged
+  payloads; `secrets.unresolved` reports what this machine cannot decrypt and
+  is the second validator (after `config.validate`) cherry-picked into
+  preflight, so `dwe run` / `deploy` / `reset` and the deploy wizard stop with
+  a named fix instead of deploying a broken config.
+- **New reference page** [`docs/reference/config/secrets.md`](docs/reference/config/secrets.md)
+  (plus the Russian mirror), covering the model, the marker format, key
+  locations, every command with its JSON shape, the render guards, where
+  plaintext goes, `age` CLI interoperability and rekey recovery.
+
 ### Changed
+
+- **Without a usable identity a project still loads**, but surfaces degrade
+  explicitly rather than silently: `dwe vars list` / `get` / `inspect` and the
+  vars TUI render `<encrypted>` instead of the ciphertext (`vars list`,
+  `get` and `inspect` gained an `omitempty` `encrypted` field in JSON, and
+  `inspect` a `secret` note), while `dwe render env` and `dwe render config`
+  now **fail** rather than write an `ENC[age:…]` marker into `.env` or a
+  rendered service config. The `.env` guard covers every write site —
+  `render env`, the compose auto-regeneration, `services enable`/`disable`,
+  and the render `dwe run` performs before its preflight.
+- `dwe render ide` / `ai` / `git` and their validators now load a **sanitized**
+  config with no decrypt pass, so a git-tracked template output carries the
+  committed marker and can never contain a decrypted secret.
+- `-v` / `--debug` command echoes — and their `.dwe/logs` mirrors — now print
+  `***` in place of any decrypted value at least 4 runes long. Child-process
+  output is not redacted.
+- The root `.env`, decrypted `secrets decrypt` outputs and `.age`-sourced pack
+  outputs are now explicitly `chmod`ed to `0600`, so a pre-existing permissive
+  file is tightened rather than left as-is.
+- `DWE_AGE_KEY` and `DWE_AGE_KEY_FILE` are stripped from the container
+  environment at the shim and re-supplied from the daemon's own environment, so
+  a container cannot point the host `dwe` at an identity file of its choosing.
+
 
 - **Breaking:** container commands now decide three runtime defaults themselves
   instead of inheriting whatever the caller happened to wire up. Each default

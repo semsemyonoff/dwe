@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 695578a24636
+> Translated from: reference/config/workspace.md @ 2623d5fe01fc
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -13,6 +13,7 @@
 - [Строгий корень + песочница `vars:`](#строгий-корень--песочница-vars)
 - [workspace.yml](#workspaceyml)
   - [Справочник полей](#справочник-полей)
+  - [Блок `secrets:`](#блок-secrets)
   - [Блок `update:`](#блок-update)
   - [Блок `stop:`](#блок-stop)
 - [Рекомендуемое соглашение о раскладке файлов](#рекомендуемое-соглашение-о-раскладке-файлов)
@@ -64,6 +65,8 @@ flowchart TB
 | Активное состояние | `local.yml` |
 | Значения портов / хостов сервисов | [`workspace/services/<name>/service.yml`](services/index.md) (проектные определения) и `local.yml` (переопределения на разработчика, deep-merge по имени записи) |
 | Личные креды (`vars.db.user`, `vars.db.password`) | `local.yml` |
+| Общекомандные креды (токен бота, JSON сервис-аккаунта) | `defaults.yml`, в зашифрованном виде — см. [`secrets.md`](secrets.md) |
+| Age-recipient проекта (`secrets.recipient`) | только `workspace.yml` — во всех остальных слоях отклоняется с ошибкой |
 | Включение debug / опциональных сервисов | `local.yml` |
 | Конфигурация, сгенерированная мастером | `local.yml` (пишется `dwe deploy` при ответе на вопросы setup или конфликты портов) |
 
@@ -99,7 +102,7 @@ Dot-path'ы используются:
 **Корень** смерженного трёхслойного конфига строгий. После слияния трёх слоёв DWE проверяет ключи верхнего уровня по фиксированному allowlist'у:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop
+project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
@@ -134,6 +137,8 @@ vars:
 `vars.*` резолвится через `DweConfig.Raw` по dot-path так же, как `services.*`.
 
 Команда [`dwe vars`](vars.md) перечисляет, читает, редактирует и трассирует каждое значение под этим блоком — см. [`vars.md`](vars.md) про подкоманды, модель слоёв author/local/effective, запись в `local.yml` с сохранением комментариев, статическое сканирование использований и allowlist контейнерной записи `bridge.vars_writable`.
+
+Значение `vars.*` также может быть **зашифрованным маркером `ENC[age:…]`**, закоммиченным в отслеживаемый слой и расшифровываемым в памяти при загрузке. Именно так общекомандные учётные данные живут в git, не лёжа там открытым текстом; см. [`secrets.md`](secrets.md).
 
 ### `bridge.vars_writable` — allowlist контейнерной записи
 
@@ -180,6 +185,23 @@ project:
 | `project.prefix` | string | Префикс для имени Docker Compose-проекта и меток контейнеров |
 
 `project.prefix` и `project.name` комбинируются, образуя имя Docker Compose-проекта через шаблон в `docker.yml` (`${project.prefix}-${project.name}`).
+
+### Блок `secrets:`
+
+Опциональный верхнеуровневый блок `secrets:` объявляет публичный age-recipient проекта — ключ, на который зашифрованы маркеры `ENC[age:…]` и источники конфиг-паков `*.age`.
+
+```yaml
+secrets:
+  recipient: age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `secrets.recipient` | string | Публичный age-recipient проекта (`age1…`), записывается командой `dwe secrets init`. Коммитьте его. |
+
+В отличие от всех остальных формализованных блоков, `secrets:` легален **только в `workspace.yml`**. Объявление его в `defaults.yml` или `local.yml` — жёсткая ошибка загрузки с именем файла: recipient «на разработчика» молча разбил бы команду на группы, которые не могут читать секреты друг друга. Значение `secrets:`, не являющееся мапой, или `recipient`, не являющийся корректным `age1…`, — тоже ошибка загрузки.
+
+Соответствующий приватный identity никогда не попадает в git — он живёт в `~/.config/dwe/keys/<recipient>.key` либо в `DWE_AGE_KEY` / `DWE_AGE_KEY_FILE`. Для шифрования нужен только recipient, поэтому любой, у кого есть репозиторий, может добавить секрет; чтобы прочитать его обратно, нужен identity. Полная модель и вся поверхность команды `dwe secrets` — в [`secrets.md`](secrets.md).
 
 ### Блок `update:`
 
@@ -484,6 +506,7 @@ services:
 
 ## Связанные команды
 
+- `dwe secrets status` — сообщает про каждое зашифрованное значение в слоях и можно ли его прочитать здесь
 - `dwe render env --out .env` — перегенерировать `.env` из смерженного конфига
 - `dwe render ide` / `dwe render ai` / `dwe render git` — pack-based рендереры; см. [справочник render](../render/index.md)
 - `dwe info` — показать дашборд (использует смерженный конфиг + `info.yml`)

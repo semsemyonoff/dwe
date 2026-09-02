@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ 277ae2d15b7b
+> Translated from: reference/concepts/project-layout.md @ 7fc9fa0b49c9
 
 # Раскладка проекта
 
@@ -15,6 +15,7 @@
 - [Исходники сервисов (`services/`)](#исходники-сервисов-services)
 - [Управляемый runtime каталог `.dwe/`](#управляемый-runtime-каталог-dwe)
 - [Сводка по отслеживанию в git](#сводка-по-отслеживанию-в-git)
+- [Вне проекта: `~/.config/dwe/`](#вне-проекта-configdwe)
 - [Что читать дальше](#что-читать-дальше)
 
 ## Форма проекта
@@ -81,7 +82,7 @@ flowchart LR
 
 | Файл | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix` | CLI на каждом вызове | Автор вручную | да |
+| `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix` и recipient блока `secrets:` | CLI на каждом вызове | Автор вручную (`secrets.recipient` — командами `dwe secrets init` / `rekey`) | да |
 | `.gitignore` | Исключает `.dwe/`, `/services/`, `snapshots/`, `backups/` и `workspace/local.yml` из контроля версий | git | Автор вручную | да |
 | `README.md` | Точка входа в документацию проекта (не README DWE CLI) | люди | Автор вручную | да |
 
@@ -246,6 +247,19 @@ workspace/docker.local.yml
 ```
 
 Всё остальное — `workspace.yml`, остальная часть `workspace/` (включая паки `workspace/templates/config/`), весь `compose/` — отслеживается. Авторы редактируют отслеживаемое дерево; CLI пишет только внутрь gitignored-папок (с одним исключением: setup wizard и `dwe services enable/disable` дописывают в `workspace/local.yml`, который и сам gitignored).
+
+Значения в отслеживаемом дереве могут быть **зашифрованы at rest** — скаляр `ENC[age:…]` в любом файле слоя или целый источник `*.age` под `workspace/templates/config/`. Они коммитятся намеренно; вне репозитория остаётся только приватный ключ, который их открывает. См. [Вне проекта: `~/.config/dwe/`](#вне-проекта-configdwe) и [`secrets.md`](../config/secrets.md).
+
+## Вне проекта: `~/.config/dwe/`
+
+Две вещи живут в конфиг-директории пользователя, а не в проекте, потому что они привязаны к машине и не должны попадать в коммиты:
+
+| Путь | Назначение | Отслеживается |
+|------|------------|---------------|
+| `~/.config/dwe/config.yml` | Пользовательские настройки: переопределения бинарей, язык, тема mermaid — см. [Пользовательский конфиг](../config/userconfig.md) | никогда |
+| `~/.config/dwe/keys/<recipient>.key` | Приватный age-identity одного проекта, `0600`. Директория — `0700`. Пишется командами `dwe secrets init` / `key import` / `rekey` | никогда |
+
+Keyfile называется по **публичному recipient**, которому он принадлежит, поэтому одна машина может держать identity любого числа проектов рядом. `DWE_AGE_KEY` (текст identity) и `DWE_AGE_KEY_FILE` (путь) перекрывают поиск keyfile для CI. См. [`secrets.md` → Ключи](../config/secrets.md#ключи-где-живёт-identity).
 
 ## Что читать дальше
 

@@ -38,18 +38,32 @@ The goal is to surface user-actionable problems ("you're not logged into ghcr.io
 
 ## Validation domains
 
-The validate command runs six domains in addition to the existing YAML-shape validators:
+The validate command runs seven domains in addition to the existing YAML-shape validators:
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
 | `env.*` | Hardcoded in the CLI | No — seven fixed probes |
 | `checks.*` | `workspace/validate.yml` entries | Yes — declarative |
+| `secrets.*` | The `secrets:` recipient, `ENC[age:…]` markers in the layers, `*.age` pack sources | No — two fixed validators |
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
 | `translations.*` | `workspace/i18n/` translation files | No — fixed validators (parse errors, orphan command/group ids, unknown `render.*` keys) |
 | `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
 | `tests.*` | `workspace/tests/*.yml` scenario files | No — fixed scenario validators (renders + resolves each scenario's steps, flags unknown services / command refs / duplicate step names, and surfaces compose-isolation hazards as warnings) |
 
 The `tests.*` domain is validate-only (like `snapshot.*`) — it never runs in preflight, and it stays silent when `workspace/tests/` is absent. See [`tests.md`](tests.md#dwe-validate-tests) for the full scenario-validation surface (`dwe validate tests`).
+
+The `secrets.*` domain has two validators, and they split along the content/readiness line that decides what runs in preflight (see [Stages](#stages)):
+
+| Validator | Kind | Fires when |
+|-----------|------|------------|
+| `secrets.recipient` | content — `dwe validate` only | Markers or `.age` sources exist but `secrets.recipient` is missing or is not a valid `age1…`; or a marker payload is **damaged** (bad base64 / not an age file) |
+| `secrets.unresolved` | readiness — **also runs in preflight** | Any encrypted value in the merged config could not be decrypted here, or a resolvable config pack's `.age` source fails to decrypt with the loaded identity |
+
+`secrets.recipient` raw-loads the layer files itself when the config failed to load, so a scoped `dwe validate secrets` still diagnoses a malformed recipient instead of going blind. A `corrupt` payload is detectable without any key, which is why it belongs to the content validator: a keyless developer is never sent hunting for a key that would not have helped.
+
+`secrets.unresolved` is the **second exception** to the rule that only `env.*` and `checks.*` run in preflight (the first is `config.validate`). It is a readiness question — "can this machine actually deploy right now" — not a content one, so `dwe run` / `dwe deploy run` / `dwe reset run` and the deploy wizard's own pre-flight gate all stop with the same named fix, while `dwe status`, `dwe docs`, `dwe validate` and `dwe prompt` keep working. Unresolved values are grouped **by reason**, one diagnostic per reason listing the sorted paths, so the single actionable fix is not buried under one identical row per marker.
+
+The `.age` source scan mirrors what `render config` actually iterates, so a disabled service or an unresolvable pack is invisible to the validator exactly as it is at render time. See [`secrets.md`](secrets.md) for the model and for `dwe secrets status`, which reports the same information without blocking anything.
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `dwe validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
 
@@ -435,7 +449,8 @@ commands:
 
 ## CLI flags
 
-- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`). The summary line names the active scope — `(scope: all)`, `(scope: config)`, `(scope: config/services)` — and `--output json` carries the same value as `summary.scope`, so a narrowed run is distinguishable from a full one by more than its diagnostic count.
+- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `secrets.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`, `dwe validate secrets`). The summary line names the active scope — `(scope: all)`, `(scope: config)`, `(scope: config/services)` — and `--output json` carries the same value as `summary.scope`, so a narrowed run is distinguishable from a full one by more than its diagnostic count.
+- `dwe validate secrets` — the two [`secrets.*` validators](#validation-domains) only: the recipient's presence and shape, damaged marker payloads, and whether every encrypted value and `.age` pack source can actually be decrypted here. It works even when the config failed to load (a malformed `secrets.recipient` is exactly that case), because the recipient validator raw-loads the layer files itself. Use [`dwe secrets status`](secrets.md#dwe-secrets-status) for the same picture as a report that never blocks.
 - `dwe validate bridge` — static checks on per-service `bridge:` blocks only: `on_unreachable` enum (`fail` / `warn`), `shim_path` absoluteness, and the bridged-service `dir` / `dir_internal` workspace mapping the shim translates over. Validate-only — the bridge domain does not participate in preflight.
 - `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
 - `dwe validate --strict` — treat warnings as errors (exit 1).

@@ -8,6 +8,7 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 - [Two syntaxes: shorthand and full templates](#two-syntaxes-shorthand-and-full-templates)
   - [Quoting templates inside YAML](#quoting-templates-inside-yaml)
 - [Render context per site](#render-context-per-site)
+  - [ide / ai / git packs never see a decrypted secret](#ide--ai--git-packs-never-see-a-decrypted-secret)
 - [Built-in `text/template` functions](#built-in-texttemplate-functions)
 - [Domain helper: appURL](#domain-helper-appurl)
 - [Sprout registries](#sprout-registries)
@@ -114,6 +115,14 @@ The data exposed to a template depends on the site. Field access uses dot syntax
 | `.Cfg` | the merged project config (advanced). `.Cfg.Raw` is the post-merge config tree (`services.*` is injected from per-service `service.yml` files). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
 
 IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
+
+### ide / ai / git packs never see a decrypted secret
+
+Because their outputs are usually tracked by git, those three renderers load a **sanitized** config: the same three-layer assembly, but with **no decrypt pass at all**. Every field a template can reach — `.Raw`, `.Cfg`, `.Project`, `.Runtime`, `.Services`, `.ServiceCfg` — carries the committed `ENC[age:…]` marker where the real runtime config carries plaintext.
+
+So a template that reads an [encrypted value](config/secrets.md) emits the ciphertext (already committed, harmless), never the plaintext — no path bookkeeping, no ambiguity for sequences or dotted keys. It is a structural guarantee rather than an allowlist, which is why the "avoid secret keys here" advice above is about *diff noise*, not about leaking.
+
+Config packs (`render config`) are the opposite case: they render into the gitignored service hub dir with the **real** config, and additionally support whole-file `.age` sources — see [`render config`](render/config.md#encrypted-age-sources).
 
 ## Built-in `text/template` functions
 
