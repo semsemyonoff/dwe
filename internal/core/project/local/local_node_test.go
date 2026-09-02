@@ -3,6 +3,7 @@ package local
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func TestLoadLocalYAMLNode_MissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing file should not error: %v", err)
 	}
-	root, err := documentRoot(doc)
+	root, err := documentRoot(doc, LabelLocal)
 	if err != nil {
 		t.Fatalf("documentRoot: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestLoadLocalYAMLNode_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("empty file should not error: %v", err)
 	}
-	if _, err := documentRoot(doc); err != nil {
+	if _, err := documentRoot(doc, LabelLocal); err != nil {
 		t.Fatalf("documentRoot: %v", err)
 	}
 }
@@ -78,7 +79,7 @@ func TestLoadLocalYAMLNode_CommentOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("comment-only file should not error: %v", err)
 	}
-	root, err := documentRoot(doc)
+	root, err := documentRoot(doc, LabelLocal)
 	if err != nil {
 		t.Fatalf("documentRoot: %v", err)
 	}
@@ -528,5 +529,292 @@ func TestWriteLocalYAMLNode_AtomicNoTempLeftover(t *testing.T) {
 		if e.Name() != "local.yml" {
 			t.Errorf("unexpected leftover file: %s", e.Name())
 		}
+	}
+}
+
+// --- Generalized node writer (all three layer files) -----------------------
+
+// Errors that carry no path of their own must name the file through the label,
+// so a `dwe secrets set` failure does not talk about "local config".
+func TestYAMLNode_ErrorsCarryLabel(t *testing.T) {
+	dir := t.TempDir()
+
+	multiDoc := filepath.Join(dir, "workspace.yml")
+	writeFixture(t, multiDoc, "a: 1\n---\nb: 2\n")
+	_, err := LoadYAMLNode(multiDoc, LabelWorkspace)
+	if err == nil || !strings.Contains(err.Error(), LabelWorkspace) {
+		t.Errorf("multi-doc error = %v; want it to name %q", err, LabelWorkspace)
+	}
+
+	scalarRoot := filepath.Join(dir, "defaults.yml")
+	writeFixture(t, scalarRoot, "just a string\n")
+	doc, err := LoadYAMLNode(scalarRoot, LabelDefaults)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+	err = ApplyOverlay(doc, map[string]any{"vars": map[string]any{"a": "b"}}, LabelDefaults)
+	if err == nil || !strings.Contains(err.Error(), LabelDefaults) {
+		t.Errorf("non-mapping root error = %v; want it to name %q", err, LabelDefaults)
+	}
+
+	mergeDoc := filepath.Join(dir, "merge.yml")
+	writeFixture(t, mergeDoc, "defaults: &d\n  host: localhost\nvars:\n  <<: *d\n")
+	doc, err = LoadYAMLNode(mergeDoc, LabelWorkspace)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+	err = ApplyOverlay(doc, map[string]any{"vars": map[string]any{"port": 1}}, LabelWorkspace)
+	if err == nil || !strings.Contains(err.Error(), LabelWorkspace) {
+		t.Errorf("merge-key error = %v; want it to name %q", err, LabelWorkspace)
+	}
+}
+
+// PreserveOrDefault keeps a tracked file's mode (git and editors must not see a
+// mode flip), and uses the default only for a file that does not exist yet;
+// ForceMode — what local.yml keeps using — tightens whatever it finds.
+func TestWriteYAMLNode_ModePolicies(t *testing.T) {
+	modeOf := func(t *testing.T, path string) os.FileMode {
+		t.Helper()
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		return info.Mode().Perm()
+	}
+	write := func(t *testing.T, path string, policy WritePolicy) {
+		t.Helper()
+		doc, err := LoadYAMLNode(path, LabelDefaults)
+		if err != nil {
+			t.Fatalf("load node: %v", err)
+		}
+		if err := ApplyOverlay(doc, map[string]any{"vars": map[string]any{"x": "y"}}, LabelDefaults); err != nil {
+			t.Fatalf("apply overlay: %v", err)
+		}
+		if err := WriteYAMLNode(path, doc, LabelDefaults, policy); err != nil {
+			t.Fatalf("write node: %v", err)
+		}
+	}
+
+	dir := t.TempDir()
+
+	existing := filepath.Join(dir, "defaults.yml")
+	writeFixture(t, existing, "vars:\n  a: 1\n")
+	if err := os.Chmod(existing, 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	write(t, existing, PreserveOrDefault(0o644))
+	if got := modeOf(t, existing); got != 0o644 {
+		t.Errorf("existing 0644 defaults.yml mode = %04o; want 0644", got)
+	}
+
+	// Preservation, not a lucky default: an unusual mode survives too.
+	if err := os.Chmod(existing, 0o640); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	write(t, existing, PreserveOrDefault(0o644))
+	if got := modeOf(t, existing); got != 0o640 {
+		t.Errorf("existing 0640 defaults.yml mode = %04o; want it preserved", got)
+	}
+
+	fresh := filepath.Join(dir, "new-defaults.yml")
+	write(t, fresh, PreserveOrDefault(0o644))
+	if got := modeOf(t, fresh); got != 0o644 {
+		t.Errorf("new defaults.yml mode = %04o; want 0644", got)
+	}
+
+	localPath := filepath.Join(dir, "local.yml")
+	writeFixture(t, localPath, "vars:\n  a: 1\n")
+	if err := os.Chmod(localPath, 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	applyAndWrite(t, localPath, map[string]any{"vars": map[string]any{"x": "y"}})
+	if got := modeOf(t, localPath); got != 0o600 {
+		t.Errorf("local.yml mode = %04o; want it forced back to 0600", got)
+	}
+}
+
+// EncodeYAMLNode is the in-memory half of the write: `dwe secrets set` validates
+// those bytes before persisting, so they must be exactly what lands on disk.
+func TestEncodeYAMLNode_MatchesWrittenBytes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "defaults.yml")
+	writeFixture(t, path, "# header\nvars:\n  a: 1 # inline\n")
+
+	doc, err := LoadYAMLNode(path, LabelDefaults)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+	if err := ApplyOverlay(doc, map[string]any{"vars": map[string]any{"b": "two"}}, LabelDefaults); err != nil {
+		t.Fatalf("apply overlay: %v", err)
+	}
+	encoded, err := EncodeYAMLNode(doc, LabelDefaults)
+	if err != nil {
+		t.Fatalf("encode node: %v", err)
+	}
+	if err := WriteYAMLNode(path, doc, LabelDefaults, PreserveOrDefault(0o644)); err != nil {
+		t.Fatalf("write node: %v", err)
+	}
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(encoded) != string(written) {
+		t.Errorf("encoded bytes differ from written bytes:\nencoded:\n%s\nwritten:\n%s", encoded, written)
+	}
+}
+
+// workspace.yml commonly carries anchors and a `<<:` merge key. Writing
+// secrets.recipient beside them must keep the anchor, the merge and the comments
+// — the merge is never rewritten or dropped.
+func TestWriteYAMLNode_PreservesAnchorsAndMergeKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workspace.yml")
+	writeFixture(t, path, `# workspace config
+project:
+  name: demo
+
+defaults: &svc
+  restart: always
+
+services:
+  web:
+    <<: *svc
+    enabled: true # web on
+`)
+
+	doc, err := LoadYAMLNode(path, LabelWorkspace)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+	if err := ApplyOverlay(doc, map[string]any{"secrets": map[string]any{"recipient": "age1qqq"}}, LabelWorkspace); err != nil {
+		t.Fatalf("apply overlay: %v", err)
+	}
+	if err := WriteYAMLNode(path, doc, LabelWorkspace, PreserveOrDefault(0o644)); err != nil {
+		t.Fatalf("write node: %v", err)
+	}
+
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	got := string(out)
+	for _, want := range []string{"# workspace config", "# web on", "&svc", "<<: *svc", "recipient: age1qqq"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected output to contain %q; got:\n%s", want, got)
+		}
+	}
+
+	// The merge still resolves after the round-trip.
+	var reloaded map[string]any
+	if err := yaml.Unmarshal(out, &reloaded); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	web, _ := reloaded["services"].(map[string]any)["web"].(map[string]any)
+	if web["restart"] != "always" || web["enabled"] != true {
+		t.Errorf("merge key lost its inherited values: %v", web)
+	}
+	if reloaded["secrets"].(map[string]any)["recipient"] != "age1qqq" {
+		t.Errorf("recipient not written: %v", reloaded["secrets"])
+	}
+}
+
+// The other half of the merge-key contract: an append INTO the merge-bearing
+// mapping is refused, and the file is left untouched rather than half-written.
+func TestApplyOverlay_MergeKeyRefusalLeavesFileUntouched(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workspace.yml")
+	original := "defaults: &svc\n  restart: always\nservices:\n  web:\n    <<: *svc\n"
+	writeFixture(t, path, original)
+
+	doc, err := LoadYAMLNode(path, LabelWorkspace)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+	if err := ApplyOverlay(doc, map[string]any{"services": map[string]any{"web": map[string]any{"enabled": true}}}, LabelWorkspace); err == nil {
+		t.Fatal("expected append into merge-key mapping to be rejected")
+	}
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(out) != original {
+		t.Errorf("file changed after a refused overlay:\n%s", out)
+	}
+}
+
+// ReplaceScalars is the rekey primitive: every marker VALUE is rewritten exactly
+// once (including an anchored one, whose aliases keep pointing at it), mapping
+// keys are never offered, and comments/anchors survive.
+func TestReplaceScalars(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "defaults.yml")
+	writeFixture(t, path, `# header
+vars:
+  tok: &tok OLD-A # inline
+  alias: *tok
+  list:
+    - OLD-B
+    - plain
+  nested:
+    k: OLD-C
+  OLD-KEY: kept
+`)
+
+	doc, err := LoadYAMLNode(path, LabelDefaults)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+
+	var seen []string
+	n := ReplaceScalars(doc, func(v string) (string, bool) {
+		if !strings.HasPrefix(v, "OLD-") {
+			return "", false
+		}
+		seen = append(seen, v)
+		return "NEW-" + strings.TrimPrefix(v, "OLD-"), true
+	})
+	if n != 3 {
+		t.Errorf("replacement count = %d; want 3 (anchor, sequence item, nested)", n)
+	}
+	sort.Strings(seen)
+	if strings.Join(seen, ",") != "OLD-A,OLD-B,OLD-C" {
+		t.Errorf("visited scalars = %v; want each value once and no mapping key", seen)
+	}
+
+	if err := WriteYAMLNode(path, doc, LabelDefaults, PreserveOrDefault(0o644)); err != nil {
+		t.Fatalf("write node: %v", err)
+	}
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	got := string(out)
+	for _, want := range []string{"# header", "# inline", "&tok NEW-A", "*tok", "NEW-B", "NEW-C", "OLD-KEY: kept", "- plain"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected output to contain %q; got:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "OLD-A") || strings.Contains(got, "OLD-B") || strings.Contains(got, "OLD-C") {
+		t.Errorf("stale value left behind:\n%s", got)
+	}
+
+	var reloaded map[string]any
+	if err := yaml.Unmarshal(out, &reloaded); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	vars := reloaded["vars"].(map[string]any)
+	if vars["alias"] != "NEW-A" {
+		t.Errorf("alias no longer resolves to the rewritten anchor: %v", vars["alias"])
+	}
+}
+
+// A nil document or nil replacement function is a no-op, not a panic.
+func TestReplaceScalars_NilInputs(t *testing.T) {
+	if n := ReplaceScalars(nil, func(string) (string, bool) { return "", true }); n != 0 {
+		t.Errorf("nil doc count = %d; want 0", n)
+	}
+	doc := emptyMappingDoc()
+	if n := ReplaceScalars(doc, nil); n != 0 {
+		t.Errorf("nil fn count = %d; want 0", n)
 	}
 }

@@ -13,21 +13,43 @@ import (
 )
 
 // This file implements the comment-preserving yaml.Node round-trip writer for
-// workspace/local.yml. Unlike the legacy map-based WriteLocalYAML, editing a
-// loaded document node in place keeps every comment, blank line, quoting style,
-// and key ordering that the developer wrote — only the touched value nodes
-// change. It is the canonical local.yml write path; `vars set`, the `services`
-// toggle, and the setup wizard all route through it.
+// dwe's YAML config layer files. Unlike a map-based marshal, editing a loaded
+// document node in place keeps every comment, blank line, quoting style, and key
+// ordering that the developer wrote — only the touched value nodes change. It is
+// the sanctioned write path for all three layer files (`workspace.yml`,
+// `workspace/defaults.yml`, `workspace/local.yml`); `vars set`, the `services`
+// toggle, the setup wizard and `dwe secrets` all route through it.
 //
-// Flow: LoadLocalYAMLNode(path) -> ApplyOverlayToNode(doc, overlay) ->
-// WriteLocalYAMLNode(path, doc). The overlay is a nested map[string]any (the
-// same shape the map-based callers built) describing only the keys to set.
+// Flow: LoadYAMLNode(path, label) -> ApplyOverlay(doc, overlay, label) ->
+// WriteYAMLNode(path, doc, label, policy). The overlay is a nested
+// map[string]any (the same shape the map-based callers built) describing only
+// the keys to set. EncodeYAMLNode produces exactly the bytes WriteYAMLNode
+// would write, for callers that must validate a staged document before it is
+// persisted.
+//
+// `label` names the file in errors that carry no path of their own ("local
+// config", "workspace config"); read/parse errors name the path instead, which
+// is strictly more specific.
 
-// LoadLocalYAMLNode reads workspace/local.yml into a document *yaml.Node,
-// preserving comments and formatting. A missing, empty, or comment-only file
-// yields a fresh empty mapping document (not an error), mirroring LoadLocalYAML.
-// Multi-document YAML is rejected — local.yml is always a single document.
+// Labels for the three config layer files, used in node-writer error messages.
+const (
+	LabelLocal     = "local config"
+	LabelWorkspace = "workspace config"
+	LabelDefaults  = "workspace defaults config"
+)
+
+// LoadLocalYAMLNode reads workspace/local.yml into a document *yaml.Node.
+// Thin wrapper over LoadYAMLNode with the local-config label.
 func LoadLocalYAMLNode(localPath string) (*yaml.Node, error) {
+	return LoadYAMLNode(localPath, LabelLocal)
+}
+
+// LoadYAMLNode reads a YAML config file into a document *yaml.Node, preserving
+// comments and formatting. A missing, empty, or comment-only file yields a fresh
+// empty mapping document (not an error), mirroring LoadLocalYAML. Multi-document
+// YAML is rejected — a dwe config layer is always a single document.
+func LoadYAMLNode(path, label string) (*yaml.Node, error) {
+	localPath := path
 	data, err := os.ReadFile(localPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -53,7 +75,7 @@ func LoadLocalYAMLNode(localPath string) (*yaml.Node, error) {
 	// `---`-separated document we would silently ignore on write.
 	var extra yaml.Node
 	if err := dec.Decode(&extra); err == nil {
-		return nil, fmt.Errorf("%s: multi-document YAML is not supported", localPath)
+		return nil, fmt.Errorf("parse %s: multi-document YAML is not supported; %s must be a single document", localPath, label)
 	} else if !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse %s: %w", localPath, err)
 	}
@@ -61,30 +83,102 @@ func LoadLocalYAMLNode(localPath string) (*yaml.Node, error) {
 	return &doc, nil
 }
 
-// ApplyOverlayToNode patches the document node in place from a nested overlay
-// map. Scalars replace the matched value node's content/tag/style (deriving them
-// from the NEW value, preserving only the node's comments); nested maps recurse,
+// ApplyOverlayToNode patches a local.yml document node. Thin wrapper over
+// ApplyOverlay with the local-config label.
+func ApplyOverlayToNode(doc *yaml.Node, overlay map[string]any) error {
+	return ApplyOverlay(doc, overlay, LabelLocal)
+}
+
+// ApplyOverlay patches the document node in place from a nested overlay map.
+// Scalars replace the matched value node's content/tag/style (deriving them from
+// the NEW value, preserving only the node's comments); nested maps recurse,
 // creating mapping nodes when absent; absent keys are appended. Nothing is ever
 // deleted. Descending a map overlay through an existing non-mapping node is
 // rejected (guards against silently discarding developer data) — except the
 // single legacy bare-int port-leaf upgrade (services.<svc>.ports.<port>), which
 // is allowed to become rich-form {port: N}.
-func ApplyOverlayToNode(doc *yaml.Node, overlay map[string]any) error {
-	root, err := documentRoot(doc)
+//
+// label names the edited file in errors that carry no path.
+func ApplyOverlay(doc *yaml.Node, overlay map[string]any, label string) error {
+	root, err := documentRoot(doc, label)
 	if err != nil {
 		return err
 	}
-	return applyOverlayToMapping(root, overlay, nil)
+	return applyOverlayToMapping(root, overlay, nil, label)
 }
 
-// WriteLocalYAMLNode marshals the document node and writes it atomically using
-// the shared write-temp + rename helper (0o755 parent dir, 0o600 file).
+// WriteLocalYAMLNode writes a local.yml document node. Thin wrapper over
+// WriteYAMLNode with the local-config label and the 0o600 force policy that
+// local.yml has always had.
 func WriteLocalYAMLNode(localPath string, doc *yaml.Node) error {
+	return WriteYAMLNode(localPath, doc, LabelLocal, ForceMode(0o600))
+}
+
+// EncodeYAMLNode marshals a document node into exactly the bytes WriteYAMLNode
+// would persist. Callers that must validate a staged document before it reaches
+// disk (`dwe secrets set`) encode, re-decode and validate, then write the same
+// node.
+func EncodeYAMLNode(doc *yaml.Node, label string) ([]byte, error) {
 	data, err := yaml.Marshal(doc)
 	if err != nil {
-		return fmt.Errorf("marshal local config node: %w", err)
+		return nil, fmt.Errorf("marshal %s node: %w", label, err)
 	}
-	return writeFileAtomic(localPath, data)
+	return data, nil
+}
+
+// WriteYAMLNode marshals the document node and writes it atomically using the
+// shared write-temp + rename helper (0o755 parent dir, file mode per policy).
+func WriteYAMLNode(path string, doc *yaml.Node, label string, policy WritePolicy) error {
+	data, err := EncodeYAMLNode(doc, label)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, data, policy)
+}
+
+// ReplaceScalars walks every scalar VALUE node reachable from doc and replaces
+// the ones fn accepts, in place: comments, anchors and (where the new value
+// still allows it) quoting style survive. Mapping KEYS are never offered to fn —
+// a rewrite there would rename config keys, and the only caller (`secrets
+// rekey`) re-encrypts values. Alias nodes are skipped: the anchored node they
+// point at is rewritten once at its definition site, so recursing through the
+// alias would re-encrypt the same scalar twice. Returns the number of
+// replacements.
+func ReplaceScalars(doc *yaml.Node, fn func(string) (string, bool)) int {
+	if doc == nil || fn == nil {
+		return 0
+	}
+	return replaceScalarsIn(doc, fn)
+}
+
+func replaceScalarsIn(node *yaml.Node, fn func(string) (string, bool)) int {
+	if node == nil {
+		return 0
+	}
+	switch node.Kind {
+	case yaml.AliasNode:
+		return 0
+	case yaml.ScalarNode:
+		next, ok := fn(node.Value)
+		if !ok {
+			return 0
+		}
+		node.Value = next
+		node.Tag = "!!str"
+		return 1
+	case yaml.MappingNode:
+		count := 0
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			count += replaceScalarsIn(node.Content[i+1], fn)
+		}
+		return count
+	default: // document and sequence nodes
+		count := 0
+		for _, child := range node.Content {
+			count += replaceScalarsIn(child, fn)
+		}
+		return count
+	}
 }
 
 // emptyMappingDoc returns a fresh document node wrapping an empty mapping.
@@ -112,7 +206,7 @@ func commentOnlyDoc(raw []byte) *yaml.Node {
 // documentRoot returns the root mapping node of a document node, normalizing
 // empty / null roots into an empty mapping. A non-mapping, non-null root is an
 // error (we will not blow away a scalar or sequence document root).
-func documentRoot(doc *yaml.Node) (*yaml.Node, error) {
+func documentRoot(doc *yaml.Node, label string) (*yaml.Node, error) {
 	if doc == nil {
 		return nil, errors.New("nil document node")
 	}
@@ -131,7 +225,7 @@ func documentRoot(doc *yaml.Node) (*yaml.Node, error) {
 		return node, nil
 	}
 	if node.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("local config root is not a mapping (got %s)", kindName(node.Kind))
+		return nil, fmt.Errorf("%s root is not a mapping (got %s)", label, kindName(node.Kind))
 	}
 	return node, nil
 }
@@ -139,7 +233,7 @@ func documentRoot(doc *yaml.Node) (*yaml.Node, error) {
 // applyOverlayToMapping recursively applies overlay onto a mapping node. path is
 // the dotted location of the mapping (empty at root); it drives the legacy
 // port-leaf exception. New keys are inserted in sorted order for determinism.
-func applyOverlayToMapping(mapping *yaml.Node, overlay map[string]any, path []string) error {
+func applyOverlayToMapping(mapping *yaml.Node, overlay map[string]any, path []string, label string) error {
 	keys := make([]string, 0, len(overlay))
 	for k := range overlay {
 		keys = append(keys, k)
@@ -156,10 +250,12 @@ func applyOverlayToMapping(mapping *yaml.Node, overlay map[string]any, path []st
 		// appending a new explicit key here would silently shadow the
 		// merge-inherited value (YAML explicit keys override merged ones) —
 		// e.g. `vars set vars.db.port` hiding an inherited vars.db.host subtree.
-		// Reject by default; the dev can materialize the merged value explicitly
-		// first.
+		// Reject; the dev can materialize the merged value explicitly first. The
+		// merge itself is never rewritten or dropped: a mapping that carries
+		// `<<` but already holds the target key explicitly is edited in place
+		// like any other, and so is every mapping elsewhere in the document.
 		if valNode == nil && mappingHasMergeKey(mapping) {
-			return fmt.Errorf("cannot set %q: parent mapping uses a YAML merge key (<<) and the key may be merge-inherited; materialize it explicitly in local.yml first", strings.Join(childPath, "."))
+			return fmt.Errorf("cannot set %q: parent mapping uses a YAML merge key (<<) and the key may be merge-inherited; materialize it explicitly in %s first", strings.Join(childPath, "."), label)
 		}
 
 		if sub, isMap := ov.(map[string]any); isMap {
@@ -178,7 +274,7 @@ func applyOverlayToMapping(mapping *yaml.Node, overlay map[string]any, path []st
 				hc, lc, fc := valNode.HeadComment, valNode.LineComment, valNode.FootComment
 				*valNode = yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", HeadComment: hc, LineComment: lc, FootComment: fc}
 			}
-			if err := applyOverlayToMapping(valNode, sub, childPath); err != nil {
+			if err := applyOverlayToMapping(valNode, sub, childPath, label); err != nil {
 				return err
 			}
 			continue
