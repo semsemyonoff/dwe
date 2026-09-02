@@ -46,6 +46,27 @@ func TestMaskSecretValue(t *testing.T) {
 			want:       map[string]any{"db": map[string]any{"tokens": []any{render.EncryptedPlaceholder}}},
 			wantMasked: true,
 		},
+		{
+			// yaml.v3 demotes a mapping with one non-string key to map[any]any,
+			// which is legal inside vars: — the marker must not reach the
+			// terminal just because the sibling key is an integer.
+			name:       "non-string-keyed mapping",
+			value:      map[any]any{8080: marker, "host": "db"},
+			want:       map[any]any{8080: render.EncryptedPlaceholder, "host": "db"},
+			wantMasked: true,
+		},
+		{
+			name:       "marker under a non-string-keyed mapping",
+			value:      map[string]any{"ports": map[any]any{8080: marker}},
+			want:       map[string]any{"ports": map[any]any{8080: render.EncryptedPlaceholder}},
+			wantMasked: true,
+		},
+		{
+			name:        "clean non-string-keyed mapping is untouched",
+			value:       map[any]any{8080: "open"},
+			want:        map[any]any{8080: "open"},
+			wantSameRef: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,6 +102,17 @@ func equalValue(a, b any) bool {
 	switch ta := a.(type) {
 	case map[string]any:
 		tb, ok := b.(map[string]any)
+		if !ok || len(ta) != len(tb) {
+			return false
+		}
+		for k, v := range ta {
+			if !equalValue(v, tb[k]) {
+				return false
+			}
+		}
+		return true
+	case map[any]any:
+		tb, ok := b.(map[any]any)
 		if !ok || len(ta) != len(tb) {
 			return false
 		}

@@ -77,6 +77,22 @@ func MaskSecretValue(value any) (any, bool) {
 			return t, false
 		}
 		return out, true
+	case map[any]any:
+		// yaml.v3 demotes a whole mapping to map[any]any as soon as one key is
+		// non-string, which is legal in the free-form vars: sandbox — the same
+		// shape config.walkScalars decrypts. Without this arm the marker would
+		// reach the terminal verbatim.
+		out := make(map[any]any, len(t))
+		masked := false
+		for k, v := range t {
+			mv, m := MaskSecretValue(v)
+			out[k] = mv
+			masked = masked || m
+		}
+		if !masked {
+			return t, false
+		}
+		return out, true
 	case []any:
 		out := make([]any, len(t))
 		masked := false

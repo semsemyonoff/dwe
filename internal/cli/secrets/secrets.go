@@ -245,8 +245,11 @@ func (s identitySet) decrypt(marker string) (string, error) {
 // decryptBytes is decrypt for a native age file: the configured identity first,
 // then the stragglers a half-rekeyed tree leaves behind.
 func (s identitySet) decryptBytes(data []byte) ([]byte, error) {
+	var primaryErr error
 	if s.err == nil {
-		if plain, err := secrets.DecryptBytes(data, s.primary); err == nil {
+		var plain []byte
+		plain, primaryErr = secrets.DecryptBytes(data, s.primary)
+		if primaryErr == nil {
 			return plain, nil
 		}
 	}
@@ -258,13 +261,20 @@ func (s identitySet) decryptBytes(data []byte) ([]byte, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
+	// Same rule as decrypt: a damaged file must not be reported as the wrong
+	// recipient, or the user is sent to rekey a file no key can open instead of
+	// restoring it from git — which is what `dwe validate secrets` tells them.
+	if errors.Is(primaryErr, secrets.ErrCorrupt) {
+		return nil, primaryErr
+	}
 	return nil, fmt.Errorf("%w: this file is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
 }
 
 // classifyBytes is classifyMarker for a native age file.
 func (s identitySet) classifyBytes(data []byte) (state, reason string) {
+	var primaryErr error
 	if s.err == nil {
-		if _, err := secrets.DecryptBytes(data, s.primary); err == nil {
+		if _, primaryErr = secrets.DecryptBytes(data, s.primary); primaryErr == nil {
 			return stateDecryptable, ""
 		}
 	}
@@ -274,6 +284,12 @@ func (s identitySet) classifyBytes(data []byte) (state, reason string) {
 		}
 	}
 	if s.err == nil {
+		// A truncated pack source fails as ErrCorrupt here; calling that the
+		// wrong recipient would contradict `dwe validate secrets`, which reads
+		// the same file through the same decoder.
+		if errors.Is(primaryErr, secrets.ErrCorrupt) {
+			return stateNotDecryptable, config.ReasonCorrupt
+		}
 		return stateNotDecryptable, config.ReasonWrongIdentity
 	}
 	return stateNotDecryptable, s.reason()

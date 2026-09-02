@@ -3,6 +3,7 @@ package secrets
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,6 +157,43 @@ func TestStatus_JSON_DamagedBodyIsCorruptNotWrongIdentity(t *testing.T) {
 	}
 	if len(cfg.SecretsState.Unresolved) != 1 || cfg.SecretsState.Unresolved[0].Reason != config.ReasonCorrupt {
 		t.Errorf("SecretsState.Unresolved = %+v, want one corrupt", cfg.SecretsState.Unresolved)
+	}
+}
+
+// TestStatus_JSON_DamagedFileIsCorruptNotWrongIdentity is the .age-file twin of
+// the marker case above: a body truncated below the age header still carries the
+// recipient stanza, so DecryptBytes fails as ErrCorrupt rather than as a
+// recipient mismatch. Calling it wrong_identity would contradict
+// `dwe validate secrets`, which reads the same bytes through the same decoder,
+// and would advertise a rekey as the fix for a file that must come back from git.
+func TestStatus_JSON_DamagedFileIsCorruptNotWrongIdentity(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	path := writeAgeFile(t, root, "app/creds.json.age", recipient, `{"ok":true}`)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the pack source: %v", err)
+	}
+	if err := os.WriteFile(path, data[:len(data)-8], 0o644); err != nil {
+		t.Fatalf("truncating the pack source: %v", err)
+	}
+
+	got := statusOf(t, flags)
+	if len(got.Files) != 1 {
+		t.Fatalf("files = %+v, want 1 row", got.Files)
+	}
+	if got.Files[0].State != stateNotDecryptable || got.Files[0].Reason != "corrupt" {
+		t.Errorf("file row = %+v, want not-decryptable/corrupt", got.Files[0])
+	}
+
+	// decryptBytes must name the same cause, so `secrets decrypt` and rekey's
+	// read-only abort do not send the user after the recipient either.
+	ids := loadIdentitySet(recipient)
+	if _, derr := ids.decryptBytes(data[:len(data)-8]); !errors.Is(derr, secrets.ErrCorrupt) {
+		t.Errorf("decryptBytes error = %v, want ErrCorrupt", derr)
 	}
 }
 

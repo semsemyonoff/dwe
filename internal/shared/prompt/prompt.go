@@ -650,10 +650,10 @@ func readProjectName(root string) (string, bool) {
 	return stub.Project.Name, true
 }
 
-// isEncryptedMarker reports whether s is an ENC[age:…] scalar marker. Repeated
-// here rather than imported from internal/shared/secrets so the prompt hot path
-// stays free of the age dependency (it must also stay lipgloss-free); the shape
-// is a stable part of the on-disk format.
+// isEncryptedMarker reports whether s is an ENC[age:…] scalar marker. The hot
+// path reads a stub, never the full config, so it can only ever check the
+// shape — a prefix/suffix test is all that is available here, and the shape is
+// a stable part of the on-disk format.
 func isEncryptedMarker(s string) bool {
 	return strings.HasPrefix(s, "ENC[age:") && strings.HasSuffix(s, "]")
 }
