@@ -19,6 +19,10 @@
 //
 // When the level is LevelOff every emit returns immediately after one atomic
 // load, so a normal run carries zero overhead.
+//
+// Every emitted line passes through a process-global redactor
+// (RegisterRedaction) so decrypted secrets never appear in dwe's own echoes.
+// Child-process output is deliberately out of scope.
 package trace
 
 import (
@@ -28,6 +32,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
 // Level controls which diagnostic emits are active. Levels are ordered:
@@ -65,6 +71,7 @@ var (
 	fallback   io.Writer
 	printers   []printerEntry // active global printers; last entry is the active one
 	printerSeq int64          // monotonic id source for printerEntry
+	redactor   *secrets.Redactor
 )
 
 type ctxKey struct{}
@@ -86,13 +93,56 @@ func Enabled(l Level) bool {
 	return currentLevel() >= l
 }
 
+// RegisterRedaction adds values to the process-global redactor applied to every
+// diagnostic line. It is a UNION, never a replacement: config.LoadConfig is the
+// single installer and several configs may load in one process (nested loads,
+// `dwe test --parallel` scenario copies), so nothing is ever removed and no
+// restore-ordering problem exists. Values shorter than secrets.MinRedactRunes
+// are dropped — see the Redactor docs.
+func RegisterRedaction(values []string) {
+	if len(values) == 0 {
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	merged := append(redactor.Values(), values...)
+	redactor = secrets.NewRedactor(merged)
+}
+
+// ResetRedaction clears the redactor. For tests only — a process that has seen
+// a plaintext keeps redacting it for its whole life.
+func ResetRedaction() {
+	mu.Lock()
+	redactor = nil
+	mu.Unlock()
+}
+
+// redact applies the registered redactor to s.
+func redact(s string) string {
+	mu.Lock()
+	r := redactor
+	mu.Unlock()
+	return r.Redact(s)
+}
+
 // Command echoes an executed command at Verbose+ as a copy-pasteable line
 // prefixed with "$ ".
+//
+// Each argument is redacted BEFORE FormatCommand quotes it: quoteArg escapes
+// an embedded apostrophe by breaking out of the surrounding single quotes, so
+// a secret containing one would no longer be a substring of the formatted line
+// and the emit-level pass would miss it.
+// FormatCommand itself stays untouched, so its quoting goldens do not move.
 func Command(ctx context.Context, name string, args ...string) {
 	if currentLevel() < LevelVerbose {
 		return
 	}
-	emit(ctx, "$ "+FormatCommand(append([]string{name}, args...)))
+	parts := make([]string, 0, len(args)+1)
+	parts = append(parts, redact(name))
+	for _, a := range args {
+		parts = append(parts, redact(a))
+	}
+	emit(ctx, "$ "+FormatCommand(parts))
 }
 
 // Decision emits a pipeline decision (step run/skip + reason, when:/condition
@@ -116,6 +166,9 @@ func Debugf(ctx context.Context, format string, a ...any) {
 // emit routes a fully-formatted line through the printer precedence:
 // ctx override → global active printer → fallback writer.
 func emit(ctx context.Context, line string) {
+	// Redact before ANY printer sees the line: this single point covers the
+	// -v / --debug echoes and their .dwe/logs mirrors for parallel steps.
+	line = redact(line)
 	if p := printerFrom(ctx); p != nil {
 		p.PrintLine(line)
 		return

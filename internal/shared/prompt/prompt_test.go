@@ -1930,6 +1930,21 @@ func TestReadComposeProjectName(t *testing.T) {
 			displayName:  "MyApp",
 			want:         "myapp",
 		},
+		// The prompt hot path never loads the full config, so it cannot
+		// decrypt an ENC[age:…] marker. Building "myorg-ENC[age:…]" would
+		// produce a label filter matching no container.
+		{
+			name:         "encrypted_name_falls_back_to_display_name",
+			workspaceYML: "project:\n  name: ENC[age:YWJj]\n  prefix: myorg\n",
+			displayName:  "fallback",
+			want:         "fallback",
+		},
+		{
+			name:         "encrypted_prefix_falls_back_to_display_name",
+			workspaceYML: "project:\n  name: myapp\n  prefix: ENC[age:YWJj]\n",
+			displayName:  "myapp",
+			want:         "myapp",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1981,5 +1996,26 @@ func TestReadDockerProjectNameLiteral(t *testing.T) {
 				t.Errorf("readDockerProjectNameLiteral: got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestReadProjectName_encryptedMarkerFallsBack pins that an encrypted
+// project.name is treated as unset: the prompt cannot decrypt (it never loads
+// the full config), and painting an ENC[age:…] marker into the shell prompt
+// would be worse than the directory-name fallback.
+func TestReadProjectName_encryptedMarkerFallsBack(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: ENC[age:YWJj]\n")
+
+	got, ok := readProjectName(root)
+	if !ok {
+		t.Fatal("readProjectName: ok = false, want true (a marker is not a read failure)")
+	}
+	if got != filepath.Base(root) {
+		t.Errorf("readProjectName = %q, want the directory name %q", got, filepath.Base(root))
+	}
+	if strings.Contains(got, "ENC[age:") {
+		t.Errorf("readProjectName leaked the marker: %q", got)
 	}
 }

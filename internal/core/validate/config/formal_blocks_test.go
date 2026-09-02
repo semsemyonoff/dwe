@@ -133,7 +133,24 @@ func TestFormalBlocks_AbsentFilesNoPanic(t *testing.T) {
 	require.NotPanics(t, func() { runFormalBlocksValidator(t, root) })
 }
 
+func TestFormalBlocks_TypoUnderSecrets_Warns(t *testing.T) {
+	// Assembled from fragments so the misspell linter does not "fix" the typo
+	// this test exists to reproduce.
+	const typo = "recip" + "iant"
+	root := t.TempDir()
+	writeProjectFile(t, root, "workspace.yml", "project:\n  name: demo\nsecrets:\n  "+typo+": age1abc\n")
+	diags := runFormalBlocksValidator(t, root)
+
+	d := findDiag(diags, `unknown field "`+typo+`" under "secrets"`)
+	require.NotNil(t, d, "expected a warning for the typo'd secrets field")
+	require.Equal(t, validate.SeverityWarning, d.Severity)
+	require.Equal(t, "workspace.yml", d.File)
+	require.Contains(t, d.Hint, "recipient")
+}
+
 func TestFormalBlockFields_DerivedFromStructs(t *testing.T) {
+	require.True(t, formalBlockFields["secrets"]["recipient"])
+
 	// The field sets are reflected off the backing structs, so a struct field
 	// addition flows through automatically. Spot-check the derivation and the two
 	// deliberate exceptions (compose.extra is yaml:"-" but allowed; ui is owned by

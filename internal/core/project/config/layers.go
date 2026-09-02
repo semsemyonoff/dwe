@@ -3,10 +3,15 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
 // Layer is one source file in the merged 3-layer project config
@@ -19,13 +24,30 @@ type Layer struct {
 	Data map[string]any
 }
 
-// LoadLayers reads the project config layers in precedence order (lowest
+// LoadLayers reads the project config layers and decrypts every ENC[age:…]
+// marker it can. It is the historical entry point and keeps its signature:
+// callers that do not care where a secret came from (ResolveLayeredPath, the
+// `dwe vars` browsers) keep using it and go through exactly the same decrypt
+// pass as LoadConfig, so the two cannot drift.
+//
+// Use LoadRawLayers when the ciphertext as written is what you need (the
+// `dwe secrets` CLI), and LoadLayersWithSecrets when you also need to know
+// which markers resolved and which did not.
+func LoadLayers(workspacePath string) ([]Layer, error) {
+	layers, _, err := LoadLayersWithSecrets(workspacePath)
+	return layers, err
+}
+
+// LoadRawLayers reads the project config layers in precedence order (lowest
 // first): workspace.yml (required) then the optional workspace/defaults.yml and
 // workspace/local.yml. Absent optional layers are skipped; a present-but-empty
 // file yields an empty (non-nil) Data map. The returned slice always begins
 // with the workspace.yml layer. Error wording matches LoadConfig's historical
 // reads so the two stay byte-identical.
-func LoadLayers(workspacePath string) ([]Layer, error) {
+//
+// Encrypted scalars are returned as the ENC[age:…] markers written on disk —
+// no decryption happens here. This is what the `dwe secrets` commands read.
+func LoadRawLayers(workspacePath string) ([]Layer, error) {
 	baseDir := filepath.Dir(workspacePath)
 	var layers []Layer
 
@@ -54,6 +76,199 @@ func LoadLayers(workspacePath string) ([]Layer, error) {
 
 	return layers, nil
 }
+
+// LoadLayersWithSecrets reads the raw layers, validates their roots and
+// decrypts every ENC[age:…] marker on a deep copy, reporting what resolved and
+// what did not.
+//
+// The recipient comes from the FIRST layer only (workspace.yml), which
+// ValidateLayerRoots has just pinned as the single legal home of the secrets:
+// block — so the recipient the decrypt pass uses and the one
+// cfg.SecretsState.Recipient reports are the same value by construction.
+//
+// A project without secrets never touches the filesystem for an identity: with
+// no markers present the identity lookup is skipped entirely.
+func LoadLayersWithSecrets(workspacePath string) ([]Layer, SecretsState, error) {
+	raw, err := LoadRawLayers(workspacePath)
+	if err != nil {
+		return nil, SecretsState{}, err
+	}
+	if err := ValidateLayerRoots(raw); err != nil {
+		return nil, SecretsState{}, err
+	}
+
+	state := SecretsState{Recipient: recipientFromLayers(raw)}
+
+	// Deep-copy before decrypting: the caller's raw view must stay ciphertext
+	// (LoadRawLayers is the documented way to read it back), and nothing may
+	// mutate a map another loader still holds.
+	layers := make([]Layer, len(raw))
+	for i, l := range raw {
+		data, _ := deepCopyValue(l.Data).(map[string]any)
+		if data == nil {
+			data = make(map[string]any)
+		}
+		layers[i] = Layer{Path: l.Path, Data: data}
+	}
+
+	if !layersHaveMarker(layers) {
+		return layers, state, nil
+	}
+
+	// Load the identity once for the whole pass. A failure is not fatal: every
+	// marker is recorded as unresolved with the reason, the project still
+	// loads, and the secrets.unresolved validator blocks the commands that
+	// would act on a missing value.
+	var (
+		id     secrets.Identity
+		idErr  error
+		source secrets.Source
+	)
+	id, source, idErr = secrets.LoadIdentity(state.Recipient)
+	state.IdentitySource = string(source)
+
+	for _, layer := range layers {
+		decryptLayer(layer, id, idErr, &state)
+	}
+	return layers, state, nil
+}
+
+// recipientFromLayers reads secrets.recipient from the workspace.yml layer.
+// ValidateLayerRoots has already rejected the block anywhere else and rejected
+// a malformed value, so a non-empty result here always parses.
+func recipientFromLayers(layers []Layer) string {
+	if len(layers) == 0 {
+		return ""
+	}
+	block, ok := layers[0].Data["secrets"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	recipient, _ := block["recipient"].(string)
+	return strings.TrimSpace(recipient)
+}
+
+func layersHaveMarker(layers []Layer) bool {
+	found := false
+	for _, layer := range layers {
+		walkScalars(layer.Data, "", func(_ string, s string) (string, bool) {
+			if secrets.IsMarker(s) {
+				found = true
+			}
+			return s, false
+		})
+		if found {
+			return true
+		}
+	}
+	return false
+}
+
+// decryptLayer replaces every marker in one layer's data in place, recording
+// each path in state. idErr is the (possibly nil) identity-load failure: when
+// it is non-nil every marker is unresolved with the mapped reason, and the
+// filesystem is not touched again.
+func decryptLayer(layer Layer, id secrets.Identity, idErr error, state *SecretsState) {
+	walkScalars(layer.Data, "", func(path, s string) (string, bool) {
+		if !secrets.IsMarker(s) {
+			return s, false
+		}
+		ref := SecretRef{Layer: layer.Path, Path: path}
+		if idErr != nil {
+			state.Unresolved = append(state.Unresolved, UnresolvedSecret{SecretRef: ref, Reason: unresolvedReason(idErr)})
+			return s, false
+		}
+		plain, err := secrets.Decrypt(s, id)
+		if err != nil {
+			state.Unresolved = append(state.Unresolved, UnresolvedSecret{SecretRef: ref, Reason: unresolvedReason(err)})
+			return s, false
+		}
+		state.Decrypted = append(state.Decrypted, ref)
+		return plain, true
+	})
+}
+
+// collectDecryptedValues re-walks the decrypted layers and returns the
+// plaintext at every path SecretsState recorded as decrypted. It exists so the
+// plaintexts never have to travel on SecretsState itself (which is handed to
+// JSON output and to renderers), and it uses the same walk as the decrypt pass
+// so sequence elements (`vars.tokens.0`) resolve too — ResolvePath does not
+// index sequences.
+func collectDecryptedValues(layers []Layer, state SecretsState) []string {
+	if len(state.Decrypted) == 0 {
+		return nil
+	}
+	want := make(map[SecretRef]struct{}, len(state.Decrypted))
+	for _, ref := range state.Decrypted {
+		want[ref] = struct{}{}
+	}
+	var values []string
+	for _, layer := range layers {
+		walkScalars(layer.Data, "", func(path, s string) (string, bool) {
+			if _, ok := want[SecretRef{Layer: layer.Path, Path: path}]; ok && s != "" {
+				values = append(values, s)
+			}
+			return s, false
+		})
+	}
+	return values
+}
+
+// unresolvedReason maps a secrets sentinel error onto the stable reason string
+// reported by SecretsState, `dwe secrets status` and the validators.
+func unresolvedReason(err error) string {
+	switch {
+	case errors.Is(err, secrets.ErrNoIdentity):
+		return ReasonNoIdentity
+	case errors.Is(err, secrets.ErrWrongIdentity):
+		return ReasonWrongIdentity
+	default:
+		return ReasonCorrupt
+	}
+}
+
+// walkScalars visits every string scalar reachable from v, depth-first, with
+// map keys sorted so the emitted paths (and therefore the SecretsState order
+// and every golden built from it) are deterministic. fn returns the
+// replacement value and whether to apply it; a sequence element's path carries
+// its index (`vars.tokens.0`).
+func walkScalars(v any, path string, fn func(path, s string) (string, bool)) {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(t)) {
+			child := k
+			if path != "" {
+				child = path + "." + k
+			}
+			if s, ok := t[k].(string); ok {
+				if replacement, replace := fn(child, s); replace {
+					t[k] = replacement
+				}
+				continue
+			}
+			walkScalars(t[k], child, fn)
+		}
+	case []any:
+		for i, item := range t {
+			child := path + "." + strconv.Itoa(i)
+			if path == "" {
+				child = strconv.Itoa(i)
+			}
+			if s, ok := item.(string); ok {
+				if replacement, replace := fn(child, s); replace {
+					t[i] = replacement
+				}
+				continue
+			}
+			walkScalars(item, child, fn)
+		}
+	}
+}
+
+// ValidateLayerRoots is the exported form of validateLayerRoots, for callers
+// that stage a modified layer set before persisting it (`dwe secrets set`) and
+// need the same acceptance rules the runtime loader applies.
+func ValidateLayerRoots(layers []Layer) error { return validateLayerRoots(layers) }
 
 // validateLayerRoots runs the strict-root + legacy-block rejection per layer,
 // naming the source file in each error. deepMerge drops nil values, so a layer
@@ -84,6 +299,49 @@ func validateLayerRoots(layers []Layer) error {
 			}
 			return fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
 				layer.Path, key, key, strings.Join(allowedRootKeys, ", "))
+		}
+	}
+	return validateSecretsBlock(layers)
+}
+
+// validateSecretsBlock pins the secrets: block to workspace.yml (the first
+// layer) and validates its shape there, naming the offending file.
+//
+// The single-layer rule mirrors compose.extra's inverse restriction: the
+// recipient identifies the project's key pair, so a per-developer local.yml
+// override would silently decrypt a different half of the tree than the one
+// `dwe secrets status` reports. Validating here rather than in LoadConfig
+// means LoadConfig, ResolveLayeredPath (dwe vars inspect) and the staged-write
+// check in `dwe secrets set` all reject the same files.
+func validateSecretsBlock(layers []Layer) error {
+	for i, layer := range layers {
+		raw, ok := layer.Data["secrets"]
+		if !ok {
+			continue
+		}
+		if i != 0 {
+			return fmt.Errorf("%s: secrets: is only valid in workspace.yml — the recipient identifies the project key pair and cannot be overridden per layer", layer.Path)
+		}
+		if raw == nil {
+			continue
+		}
+		block, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: secrets: must be a mapping", layer.Path)
+		}
+		rawRecipient, present := block["recipient"]
+		if !present || rawRecipient == nil {
+			continue
+		}
+		recipient, ok := rawRecipient.(string)
+		if !ok {
+			return fmt.Errorf("%s: secrets.recipient must be a string (an age1… public recipient)", layer.Path)
+		}
+		if recipient = strings.TrimSpace(recipient); recipient == "" {
+			continue
+		}
+		if err := secrets.ParseRecipient(recipient); err != nil {
+			return fmt.Errorf("%s: secrets.recipient is malformed: %w", layer.Path, err)
 		}
 	}
 	return nil

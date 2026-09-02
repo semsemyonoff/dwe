@@ -33,6 +33,7 @@ func reset(t *testing.T) {
 	mu.Lock()
 	printers = nil
 	fallback = nil
+	redactor = nil
 	mu.Unlock()
 	level.Store(int32(LevelOff))
 }

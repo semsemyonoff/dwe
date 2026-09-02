@@ -145,6 +145,7 @@ var KnownVarHeads = []string{
 	"update",
 	"bridge",
 	"stop",
+	"secrets",
 	// special namespaces CompileVarSyntax switches on directly
 	"files",
 	"host",
