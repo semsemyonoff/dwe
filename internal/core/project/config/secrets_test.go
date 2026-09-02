@@ -3,7 +3,9 @@ package config
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -222,6 +224,49 @@ func TestLoadLayersWithSecrets_unresolvedReasons(t *testing.T) {
 	}
 }
 
+// An identity that cannot be LOADED is never "the payload is damaged": that
+// reason sends the developer to `dwe secrets rekey` over what is a local key
+// problem. LoadIdentity deliberately returns a permission error unwrapped and a
+// malformed keyfile as ErrCorrupt, so the loader needs its own mapper.
+func TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt(t *testing.T) {
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	marker := mustEncrypt(t, "plain", id.Recipient())
+
+	tests := []struct {
+		name    string
+		keyfile string
+	}{
+		{name: "malformed keyfile", keyfile: "not a key at all\n"},
+		{name: "empty keyfile", keyfile: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hideIdentity(t)
+			path := filepath.Join(t.TempDir(), "broken.key")
+			if err := os.WriteFile(path, []byte(tc.keyfile), 0o600); err != nil {
+				t.Fatalf("writing keyfile: %v", err)
+			}
+			t.Setenv(secrets.EnvKeyFile, path)
+
+			ws := writeLayerFixture(t,
+				"secrets:\n  recipient: "+id.Recipient()+"\nvars:\n  tok: "+marker+"\n", "", "")
+			_, state, err := LoadLayersWithSecrets(ws)
+			if err != nil {
+				t.Fatalf("LoadLayersWithSecrets: %v", err)
+			}
+			if len(state.Unresolved) != 1 {
+				t.Fatalf("want 1 unresolved, got %+v", state.Unresolved)
+			}
+			if got := state.Unresolved[0].Reason; got != ReasonNoIdentity {
+				t.Errorf("reason = %q, want %q", got, ReasonNoIdentity)
+			}
+		})
+	}
+}
+
 func TestLoadLayersWithSecrets_sequenceIndexPaths(t *testing.T) {
 	hideIdentity(t)
 	id, err := secrets.Keygen()
@@ -238,6 +283,73 @@ func TestLoadLayersWithSecrets_sequenceIndexPaths(t *testing.T) {
 	}
 	if len(state.Unresolved) != 1 || state.Unresolved[0].Path != "vars.tokens.1" {
 		t.Fatalf("want one unresolved at vars.tokens.1, got %+v", state.Unresolved)
+	}
+}
+
+// A single non-string key demotes the whole mapping to map[any]any in yaml.v3.
+// The walk must still find markers there: the node-based rewriter behind
+// `dwe secrets rekey` does, and a disagreement leaves rekey unable to converge.
+func TestLoadLayersWithSecrets_nonStringMapKeys(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+	ws := writeLayerFixture(t,
+		"secrets:\n  recipient: "+r+"\nvars:\n  ports:\n    8080: "+mustEncrypt(t, "port-secret", r)+
+			"\n    name: "+mustEncrypt(t, "name-secret", r)+"\n", "", "")
+
+	layers, state, err := LoadLayersWithSecrets(ws)
+	if err != nil {
+		t.Fatalf("LoadLayersWithSecrets: %v", err)
+	}
+	if len(state.Unresolved) != 0 {
+		t.Fatalf("want no unresolved markers, got %+v", state.Unresolved)
+	}
+	gotPaths := []string{}
+	for _, ref := range state.Decrypted {
+		gotPaths = append(gotPaths, ref.Path)
+	}
+	if want := []string{"vars.ports.8080", "vars.ports.name"}; !slices.Equal(gotPaths, want) {
+		t.Fatalf("decrypted paths = %v, want %v", gotPaths, want)
+	}
+
+	ports, _ := layers[0].Data["vars"].(map[string]any)["ports"].(map[any]any)
+	if got := ports[8080]; got != "port-secret" {
+		t.Errorf("vars.ports.8080 = %v, want the plaintext", got)
+	}
+	if got := ports["name"]; got != "name-secret" {
+		t.Errorf("vars.ports.name = %v, want the plaintext", got)
+	}
+
+	// The raw view must still be ciphertext: the decrypt pass runs on a deep
+	// copy, and map[any]any has to be cloned like every other container.
+	raw, err := LoadRawLayers(ws)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	rawPorts, _ := raw[0].Data["vars"].(map[string]any)["ports"].(map[any]any)
+	if got, _ := rawPorts[8080].(string); !secrets.IsMarker(got) {
+		t.Errorf("raw vars.ports.8080 = %v, want the ciphertext marker", rawPorts[8080])
+	}
+}
+
+// CollectMarkers feeds `dwe secrets status` and the rekey read-only pass; it
+// must see exactly what the decrypt pass and ReplaceScalars see.
+func TestCollectMarkers_nonStringMapKeys(t *testing.T) {
+	hideIdentity(t)
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	marker := mustEncrypt(t, "port-secret", id.Recipient())
+	ws := writeLayerFixture(t,
+		"secrets:\n  recipient: "+id.Recipient()+"\nvars:\n  ports:\n    8080: "+marker+"\n", "", "")
+
+	raw, err := LoadRawLayers(ws)
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	found := CollectMarkers(raw)
+	if len(found) != 1 || found[0].Path != "vars.ports.8080" || found[0].Value != marker {
+		t.Fatalf("CollectMarkers = %+v, want one marker at vars.ports.8080", found)
 	}
 }
 

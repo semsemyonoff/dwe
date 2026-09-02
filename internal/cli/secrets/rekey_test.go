@@ -165,6 +165,66 @@ func TestRekey_ReencryptsEverything(t *testing.T) {
 	}
 }
 
+// TestRekey_NonStringMapKeys pins that the read-only pass and the node rewriter
+// agree on which scalars are markers. yaml.v3 demotes a mapping with any
+// non-string key to map[any]any; when the marker inventory skipped that shape,
+// ReplaceScalars still found the value and rekey aborted mid-write with "an
+// encrypted value appeared after the read-only pass" — on every retry, since
+// nothing about the tree changed. When the hidden marker was the only one in
+// its file the failure was quieter and worse: rekey reported success, rotated
+// secrets.recipient, and left the value encrypted to the retired key.
+func TestRekey_NonStringMapKeys(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	oldRecipient := initProject(t, flags)
+
+	// vars.db.password is string-keyed, so the layer enters the rekey plan and
+	// ReplaceScalars runs over the whole file; vars.ports carries a non-string
+	// key, so the marker under it lives in a map[any]any the inventory walk has
+	// to reach too.
+	hidden, err := secrets.Encrypt("port-secret", oldRecipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	visible, err := secrets.Encrypt("hunter2", oldRecipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	fixture := "schema_version: \"2\"\nproject:\n  name: sectest\n  prefix: dwe\n" +
+		"vars:\n  db:\n    password: " + visible + "\n  ports:\n    8080: " + hidden + "\n" +
+		"secrets:\n  recipient: " + oldRecipient + "\n"
+	if err := os.WriteFile(cfgPath, []byte(fixture), 0o644); err != nil {
+		t.Fatalf("writing workspace.yml: %v", err)
+	}
+
+	if _, _, err := runSecrets(t, flags, "rekey"); err != nil {
+		t.Fatalf("secrets rekey: %v", err)
+	}
+
+	newRecipient, err := requireRecipient(flags)
+	if err != nil {
+		t.Fatalf("reading the new recipient: %v", err)
+	}
+	assertReadableBy(t, flags, newRecipient, true)
+	assertReadableBy(t, flags, oldRecipient, false)
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config after rekey: %v", err)
+	}
+	if len(cfg.SecretsState.Unresolved) != 0 {
+		t.Fatalf("SecretsState.Unresolved = %+v, want empty after a rekey", cfg.SecretsState.Unresolved)
+	}
+	var paths []string
+	for _, ref := range cfg.SecretsState.Decrypted {
+		paths = append(paths, ref.Path)
+	}
+	if want := []string{"vars.db.password", "vars.ports.8080"}; !slices.Equal(paths, want) {
+		t.Fatalf("SecretsState.Decrypted = %v, want %v", paths, want)
+	}
+}
+
 // TestRekey_PreservesCommentsAndAnchors pins that the layer rewrite goes through
 // the node writer: comments, key order and anchors survive, the anchored marker
 // is re-encrypted exactly once, and the alias still points at it.

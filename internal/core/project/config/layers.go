@@ -209,7 +209,7 @@ func decryptLayer(layer Layer, id secrets.Identity, idErr error, state *SecretsS
 		}
 		ref := SecretRef{Layer: layer.Path, Path: path}
 		if idErr != nil {
-			state.Unresolved = append(state.Unresolved, UnresolvedSecret{SecretRef: ref, Reason: unresolvedReason(idErr)})
+			state.Unresolved = append(state.Unresolved, UnresolvedSecret{SecretRef: ref, Reason: identityReason(idErr)})
 			return s, false
 		}
 		plain, err := secrets.Decrypt(s, id)
@@ -248,8 +248,11 @@ func collectDecryptedValues(layers []Layer, state SecretsState) []string {
 	return values
 }
 
-// unresolvedReason maps a secrets sentinel error onto the stable reason string
-// reported by SecretsState, `dwe secrets status` and the validators.
+// unresolvedReason maps a per-marker decryption failure onto the stable reason
+// string reported by SecretsState, `dwe secrets status` and the validators.
+// Its default is ReasonCorrupt because secrets.Decrypt only ever fails for one
+// of the three sentinels — use identityReason instead for an identity-load
+// failure, whose "other" errors are nothing of the sort.
 func unresolvedReason(err error) string {
 	switch {
 	case errors.Is(err, secrets.ErrNoIdentity):
@@ -261,11 +264,36 @@ func unresolvedReason(err error) string {
 	}
 }
 
+// identityReason maps an identity-LOAD failure onto the same reason strings.
+// It must not share unresolvedReason's default: LoadIdentity deliberately
+// returns a keyfile permission error unwrapped (pinned by its own test) and a
+// malformed keyfile as ErrCorrupt, and both would then be reported as "the
+// encrypted payload is damaged" for every marker in the project — sending the
+// developer to `dwe secrets rekey` over what is a local key problem. No
+// identity could be loaded, so anything short of a recipient mismatch is
+// no_identity, which is also what `dwe secrets status` reports for it.
+func identityReason(err error) string {
+	if errors.Is(err, secrets.ErrWrongIdentity) {
+		return ReasonWrongIdentity
+	}
+	return ReasonNoIdentity
+}
+
 // walkScalars visits every string scalar reachable from v, depth-first, with
 // map keys sorted so the emitted paths (and therefore the SecretsState order
 // and every golden built from it) are deterministic. fn returns the
 // replacement value and whether to apply it; a sequence element's path carries
 // its index (`vars.tokens.0`).
+//
+// Both map shapes yaml.v3 produces must be walked: a mapping whose keys are all
+// strings decodes to map[string]any, but ONE non-string key (`vars: {8080: …}`,
+// legal in the free-form vars: sandbox) demotes the whole mapping to
+// map[any]any. Skipping that shape would hide a marker from the decrypt pass,
+// from SecretsState and from both validators — while `local.ReplaceScalars`,
+// which walks nodes and does not care about key kind, still rewrites it. That
+// disagreement makes `dwe secrets rekey` abort in its write phase with "an
+// encrypted value appeared after the read-only pass" on every run, after the
+// new keyfile is already on disk.
 func walkScalars(v any, path string, fn func(path, s string) (string, bool)) {
 	switch t := v.(type) {
 	case map[string]any:
@@ -273,6 +301,23 @@ func walkScalars(v any, path string, fn func(path, s string) (string, bool)) {
 			child := k
 			if path != "" {
 				child = path + "." + k
+			}
+			if s, ok := t[k].(string); ok {
+				if replacement, replace := fn(child, s); replace {
+					t[k] = replacement
+				}
+				continue
+			}
+			walkScalars(t[k], child, fn)
+		}
+	case map[any]any:
+		keys := slices.SortedStableFunc(maps.Keys(t), func(a, b any) int {
+			return strings.Compare(fmt.Sprint(a), fmt.Sprint(b))
+		})
+		for _, k := range keys {
+			child := fmt.Sprint(k)
+			if path != "" {
+				child = path + "." + child
 			}
 			if s, ok := t[k].(string); ok {
 				if replacement, replace := fn(child, s); replace {
@@ -474,10 +519,21 @@ func deepMergeCopy(dst, src map[string]any) map[string]any {
 // deepCopyValue returns a structural deep copy of a yaml-decoded value (maps and
 // sequences cloned recursively; scalars returned as-is since they are
 // immutable). A typed-nil map yields an empty map.
+//
+// map[any]any (yaml.v3's shape for a mapping with a non-string key) is cloned
+// too: walkScalars descends into it, so leaving it aliased would let the decrypt
+// pass write plaintext into the raw layer set LoadRawLayers hands out as
+// ciphertext.
 func deepCopyValue(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
 		m := make(map[string]any, len(t))
+		for k, val := range t {
+			m[k] = deepCopyValue(val)
+		}
+		return m
+	case map[any]any:
+		m := make(map[any]any, len(t))
 		for k, val := range t {
 			m[k] = deepCopyValue(val)
 		}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -110,6 +111,54 @@ func TestStatus_JSON_MarkersAndFiles(t *testing.T) {
 // TestStatus_JSON_Keyless pins the new-developer report: every value fails for
 // the one actionable reason, and the identity block says why rather than the
 // command failing.
+// A body damaged below the age header survives CheckMarker (shape, base64 and
+// header are all intact) and fails only in Decrypt. Reporting that as
+// wrong_identity would contradict the loader, which calls the same value
+// corrupt, and would advertise a rekey as the fix for a value no key can open.
+func TestStatus_JSON_DamagedBodyIsCorruptNotWrongIdentity(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	marker, err := secrets.Encrypt("s3cret-token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	raw, err := base64.StdEncoding.DecodeString(marker[len(secrets.MarkerPrefix) : len(marker)-1])
+	if err != nil {
+		t.Fatalf("decoding the marker payload: %v", err)
+	}
+	// Drop the tail of the payload only: the header and the recipient stanza
+	// stay intact, so the identity still matches and the failure is the body.
+	damaged := secrets.MarkerPrefix + base64.StdEncoding.EncodeToString(raw[:len(raw)-8]) + "]"
+	if err := secrets.CheckMarker(damaged); err != nil {
+		t.Fatalf("the fixture must still pass CheckMarker, got %v", err)
+	}
+
+	defaults := "vars:\n  tok: " + damaged + "\n"
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"), []byte(defaults), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+
+	got := statusOf(t, flags)
+	if len(got.Markers) != 1 {
+		t.Fatalf("markers = %+v, want 1 row", got.Markers)
+	}
+	if got.Markers[0].Reason != "corrupt" {
+		t.Errorf("reason = %q, want %q", got.Markers[0].Reason, "corrupt")
+	}
+
+	// The loader must name the same cause for the same value.
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+	if len(cfg.SecretsState.Unresolved) != 1 || cfg.SecretsState.Unresolved[0].Reason != config.ReasonCorrupt {
+		t.Errorf("SecretsState.Unresolved = %+v, want one corrupt", cfg.SecretsState.Unresolved)
+	}
+}
+
 func TestStatus_JSON_Keyless(t *testing.T) {
 	isolateHome(t)
 	cfgPath, root := writeFixture(t)

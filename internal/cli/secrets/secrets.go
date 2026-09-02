@@ -183,8 +183,10 @@ func (s identitySet) classifyMarker(marker string) (state, reason string) {
 	if err := secrets.CheckMarker(marker); err != nil {
 		return stateUnresolved, config.ReasonCorrupt
 	}
+	var primaryErr error
 	if s.err == nil {
-		if _, err := secrets.Decrypt(marker, s.primary); err == nil {
+		_, primaryErr = secrets.Decrypt(marker, s.primary)
+		if primaryErr == nil {
 			return stateDecrypted, ""
 		}
 	}
@@ -194,8 +196,14 @@ func (s identitySet) classifyMarker(marker string) (state, reason string) {
 		}
 	}
 	if s.err == nil {
-		// The configured identity loaded but does not open this value: it was
-		// encrypted to a different recipient (a half-finished rekey, a bad merge).
+		// The configured identity loaded but does not open this value. CheckMarker
+		// only proves the header and the base64: a body truncated in a bad merge
+		// still fails as ErrCorrupt here, and reporting that as wrong_identity
+		// would contradict the loader, which calls the same value corrupt.
+		if errors.Is(primaryErr, secrets.ErrCorrupt) {
+			return stateUnresolved, config.ReasonCorrupt
+		}
+		// Encrypted to a different recipient (a half-finished rekey, a bad merge).
 		return stateUnresolved, config.ReasonWrongIdentity
 	}
 	return stateUnresolved, s.reason()
@@ -209,8 +217,11 @@ func (s identitySet) decrypt(marker string) (string, error) {
 	if err := secrets.CheckMarker(marker); err != nil {
 		return "", err
 	}
+	var primaryErr error
 	if s.err == nil {
-		if plain, err := secrets.Decrypt(marker, s.primary); err == nil {
+		var plain string
+		plain, primaryErr = secrets.Decrypt(marker, s.primary)
+		if primaryErr == nil {
 			return plain, nil
 		}
 	}
@@ -221,6 +232,12 @@ func (s identitySet) decrypt(marker string) (string, error) {
 	}
 	if s.err != nil {
 		return "", s.err
+	}
+	// CheckMarker cleared the header and the base64, so a failure here is either
+	// a body no key can open or the wrong recipient; blaming the recipient for a
+	// damaged body would send a rekey after a value no rekey can read.
+	if errors.Is(primaryErr, secrets.ErrCorrupt) {
+		return "", primaryErr
 	}
 	return "", fmt.Errorf("%w: this value is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
 }
