@@ -53,7 +53,10 @@ the IDE collision-policy winner (deepest extends) is rendered. This means
 		SilenceUsage:      true,
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
+			// Sanitized: IDE pack outputs are usually git-tracked, so their
+			// templates must see the ENC[age:…] marker where the real config
+			// carries plaintext.
+			cfg, err := config.LoadConfigSanitizedOrWrap(flags.ConfigPath)
 			if err != nil {
 				return err
 			}

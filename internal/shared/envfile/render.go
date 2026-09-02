@@ -6,6 +6,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/hostid"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
 // HostUID returns the UID to use for container builds.
@@ -39,7 +40,12 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 		"UID":     HostUID(),
 		"GID":     HostGID(),
 	}
+	// System-value sources, for the undecrypted-secret guard below.
+	systemSources := map[string]string{"PROJECT": "project.name"}
 	for _, name := range config.ReservedExportNames {
+		if err := checkNotMarker(name, systemSources[name], systemValues[name]); err != nil {
+			return "", err
+		}
 		fmt.Fprintf(&b, "%s=%s\n", name, systemValues[name])
 	}
 
@@ -62,12 +68,18 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 		// falsy (false, 0) so that TOOL_FOO=false and PORT=0 are emitted correctly.
 		// For string format, an empty resolved value falls back to default.
 		value := rule.Default
+		source := "the rule default"
 		if v, ok := config.ResolvePath(cfg.Raw, rule.From); ok {
 			if rule.Format == "bool" || rule.Format == "int" || IsTruthy(v) {
 				value = FormatValue(v, rule.Format)
+				source = rule.From
 			}
 		} else if rule.Required && value == "" {
 			return "", fmt.Errorf("export %q: required path %q not found in config", rule.Name, rule.From)
+		}
+
+		if err := checkNotMarker("exports.env["+rule.Name+"]", source, value); err != nil {
+			return "", err
 		}
 
 		if rule.Comment != "" {
@@ -77,6 +89,23 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+// checkNotMarker refuses a value that is still an undecrypted secret marker.
+//
+// The .env file is the one plaintext sink the container reads, and neither
+// `dwe render env` nor the auto-regeneration sites run preflight (dwe run even
+// renders .env *before* its preflight), so the guard lives here: a missing
+// identity must never silently publish ciphertext as if it were the
+// credential.
+func checkNotMarker(label, source, value string) error {
+	if !secrets.IsMarker(value) {
+		return nil
+	}
+	if source == "" {
+		source = "the config"
+	}
+	return fmt.Errorf("%s: value at %s is an undecrypted secret — see 'dwe secrets status'", label, source)
 }
 
 // IsTruthy returns whether v represents a truthy config value.

@@ -21,6 +21,12 @@ func Write(cfg *config.DweConfig, outputPath string) error {
 	if err := os.WriteFile(outputPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", outputPath, err)
 	}
+	// os.WriteFile keeps the mode of a pre-existing file, so a .env created
+	// before dwe (or by a laxer umask) would stay world-readable while holding
+	// decrypted secrets. Tighten it explicitly.
+	if err := os.Chmod(outputPath, 0o600); err != nil {
+		return fmt.Errorf("chmod %s: %w", outputPath, err)
+	}
 	return nil
 }
 
