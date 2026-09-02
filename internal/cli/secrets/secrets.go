@@ -87,6 +87,9 @@ fix instead of writing ciphertext into a config file.`,
 	cmd.AddCommand(newSetCmd(flags))
 	cmd.AddCommand(newGetCmd(flags))
 	cmd.AddCommand(newKeyCmd(flags))
+	cmd.AddCommand(newEncryptCmd(flags))
+	cmd.AddCommand(newDecryptCmd(flags))
+	cmd.AddCommand(newRekeyCmd(flags))
 	return cmd
 }
 
@@ -210,6 +213,25 @@ func (s identitySet) decrypt(marker string) (string, error) {
 		return "", s.err
 	}
 	return "", fmt.Errorf("%w: this value is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
+}
+
+// decryptBytes is decrypt for a native age file: the configured identity first,
+// then the stragglers a half-rekeyed tree leaves behind.
+func (s identitySet) decryptBytes(data []byte) ([]byte, error) {
+	if s.err == nil {
+		if plain, err := secrets.DecryptBytes(data, s.primary); err == nil {
+			return plain, nil
+		}
+	}
+	for _, id := range s.others {
+		if plain, err := secrets.DecryptBytes(data, id); err == nil {
+			return plain, nil
+		}
+	}
+	if s.err != nil {
+		return nil, s.err
+	}
+	return nil, fmt.Errorf("%w: this file is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
 }
 
 // classifyBytes is classifyMarker for a native age file.

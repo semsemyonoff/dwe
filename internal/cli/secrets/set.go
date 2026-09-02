@@ -254,7 +254,7 @@ func trimOneNewline(s string) string {
 // local.yml's 0600 on a tracked file would surprise git and editors, and the
 // marker is ciphertext anyway.
 func writeMarker(target, path, marker string, layers []config.Layer) error {
-	label := layerLabel(target, layers)
+	label, policy := layerWritePolicy(target, layers)
 
 	doc, err := localpkg.LoadYAMLNode(target, label)
 	if err != nil {
@@ -279,7 +279,7 @@ func writeMarker(target, path, marker string, layers []config.Layer) error {
 		return cmdctx.ErrWrap("project_invalid_config", err)
 	}
 
-	if err := localpkg.WriteYAMLNode(target, doc, label, localpkg.PreserveOrDefault(0o644)); err != nil {
+	if err := localpkg.WriteYAMLNode(target, doc, label, policy); err != nil {
 		return cmdctx.ErrWrap("secrets_write_failed", err)
 	}
 	return nil
@@ -322,15 +322,6 @@ func stageLayers(layers []config.Layer, target string, data map[string]any) []co
 		return []config.Layer{staged}
 	}
 	return slices.Insert(out, 1, staged)
-}
-
-// layerLabel names the edited file for the node writer's error messages, using
-// the loader's own vocabulary.
-func layerLabel(target string, layers []config.Layer) string {
-	if len(layers) > 0 && layers[0].Path == target {
-		return localpkg.LabelWorkspace
-	}
-	return localpkg.LabelDefaults
 }
 
 // recipientOrErr reads secrets.recipient out of an already-loaded raw layer set,
