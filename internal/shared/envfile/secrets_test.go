@@ -123,3 +123,53 @@ func TestBuildContent_refusesMarkerInsideCompositeValue(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildContent_refusesMultiLineValue pins the sibling guard: values are
+// written unquoted, so a multi-line one (what `dwe secrets set --stdin` accepts
+// — a PEM key, a service-account blob) would be truncated to its first line by
+// compose, and any `NAME=…` line inside it injected as a variable of its own.
+func TestBuildContent_refusesMultiLineValue(t *testing.T) {
+	for name, value := range map[string]string{
+		"pem":      "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----",
+		"injected": "harmless\nDOCKER_HOST=tcp://attacker:2375",
+		"carriage": "first\rsecond",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := makeEnvCfg([]config.ExportRule{
+				{Name: "SSH_KEY", From: "vars.ssh.key"},
+			}, map[string]any{
+				"vars": map[string]any{"ssh": map[string]any{"key": value}},
+			})
+
+			out, err := BuildContent(cfg)
+			if err == nil {
+				t.Fatalf("expected an error, got output:\n%s", out)
+			}
+			for _, want := range []string{"SSH_KEY", "vars.ssh.key", "multiple lines"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not mention %q", err, want)
+				}
+			}
+			if out != "" {
+				t.Errorf("expected no output on refusal, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestBuildContent_refusesMultiLineProjectName covers the system block, which
+// runs the same guard before the export rules.
+func TestBuildContent_refusesMultiLineProjectName(t *testing.T) {
+	cfg := makeEnvCfg(nil, map[string]any{})
+	cfg.Project.Name = "demo\nUID=0"
+
+	out, err := BuildContent(cfg)
+	if err == nil {
+		t.Fatalf("expected an error, got output:\n%s", out)
+	}
+	for _, want := range []string{"PROJECT", "project.name", "multiple lines"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+}

@@ -43,7 +43,7 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 	// System-value sources, for the undecrypted-secret guard below.
 	systemSources := map[string]string{"PROJECT": "project.name"}
 	for _, name := range config.ReservedExportNames {
-		if err := checkNotMarker(name, systemSources[name], systemValues[name]); err != nil {
+		if err := checkValue(name, systemSources[name], systemValues[name]); err != nil {
 			return "", err
 		}
 		fmt.Fprintf(&b, "%s=%s\n", name, systemValues[name])
@@ -78,7 +78,7 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 			return "", fmt.Errorf("export %q: required path %q not found in config", rule.Name, rule.From)
 		}
 
-		if err := checkNotMarker("exports.env["+rule.Name+"]", source, value); err != nil {
+		if err := checkValue("exports.env["+rule.Name+"]", source, value); err != nil {
 			return "", err
 		}
 
@@ -89,6 +89,39 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+// checkValue runs every guard a value must clear before it is written to the
+// .env file as a bare `NAME=value` line.
+func checkValue(label, source, value string) error {
+	if err := checkNotMarker(label, source, value); err != nil {
+		return err
+	}
+	return checkSingleLine(label, source, value)
+}
+
+// checkSingleLine refuses a value carrying a line break.
+//
+// Values are written unquoted and unescaped, so the second and later lines of a
+// multi-line value are parsed by compose as further `.env` entries: the value
+// is silently truncated to its first line, and a line that happens to look like
+// `NAME=…` injects a variable nobody declared. Multi-line material is exactly
+// what `dwe secrets set --stdin` accepts (a PEM key, a service-account blob),
+// which makes the silent truncation likeliest on the values that can least
+// afford it.
+//
+// Refuse rather than quote: the .env dialect compose accepts is narrower than
+// the shell's, and a credential that half-survives an escaping scheme is worse
+// than one that fails loudly at render time.
+func checkSingleLine(label, source, value string) error {
+	if !strings.ContainsAny(value, "\n\r") {
+		return nil
+	}
+	if source == "" {
+		source = "the config"
+	}
+	return fmt.Errorf("%s: value at %s spans multiple lines, which the .env format cannot represent — "+
+		"deliver multi-line material through a config-pack file instead of exports.env", label, source)
 }
 
 // checkNotMarker refuses a value that is still an undecrypted secret marker.

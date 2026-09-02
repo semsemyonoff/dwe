@@ -375,6 +375,10 @@ exports:
 
 These are managed by the CLI; do not redeclare them as export rules.
 
+#### Single-line values only
+
+Values are written unquoted, so a resolved value containing a line break cannot be represented: compose would parse the second and later lines as further `.env` entries, truncating the value and possibly defining variables nobody declared. `dwe render env` refuses such a value and names the rule and its source path. Deliver multi-line material — a PEM key, a service-account JSON — through a [`render config`](../render/config.md) pack file instead, which has no such constraint and which [encrypted secrets](secrets.md) support natively via `*.age` sources.
+
 ### `compose`
 
 Compose file configuration used by the Docker control plane.

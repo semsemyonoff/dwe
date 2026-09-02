@@ -73,6 +73,13 @@ generated from commit subjects and stay on the
 - `DWE_AGE_KEY` and `DWE_AGE_KEY_FILE` are stripped from the container
   environment at the shim and re-supplied from the daemon's own environment, so
   a container cannot point the host `dwe` at an identity file of its choosing.
+- **An `exports.env` value spanning multiple lines is now refused** instead of
+  being written raw. `.env` values are unquoted, so compose parsed the second
+  and later lines as further entries: the value arrived truncated to its first
+  line, and a line shaped like `NAME=…` inside it became a variable nobody
+  declared. Multi-line material — a PEM key, a service-account blob, exactly
+  what `dwe secrets set --stdin` accepts — belongs in a `render config` pack
+  file, not in `exports.env`.
 
 
 - **Breaking:** container commands now decide three runtime defaults themselves
