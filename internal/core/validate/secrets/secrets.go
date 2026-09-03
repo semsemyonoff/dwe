@@ -86,6 +86,19 @@ func (v *recipientValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			Hint:     hint,
 		})
 	}
+	// A silent domain is indistinguishable from one that did not run:
+	// FormatSummary renders an all-zero counter set as "validation skipped (no
+	// files found)". Emitting an OK row is what makes `dwe validate secrets`
+	// usable as the self-check after onboarding.
+	emitOK := func(target, msgFile, msg string) {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   domain,
+			Target:   target,
+			File:     msgFile,
+			Message:  msg,
+		})
+	}
 
 	if recipient == "" {
 		if len(markers) > 0 || len(sources) > 0 {
@@ -110,6 +123,15 @@ func (v *recipientValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
+	// Only a project that HAS a recipient gets the positive row: without a
+	// secrets: block there is nothing to affirm, and `dwe validate` output for
+	// projects that use no secrets stays exactly as it was. The message is
+	// empty on purpose — the config domain's OK rows read the same way, the
+	// table shows the target.
+	if len(diags) == 0 && recipient != "" {
+		emitOK("secrets.recipient", file, "")
+	}
+
 	return diags
 }
 
@@ -128,6 +150,17 @@ func (v *unresolvedValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	recipient := config.SecretsRecipient(ctx.Cfg)
+
+	// The inventory is built FIRST, before any early return: a project whose
+	// only encrypted things are markers must still reach the OK row at the end,
+	// and the row's counters need both halves.
+	state := ctx.Cfg.SecretsState
+	markers := len(state.Decrypted) + len(state.Unresolved)
+	sources := collectEncryptedSources(ctx)
+	if markers == 0 && len(sources) == 0 {
+		return nil
+	}
+
 	diags := unresolvedMarkerDiags(ctx, recipient)
 
 	// With no recipient there is nothing to try: every marker is already
@@ -136,50 +169,77 @@ func (v *unresolvedValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if recipient == "" {
 		return diags
 	}
-	sources := collectEncryptedSources(ctx)
-	if len(sources) == 0 {
+
+	// Where the identity came from, for the OK row. The load pass already
+	// answered this when the project carries markers; for an .age-only project
+	// nothing has looked yet, so LoadIdentity's own source is kept below.
+	source := state.IdentitySource
+
+	if len(sources) > 0 {
+		id, idSource, idErr := secrets.LoadIdentity(recipient)
+		if idErr != nil {
+			files := make([]string, 0, len(sources))
+			for _, src := range sources {
+				files = append(files, src.rel)
+			}
+			return append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   domain,
+				Target:   "secrets.unresolved:packs",
+				Message: fmt.Sprintf("encrypted config-pack source(s) %s cannot be decrypted: %v",
+					strings.Join(files, ", "), idErr),
+				Hint: identityHint(recipient),
+			})
+		}
+		if source == "" {
+			source = string(idSource)
+		}
+
+		// Decrypt for real. "The identity loaded" is not the same question as
+		// "this file opens": a source encrypted to a previous recipient or
+		// truncated in a bad merge fails only here — and it must fail here
+		// rather than mid-deploy, after other phases have already run.
+		for _, src := range sources {
+			data, err := os.ReadFile(src.path)
+			if err == nil {
+				_, err = secrets.DecryptBytes(data, id)
+			}
+			if err == nil {
+				continue
+			}
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   domain,
+				Target:   "secrets.unresolved:" + src.service + "/" + src.rel,
+				File:     relPath(ctx.ProjectRoot, src.path),
+				Message: fmt.Sprintf("config pack %q source %s (service %q) cannot be decrypted: %v",
+					src.pack, src.rel, src.service, err),
+				Hint: "re-encrypt it for " + recipient + " with 'dwe secrets encrypt', or run 'dwe secrets rekey'",
+			})
+		}
+	}
+
+	if len(diags) > 0 {
 		return diags
 	}
+	return []validate.Diagnostic{{
+		Severity: validate.SeverityOK,
+		Domain:   domain,
+		Target:   "secrets.unresolved",
+		File:     relPath(ctx.ProjectRoot, workspacePath(ctx)),
+		Message: fmt.Sprintf("%d encrypted value(s) and %d config-pack source(s) readable via %s",
+			markers, len(sources), sourcePhrase(source)),
+	}}
+}
 
-	id, _, idErr := secrets.LoadIdentity(recipient)
-	if idErr != nil {
-		files := make([]string, 0, len(sources))
-		for _, src := range sources {
-			files = append(files, src.rel)
-		}
-		return append(diags, validate.Diagnostic{
-			Severity: validate.SeverityError,
-			Domain:   domain,
-			Target:   "secrets.unresolved:packs",
-			Message: fmt.Sprintf("encrypted config-pack source(s) %s cannot be decrypted: %v",
-				strings.Join(files, ", "), idErr),
-			Hint: identityHint(recipient),
-		})
+// sourcePhrase names the identity source for the OK row. It is the source WORD
+// (env / env-file / keyfile), never the keyfile path: a positive row must not
+// widen what `dwe validate --output json` reveals about the machine.
+func sourcePhrase(source string) string {
+	if source == "" {
+		return "the available identity"
 	}
-
-	// Decrypt for real. "The identity loaded" is not the same question as "this
-	// file opens": a source encrypted to a previous recipient or truncated in a
-	// bad merge fails only here — and it must fail here rather than mid-deploy,
-	// after other phases have already run.
-	for _, src := range sources {
-		data, err := os.ReadFile(src.path)
-		if err == nil {
-			_, err = secrets.DecryptBytes(data, id)
-		}
-		if err == nil {
-			continue
-		}
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityError,
-			Domain:   domain,
-			Target:   "secrets.unresolved:" + src.service + "/" + src.rel,
-			File:     relPath(ctx.ProjectRoot, src.path),
-			Message: fmt.Sprintf("config pack %q source %s (service %q) cannot be decrypted: %v",
-				src.pack, src.rel, src.service, err),
-			Hint: "re-encrypt it for " + recipient + " with 'dwe secrets encrypt', or run 'dwe secrets rekey'",
-		})
-	}
-	return diags
+	return source
 }
 
 // unresolvedMarkerDiags groups the load-time unresolved markers by reason, one

@@ -160,13 +160,15 @@ func TestRecipientValidator_corruptMarker(t *testing.T) {
 		"\nvars:\n  token: ENC[age:bm90LWFuLWFnZS1maWxl]\n")
 
 	diags := (&recipientValidator{}).Run(loadCtx(t, root, path))
+	// A valid recipient next to a damaged marker must NOT be affirmed: the row
+	// would sit next to the error and read as "the setup is fine".
 	require.Len(t, diags, 1, "a damaged payload is diagnosable without any key: %s", messages(diags))
 	require.Contains(t, diags[0].Message, "vars.token")
 	require.Contains(t, diags[0].Message, "damaged")
 	require.Equal(t, "secrets.marker:vars.token", diags[0].Target)
 }
 
-func TestRecipientValidator_validSetupIsSilent(t *testing.T) {
+func TestRecipientValidator_validSetupEmitsOK(t *testing.T) {
 	root := t.TempDir()
 	id := mustKeygen(t)
 	useIdentity(t, id)
@@ -175,7 +177,28 @@ func TestRecipientValidator_validSetupIsSilent(t *testing.T) {
 		"\nvars:\n  token: "+marker+"\n")
 
 	diags := (&recipientValidator{}).Run(loadCtx(t, root, path))
-	require.Empty(t, diags, messages(diags))
+	require.Len(t, diags, 1, messages(diags))
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "secrets", diags[0].Domain)
+	require.Equal(t, "secrets.recipient", diags[0].Target)
+	require.Equal(t, "workspace.yml", diags[0].File)
+	require.Empty(t, diags[0].Message)
+	require.Empty(t, diags[0].Hint)
+}
+
+// The OK row is tied to the recipient, not to the presence of secrets: a
+// project that declares a recipient but has nothing encrypted yet (the state
+// right after `dwe secrets init`) still gets the positive row.
+func TestRecipientValidator_recipientWithoutSecretsEmitsOK(t *testing.T) {
+	root := t.TempDir()
+	id := mustKeygen(t)
+	useIdentity(t, id)
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+"\n")
+
+	diags := (&recipientValidator{}).Run(loadCtx(t, root, path))
+	require.Len(t, diags, 1, messages(diags))
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "secrets.recipient", diags[0].Target)
 }
 
 func TestUnresolvedValidator_nilCfgIsSilent(t *testing.T) {
@@ -222,7 +245,10 @@ func TestUnresolvedValidator_wrongIdentity(t *testing.T) {
 	require.Contains(t, diags[0].Message, project.Recipient())
 }
 
-func TestUnresolvedValidator_decryptedIsSilent(t *testing.T) {
+// A marker-only project is the case the pre-restructure early return skipped
+// entirely: it returned before any source was known, so the OK row was
+// unreachable however healthy the project was.
+func TestUnresolvedValidator_decryptedEmitsOK(t *testing.T) {
 	root := t.TempDir()
 	id := mustKeygen(t)
 	useIdentity(t, id)
@@ -232,7 +258,48 @@ func TestUnresolvedValidator_decryptedIsSilent(t *testing.T) {
 
 	ctx := loadCtx(t, root, path)
 	require.Equal(t, "s3cr3t", ctx.Cfg.Vars["token"])
-	require.Empty(t, (&unresolvedValidator{}).Run(ctx))
+
+	diags := (&unresolvedValidator{}).Run(ctx)
+	require.Len(t, diags, 1, messages(diags))
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "secrets", diags[0].Domain)
+	require.Equal(t, "secrets.unresolved", diags[0].Target)
+	require.Equal(t, "workspace.yml", diags[0].File)
+	require.Equal(t, "1 encrypted value(s) and 0 config-pack source(s) readable via env", diags[0].Message)
+	require.NotContains(t, messages(diags), "s3cr3t")
+	require.NotContains(t, messages(diags), "AGE-SECRET-KEY-")
+}
+
+// A project with no secrets: block and nothing encrypted stays silent, so
+// `dwe validate` output for such projects is unchanged.
+func TestUnresolvedValidator_noSecretsIsSilent(t *testing.T) {
+	root := t.TempDir()
+	path := writeProject(t, root, "project:\n  name: test\nvars:\n  plain: value\n")
+
+	require.Empty(t, (&unresolvedValidator{}).Run(loadCtx(t, root, path)))
+}
+
+// Mixed state: the recipient is fine, one marker is not readable. The positive
+// row belongs to the recipient validator only — readiness failed.
+func TestUnresolvedValidator_mixedStateHasNoOKRow(t *testing.T) {
+	root := t.TempDir()
+	id := mustKeygen(t)
+	noIdentity(t)
+	marker := mustEncrypt(t, "s3cr3t", id.Recipient())
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+		"\nvars:\n  token: "+marker+"\n")
+
+	ctx := loadCtx(t, root, path)
+
+	recipientDiags := (&recipientValidator{}).Run(ctx)
+	require.Len(t, recipientDiags, 1, messages(recipientDiags))
+	require.Equal(t, validate.SeverityOK, recipientDiags[0].Severity)
+	require.Equal(t, "secrets.recipient", recipientDiags[0].Target)
+
+	unresolvedDiags := (&unresolvedValidator{}).Run(ctx)
+	require.Len(t, unresolvedDiags, 1, messages(unresolvedDiags))
+	require.Equal(t, validate.SeverityError, unresolvedDiags[0].Severity)
+	require.Equal(t, "secrets.unresolved:no_identity", unresolvedDiags[0].Target)
 }
 
 // A file encrypted to another recipient loads fine and decrypts never: the
@@ -274,7 +341,10 @@ func TestUnresolvedValidator_ageSourceTruncated(t *testing.T) {
 	require.Contains(t, diags[0].Message, "creds.json.age")
 }
 
-func TestUnresolvedValidator_ageSourceDecryptableIsSilent(t *testing.T) {
+// An .age-only project carries no marker, so the load pass never looked for an
+// identity and SecretsState.IdentitySource is empty: the source word in the OK
+// row comes from this validator's own LoadIdentity call.
+func TestUnresolvedValidator_ageSourceDecryptableEmitsOK(t *testing.T) {
 	root := t.TempDir()
 	id := mustKeygen(t)
 	useIdentity(t, id)
@@ -285,8 +355,13 @@ func TestUnresolvedValidator_ageSourceDecryptableIsSilent(t *testing.T) {
 
 	ctx := loadCtx(t, root, path)
 	ctx.Cfg.Services = appServices()
+	require.Empty(t, ctx.Cfg.SecretsState.IdentitySource, "a marker-free load must not have loaded an identity")
 
-	require.Empty(t, (&unresolvedValidator{}).Run(ctx))
+	diags := (&unresolvedValidator{}).Run(ctx)
+	require.Len(t, diags, 1, messages(diags))
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "secrets.unresolved", diags[0].Target)
+	require.Equal(t, "0 encrypted value(s) and 1 config-pack source(s) readable via env", diags[0].Message)
 }
 
 func TestUnresolvedValidator_ageSourceWithoutIdentityNamesEveryFile(t *testing.T) {

@@ -356,5 +356,9 @@ func TestRunPreWizardPreflight_SecretsUnresolvedBlocks(t *testing.T) {
 		_ = runPreWizardPreflight(context.Background(), load(t), root, &errOut)
 		assert.NotContains(t, errOut.String(), "vars.token")
 		assert.NotContains(t, errOut.String(), "s3cr3t-value")
+		// The secrets domain now affirms a healthy setup with SeverityOK rows;
+		// the gate filters them, so the wizard gains no extra banner.
+		assert.NotContains(t, errOut.String(), "secrets.unresolved")
+		assert.NotContains(t, errOut.String(), "readable via")
 	})
 }

@@ -749,14 +749,14 @@ gate excludes it).
 - Modify: `internal/core/validate/secrets/secrets.go`, `secrets_test.go`
 - Modify: `internal/cli/validate/validate_test.go` (+ `testdata/` golden if the scope has one)
 
-- [ ] `recipientValidator`: OK row when the recipient is set, valid, and
+- [x] `recipientValidator`: OK row when the recipient is set, valid, and
       `diags` is empty
-- [ ] `unresolvedValidator.Run` restructured in the six-step order from
+- [x] `unresolvedValidator.Run` restructured in the six-step order from
       Solution Overview (inventory first, early nil on empty, source from
       `SecretsState.IdentitySource` or the kept `LoadIdentity` source for
       `.age`-only projects, OK row only when no diagnostic was produced,
       new counter message — `inventoryPhrase` untouched)
-- [ ] tests: `TestRecipientValidator_validSetupIsSilent`,
+- [x] tests: `TestRecipientValidator_validSetupIsSilent`,
       `TestUnresolvedValidator_decryptedIsSilent` and
       `TestUnresolvedValidator_ageSourceDecryptableIsSilent` become
       `…EmitsOK` (severity, target, file, message incl. the source word);
@@ -772,7 +772,21 @@ gate excludes it).
       `message`) and `secrets/secrets.unresolved`, no identity path or key
       material; preflight and the pre-wizard gate on the same project
       (buffered, non-TTY) print nothing extra
-- [ ] run `go test ./internal/core/validate/... ./internal/cli/validate/... ./internal/core/execution/preflight/...` — must pass before task 6
+- [x] run `go test ./internal/core/validate/... ./internal/cli/validate/... ./internal/core/execution/preflight/...` — must pass before task 6
+
+➕ Task 5 notes: the plan's "a recipient OK row will sort first" is **inverted** —
+`sortDiagnostics` orders by severity DESCENDING (`validate.go:169-187`), so on the
+mixed fixture the `secrets.unresolved:no_identity` error stays `Diagnostics[0]`
+and the OK row lands last; `validate_test.go`'s two pinned assertions therefore
+changed in length and gained a trailing OK-row check, not a reordering. The
+recipient OK row is tied to the recipient alone, so a project that ran
+`dwe secrets init` but has nothing encrypted yet also gets it
+(`TestRecipientValidator_recipientWithoutSecretsEmitsOK`) — the unresolved
+validator stays silent there, since its inventory is empty. The healthy-fixture
+text assertion checks the counter message in fragments (`1 encrypted value(s)`,
+`readable via env`) because `DiagnosticsTable` wraps the MESSAGE column; the
+exact string is pinned on the JSON side. The identity source is rendered through
+a `sourcePhrase` helper so the OK row can never carry a keyfile path.
 
 ### Task 6: Documentation and changelog
 
