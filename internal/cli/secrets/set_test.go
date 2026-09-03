@@ -554,6 +554,34 @@ func TestSet_WithoutRecipient(t *testing.T) {
 	}
 }
 
+// TestSet_WithoutRecipientDoesNotPrompt pins that the missing-recipient refusal
+// lands BEFORE the value is resolved: a developer must never type a secret into
+// the hidden prompt only to have it discarded.
+func TestSet_WithoutRecipientDoesNotPrompt(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	origInteractive := widgets.IsInteractiveFn
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	t.Cleanup(func() { widgets.IsInteractiveFn = origInteractive })
+
+	origAsk := runAsk
+	runAsk = func(context.Context, string, []ask.Field, ask.RunOptions) (ask.Result, error) {
+		t.Error("the hidden prompt opened in a project with no recipient")
+		return ask.NewResultForTest(map[string]any{"value": "typed-secret"}), nil
+	}
+	t.Cleanup(func() { runAsk = origAsk })
+
+	_, _, err := runSecrets(t, flags, "set", "vars.token")
+	if err == nil {
+		t.Fatal("set succeeded without a recipient")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_no_recipient" {
+		t.Fatalf("error code = %q, want secrets_no_recipient", coded.Code)
+	}
+}
+
 // TestSet_NoCoercion pins decision 3: plaintext is always a string, so a secret
 // that looks like a number or a bool survives the round-trip as text.
 func TestSet_NoCoercion(t *testing.T) {

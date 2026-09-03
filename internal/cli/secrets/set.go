@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -96,6 +95,15 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 	}
 	target, err := resolveTargetFile(flags.ConfigPath, file)
 	if err != nil {
+		return err
+	}
+
+	// Refuse an uninitialized project before the value is resolved: opening the
+	// hidden prompt (or draining a piped secret) only to answer "run init first"
+	// makes the developer hand over a plaintext value for nothing. This is a
+	// courtesy check, not the authoritative one — the recipient the value is
+	// actually encrypted to is re-read under the lock below.
+	if _, err := requireRecipient(flags); err != nil {
 		return err
 	}
 
@@ -227,7 +235,7 @@ func promptForSecret(cmd *cobra.Command, path string) (string, bool, error) {
 		Kind:        ask.FieldPassword,
 		Required:    true,
 	}}
-	res, err := runAsk(context.Background(), "dwe secrets › set "+path, fields,
+	res, err := runAsk(cmd.Context(), "dwe secrets › set "+path, fields,
 		ask.RunOptions{Input: cmd.InOrStdin(), Output: cmd.OutOrStdout()})
 	if err != nil {
 		if errors.Is(err, widgets.ErrCancelled) {
