@@ -911,9 +911,31 @@ writer for all three layer files".
 
 ### Task 8: [Final] Update documentation
 
-- [ ] re-read the touched docs against the shipped strings (copy from goldens)
-- [ ] record any ➕ deviations in `packages.md`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] re-read the touched docs against the shipped strings (copy from goldens)
+- [x] record any ➕ deviations in `packages.md`
+- [x] move this plan to `docs/plans/completed/`
+
+➕ Task 8 notes: the touched pages were re-checked against the code rather than
+against goldens — none of the four surfaces has one (`internal/cli/validate/testdata/`
+still holds only `validate_config.json.golden`, and the plan surfaces are pinned
+by substring assertions by design). Verified: the OK-row counter string in
+`secrets.md` / its ru mirror / `validate.md` is character-for-character the
+`fmt.Sprintf` format in `validate/secrets/secrets.go:230`; the source words
+(`env` / `env-file` / `keyfile`) are `secrets.Source`'s constants; the
+`secrets_write_unsupported` code and every row of the refused-shapes table map
+onto a real `ErrUnsplicable` / `ErrMultilineScalar` message in `local_splice.go`;
+the "Diagnostic redaction" → "Redaction" rename is reflected in both Contents
+lists and no cross-reference still points at the old anchor.
+
+Two Task 1/2 contracts were missing from `packages.md` and were added there: an
+implicit-null **leaf** (`key:` with nothing after the colon) is a normal
+replacement target — the asymmetry against the refused null *parent* is easy to
+read backwards out of the refused-shapes list — and the raw-line mapping-end scan
+applies to a NESTED key only, since a new top-level key (or an insertion into a
+document-less file) is appended at EOF with the blank-line heuristic. Everything
+else recorded under Tasks 1–7 was already carried by `packages.md` §§
+`internal/core/project/local/`, `internal/cli/secrets/`, Core — Execution
+(`pipeline/`), `internal/shared/trace/` and `internal/core/validate/secrets/`.
 
 ## Post-Completion
 
