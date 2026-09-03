@@ -6,6 +6,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
@@ -58,8 +59,8 @@ func runGet(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) error {
 	if err != nil {
 		return err
 	}
-	ids := loadIdentitySet(recipient)
-	plain, err := ids.decrypt(marker)
+	ids := keygate.LoadIdentitySet(recipient)
+	plain, err := ids.Decrypt(marker)
 	if err != nil {
 		return decryptError(recipient, layerPath, path, err)
 	}

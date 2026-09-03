@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
@@ -185,7 +186,7 @@ func runDecrypt(cmd *cobra.Command, flags *cmdctx.RootFlags, input, out string, 
 	// Read-only as far as the project is concerned: no locks. The identity set
 	// opens a file left behind by an interrupted rekey, exactly as `get` does
 	// for a scalar.
-	plain, err := loadIdentitySet(recipient).decryptBytes(ciphertext)
+	plain, err := keygate.LoadIdentitySet(recipient).DecryptBytes(ciphertext)
 	if err != nil {
 		return fileDecryptError(recipient, displayPath(root, src), err)
 	}

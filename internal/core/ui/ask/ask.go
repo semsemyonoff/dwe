@@ -53,6 +53,8 @@ type Field struct {
 	Validate    func(string) error // optional per-field validation; for multiselect, called per-item
 	Height      int                // select/multiselect viewport height; 0 = unset (huh default)
 	Filterable  *bool              // FieldMultiselect only (huh/v2 Select has no Filterable); nil = huh default
+	Affirmative string             // FieldConfirm only: yes-button label; "" = huh default
+	Negative    string             // FieldConfirm only: no-button label; "" = huh default
 }
 
 // Result is the form output. Values are typed: string for input/select,
@@ -466,6 +468,15 @@ func buildHuhField(f Field, hasQuit bool) (huh.Field, fieldBinding, error) {
 			Title(f.Title).
 			Description(f.Description).
 			Value(&val)
+
+		// Empty labels are left alone rather than set to "", so every existing
+		// FieldConfirm site keeps huh's own Yes/No buttons byte-identically.
+		if f.Affirmative != "" {
+			field = field.Affirmative(f.Affirmative)
+		}
+		if f.Negative != "" {
+			field = field.Negative(f.Negative)
+		}
 
 		if f.Validate != nil {
 			field = field.Validate(func(b bool) error {

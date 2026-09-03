@@ -14,6 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -51,17 +52,17 @@ func encryptedPayloads(t *testing.T, flags *cmdctx.RootFlags) (markers []string,
 	for _, m := range config.CollectMarkers(layers) {
 		markers = append(markers, m.Value)
 	}
-	found, err := collectAgeFiles(flags.ProjectRoot())
+	found, err := keygate.CollectAgeFiles(flags.ProjectRoot())
 	if err != nil {
 		t.Fatalf("scanning .age files: %v", err)
 	}
 	for _, f := range found {
-		if f.err != nil {
-			t.Fatalf("unexpected refusal for %s: %v", f.path, f.err)
+		if f.Err != nil {
+			t.Fatalf("unexpected refusal for %s: %v", f.Path, f.Err)
 		}
-		data, rerr := os.ReadFile(f.path)
+		data, rerr := os.ReadFile(f.Path)
 		if rerr != nil {
-			t.Fatalf("reading %s: %v", f.path, rerr)
+			t.Fatalf("reading %s: %v", f.Path, rerr)
 		}
 		files = append(files, data)
 	}

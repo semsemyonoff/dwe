@@ -12,6 +12,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -192,8 +193,8 @@ func TestStatus_JSON_DamagedFileIsCorruptNotWrongIdentity(t *testing.T) {
 
 	// decryptBytes must name the same cause, so `secrets decrypt` and rekey's
 	// read-only abort do not send the user after the recipient either.
-	ids := loadIdentitySet(recipient)
-	if _, derr := ids.decryptBytes(data[:len(data)-8]); !errors.Is(derr, secrets.ErrCorrupt) {
+	ids := keygate.LoadIdentitySet(recipient)
+	if _, derr := ids.DecryptBytes(data[:len(data)-8]); !errors.Is(derr, secrets.ErrCorrupt) {
 		t.Errorf("decryptBytes error = %v, want ErrCorrupt", derr)
 	}
 }

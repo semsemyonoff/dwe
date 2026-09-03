@@ -15,17 +15,12 @@ package secrets
 
 import (
 	"errors"
-	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
-	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/charmbracelet/x/term"
@@ -37,29 +32,26 @@ import (
 // parallel.
 var stdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
 
-// Marker and file states reported by the inventory. They are part of the
-// `dwe secrets status` JSON contract, so they are stable strings.
-const (
-	stateDecrypted      = "decrypted"
-	stateUnresolved     = "unresolved"
-	stateDecryptable    = "decryptable"
-	stateNotDecryptable = "not decryptable"
+// The inventory itself lives in core/workflow/keygate, so the onboarding gate,
+// `key import` and `status` share one scanner and one classification. These
+// aliases keep the local vocabulary (and the JSON row types) unchanged.
+type (
+	markerRow = keygate.MarkerRow
+	fileRow   = keygate.FileRow
+	inventory = keygate.Result
 )
 
-// reasonStaleKey qualifies a readable row that only a STRAGGLER keyfile opened
-// — the configured recipient's identity does not.
-//
-// It is what makes the half-rekeyed report actionable. The config loader tries
-// the configured identity alone, so such a value is `wrong_identity` at load
-// time and `secrets.unresolved` blocks the lifecycle commands; without this
-// qualifier `status` printed the row green and empty, i.e. "nothing to do", in
-// exactly the recovery scenario `rekey`'s resume hint sends the user here for.
-const reasonStaleKey = "stale_key"
+const (
+	stateDecrypted      = keygate.StateDecrypted
+	stateUnresolved     = keygate.StateUnresolved
+	stateDecryptable    = keygate.StateDecryptable
+	stateNotDecryptable = keygate.StateNotDecryptable
+	reasonStaleKey      = keygate.ReasonStaleKey
+)
 
-// configPackKind is the only template-pack kind that may carry .age sources:
-// ide/ai/git pack outputs are git-tracked and render against a sanitized
-// config, so an encrypted source there would have nowhere safe to land.
-const configPackKind = "config"
+// relToRoot renders a path relative to the project root for display. One
+// implementation, shared with the inventory rows it has to agree with.
+var relToRoot = keygate.RelToRoot
 
 // NewCmd builds the `dwe secrets` command tree. Registered under
 // groupConfiguration in cli/root.go next to `vars`: both edit the same three
@@ -131,318 +123,21 @@ func requireRecipient(flags *cmdctx.RootFlags) (string, error) {
 	return recipientOrErr(layers)
 }
 
-// identitySet is every identity this machine can offer for a project: the one
-// configured recipient's, plus every other keyfile in the keys directory.
-//
-// The stragglers exist for rekey recovery (decision 11): an interrupted rekey
-// leaves markers under two recipients, and the inventory must be able to say
-// which of them each value belongs to instead of reporting the whole tree as
-// broken.
-type identitySet struct {
-	recipient string
-	primary   secrets.Identity
-	source    secrets.Source
-	err       error
-	others    []secrets.Identity
-}
-
-// loadIdentitySet resolves the configured identity and the fallbacks. Neither
-// lookup failing is an error: the inventory reports per value what could be
-// read, and a keyless machine is a normal, documented state.
-func loadIdentitySet(recipient string) identitySet {
-	set := identitySet{recipient: recipient}
-	if recipient == "" {
-		set.err = fmt.Errorf("%w: no secrets.recipient configured", secrets.ErrNoIdentity)
-		return set
-	}
-	set.primary, set.source, set.err = secrets.LoadIdentity(recipient)
-	others, err := secrets.LoadAnyIdentity(recipient)
-	if err == nil {
-		set.others = others
-	}
-	return set
-}
-
-// reason maps the configured identity's load failure onto the stable
-// SecretsState reason strings, so status, the validators and the loader all
-// name the same causes.
-func (s identitySet) reason() string {
-	switch {
-	case s.err == nil:
-		return ""
-	case errors.Is(s.err, secrets.ErrWrongIdentity):
-		return config.ReasonWrongIdentity
-	case errors.Is(s.err, secrets.ErrInvalidIdentity):
-		return config.ReasonInvalidIdentity
-	default:
-		return config.ReasonNoIdentity
-	}
-}
-
-// classifyMarker reports whether a marker can be opened on this machine.
-// A damaged payload is detected without any key at all (CheckMarker), so a
-// keyless developer is never sent hunting for a key that would not have helped.
-func (s identitySet) classifyMarker(marker string) (state, reason string) {
-	if err := secrets.CheckMarker(marker); err != nil {
-		return stateUnresolved, config.ReasonCorrupt
-	}
-	var primaryErr error
-	if s.err == nil {
-		_, primaryErr = secrets.Decrypt(marker, s.primary)
-		if primaryErr == nil {
-			return stateDecrypted, ""
-		}
-	}
-	for _, id := range s.others {
-		if _, err := secrets.Decrypt(marker, id); err == nil {
-			return stateDecrypted, reasonStaleKey
-		}
-	}
-	if s.err == nil {
-		// The configured identity loaded but does not open this value. CheckMarker
-		// only proves the header and the base64: a body truncated in a bad merge
-		// still fails as ErrCorrupt here, and reporting that as wrong_identity
-		// would contradict the loader, which calls the same value corrupt.
-		if errors.Is(primaryErr, secrets.ErrCorrupt) {
-			return stateUnresolved, config.ReasonCorrupt
-		}
-		// Encrypted to a different recipient (a half-finished rekey, a bad merge).
-		return stateUnresolved, config.ReasonWrongIdentity
-	}
-	return stateUnresolved, s.reason()
-}
-
-// decrypt opens a marker with whatever this machine holds: the configured
-// identity first, then the stragglers (a half-rekeyed tree). A damaged payload
-// is reported as such without a key, so the failure names the real cause
-// instead of blaming a missing identity.
-func (s identitySet) decrypt(marker string) (string, error) {
-	if err := secrets.CheckMarker(marker); err != nil {
-		return "", err
-	}
-	var primaryErr error
-	if s.err == nil {
-		var plain string
-		plain, primaryErr = secrets.Decrypt(marker, s.primary)
-		if primaryErr == nil {
-			return plain, nil
-		}
-	}
-	for _, id := range s.others {
-		if plain, err := secrets.Decrypt(marker, id); err == nil {
-			return plain, nil
-		}
-	}
-	if s.err != nil {
-		return "", s.err
-	}
-	// CheckMarker cleared the header and the base64, so a failure here is either
-	// a body no key can open or the wrong recipient; blaming the recipient for a
-	// damaged body would send a rekey after a value no rekey can read.
-	if errors.Is(primaryErr, secrets.ErrCorrupt) {
-		return "", primaryErr
-	}
-	return "", fmt.Errorf("%w: this value is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
-}
-
-// decryptBytes is decrypt for a native age file: the configured identity first,
-// then the stragglers a half-rekeyed tree leaves behind.
-func (s identitySet) decryptBytes(data []byte) ([]byte, error) {
-	var primaryErr error
-	if s.err == nil {
-		var plain []byte
-		plain, primaryErr = secrets.DecryptBytes(data, s.primary)
-		if primaryErr == nil {
-			return plain, nil
-		}
-	}
-	for _, id := range s.others {
-		if plain, err := secrets.DecryptBytes(data, id); err == nil {
-			return plain, nil
-		}
-	}
-	if s.err != nil {
-		return nil, s.err
-	}
-	// Same rule as decrypt: a damaged file must not be reported as the wrong
-	// recipient, or the user is sent to rekey a file no key can open instead of
-	// restoring it from git — which is what `dwe validate secrets` tells them.
-	if errors.Is(primaryErr, secrets.ErrCorrupt) {
-		return nil, primaryErr
-	}
-	return nil, fmt.Errorf("%w: this file is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
-}
-
-// classifyBytes is classifyMarker for a native age file.
-func (s identitySet) classifyBytes(data []byte) (state, reason string) {
-	var primaryErr error
-	if s.err == nil {
-		if _, primaryErr = secrets.DecryptBytes(data, s.primary); primaryErr == nil {
-			return stateDecryptable, ""
-		}
-	}
-	for _, id := range s.others {
-		if _, err := secrets.DecryptBytes(data, id); err == nil {
-			return stateDecryptable, reasonStaleKey
-		}
-	}
-	if s.err == nil {
-		// A truncated pack source fails as ErrCorrupt here; calling that the
-		// wrong recipient would contradict `dwe validate secrets`, which reads
-		// the same file through the same decoder.
-		if errors.Is(primaryErr, secrets.ErrCorrupt) {
-			return stateNotDecryptable, config.ReasonCorrupt
-		}
-		return stateNotDecryptable, config.ReasonWrongIdentity
-	}
-	return stateNotDecryptable, s.reason()
-}
-
-// markerRow is one ENC[age:…] scalar in the raw layers, with where it lives and
-// whether this machine can read it.
-type markerRow struct {
-	Layer  string `json:"layer"` // layer file, relative to the project root
-	Path   string `json:"path"`  // dot-path inside that layer
-	State  string `json:"state"`
-	Reason string `json:"reason,omitempty"`
-}
-
-// fileRow is one *.age file under workspace/templates/config/**.
-type fileRow struct {
-	File   string `json:"file"` // relative to the project root
-	State  string `json:"state"`
-	Reason string `json:"reason,omitempty"`
-}
-
-// inventory is the whole encrypted surface of a project: the identity this
-// machine holds, every committed marker, and every encrypted pack source.
-// `dwe secrets status` renders it; `rekey` walks the same lists.
-type inventory struct {
-	Recipient      string
-	IdentitySource secrets.Source
-	IdentityErr    error
-	Markers        []markerRow
-	Files          []fileRow
-}
-
-// HasSecrets reports whether the project carries anything encrypted at all.
-func (inv inventory) HasSecrets() bool { return len(inv.Markers) > 0 || len(inv.Files) > 0 }
-
-// collectInventory builds the inventory from the raw layers plus a filesystem
-// scan of the config-pack templates. Rows are sorted (layer order then path for
-// markers, path order for files) so every table and JSON dump built from it is
-// byte-stable across runs.
+// collectInventory builds the encrypted-surface inventory for the current
+// project. The scan, the classification and the row types all live in
+// core/workflow/keygate, so `status`, `rekey` and the onboarding gate can never
+// disagree about what a value's state is.
 func collectInventory(flags *cmdctx.RootFlags) (inventory, error) {
 	layers, err := loadRawLayers(flags)
 	if err != nil {
 		return inventory{}, err
 	}
-	root := flags.ProjectRoot()
 	recipient := config.RecipientFromLayers(layers)
-	ids := loadIdentitySet(recipient)
-
-	inv := inventory{Recipient: recipient, IdentitySource: ids.source, IdentityErr: ids.err}
-
-	// CollectMarkers is the single marker inventory (layer order, then path), so
-	// status can never disagree with the loader about sequence indices or key
-	// order.
-	for _, m := range config.CollectMarkers(layers) {
-		state, reason := ids.classifyMarker(m.Value)
-		inv.Markers = append(inv.Markers, markerRow{
-			Layer:  relToRoot(root, m.Layer),
-			Path:   m.Path,
-			State:  state,
-			Reason: reason,
-		})
-	}
-
-	files, err := collectAgeFiles(root)
+	inv, err := keygate.Inventory(flags.ProjectRoot(), layers, keygate.LoadIdentitySet(recipient))
 	if err != nil {
 		return inventory{}, err
 	}
-	for _, f := range files {
-		row := fileRow{File: relToRoot(root, f.path), State: stateNotDecryptable}
-		switch {
-		case f.err != nil:
-			row.Reason = f.err.Error()
-		default:
-			data, rerr := os.ReadFile(f.path)
-			if rerr != nil {
-				row.Reason = rerr.Error()
-				break
-			}
-			row.State, row.Reason = ids.classifyBytes(data)
-		}
-		inv.Files = append(inv.Files, row)
-	}
 	return inv, nil
-}
-
-// ageFile is one discovered *.age source; err carries the path-discipline
-// refusal for a candidate that exists but must not be read.
-type ageFile struct {
-	path string
-	err  error
-}
-
-// collectAgeFiles finds every *.age file under workspace/templates/config,
-// including the *.local override packs. Each candidate goes through the same
-// containment + symlink discipline packroot applies at render time
-// (ContainedRel, CheckNoSymlinks, regular-file Lstat), and a candidate that
-// fails it is REPORTED rather than skipped: a symlinked "secret" is exactly the
-// thing a status report must not stay silent about.
-func collectAgeFiles(projectRoot string) ([]ageFile, error) {
-	if projectRoot == "" {
-		return nil, nil
-	}
-	root := filepath.Join(projectRoot, "workspace", "templates", configPackKind)
-	if _, err := os.Stat(root); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("scan %s: %w", root, err)
-	}
-
-	var out []ageFile
-	// WalkDir does not follow symlinks, so a symlinked directory is reported as
-	// an entry (and rejected below) rather than silently traversed.
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".age") {
-			return nil
-		}
-		out = append(out, inspectAgeFile(root, path))
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("scan %s: %w", root, err)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].path < out[j].path })
-	return out, nil
-}
-
-// inspectAgeFile applies the pack path discipline to one candidate.
-func inspectAgeFile(root, path string) ageFile {
-	const label = "config templates"
-	if _, err := pathsafe.ContainedRel(root, path); err != nil {
-		return ageFile{path: path, err: err}
-	}
-	if err := pathsafe.CheckNoSymlinks(root, path, label); err != nil {
-		return ageFile{path: path, err: err}
-	}
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return ageFile{path: path, err: err}
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return ageFile{path: path, err: fmt.Errorf("%s is a symlink; symlinked template sources are not supported", path)}
-	}
-	if !fi.Mode().IsRegular() {
-		return ageFile{path: path, err: fmt.Errorf("%s is not a regular file (mode %s)", path, fi.Mode())}
-	}
-	return ageFile{path: path}
 }
 
 // spliceUnsupportedError maps a splice-writer refusal onto the typed
@@ -487,17 +182,4 @@ func spliceWriteError(err error, file string) error {
 		return unsupported
 	}
 	return cmdctx.ErrWrap("secrets_write_failed", err).WithDetail("file", file)
-}
-
-// relToRoot renders a path relative to the project root for display; an
-// unrelatable path is shown as-is.
-func relToRoot(projectRoot, path string) string {
-	if projectRoot == "" || path == "" {
-		return path
-	}
-	rel, err := filepath.Rel(projectRoot, path)
-	if err != nil {
-		return path
-	}
-	return rel
 }

@@ -659,35 +659,48 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/secrets/secrets.go`, `status.go`, `get.go`, `files.go`, `rekey.go` (consume the moved inventory; delete the local copies)
 - Modify: `internal/cli/secrets/status_test.go`, `secrets_test.go`, `rekey_test.go` (`:52` calls `collectAgeFiles` directly; the symlink inventory test at `secrets_test.go:292` MOVES to `inventory_test.go` rather than being duplicated)
 
-- [ ] move `identitySet` → `keygate.IdentitySet` (+ `LoadIdentitySet`) with
+- [x] move `identitySet` → `keygate.IdentitySet` (+ `LoadIdentitySet`) with
       its methods `decrypt`, `decryptBytes`, `reason()`, plus
       `classifyMarker`/`classifyBytes`, `collectAgeFiles`/`inspectAgeFile`,
       `markerRow`/`fileRow`, `configPackKind`, `reasonStaleKey`, `relToRoot`
       and the state/reason constants; `cli/secrets` (incl. `get.go:61`,
       `files.go:188`) becomes a consumer — **no behaviour change**,
       `secrets status` JSON and goldens byte-identical
-- [ ] implement `HasEncryptedSurface` (markers via `config.CollectMarkers`,
+      (➕ `cli/secrets` keeps its local vocabulary through type aliases
+      (`markerRow`/`fileRow`/`inventory`) and `var relToRoot = keygate.RelToRoot`,
+      so the ~15 unrelated call sites in `init/set/rekey/files` stayed untouched;
+      `collectInventory` is now a four-line wrapper)
+- [x] implement `HasEncryptedSurface` (markers via `config.CollectMarkers`,
       `.age` via the moved walker with an early `return true`, walk error →
       false) and `NonInteractiveEnv()` (pinned equal to `cmdctx`'s set from
       `cmdctx`'s own test file, never from `keygate`'s)
-- [ ] implement `secretsprompt.PromptIdentity` (one `FieldPassword`, title
+- [x] implement `secretsprompt.PromptIdentity` (one `FieldPassword`, title
       `dwe secrets › key import`, description naming the recipient,
       `Validate` = `ParseIdentity` + recipient match with both age1… values
       in the mismatch text; the private key never appears in any error) and
       `secretsprompt.ConfirmImport` (`ask.FieldConfirm`, `Enter key`/`Abort`,
       streams from the caller); no `core/ui` import in `keygate`
-- [ ] implement `Ensure` in the 8-step order given in Technical Details,
+- [x] implement `Ensure` in the 8-step order given in Technical Details,
       with `ErrAborted`, `ErrEnvSourceUnusable`, `ErrKeyfileUnusable`;
       `ValidateLayerRoots` guard; project locks around the keyfile write;
       post-write `LoadIdentity` verification; success report uses the
       re-run inventory; no trace/log of the submitted text
-- [ ] tests (prompt, in `secretsprompt`): stubbed `runAsk` returns a
+      (➕ `ErrCancelled` is NOT matched by name: `keygate` must stay free of
+      `core/ui`, and a sentinel duplicated into a third package would be worse
+      than the alternative — **any** `Prompt`/`Confirm` error becomes
+      `ErrAborted`, whose message is DWE-authored and drops the cause, since
+      the only two causes are a cancel (adds nothing) and a form failure
+      (the one error whose text travelled next to the typed key).
+      ➕ `Result.Readable()` carries the two report counters, and the
+      confirmation sentence is the exported `keygate.Explanation(recipient)`,
+      so the wording is pinned in one place)
+- [x] tests (prompt, in `secretsprompt`): stubbed `runAsk` returns a
       matching identity → returned; the form-level `Validate` func
       (exercised directly) yields the two-recipient message for a foreign
       key and the fixed parse message for garbage; `ErrCancelled`
       propagates; no error text contains the last 20 characters of the typed
       input; `ConfirmImport` honours the passed streams
-- [ ] tests (gate): table over {nil layers, layers failing
+- [x] tests (gate): table over {nil layers, layers failing
       `ValidateLayerRoots` (a `secrets:` block in `defaults.yml`), no
       recipient, malformed recipient, recipient+no markers+no files, usable
       keyfile, usable env, `Interactive=false`, `Yes`, `OutputJSON`,
@@ -702,10 +715,10 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       `HasEncryptedSurface` never calls `secrets.Decrypt` (a marker with
       garbage ciphertext still yields true, no error); `Inventory` keeps its
       error on an unwalkable templates dir
-- [ ] tests (inventory): the moved `cli/secrets` cases keep passing; add a
+- [x] tests (inventory): the moved `cli/secrets` cases keep passing; add a
       direct `Inventory` test with one marker + one `.age` file + one
       symlinked `.age` (reported, not skipped)
-- [ ] run `go test ./internal/core/workflow/keygate/... ./internal/cli/secrets/...` — must pass before task 4
+- [x] run `go test ./internal/core/workflow/keygate/... ./internal/cli/secrets/...` — must pass before task 4
 
 ### Task 4: Interactive `secrets key import` with the readability report
 
