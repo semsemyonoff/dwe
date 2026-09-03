@@ -1418,9 +1418,14 @@ func TestValidateSecretsScopedReportsUnresolved(t *testing.T) {
 	var got validateJSON
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Equal(t, 1, got.Summary.Error)
-	require.Len(t, got.Diagnostics, 1)
+	// The fixture's recipient is valid, so the recipient validator affirms it
+	// next to the readiness error; diagnostics sort severity-descending, so the
+	// error stays first.
+	require.Len(t, got.Diagnostics, 2)
 	require.Equal(t, "secrets/secrets.unresolved:no_identity", got.Diagnostics[0].Scope)
 	require.Contains(t, got.Diagnostics[0].Message, "vars.token")
+	require.Equal(t, "ok", got.Diagnostics[1].Severity)
+	require.Equal(t, "secrets/secrets.recipient", got.Diagnostics[1].Scope)
 	require.NotContains(t, stdout, "s3cr3t-value")
 	require.NotContains(t, stdout, "main config did not load")
 }
@@ -1438,7 +1443,82 @@ func TestValidateFullRunIncludesSecretsDomain(t *testing.T) {
 			scopes = append(scopes, d.Scope)
 		}
 	}
-	require.Equal(t, []string{"secrets/secrets.unresolved:no_identity"}, scopes)
+	require.Equal(t, []string{"secrets/secrets.unresolved:no_identity", "secrets/secrets.recipient"}, scopes)
+}
+
+// writeHealthySecretsFixture creates a project whose marker decrypts with the
+// identity published through DWE_AGE_KEY — the state a developer lands in right
+// after onboarding, and the one `dwe validate secrets` has to confirm.
+func writeHealthySecretsFixture(t *testing.T) (workspacePath string, recipient string) {
+	t.Helper()
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+	t.Setenv("HOME", t.TempDir())
+
+	workspacePath = filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n"), 0o644))
+	return workspacePath, id.Recipient()
+}
+
+// Without the OK rows a healthy project renders as "validation skipped (no
+// files found)" — indistinguishable from the domain never running, on the one
+// command a developer uses to check themselves after onboarding.
+func TestValidateSecretsScopedHealthyEmitsOKRows(t *testing.T) {
+	workspacePath, recipient := writeHealthySecretsFixture(t)
+
+	stdout, _ := runValidateTextCmd(t, workspacePath, "secrets")
+
+	require.Contains(t, stdout, "secrets.recipient")
+	require.Contains(t, stdout, "secrets.unresolved")
+	// The table wraps long messages, so the counter line is asserted in
+	// fragments; the exact string is pinned on the JSON side.
+	require.Contains(t, stdout, "1 encrypted value(s)")
+	require.Contains(t, stdout, "readable via env")
+	require.Contains(t, stdout, "validation result: 2 checks")
+	require.NotContains(t, stdout, "validation skipped")
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "AGE-SECRET-KEY-")
+	require.NotContains(t, stdout, recipient+".key")
+}
+
+func TestValidateSecretsScopedHealthyJSON(t *testing.T) {
+	workspacePath, recipient := writeHealthySecretsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 2, got.Summary.Ok)
+	require.Zero(t, got.Summary.Error)
+	require.Zero(t, got.Summary.Warning)
+	require.Len(t, got.Diagnostics, 2)
+
+	byScope := map[string]diagnosticJSON{}
+	for _, d := range got.Diagnostics {
+		byScope[d.Scope] = d
+	}
+	recipientRow, ok := byScope["secrets/secrets.recipient"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "ok", recipientRow.Severity)
+	require.Empty(t, recipientRow.Message)
+	require.Equal(t, "workspace.yml", recipientRow.File)
+
+	unresolvedRow, ok := byScope["secrets/secrets.unresolved"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "ok", unresolvedRow.Severity)
+	require.Equal(t, "1 encrypted value(s) and 0 config-pack source(s) readable via env", unresolvedRow.Message)
+
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "AGE-SECRET-KEY-")
+	require.NotContains(t, stdout, recipient+".key")
 }
 
 // A malformed recipient makes LoadConfig fail; the scoped run must still name

@@ -3,7 +3,6 @@ package local
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
@@ -703,6 +702,13 @@ services:
 			t.Errorf("expected output to contain %q; got:\n%s", want, got)
 		}
 	}
+	// The parser's resolved "!!merge" tag must not reach the output: yaml.v3
+	// prints a non-implicit tag verbatim, so a stray one rewrites every merge key
+	// in the file as `!!merge <<: *svc`. A Contains("<<: *svc") assertion alone is
+	// satisfied by that form, which is how the defect stayed invisible.
+	if strings.Contains(got, "!!merge") {
+		t.Errorf("the merge key was written with its resolved tag; got:\n%s", got)
+	}
 
 	// The merge still resolves after the round-trip.
 	var reloaded map[string]any
@@ -739,82 +745,5 @@ func TestApplyOverlay_MergeKeyRefusalLeavesFileUntouched(t *testing.T) {
 	}
 	if string(out) != original {
 		t.Errorf("file changed after a refused overlay:\n%s", out)
-	}
-}
-
-// ReplaceScalars is the rekey primitive: every marker VALUE is rewritten exactly
-// once (including an anchored one, whose aliases keep pointing at it), mapping
-// keys are never offered, and comments/anchors survive.
-func TestReplaceScalars(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "defaults.yml")
-	writeFixture(t, path, `# header
-vars:
-  tok: &tok OLD-A # inline
-  alias: *tok
-  list:
-    - OLD-B
-    - plain
-  nested:
-    k: OLD-C
-  OLD-KEY: kept
-`)
-
-	doc, err := LoadYAMLNode(path, LabelDefaults)
-	if err != nil {
-		t.Fatalf("load node: %v", err)
-	}
-
-	var seen []string
-	n := ReplaceScalars(doc, func(v string) (string, bool) {
-		if !strings.HasPrefix(v, "OLD-") {
-			return "", false
-		}
-		seen = append(seen, v)
-		return "NEW-" + strings.TrimPrefix(v, "OLD-"), true
-	})
-	if n != 3 {
-		t.Errorf("replacement count = %d; want 3 (anchor, sequence item, nested)", n)
-	}
-	sort.Strings(seen)
-	if strings.Join(seen, ",") != "OLD-A,OLD-B,OLD-C" {
-		t.Errorf("visited scalars = %v; want each value once and no mapping key", seen)
-	}
-
-	if err := WriteYAMLNode(path, doc, LabelDefaults, PreserveOrDefault(0o644)); err != nil {
-		t.Fatalf("write node: %v", err)
-	}
-	out, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	got := string(out)
-	for _, want := range []string{"# header", "# inline", "&tok NEW-A", "*tok", "NEW-B", "NEW-C", "OLD-KEY: kept", "- plain"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("expected output to contain %q; got:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "OLD-A") || strings.Contains(got, "OLD-B") || strings.Contains(got, "OLD-C") {
-		t.Errorf("stale value left behind:\n%s", got)
-	}
-
-	var reloaded map[string]any
-	if err := yaml.Unmarshal(out, &reloaded); err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	vars := reloaded["vars"].(map[string]any)
-	if vars["alias"] != "NEW-A" {
-		t.Errorf("alias no longer resolves to the rewritten anchor: %v", vars["alias"])
-	}
-}
-
-// A nil document or nil replacement function is a no-op, not a panic.
-func TestReplaceScalars_NilInputs(t *testing.T) {
-	if n := ReplaceScalars(nil, func(string) (string, bool) { return "", true }); n != 0 {
-		t.Errorf("nil doc count = %d; want 0", n)
-	}
-	doc := emptyMappingDoc()
-	if n := ReplaceScalars(doc, nil); n != 0 {
-		t.Errorf("nil fn count = %d; want 0", n)
 	}
 }

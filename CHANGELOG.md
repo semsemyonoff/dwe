@@ -37,7 +37,9 @@ generated from commit subjects and stay on the
   source individually, so it distinguishes "no key on this machine" from
   "encrypted to somebody else" from "the payload is damaged", and reports a
   half-rekeyed tree per value. `secrets set` takes the value from an argument, `--stdin` or a hidden
-  prompt, writes only under `vars.`, and never coerces types.
+  prompt, writes only under `vars.`, and never coerces types. A value shorter
+  than 4 characters is stored like any other, but `secrets set` warns on stderr
+  that redaction deliberately skips it.
   `dwe secrets` is **not** reachable from a bridged container.
 - **New `secrets` validation domain**, with `dwe validate secrets`.
   `secrets.recipient` reports a missing / malformed recipient and damaged
@@ -67,6 +69,42 @@ generated from commit subjects and stay on the
 - `-v` / `--debug` command echoes — and their `.dwe/logs` mirrors — now print
   `***` in place of any decrypted value at least 4 runes long. Child-process
   output is not redacted.
+- **Plan and dry-run output is redacted too.** `dwe deploy plan` (table,
+  `--format shell` and `--output json`, including the `unresolved` field),
+  `dwe reset plan` and `dwe reset step --dry-run` print `***` where a step
+  references a decrypted secret — plan output is what gets pasted into tickets
+  and PR descriptions. Redaction happens in the display functions that build
+  those lines, before the value is quoted or embedded into a `--set k=v`
+  argument, so `--format shell` is now a **preview of what will run, not a
+  script to execute** when a step references a secret. What actually executes
+  is never redacted.
+- **`dwe secrets init` / `set` / `rekey` no longer reformat the layer file.**
+  They now edit it by replacing single lines instead of re-encoding the whole
+  document, so indentation, blank lines, comments, anchors, `<<:` merge keys
+  and quoting survive byte-for-byte: one `secrets set` into a large annotated
+  `defaults.yml` is a one-line diff instead of a whole-file rewrite. A handful
+  of shapes cannot be edited in place — a multi-line block scalar, a wrapped
+  scalar, a target inside a flow collection, a `null` / sequence / non-mapping
+  scalar / alias parent — and are refused with the new
+  `secrets_write_unsupported` code, naming the path and the fix, with the file
+  untouched. `rekey` detects those shapes in its read-only pass, so it aborts
+  with `written: false` before minting a key pair or re-encrypting any `.age`
+  source, rather than part-way through. Descending through an existing scalar
+  (`vars.db.host.port` where
+  `host` is a string) previously reported `secrets_write_failed`; it now
+  reports `secrets_write_unsupported` like the other refused shapes.
+- `dwe vars set`, `dwe services enable` / `disable` and the setup wizard no
+  longer rewrite a `<<: *anchor` merge key as `!!merge <<: *anchor` in
+  `workspace/local.yml`.
+- **`dwe validate secrets` now reports success explicitly.** A healthy project
+  gets an `✓` row per validator (`validation result: 2 checks`) instead of
+  `validation skipped (no files found)`, which was indistinguishable from the
+  domain never running — on the one command a developer uses to check
+  themselves after key onboarding. The `secrets.unresolved` row counts what it
+  read (`N encrypted value(s) and M config-pack source(s) readable via
+  keyfile`); the identity is named by source word, never by path. A project
+  with no `secrets:` block and nothing encrypted stays silent, and preflight
+  and the deploy wizard filter the rows out as before.
 - The root `.env`, decrypted `secrets decrypt` outputs and `.age`-sourced pack
   outputs are now explicitly `chmod`ed to `0600`, so a pre-existing permissive
   file is tightened rather than left as-is.

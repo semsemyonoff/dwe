@@ -1,13 +1,13 @@
 package secrets
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -99,6 +99,15 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 		return err
 	}
 
+	// Refuse an uninitialized project before the value is resolved: opening the
+	// hidden prompt (or draining a piped secret) only to answer "run init first"
+	// makes the developer hand over a plaintext value for nothing. This is a
+	// courtesy check, not the authoritative one — the recipient the value is
+	// actually encrypted to is re-read under the lock below.
+	if _, err := requireRecipient(flags); err != nil {
+		return err
+	}
+
 	// The value is resolved BEFORE the locks: a hidden prompt can sit open for
 	// as long as the developer needs, and holding the project locks meanwhile
 	// would block every other dwe command in the project.
@@ -136,8 +145,22 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 		return cmdctx.ErrWrap("secrets_encrypt_failed", err)
 	}
 
-	if err := writeMarker(target, path, marker, layers); err != nil {
+	if err := writeMarker(target, path, marker, layers, flags.ProjectRoot()); err != nil {
 		return err
+	}
+
+	// A value under secrets.MinRedactRunes is encrypted at rest like any other,
+	// but the redactor deliberately skips it — redacting a 3-rune string would
+	// shred every unrelated line containing it. Say so here instead of letting
+	// the developer discover it in a pasted `dwe deploy plan`. It comes AFTER
+	// writeMarker on purpose: emitted earlier, a refused write or a lost lock
+	// would leave a warning claiming the value is encrypted at rest when no
+	// marker exists. Text mode only: in JSON mode stderr stays free of anything
+	// a parser could trip over.
+	if flags.Output != "json" && utf8.RuneCountInString(plain) < secrets.MinRedactRunes {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"warning: the value for %s is shorter than %d characters — it is encrypted at rest, but dwe will not redact it in plan or --debug output\n",
+			path, secrets.MinRedactRunes)
 	}
 
 	data := secretSetJSON{Path: path, File: relToRoot(flags.ProjectRoot(), target)}
@@ -227,7 +250,7 @@ func promptForSecret(cmd *cobra.Command, path string) (string, bool, error) {
 		Kind:        ask.FieldPassword,
 		Required:    true,
 	}}
-	res, err := runAsk(context.Background(), "dwe secrets › set "+path, fields,
+	res, err := runAsk(cmd.Context(), "dwe secrets › set "+path, fields,
 		ask.RunOptions{Input: cmd.InOrStdin(), Output: cmd.OutOrStdout()})
 	if err != nil {
 		if errors.Is(err, widgets.ErrCancelled) {
@@ -245,32 +268,39 @@ func trimOneNewline(s string) string {
 }
 
 // writeMarker sets the marker at path in the target layer file through the
-// comment-preserving node writer, staging the result first: the edited document
-// is encoded, decoded back into a layer map, swapped into the raw layer list and
-// run through the loader's own root validation. A `set` can therefore never
-// leave a layer the project would refuse to load afterwards.
+// splice writer, staging the result first: the spliced bytes are decoded back
+// into a layer map, swapped into the raw layer list and run through the loader's
+// own root validation. A `set` can therefore never leave a layer the project
+// would refuse to load afterwards.
+//
+// The splice writer rather than the node writer, because a `set` into a
+// hand-annotated layer file must produce a one-line diff: only the bytes of the
+// marker's own value token change, and indentation, blank lines, comments,
+// anchors and merge keys elsewhere in the file are never re-encoded. A shape it
+// cannot edit in place (a block scalar, a flow collection) is refused with
+// `secrets_write_unsupported` and the file untouched.
 //
 // The target files are git-tracked, hence PreserveOrDefault(0644): forcing
 // local.yml's 0600 on a tracked file would surprise git and editors, and the
 // marker is ciphertext anyway.
-func writeMarker(target, path, marker string, layers []config.Layer) error {
+// The reported file is project-relative, matching `init` and `rekey` and this
+// command's own success payload: a machine consumer of the error envelope must
+// not have to handle two path shapes for one code.
+func writeMarker(target, path, marker string, layers []config.Layer, root string) error {
 	label, policy := layerWritePolicy(target, layers)
+	display := relToRoot(root, target)
 
-	doc, err := localpkg.LoadYAMLNode(target, label)
+	splicer, err := localpkg.NewSplicer(target, label)
 	if err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
+		return spliceWriteError(err, display)
 	}
-	if err := localpkg.ApplyOverlay(doc, buildPathOverlay(path, marker), label); err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
-	}
-	staged, err := localpkg.EncodeYAMLNode(doc, label)
-	if err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
+	if err := splicer.SetScalar(strings.Split(path, "."), marker); err != nil {
+		return spliceWriteError(err, display)
 	}
 
 	var data map[string]any
-	if err := yaml.Unmarshal(staged, &data); err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", fmt.Errorf("parse the staged %s: %w", target, err))
+	if err := yaml.Unmarshal(splicer.Bytes(), &data); err != nil {
+		return cmdctx.ErrWrap("secrets_write_failed", fmt.Errorf("parse the staged %s: %w", display, err))
 	}
 	if data == nil {
 		data = make(map[string]any)
@@ -279,28 +309,10 @@ func writeMarker(target, path, marker string, layers []config.Layer) error {
 		return cmdctx.ErrWrap("project_invalid_config", err)
 	}
 
-	if err := localpkg.WriteYAMLNode(target, doc, label, policy); err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
+	if err := splicer.Write(target, policy); err != nil {
+		return spliceWriteError(err, display)
 	}
 	return nil
-}
-
-// buildPathOverlay turns a dot-path plus a value into the nested overlay map the
-// node writer consumes: "vars.a.b" → {vars: {a: {b: value}}}.
-func buildPathOverlay(path string, value any) map[string]any {
-	parts := strings.Split(path, ".")
-	root := make(map[string]any)
-	node := root
-	for i, p := range parts {
-		if i == len(parts)-1 {
-			node[p] = value
-			break
-		}
-		child := make(map[string]any)
-		node[p] = child
-		node = child
-	}
-	return root
 }
 
 // stageLayers returns the layer list with target's data replaced by the staged

@@ -124,6 +124,37 @@ func TestFormatCommandUnaffectedByRedaction(t *testing.T) {
 	}
 }
 
+// TestRedactExported covers the exported entry point used by display code
+// outside the diagnostic path (pipeline plan strings).
+func TestRedactExported(t *testing.T) {
+	reset(t)
+	t.Cleanup(ResetRedaction)
+
+	if got, want := Redact("v=plain"), "v=plain"; got != want {
+		t.Errorf("Redact with nothing registered = %q, want %q", got, want)
+	}
+
+	RegisterRedaction([]string{"display-secret"})
+	if got, want := Redact("v=display-secret and display-secret"), "v=*** and ***"; got != want {
+		t.Errorf("Redact = %q, want %q", got, want)
+	}
+	if got, want := Redact(""), ""; got != want {
+		t.Errorf("Redact(\"\") = %q, want %q", got, want)
+	}
+}
+
+// TestRedactSkipsShortValues pins the documented limit: a value under
+// secrets.MinRedactRunes is never redacted, on any surface.
+func TestRedactSkipsShortValues(t *testing.T) {
+	reset(t)
+	t.Cleanup(ResetRedaction)
+	RegisterRedaction([]string{"abc"})
+
+	if got, want := Redact("v=abc"), "v=abc"; got != want {
+		t.Errorf("Redact = %q, want %q — a 3-rune value must stay verbatim", got, want)
+	}
+}
+
 func TestRegisterRedactionEmptyIsNoop(t *testing.T) {
 	reset(t)
 	t.Cleanup(ResetRedaction)

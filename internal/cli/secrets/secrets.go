@@ -24,6 +24,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
@@ -440,6 +441,50 @@ func inspectAgeFile(root, path string) ageFile {
 		return ageFile{path: path, err: fmt.Errorf("%s is not a regular file (mode %s)", path, fi.Mode())}
 	}
 	return ageFile{path: path}
+}
+
+// spliceUnsupportedError maps a splice-writer refusal onto the typed
+// `secrets_write_unsupported` code. The three sentinels share one code — the
+// file was left untouched and the document has to change before a retry can
+// work — but not one hint: a shape refusal names the reshaping, while a
+// verification failure is about the file NOT reading back as written.
+//
+// Every caller branches on this BEFORE its own generic ErrWrap: cmdctx.ErrWrap
+// builds a NEW outer CodedError and the JSON serializer reports the outermost
+// code, so wrapping first would bury the specific refusal under
+// `secrets_recipient_write_failed` or `secrets_rekey_failed`.
+func spliceUnsupportedError(err error, file string) (*cmdctx.CodedError, bool) {
+	if !errors.Is(err, localpkg.ErrMultilineScalar) &&
+		!errors.Is(err, localpkg.ErrUnsplicable) &&
+		!errors.Is(err, localpkg.ErrVerify) {
+		return nil, false
+	}
+	return cmdctx.ErrWrap("secrets_write_unsupported", err).
+		WithDetail("file", file).
+		WithHint(spliceUnsupportedHint(err, file)), true
+}
+
+// spliceUnsupportedHint is the fix for a refusal. ErrVerify is not a shape the
+// author can reshape at the target — the write DID splice and then failed to
+// read back — so pointing at the target's own formatting would send the
+// developer to a line that is already fine; a duplicate or merge-inherited key
+// elsewhere in the file is the shape that produces it.
+func spliceUnsupportedHint(err error, file string) string {
+	if errors.Is(err, localpkg.ErrVerify) {
+		return "the edited " + file + " did not read back as written; check it for a duplicate key " +
+			"or a '<<:' merge key that shadows the target, then retry"
+	}
+	return "dwe secrets writes a layer file by replacing single lines; make the target a single-line " +
+		"value under a block mapping in " + file + " and retry"
+}
+
+// spliceWriteError is spliceUnsupportedError with the I/O fallback the plain
+// write paths need: anything that is not a refusal keeps today's code.
+func spliceWriteError(err error, file string) error {
+	if unsupported, ok := spliceUnsupportedError(err, file); ok {
+		return unsupported
+	}
+	return cmdctx.ErrWrap("secrets_write_failed", err).WithDetail("file", file)
 }
 
 // relToRoot renders a path relative to the project root for display; an

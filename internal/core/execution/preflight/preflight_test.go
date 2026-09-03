@@ -98,5 +98,12 @@ func TestRun_secretsUnresolvedBlocks(t *testing.T) {
 		if strings.Contains(errOut.String(), "s3cr3t-value") {
 			t.Error("preflight output must not carry the plaintext")
 		}
+		// The secrets domain now affirms a healthy setup with SeverityOK rows;
+		// preflight filters them, so a lifecycle command gains no extra line.
+		for _, unwanted := range []string{"secrets.unresolved", "secrets.recipient", "readable via"} {
+			if strings.Contains(errOut.String(), unwanted) {
+				t.Errorf("preflight printed the OK row (%q):\n%s", unwanted, errOut.String())
+			}
+		}
 	})
 }

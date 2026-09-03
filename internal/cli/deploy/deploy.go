@@ -162,6 +162,8 @@ func buildPlanStepJSON(rs pipeline.ResolvedStep, dweBin string) planStepJSON {
 		return step
 	}
 
+	// Display strings, redacted by StepCommand: the JSON plan is printed, never
+	// executed. Unresolved refs are scanned on the redacted form on purpose.
 	step.Cmd = pipeline.StepCommand(rs.Step, dweBin)
 	step.Unresolved = pipeline.UnresolvedTemplateRefs(step.Cmd)
 	return step
@@ -240,7 +242,12 @@ func newDeployPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Print all phases and steps from workspace/deploy.yml as they would be executed.
 
 The implicit .env generation step is always shown first. Use --service to filter
-the plan to steps relevant to a specific service. Use --format shell for script-friendly output.`,
+the plan to steps relevant to a specific service. Use --format shell for a
+line-per-step preview of the same plan.
+
+Plan output is redacted: a step referencing a decrypted secret shows *** in
+place of the value, so the shell format is a preview of what will run, not a
+script to execute.`,
 		Example: `  dwe deploy plan
   dwe deploy plan --service main
   dwe deploy plan --format shell`,

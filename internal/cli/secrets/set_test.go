@@ -97,25 +97,25 @@ func TestSet_CreatesDefaultsAndRoundTrips(t *testing.T) {
 	}
 }
 
-// TestSet_PreservesCommentsAndSiblings pins the node-writer contract at the
-// defaults.yml layer and the "descend into an existing mapping" case.
+// TestSet_PreservesCommentsAndSiblings pins the splice-writer contract at the
+// defaults.yml layer, on the annotated shape a real project has: overwriting an
+// existing value changes exactly the one line that holds it. Every other byte —
+// the 2-space indent, the blank lines between blocks, the header and trailing
+// comments, the quoted key, the anchor, the merge key, the sequence and the
+// literal block — is identical, which the node writer could not manage: it
+// re-encodes the whole document and drops every blank line.
 func TestSet_PreservesCommentsAndSiblings(t *testing.T) {
 	isolateHome(t)
 	cfgPath, root := writeFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
 	initProject(t, flags)
 
-	const src = `# shared defaults, committed
-vars:
-  telegram:
-    chat_id: "42" # keep me
-  other: plain
-`
+	src := readTestdata(t, "annotated_defaults.yml")
 	if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
 		t.Fatalf("writing defaults.yml: %v", err)
 	}
 
-	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.token", "s3cret"); err != nil {
+	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.bot_token", "s3cret"); err != nil {
 		t.Fatalf("secrets set: %v", err)
 	}
 
@@ -123,21 +123,176 @@ vars:
 	if err != nil {
 		t.Fatalf("reading defaults.yml: %v", err)
 	}
-	got := string(data)
-	for _, want := range []string{
-		"# shared defaults, committed",
-		"# keep me",
-		`chat_id: "42"`,
-		"other: plain",
-		"token: " + secrets.MarkerPrefix,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("defaults.yml lost %q\ngot:\n%s", want, got)
-		}
+	after := string(data)
+	tokenLine := lineOf(t, src, "bot_token:")
+	assertOnlyLinesChanged(t, src, after, tokenLine)
+	if got := strings.Split(after, "\n")[tokenLine-1]; !strings.HasPrefix(got, "    bot_token: "+secrets.MarkerPrefix) {
+		t.Errorf("line %d = %q, want the marker on it", tokenLine, got)
 	}
-	if plain := readSecret(t, flags, "vars.telegram.token"); plain != "s3cret" {
+	if plain := readSecret(t, flags, "vars.telegram.bot_token"); plain != "s3cret" {
 		t.Errorf("decrypted value = %q, want %q", plain, "s3cret")
 	}
+}
+
+// TestSet_InsertsNewPathIntoAnnotatedFixture pins the insertion half: a path the
+// file does not hold yet adds lines and rewrites none. The trailing comment of
+// the mapping it lands in stays where the developer put it.
+func TestSet_InsertsNewPathIntoAnnotatedFixture(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	src := readTestdata(t, "annotated_defaults.yml")
+	if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+
+	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.api_key", "k3y"); err != nil {
+		t.Fatalf("secrets set: %v", err)
+	}
+
+	data, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+	added := insertedLines(t, src, string(data))
+	if len(added) != 1 {
+		t.Fatalf("inserted %d lines, want 1: %q", len(added), added)
+	}
+	if !strings.HasPrefix(added[0], "    api_key: "+secrets.MarkerPrefix) {
+		t.Errorf("inserted line = %q, want the marker under vars.telegram", added[0])
+	}
+	if plain := readSecret(t, flags, "vars.telegram.api_key"); plain != "k3y" {
+		t.Errorf("decrypted value = %q, want %q", plain, "k3y")
+	}
+}
+
+// TestSet_RotatesAnExistingMarker pins the rotation flow — a `set` over a path
+// that ALREADY holds a marker. It is the common case after a leak, and it is the
+// one where the replaced token is itself long and quoted, so it exercises the
+// span logic on a marker rather than on a placeholder.
+func TestSet_RotatesAnExistingMarker(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	src := readTestdata(t, "annotated_defaults.yml")
+	if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.bot_token", "first-value"); err != nil {
+		t.Fatalf("secrets set (first): %v", err)
+	}
+	before, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+
+	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.bot_token", "second-value"); err != nil {
+		t.Fatalf("secrets set (rotation): %v", err)
+	}
+	after, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+
+	assertOnlyLinesChanged(t, string(before), string(after), lineOf(t, string(before), "bot_token:"))
+	if plain := readSecret(t, flags, "vars.telegram.bot_token"); plain != "second-value" {
+		t.Errorf("decrypted value = %q, want %q", plain, "second-value")
+	}
+	if strings.Contains(string(after), "first-value") {
+		t.Error("the rotated file carries the previous plaintext")
+	}
+}
+
+// TestSet_RefusedShapesLeaveTheFileUntouched pins the shapes the splice writer
+// will not guess at. Each is a typed secrets_write_unsupported in text AND JSON
+// mode, with the file byte-identical afterwards and no plaintext or private key
+// material on any surface.
+func TestSet_RefusedShapesLeaveTheFileUntouched(t *testing.T) {
+	const plaintext = "refused-plaintext-value"
+	tests := []struct {
+		name string
+		src  string
+		path string
+	}{
+		{
+			name: "literal block scalar target",
+			src:  "vars:\n  notes: |\n    first line\n    second line\n",
+			path: "vars.notes",
+		},
+		{
+			name: "flow mapping parent",
+			src:  "vars:\n  telegram: {bot_token: placeholder}\n",
+			path: "vars.telegram.bot_token",
+		},
+		{
+			name: "flow sequence element",
+			src:  "vars:\n  tokens: [alpha, beta]\n",
+			path: "vars.tokens.0",
+		},
+	}
+	for _, tt := range tests {
+		for _, mode := range []string{"text", "json"} {
+			t.Run(tt.name+"/"+mode, func(t *testing.T) {
+				isolateHome(t)
+				cfgPath, root := writeFixture(t)
+				flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+				initProject(t, flags)
+				if err := os.WriteFile(defaultsPath(root), []byte(tt.src), 0o644); err != nil {
+					t.Fatalf("writing defaults.yml: %v", err)
+				}
+				if mode == "json" {
+					flags.Output = "json"
+				}
+
+				stdout, stderr, err := runSecrets(t, flags, "set", tt.path, plaintext)
+				if err == nil {
+					t.Fatal("set succeeded on a shape the splice writer must refuse")
+				}
+				coded := codedError(t, err)
+				if coded.Code != "secrets_write_unsupported" {
+					t.Errorf("error code = %q, want secrets_write_unsupported (message: %s)", coded.Code, coded.Message)
+				}
+				if coded.Hint == "" {
+					t.Error("the refusal carries no hint")
+				}
+				// One path shape per code: `init` and `rekey` report the layer
+				// file relative to the project root, and so does this command's
+				// own success payload.
+				if got := coded.Details["file"]; got != filepath.Join("workspace", "defaults.yml") {
+					t.Errorf("details[file] = %v, want the project-relative path", got)
+				}
+				payload, merr := json.Marshal(coded)
+				if merr != nil {
+					t.Fatalf("marshalling the coded error: %v", merr)
+				}
+				assertNoSecretLeak(t, plaintext, stdout, stderr, coded.Message, coded.Hint, string(payload))
+
+				after, rerr := os.ReadFile(defaultsPath(root))
+				if rerr != nil {
+					t.Fatalf("reading defaults.yml: %v", rerr)
+				}
+				if string(after) != tt.src {
+					t.Errorf("defaults.yml changed after a refused write:\n%s", after)
+				}
+			})
+		}
+	}
+}
+
+// lineOf returns the 1-based number of the first line containing needle.
+func lineOf(t *testing.T, src, needle string) int {
+	t.Helper()
+	for i, line := range strings.Split(src, "\n") {
+		if strings.Contains(line, needle) {
+			return i + 1
+		}
+	}
+	t.Fatalf("%q not found in the fixture", needle)
+	return 0
 }
 
 // TestSet_WorkspaceFile pins --file workspace: the value lands in workspace.yml
@@ -301,9 +456,13 @@ func TestSet_Refusals(t *testing.T) {
 			code: "secrets_path_invalid",
 		},
 		{
+			// Descending through a scalar is one of the shapes the splice writer
+			// refuses rather than reshaping: writing here would discard the
+			// developer's value.
 			name: "through a scalar node",
 			args: []string{"set", "vars.db.host.port", "x"},
-			code: "secrets_write_failed",
+			code: "secrets_write_unsupported",
+			hint: "block mapping",
 		},
 		{
 			name: "file local",
@@ -395,6 +554,34 @@ func TestSet_WithoutRecipient(t *testing.T) {
 	}
 }
 
+// TestSet_WithoutRecipientDoesNotPrompt pins that the missing-recipient refusal
+// lands BEFORE the value is resolved: a developer must never type a secret into
+// the hidden prompt only to have it discarded.
+func TestSet_WithoutRecipientDoesNotPrompt(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	origInteractive := widgets.IsInteractiveFn
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	t.Cleanup(func() { widgets.IsInteractiveFn = origInteractive })
+
+	origAsk := runAsk
+	runAsk = func(context.Context, string, []ask.Field, ask.RunOptions) (ask.Result, error) {
+		t.Error("the hidden prompt opened in a project with no recipient")
+		return ask.NewResultForTest(map[string]any{"value": "typed-secret"}), nil
+	}
+	t.Cleanup(func() { runAsk = origAsk })
+
+	_, _, err := runSecrets(t, flags, "set", "vars.token")
+	if err == nil {
+		t.Fatal("set succeeded without a recipient")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_no_recipient" {
+		t.Fatalf("error code = %q, want secrets_no_recipient", coded.Code)
+	}
+}
+
 // TestSet_NoCoercion pins decision 3: plaintext is always a string, so a secret
 // that looks like a number or a bool survives the round-trip as text.
 func TestSet_NoCoercion(t *testing.T) {
@@ -449,6 +636,78 @@ func TestSet_JSON(t *testing.T) {
 	if strings.Contains(out, "s3cret") {
 		t.Errorf("set JSON leaked the plaintext: %s", out)
 	}
+}
+
+// TestSet_WarnsOnUnredactableValue pins the write-time notice for a value the
+// redactor will skip (< secrets.MinRedactRunes): the value is still stored, the
+// warning goes to stderr and never carries the plaintext, and JSON mode keeps
+// stderr clean.
+func TestSet_WarnsOnUnredactableValue(t *testing.T) {
+	isolateHome(t)
+
+	t.Run("short value warns on stderr", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+		initProject(t, flags)
+
+		_, errOut, err := runSecrets(t, flags, "set", "vars.pin", "k3y")
+		if err != nil {
+			t.Fatalf("secrets set: %v", err)
+		}
+		if !strings.Contains(errOut, "warning:") || !strings.Contains(errOut, "vars.pin") {
+			t.Errorf("stderr = %q, want the not-redacted warning naming the path", errOut)
+		}
+		if strings.Contains(errOut, "k3y") {
+			t.Errorf("the warning echoed the plaintext: %q", errOut)
+		}
+		if got := readSecret(t, flags, "vars.pin"); got != "k3y" {
+			t.Errorf("stored value = %q, want the value written despite the warning", got)
+		}
+	})
+
+	t.Run("a redactable value is silent", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+		initProject(t, flags)
+
+		if _, errOut, err := runSecrets(t, flags, "set", "vars.pin", "k3yy"); err != nil {
+			t.Fatalf("secrets set: %v", err)
+		} else if errOut != "" {
+			t.Errorf("stderr = %q, want no warning at exactly MinRedactRunes", errOut)
+		}
+	})
+
+	t.Run("a refused write warns about nothing", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+		initProject(t, flags)
+		// A flow mapping the splice writer refuses: the command fails before any
+		// marker exists, so a warning saying the value "is encrypted at rest"
+		// would be a lie.
+		if err := os.WriteFile(defaultsPath(root), []byte("vars:\n  telegram: {pin: placeholder}\n"), 0o644); err != nil {
+			t.Fatalf("writing defaults.yml: %v", err)
+		}
+
+		_, errOut, err := runSecrets(t, flags, "set", "vars.telegram.pin", "k3y")
+		if err == nil {
+			t.Fatal("set succeeded on a shape the splice writer must refuse")
+		}
+		if strings.Contains(errOut, "warning:") {
+			t.Errorf("stderr = %q, want no redaction warning when the write failed", errOut)
+		}
+	})
+
+	t.Run("json mode keeps stderr clean", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+		initProject(t, flags)
+
+		if _, errOut, err := runSecrets(t, flags, "set", "vars.pin", "k3y"); err != nil {
+			t.Fatalf("secrets set --output json: %v", err)
+		} else if errOut != "" {
+			t.Errorf("stderr = %q, want it empty in JSON mode", errOut)
+		}
+	})
 }
 
 // TestStageLayers pins the staging list the pre-write validation runs on. The

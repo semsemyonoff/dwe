@@ -98,8 +98,15 @@ func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var format string
 
 	cmd := &cobra.Command{
-		Use:          "plan",
-		Short:        "Show resolved reset plan",
+		Use:   "plan",
+		Short: "Show resolved reset plan",
+		Long: `Print all phases and steps from workspace/reset.yml as they would be executed.
+
+Use --format shell for a line-per-step preview of the same plan.
+
+Plan output is redacted: a step referencing a decrypted secret shows *** in
+place of the value, so the shell format is a preview of what will run, not a
+script to execute.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -660,7 +667,7 @@ func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command without executing")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command (secrets redacted) without executing")
 	return cmd
 }
 
@@ -720,6 +727,8 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 		render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
 	}
 
+	// Display only, and redacted — StepCommand works on a deep copy, so the
+	// real execution below still sees the step's own (plaintext) with: values.
 	resolved := pipeline.StepCommand(step, config.DweBin(cfg))
 	if dryRun {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)

@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // --- PrintPlanShell tests ---
@@ -465,7 +467,7 @@ func TestPrintPlanShell_noUnresolvedAnnotation(t *testing.T) {
 	out := buf.String()
 
 	if strings.Contains(out, "[unresolved:") {
-		t.Errorf("shell format must stay executable, no annotation expected, got:\n%s", out)
+		t.Errorf("shell format must stay a plain command preview, no annotation expected, got:\n%s", out)
 	}
 	if !strings.Contains(out, "echo ${HOME}") {
 		t.Errorf("shell output missing raw command, got:\n%s", out)
@@ -581,5 +583,33 @@ func TestPrintPlanShell_binarySubstitution(t *testing.T) {
 	}
 	if !strings.Contains(out, "podman-dwe deploy step") {
 		t.Errorf("expected 'podman-dwe deploy step' for builtin in shell output, got:\n%s", out)
+	}
+}
+
+// TestPrintPlanShell_redactsSecret pins that the shell preview inherits the
+// redaction StepCommand/FormatCondition apply — the format is a preview of
+// what will run, not an artefact to execute.
+func TestPrintPlanShell_redactsSecret(t *testing.T) {
+	const plaintext = "w0rkflow-deploy-print-secret"
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+	trace.RegisterRedaction([]string{plaintext})
+
+	var buf bytes.Buffer
+	steps := []pipeline.ResolvedStep{
+		{
+			Phase:       phaseWith("setup"),
+			Step:        cmdStep("greet", "echo "+plaintext),
+			RuntimeWhen: &condition.Condition{Type: condition.TypeShell, Cmd: "test -n " + plaintext},
+		},
+	}
+	deploy.PrintPlanShell(steps, &buf, "dwe")
+
+	out := buf.String()
+	if strings.Contains(out, plaintext) {
+		t.Errorf("shell plan carries the plaintext:\n%s", out)
+	}
+	if !strings.Contains(out, "echo ***") || !strings.Contains(out, "# when: shell test -n ***") {
+		t.Errorf("shell plan = %q, want both the cmd and the when redacted", out)
 	}
 }
