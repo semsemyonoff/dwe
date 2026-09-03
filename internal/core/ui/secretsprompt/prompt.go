@@ -30,6 +30,14 @@ const formTitle = "dwe secrets › key import"
 // deterministically; they MUST NOT call t.Parallel() while overriding it.
 var runAsk = ask.Run
 
+// quitSpec binds Esc alongside Ctrl-C on both forms. huh's default keymap quits
+// on Ctrl-C only, so without this the documented Esc cancel does nothing and a
+// developer who opened the offer from `dwe run` has no way out of a hidden
+// field. Declared once: the two forms are one step and must cancel alike.
+func quitSpec() *ask.QuitSpec {
+	return &ask.QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
+}
+
 // PromptIdentity reads the private identity for recipient from a single hidden
 // field. Validation runs in-form, so a typo or a foreign key is corrected
 // without losing the prompt; Esc cancels and surfaces as widgets.ErrCancelled.
@@ -42,7 +50,7 @@ func PromptIdentity(ctx context.Context, recipient string, in io.Reader, out io.
 		Required:    true,
 		Validate:    identityValidator(recipient),
 	}}
-	res, err := runAsk(ctx, formTitle, fields, ask.RunOptions{Input: in, Output: out})
+	res, err := runAsk(ctx, formTitle, fields, ask.RunOptions{Input: in, Output: out, Quit: quitSpec()})
 	if err != nil {
 		return secrets.Identity{}, err
 	}
@@ -69,7 +77,7 @@ func ConfirmImport(ctx context.Context, explanation string, in io.Reader, out io
 		Affirmative: "Enter key",
 		Negative:    "Abort",
 	}}
-	res, err := runAsk(ctx, formTitle, fields, ask.RunOptions{Input: in, Output: out})
+	res, err := runAsk(ctx, formTitle, fields, ask.RunOptions{Input: in, Output: out, Quit: quitSpec()})
 	if err != nil {
 		return false, err
 	}

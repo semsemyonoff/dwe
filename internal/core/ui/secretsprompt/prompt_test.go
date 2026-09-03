@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -214,5 +215,47 @@ func TestConfirmImport_CancelPropagates(t *testing.T) {
 	})
 	if _, err := ConfirmImport(t.Context(), "why", nil, nil); !errors.Is(err, widgets.ErrCancelled) {
 		t.Fatalf("err = %v, want widgets.ErrCancelled", err)
+	}
+}
+
+// TestBothForms_BindEsc pins the quit keys on both forms. Every other test here
+// stubs runAsk and injects widgets.ErrCancelled directly, so none of them
+// exercises the keymap — huh's default quits on ctrl+c alone, and the reference
+// documents Esc as the cancel key.
+func TestBothForms_BindEsc(t *testing.T) {
+	id := keygen(t)
+	run := func(t *testing.T, call func() error) ask.RunOptions {
+		t.Helper()
+		var got ask.RunOptions
+		stubAsk(t, func(_ context.Context, _ string, _ []ask.Field, opts ask.RunOptions) (ask.Result, error) {
+			got = opts
+			return ask.NewResultForTest(map[string]any{"identity": id.Export(), "import": true}), nil
+		})
+		if err := call(); err != nil {
+			t.Fatalf("form: %v", err)
+		}
+		return got
+	}
+
+	forms := map[string]func() error{
+		"PromptIdentity": func() error {
+			_, err := PromptIdentity(t.Context(), id.Recipient(), nil, nil)
+			return err
+		},
+		"ConfirmImport": func() error {
+			_, err := ConfirmImport(t.Context(), "why", nil, nil)
+			return err
+		},
+	}
+	for name, call := range forms {
+		t.Run(name, func(t *testing.T) {
+			opts := run(t, call)
+			if opts.Quit == nil {
+				t.Fatal("Quit is nil: the form quits on ctrl+c only, but Esc is documented as the cancel key")
+			}
+			if !slices.Contains(opts.Quit.Keys, "esc") || !slices.Contains(opts.Quit.Keys, "ctrl+c") {
+				t.Errorf("Quit.Keys = %v, want esc and ctrl+c", opts.Quit.Keys)
+			}
+		})
 	}
 }
