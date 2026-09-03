@@ -199,7 +199,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § CLI (container command policy), § Core — Bridge and § Core — User Commands.
 
 - **Container TTY** — a service command keeps a container terminal only when `RunContext.UserInvoked` is true and its own streams are terminals (or it is bridged); pipeline steps, `parallel:` sub-steps, `check:` probes and piped output all get `-T`.
-  `UserInvoked` is set in exactly ONE place — `runCommandByID`, as `!bridgeclient.NestedRuntime()` read BEFORE that same call writes the process-global `DWE_NESTED_RUNTIME` marker, which MUST stay in `bridgeclient.StripEnv` or a container-set one kills the TTY on every bridged `dwe cmd`.
+  `UserInvoked` has ONE derivation, never a literal `true` — `!bridgeclient.NestedRuntime()` read BEFORE the same call writes the process-global `DWE_NESTED_RUNTIME` marker (`runCommandByID`; `resetStepCmd` bypasses it), which MUST stay in `bridgeclient.StripEnv` or a container-set one kills the TTY on every bridged `dwe cmd`.
   Injecting `-T` also forces colour via `ColorForceEnv(rc, ttySuppressed && !detached)`; dropping the `!detached` guard bakes ANSI into the Docker logs permanently.
   See § Container TTY Contract.
 

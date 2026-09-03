@@ -1156,6 +1156,96 @@ func TestKeyRemove_ConfirmedRemoves(t *testing.T) {
 	}
 }
 
+// TestKeyRemove_UnusableCurrentKeyfileNeedsNoForce closes the loop keygate's
+// ErrKeyfileUnusable opens: it tells the developer to run exactly this command
+// on the canonical keyfile when that file exists but opens nothing. Inside the
+// project the argument always equals secrets.recipient, so a name-based in-use
+// guard refused the prescribed fix — and its "export it first" hint named a
+// command that fails for the same reason. Nothing is at risk here: the file
+// already decrypts nothing.
+func TestKeyRemove_UnusableCurrentKeyfileNeedsNoForce(t *testing.T) {
+	cases := map[string]func(t *testing.T, recipient string) string{
+		"unparsable": func(t *testing.T, recipient string) string {
+			return writeKeyfile(t, recipient+".key", "not an age key\n", 0o600)
+		},
+		"foreign key under the current name": func(t *testing.T, recipient string) string {
+			return writeKeyfile(t, recipient+".key", foreignIdentity(t).Export()+"\n", 0o600)
+		},
+	}
+	for name, seed := range cases {
+		t.Run(name, func(t *testing.T) {
+			isolateHome(t)
+			cfgPath, root := writeFixture(t)
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			recipient := initProject(t, flags)
+			// initProject installed the real keyfile; replace it in place with
+			// the unusable one the gate would have complained about.
+			path, err := secrets.KeyfilePath(recipient)
+			if err != nil {
+				t.Fatalf("keyfile path: %v", err)
+			}
+			if rerr := os.Remove(path); rerr != nil {
+				t.Fatalf("clearing the installed keyfile: %v", rerr)
+			}
+			path = seed(t, recipient)
+			forbidConfirm(t)
+
+			if _, _, rerr := runSecrets(t, flags, "key", "remove", recipient, "--yes"); rerr != nil {
+				t.Fatalf("secrets key remove: %v", rerr)
+			}
+			if _, serr := os.Stat(path); !os.IsNotExist(serr) {
+				t.Errorf("the unusable keyfile survived: %v", serr)
+			}
+		})
+	}
+}
+
+// TestKeyRemove_MisnamedFileHoldingCurrentKeyNeedsForce is the mirror image:
+// the file name is foreign but its CONTENT is the project's own identity, and
+// deleting it destroys the only copy. A name-based guard waved this through.
+func TestKeyRemove_MisnamedFileHoldingCurrentKeyNeedsForce(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+	forbidConfirm(t)
+
+	canonical, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	key, err := os.ReadFile(canonical)
+	if err != nil {
+		t.Fatalf("reading the installed keyfile: %v", err)
+	}
+	stale := foreignIdentity(t).Recipient()
+	path := writeKeyfile(t, stale+".key", string(key), 0o600)
+
+	_, _, err = runSecrets(t, flags, "key", "remove", stale, "--yes")
+	if err == nil {
+		t.Fatal("removing a misnamed file holding the project's key succeeded without --force")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_key_in_use" {
+		t.Errorf("code = %q, want secrets_key_in_use", coded.Code)
+	}
+	// `key export` reads keys/<current>.key, a different file — naming it here
+	// would point the rescue at something that does not hold this key.
+	if strings.Contains(coded.Hint, "key export") {
+		t.Errorf("hint = %q, want it not to name `key export` for a misnamed file", coded.Hint)
+	}
+	if _, serr := os.Stat(path); serr != nil {
+		t.Errorf("a refused removal deleted the keyfile: %v", serr)
+	}
+
+	if _, _, ferr := runSecrets(t, flags, "key", "remove", stale, "--force", "--yes"); ferr != nil {
+		t.Fatalf("secrets key remove --force: %v", ferr)
+	}
+	if _, serr := os.Stat(path); !os.IsNotExist(serr) {
+		t.Errorf("--force did not remove the keyfile: %v", serr)
+	}
+}
+
 // TestKeyRemove_MisnamedFileNeverTargeted pins that only the canonical
 // <recipient>.key is deleted: a file whose name does not match the identity it
 // holds is reported by `key list` and left alone.

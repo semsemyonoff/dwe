@@ -385,6 +385,22 @@ func keyListView(d keyListJSON, dir string) render.SecretsKeyListView {
 // allowedWithoutProject) or the config does not load. The raw layers are read
 // directly rather than through loadRawLayers: a keyfile listing must not fail
 // over a config it only uses to add a marker to one row.
+// heldRecipient returns the recipient of the identity stored at path, or "" for
+// a file that cannot be read or holds no age identity. Neither failure is
+// surfaced: the text of both echoes file content, which here is a private key —
+// the same reason secrets.ListKeyfiles reduces them to a fixed enum.
+func heldRecipient(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	id, err := secrets.ParseIdentity(string(data))
+	if err != nil {
+		return ""
+	}
+	return id.Recipient()
+}
+
 func currentRecipient(flags *cmdctx.RootFlags) string {
 	if flags.ConfigPath == "" {
 		return ""
@@ -403,13 +419,16 @@ func newKeyRemoveCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Delete an installed identity from this machine",
 		Long: `Delete ` + "`~/" + secrets.KeysDirRel + "/<recipient>.key`" + `.
 
-Only the canonical file name is targeted: a keyfile whose name does not match
-the identity it holds (listed as "misnamed" by ` + "`dwe secrets key list`" + `) is never
-touched, so removing it stays a deliberate manual act.
+The argument names the FILE: a keyfile whose name does not match the identity it
+holds (listed as "misnamed" by ` + "`dwe secrets key list`" + `) is removed under its own
+name, never under the recipient the listing shows for it.
 
-Removing the identity this project uses is refused unless --force is passed:
-the encrypted values in the repository become unreadable here until the key is
-imported again, and it exists nowhere else unless it was exported.`,
+Removing the file that holds the identity this project uses is refused unless
+--force is passed: the encrypted values in the repository become unreadable here
+until the key is imported again, and it exists nowhere else unless it was
+exported. A file that opens nothing — unreadable, holding no age identity, or
+holding another project's key — is removed without --force, which is what makes
+the "remove it and import the right one" advice work on a stale keyfile.`,
 		Example: `  dwe secrets key list
   dwe secrets key remove age1qyqs…
   dwe secrets key remove age1qyqs… --force --yes`,
@@ -445,12 +464,33 @@ func runKeyRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient string,
 			WithDetail("keyfile", path).
 			WithHint("run 'dwe secrets key list' to see the installed identities")
 	}
-	if !force && recipient == currentRecipient(flags) {
+	// The guard is on the identity the file HOLDS, not on its name. Two cases
+	// turn on that distinction, and the filename answers neither:
+	//
+	//   - keygate's ErrKeyfileUnusable tells the developer to run exactly this
+	//     command when ~/.config/dwe/keys/<recipient>.key exists but is
+	//     unreadable, unparsable or holds somebody else's key. Inside the
+	//     project the argument always equals secrets.recipient, so a name-based
+	//     guard refused the one invocation the gate had just prescribed — and
+	//     sent the reader to a `key export` that fails for the same reason.
+	//     Nothing is lost by removing a file that already opens nothing.
+	//   - the mirror image: <other>.key holding THIS project's key (`key list`
+	//     reports it "misnamed" under the recipient it holds). A name-based
+	//     guard waved that through and deleted live key material.
+	held := heldRecipient(path)
+	if !force && held != "" && held == currentRecipient(flags) {
+		// `key export` reads keys/<current>.key, which is a DIFFERENT file when
+		// the key material sits under a misnamed one — naming it there would
+		// point the rescue at a file that does not hold this key.
+		hint := "export it first with 'dwe secrets key export', or pass --force to remove it anyway"
+		if held != recipient {
+			hint = "copy " + path + " aside first, or pass --force to remove it anyway"
+		}
 		return cmdctx.Err("secrets_key_in_use",
-			fmt.Sprintf("%s is the identity this project uses", recipient)).
-			WithDetail("recipient", recipient).
+			fmt.Sprintf("%s holds the identity this project uses (%s)", path, held)).
+			WithDetail("recipient", held).
 			WithDetail("keyfile", path).
-			WithHint("export it first with 'dwe secrets key export', or pass --force to remove it anyway")
+			WithHint(hint)
 	}
 
 	if !yes {

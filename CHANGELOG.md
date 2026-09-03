@@ -70,9 +70,9 @@ generated from commit subjects and stay on the
   the machine-wide keys directory. `list` reports every `~/.config/dwe/keys/*.key`
   with a fixed state (`ok`, `unreadable`, `unparsable`, `misnamed`) and marks
   the one this project uses; the content of a file that does not parse is never
-  echoed. `remove` deletes only the canonical `<recipient>.key` — a misnamed
-  file is reported and left — refuses the current project's identity without
-  `--force`, and needs `--yes` wherever it cannot ask. Both run outside a
+  echoed. `remove` deletes the file named by its argument, refuses the file that
+  HOLDS the current project's identity without `--force` (the guard reads the
+  file, not its name), and needs `--yes` wherever it cannot ask. Both run outside a
   project (the directory is not project-scoped) and neither is reachable from a
   bridged container. New error codes: `secrets_key_in_use`,
   `secrets_key_not_found`, `secrets_confirmation_required`,

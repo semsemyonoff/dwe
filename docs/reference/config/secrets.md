@@ -572,14 +572,18 @@ by construction — never anything read out of the file.
 dwe secrets key remove <recipient> [--force] [--yes|-y]
 ```
 
-Deletes `~/.config/dwe/keys/<recipient>.key`. **Only the canonical file name is
-targeted**, so a `misnamed` file is never removed by a command aimed at the
-recipient it happens to hold — deleting it stays a deliberate manual act.
+Deletes `~/.config/dwe/keys/<recipient>.key`. **The argument names the file**, so
+a `misnamed` file is removed under its own name, never under the recipient
+`key list` shows for it — aiming at that recipient is `secrets_key_not_found`.
 
-Removing the identity the current project uses is refused
+Removing the file that HOLDS the identity the current project uses is refused
 (`secrets_key_in_use`) unless `--force` is passed: those encrypted values become
-unreadable here, and unless the key was exported it exists nowhere else. A file
-that is not there is `secrets_key_not_found`.
+unreadable here, and unless the key was exported it exists nowhere else. The
+guard reads the file, not its name, so it covers a `misnamed` file carrying this
+project's key too. A file that opens nothing — unreadable, holding no age
+identity, or holding another project's key — is removed without `--force`; that
+is what makes the "remove it and import the right one" advice above work on a
+stale keyfile. A file that is not there is `secrets_key_not_found`.
 
 Otherwise the removal is confirmed interactively. Where it cannot ask — no
 terminal, `--output json`, `DWE_NONINTERACTIVE=1` — it is
