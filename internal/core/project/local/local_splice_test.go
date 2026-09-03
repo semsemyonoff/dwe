@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -988,6 +989,40 @@ func TestSplicer_ReplaceScalars_BlockSequenceElement(t *testing.T) {
 	assertSingleLineChange(t, src, string(s.Bytes()), 2, "  - "+spliceMarker)
 	if err := s.Write(path, PreserveOrDefault(0o600)); err != nil {
 		t.Fatalf("Write: %v", err)
+	}
+}
+
+// A mapping key may itself contain a `.`, so two scalars can share one dotted
+// path. Write's verification must not compare them against each other: a rekey
+// mints a different ciphertext per marker, so it would reject a correct splice.
+func TestSplicer_ReplaceScalars_DuplicateDottedPathsVerifySeparately(t *testing.T) {
+	src := "vars:\n  a.b: ENC[age:AAA]\n  a:\n    b: ENC[age:BBB]\n"
+	s, path := newSpliceFixture(t, src)
+
+	seq := 0
+	n, err := s.ReplaceScalars(func(v string) (string, bool, error) {
+		if !strings.HasPrefix(v, "ENC[age:") {
+			return v, false, nil
+		}
+		seq++
+		return "ENC[age:NEW" + strconv.Itoa(seq) + "]", true, nil
+	})
+	if err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("replaced %d scalars, want 2", n)
+	}
+	if err := s.Write(path, PreserveOrDefault(0o600)); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	want := "vars:\n  a.b: ENC[age:NEW1]\n  a:\n    b: ENC[age:NEW2]\n"
+	if string(got) != want {
+		t.Errorf("file =\n%s\nwant\n%s", got, want)
 	}
 }
 

@@ -90,10 +90,15 @@ type spliceSet struct {
 
 // spliceBulk records one accepted ReplaceScalars edit for Write's verification.
 // It is keyed by the dotted node path (sequence elements by index) rather than
-// by walk position, so a later SetScalar insertion cannot invalidate it.
+// by walk position, so a later SetScalar insertion cannot invalidate it. A
+// dotted path is not unique — a mapping key may itself contain a `.` — so the
+// occurrence index within its own dotted group disambiguates; without it two
+// scalars sharing a path would verify against each other and a rekey, whose
+// ciphertexts are randomized, would fail every time on a correct splice.
 type spliceBulk struct {
-	dotted string
-	value  string
+	dotted     string
+	occurrence int
+	value      string
 }
 
 // NewSplicer reads and parses path. A missing, empty or comment-only file is not
@@ -479,7 +484,13 @@ func (s *Splicer) ReplaceScalars(fn func(string) (string, bool, error)) (int, er
 		edits   []spliceEdit
 		accepts []spliceBulk
 	)
+	// Counted over every site, accepted or not, so it matches the occurrence
+	// index verify() derives from a full walk of the written document.
+	occurrences := make(map[string]int)
 	for _, site := range collectValueScalars(spliceRoot(s.doc)) {
+		dotted := site.dotted()
+		occurrence := occurrences[dotted]
+		occurrences[dotted]++
 		next, ok, err := fn(site.node.Value)
 		if err != nil {
 			return 0, err
@@ -488,14 +499,14 @@ func (s *Splicer) ReplaceScalars(fn func(string) (string, bool, error)) (int, er
 			continue
 		}
 		if site.flow {
-			return 0, fmt.Errorf("%w: %q sits in a flow collection in %s; write it as a block collection first", ErrUnsplicable, site.dotted(), s.path)
+			return 0, fmt.Errorf("%w: %q sits in a flow collection in %s; write it as a block collection first", ErrUnsplicable, dotted, s.path)
 		}
 		start, end, text, err := s.valueSplice(site.node, site.path, next)
 		if err != nil {
 			return 0, err
 		}
 		edits = append(edits, spliceEdit{start: start, end: end, text: text})
-		accepts = append(accepts, spliceBulk{dotted: site.dotted(), value: next})
+		accepts = append(accepts, spliceBulk{dotted: dotted, occurrence: occurrence, value: next})
 	}
 	if len(edits) == 0 {
 		return 0, nil
@@ -637,12 +648,14 @@ func (s *Splicer) verify() error {
 		}
 	}
 	if len(s.bulk) > 0 {
-		values := make(map[string]string)
+		values := make(map[string][]string)
 		for _, site := range collectValueScalars(spliceRoot(probe.doc)) {
-			values[site.dotted()] = site.node.Value
+			dotted := site.dotted()
+			values[dotted] = append(values[dotted], site.node.Value)
 		}
 		for _, b := range s.bulk {
-			if got, found := values[b.dotted]; !found || got != b.value {
+			group := values[b.dotted]
+			if b.occurrence >= len(group) || group[b.occurrence] != b.value {
 				return fmt.Errorf("%w: %q does not read back as the requested value in %s", ErrVerify, b.dotted, s.path)
 			}
 		}
