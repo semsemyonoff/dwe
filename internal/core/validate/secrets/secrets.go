@@ -195,7 +195,7 @@ func (v *unresolvedValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Target:   "secrets.unresolved:packs",
 				Message: fmt.Sprintf("encrypted config-pack source(s) %s cannot be decrypted: %v",
 					strings.Join(files, ", "), idErr),
-				Hint: identityHint(recipient),
+				Hint: secrets.IdentityHint(recipient),
 			})
 		}
 		if source == "" {
@@ -275,7 +275,7 @@ func unresolvedMarkerDiags(ctx validate.Context, recipient string) []validate.Di
 			File:     relPath(ctx.ProjectRoot, workspacePath(ctx)),
 			Message: fmt.Sprintf("%d encrypted value(s) could not be decrypted (%s): %s",
 				len(paths), reasonPhrase(reason, recipient), strings.Join(paths, ", ")),
-			Hint: identityHint(recipient),
+			Hint: secrets.IdentityHint(recipient),
 		})
 	}
 	return diags
@@ -300,17 +300,6 @@ func displayRecipient(recipient string) string {
 		return "the project recipient"
 	}
 	return recipient
-}
-
-// identityHint names every place LoadIdentity looks, in its own precedence
-// order, so the fix does not depend on the reader knowing the lookup rules.
-func identityHint(recipient string) string {
-	location := "~/" + secrets.KeysDirRel + string(os.PathSeparator) + "<recipient>.key"
-	if path, err := secrets.KeyfilePath(recipient); err == nil {
-		location = path
-	}
-	return fmt.Sprintf("run 'dwe secrets key import' to store the identity at %s, or set %s / %s",
-		location, secrets.EnvKey, secrets.EnvKeyFile)
 }
 
 // inventoryPhrase describes what a project holds, for the no-recipient error.

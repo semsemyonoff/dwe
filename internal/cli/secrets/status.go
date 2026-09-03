@@ -136,7 +136,7 @@ func identityDisplay(d statusJSON) string {
 			return "none"
 		}
 		return fmt.Sprintf("none (looked at %s, $%s, $%s)",
-			displayKeyfilePath(d.Recipient), secrets.EnvKey, secrets.EnvKeyFile)
+			secrets.DisplayKeyfilePath(d.Recipient), secrets.EnvKey, secrets.EnvKeyFile)
 	}
 }
 

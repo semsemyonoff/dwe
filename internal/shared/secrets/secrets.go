@@ -45,8 +45,8 @@ const MarkerPrefix = "ENC[age:"
 // holds no key at all.
 const fileHeader = "age-encryption.org/v1"
 
-// Sentinel errors. Callers map them to the SecretsState unresolved reasons
-// (no_identity / wrong_identity / corrupt), so every failure path in this
+// Sentinel errors. Callers map them to the SecretsState reasons (no_identity /
+// wrong_identity / corrupt / invalid_identity), so every failure path in this
 // package must wrap exactly one of them.
 var (
 	// ErrNoIdentity means no private identity was available at all.
@@ -56,6 +56,12 @@ var (
 	ErrWrongIdentity = errors.New("identity does not match the recipient")
 	// ErrCorrupt means the marker or the ciphertext is malformed.
 	ErrCorrupt = errors.New("malformed encrypted value")
+	// ErrInvalidIdentity means an identity source was PRESENT but its content
+	// is not an age X25519 identity. Distinct from ErrCorrupt (a damaged
+	// payload) and from ErrNoIdentity (no source at all): the three drive three
+	// different user messages, so a truncated DWE_AGE_KEY is reported as a
+	// broken key rather than a missing one.
+	ErrInvalidIdentity = errors.New("invalid identity")
 )
 
 // markerRe matches a scalar that is *entirely* a marker. The whole scalar or

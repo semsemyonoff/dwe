@@ -499,13 +499,3 @@ func relToRoot(projectRoot, path string) string {
 	}
 	return rel
 }
-
-// displayKeyfilePath renders the keyfile location for a recipient, degrading to
-// the generic form when the home directory or the recipient is unusable (the
-// message is help text, never a hard failure).
-func displayKeyfilePath(recipient string) string {
-	if path, err := secrets.KeyfilePath(recipient); err == nil {
-		return path
-	}
-	return "~/" + secrets.KeysDirRel + string(os.PathSeparator) + "<recipient>.key"
-}

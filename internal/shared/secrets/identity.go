@@ -1,12 +1,12 @@
 package secrets
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -88,17 +88,31 @@ func Keygen() (Identity, error) {
 	return Identity{id: id}, nil
 }
 
-// ParseIdentity reads an identity from key text. Blank lines and comment lines
-// (as written by WriteKeyfile and by the age CLI) are skipped; the first key
-// line wins.
+// secretKeyRe matches one age X25519 private key: the fixed HRP, the bech32
+// separator and 58 characters of the upper-case bech32 charset (which excludes
+// 1, B, I and O). Matching the token rather than a line is what lets a keyfile
+// pasted into a single-line field parse: its comment and key arrive joined.
+var secretKeyRe = regexp.MustCompile(`AGE-SECRET-KEY-1[AC-HJ-NP-Z02-9]{58}`)
+
+// ParseIdentity reads an identity from key text.
+//
+// The FIRST AGE-SECRET-KEY-1… token anywhere in text wins, so a bare key line,
+// a whole keyfile (comment plus key), age-keygen output, CRLF, surrounding
+// whitespace and a keyfile whose lines a paste joined into one all parse. Later
+// tokens are ignored: a multi-identity keyfile and a commented-out old key
+// above the live one are both shapes age itself accepts.
+//
+// No token, or a token age refuses, is ErrInvalidIdentity — never ErrCorrupt,
+// which means a damaged payload. The age error is not interpolated: its text
+// echoes the input characters, which here are private-key bytes.
 func ParseIdentity(text string) (Identity, error) {
-	line, ok := firstKeyLine(text)
-	if !ok {
-		return Identity{}, fmt.Errorf("%w: no AGE-SECRET-KEY line found", ErrCorrupt)
+	token := secretKeyRe.FindString(text)
+	if token == "" {
+		return Identity{}, fmt.Errorf("%w: no AGE-SECRET-KEY-1… key found", ErrInvalidIdentity)
 	}
-	id, err := age.ParseX25519Identity(line)
+	id, err := age.ParseX25519Identity(token)
 	if err != nil {
-		return Identity{}, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return Identity{}, fmt.Errorf("%w: not a valid age X25519 identity", ErrInvalidIdentity)
 	}
 	return Identity{id: id}, nil
 }
@@ -112,18 +126,6 @@ func ParseRecipient(text string) error {
 		return fmt.Errorf("%w: invalid recipient %q: %v", ErrCorrupt, text, err)
 	}
 	return nil
-}
-
-func firstKeyLine(text string) (string, bool) {
-	sc := bufio.NewScanner(strings.NewReader(text))
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		return line, true
-	}
-	return "", false
 }
 
 // LoadIdentity resolves the private identity for recipient.
@@ -204,6 +206,25 @@ func KeyfilePath(recipient string) (string, error) {
 	return filepath.Join(dir, recipient+".key"), nil
 }
 
+// DisplayKeyfilePath renders the keyfile location for a recipient, degrading to
+// the generic form when the home directory or the recipient is unusable: this
+// is help text, never a hard failure.
+func DisplayKeyfilePath(recipient string) string {
+	if path, err := KeyfilePath(recipient); err == nil {
+		return path
+	}
+	return "~/" + KeysDirRel + string(os.PathSeparator) + "<recipient>.key"
+}
+
+// IdentityHint names every place LoadIdentity looks, in its own precedence
+// order, so the fix does not depend on the reader knowing the lookup rules. It
+// is the single source of this wording: the validator, the CLI and the
+// onboarding gate all print the same sentence.
+func IdentityHint(recipient string) string {
+	return fmt.Sprintf("run 'dwe secrets key import' to store the identity at %s, or set %s / %s",
+		DisplayKeyfilePath(recipient), EnvKey, EnvKeyFile)
+}
+
 // WriteKeyfile stores id in the keys directory and returns the path. The
 // directory is created and chmod'ed 0700 (an existing 0755 one is tightened);
 // the file is a true no-clobber write (O_CREATE|O_EXCL) at 0600, so an
@@ -251,21 +272,10 @@ func LoadAnyIdentity(exclude string) ([]Identity, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(dir)
+	names, err := keyfileNames(dir)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read keys dir %s: %w", dir, err)
+		return nil, err
 	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".key") {
-			continue
-		}
-		names = append(names, e.Name())
-	}
-	slices.Sort(names)
 
 	out := make([]Identity, 0, len(names))
 	for _, name := range names {
@@ -283,4 +293,86 @@ func LoadAnyIdentity(exclude string) ([]Identity, error) {
 		out = append(out, id)
 	}
 	return out, nil
+}
+
+// KeyfileState classifies one keyfile for `dwe secrets key list`. The values
+// are a fixed enum on purpose: neither an I/O error nor a parse error may reach
+// a caller, because the text of both echoes file content.
+type KeyfileState string
+
+const (
+	// KeyfileOK is a readable keyfile whose identity matches its filename.
+	KeyfileOK KeyfileState = "ok"
+	// KeyfileUnreadable is a keyfile that could not be read at all.
+	KeyfileUnreadable KeyfileState = "unreadable"
+	// KeyfileUnparsable is a keyfile that holds no age identity.
+	KeyfileUnparsable KeyfileState = "unparsable"
+	// KeyfileMisnamed is a keyfile that parses, but whose identity belongs to
+	// another recipient than the filename claims. `key remove` targets the
+	// canonical <recipient>.key only, so such a file is reported and left.
+	KeyfileMisnamed KeyfileState = "misnamed"
+)
+
+// KeyfileInfo describes one *.key file in the keys directory. Recipient is the
+// PARSED identity's recipient when the file parses, and the filename stem
+// otherwise — the filename is the recipient by construction, so the fallback
+// reveals nothing the directory listing does not.
+type KeyfileInfo struct {
+	Path      string
+	Recipient string
+	State     KeyfileState
+}
+
+// ListKeyfiles returns every *.key file in the keys directory, sorted by
+// filename. A missing directory is empty, not an error.
+func ListKeyfiles() ([]KeyfileInfo, error) {
+	dir, err := KeysDir()
+	if err != nil {
+		return nil, err
+	}
+	names, err := keyfileNames(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]KeyfileInfo, 0, len(names))
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		info := KeyfileInfo{Path: path, Recipient: strings.TrimSuffix(name, ".key")}
+		data, err := os.ReadFile(path)
+		switch id, perr := ParseIdentity(string(data)); {
+		case err != nil:
+			info.State = KeyfileUnreadable
+		case perr != nil:
+			info.State = KeyfileUnparsable
+		case id.Recipient() != info.Recipient:
+			info.Recipient = id.Recipient()
+			info.State = KeyfileMisnamed
+		default:
+			info.State = KeyfileOK
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// keyfileNames lists the *.key entries of dir, sorted. A missing directory
+// yields no names and no error: the keys directory is created on first import.
+func keyfileNames(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read keys dir %s: %w", dir, err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".key") {
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	slices.Sort(names)
+	return names, nil
 }

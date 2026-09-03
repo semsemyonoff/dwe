@@ -587,20 +587,20 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/shared/secrets/identity_test.go` (`:353` asserts `ErrCorrupt` for a garbage keyfile → becomes `ErrInvalidIdentity`)
 - Modify: `internal/core/validate/secrets/secrets.go` (`identityHint` → call), `internal/cli/secrets/key.go` (`identityError` hint → call), `internal/cli/secrets/secrets.go` (`displayKeyfilePath` at `:461` → call)
 
-- [ ] add `ErrInvalidIdentity`; `ParseIdentity` extracts the FIRST
+- [x] add `ErrInvalidIdentity`; `ParseIdentity` extracts the FIRST
       `AGE-SECRET-KEY-1…` token anywhere in the text (regexp, bech32 charset,
       fixed length), later tokens ignored; returns `ErrInvalidIdentity` with
       DWE-authored text on no token / age parse failure (the age error is
       wrapped for `errors.Is` chains only if its text is provably free of
       input bytes — otherwise dropped); delete `firstKeyLine`
-- [ ] extract `secrets.IdentityHint(recipient)` and
+- [x] extract `secrets.IdentityHint(recipient)` and
       `secrets.DisplayKeyfilePath(recipient)` from the unexported copies
       (`validate/secrets/secrets.go:240`, `cli/secrets/key.go:189`,
       `cli/secrets/secrets.go:461`); all call sites become calls, wording
       unchanged
-- [ ] add `ListKeyfiles() ([]KeyfileInfo, error)` (sorted, `State` enum
+- [x] add `ListKeyfiles() ([]KeyfileInfo, error)` (sorted, `State` enum
       `ok`/`unreadable`/`unparsable`/`misnamed`, no error text, missing dir → empty)
-- [ ] tests: `TestParseIdentity` table gains joined-line paste
+- [x] tests: `TestParseIdentity` table gains joined-line paste
       (`# public key: age1… AGE-SECRET-KEY-1…`), CRLF, surrounding whitespace,
       a multi-identity keyfile (first wins), a commented-out old key above the
       live one (first token wins — document this as the accepted change from
@@ -608,7 +608,7 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       `ErrCorrupt`) whose error text does not contain the last 20 characters
       of the input; `TestListKeyfiles` (ok + unreadable + unparsable rows,
       missing dir; a misnamed file → `KeyfileMisnamed` with the parsed recipient; the unparsable file's content appears nowhere in the result)
-- [ ] run `go test ./internal/shared/secrets/... ./internal/cli/secrets/... ./internal/core/validate/...` — must pass before task 2
+- [x] run `go test ./internal/shared/secrets/... ./internal/cli/secrets/... ./internal/core/validate/...` — must pass before task 2
 
 ### Task 2: `invalid_identity` reason in config and the validator phrase
 
