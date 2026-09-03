@@ -530,20 +530,20 @@ today's codes.
 - Create: `internal/core/project/local/local_splice_test.go`
 - Create: `internal/core/project/local/testdata/annotated_defaults.yml`
 
-- [ ] implement `NewSplicer` (read + `yaml.NewDecoder` with the second
+- [x] implement `NewSplicer` (read + `yaml.NewDecoder` with the second
       `Decode` multi-doc rejection copied from `LoadYAMLNode:74-81`;
       missing/empty/comment-only file → `Kind == 0` doc with `src` kept
       verbatim), the line-start byte table, rune-column → byte-offset
       conversion, property skipping (`&anchor`, `!tag`), dominant-EOL and
       indent detection, `Bytes()`
-- [ ] implement `SetScalar` for the **existing-scalar** case: path
+- [x] implement `SetScalar` for the **existing-scalar** case: path
       resolution via `findMappingPair`; flow-ancestor refusal; token span by
       style with the `candidate == node.Value` detector; replacement rendered
       from a fresh scalar node; `ErrMultilineScalar` for `|`/`>`/wrapped
       plain/wrapped quoted; re-parse after success
-- [ ] implement `Write` (re-parse `Bytes()` + value-at-path verification,
+- [x] implement `Write` (re-parse `Bytes()` + value-at-path verification,
       then `writeFileAtomic`)
-- [ ] tests (table, byte-diff helper): plain → marker, `""` → marker,
+- [x] tests (table, byte-diff helper): plain → marker, `""` → marker,
       double-quoted with trailing `# comment` → only the token changes and
       the comment keeps its spacing, single-quoted with `''` escape,
       double-quoted with `\"`, anchored plain `a: &x 1` and anchored quoted
@@ -556,9 +556,16 @@ today's codes.
       sequence → `ErrUnsplicable`, 4-space file stays 4-space, CRLF file
       keeps `\r\n` on the TOUCHED line, two consecutive `SetScalar` calls on
       different lines both land, multi-doc file → error
-- [ ] test: the annotated fixture — one `SetScalar` → exactly ONE line
+- [x] test: the annotated fixture — one `SetScalar` → exactly ONE line
       differs, byte-equal elsewhere (R9.4)
-- [ ] run `go test ./internal/core/project/local/...` — must pass before task 2
+- [x] run `go test ./internal/core/project/local/...` — must pass before task 2
+
+➕ Task 1 notes: an implicit-null leaf (`key:` with no value) is a supported
+replacement target — the span is empty and the rendered value gains its own
+separating space. `SetScalar` on a **missing** path currently returns
+`ErrUnsplicable`; Task 2 replaces that branch with the insertion path.
+`Splicer.eol` / `Splicer.indent` are detected in Task 1 and first consumed by
+Task 2's insertion rendering.
 
 ### Task 2: Splicer — insertion and bulk replace
 

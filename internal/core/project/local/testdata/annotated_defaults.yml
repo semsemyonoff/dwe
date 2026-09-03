@@ -1,0 +1,34 @@
+# Project defaults — tracked in git and reviewed like code.
+# Values written as ENC[age:...] are encrypted with `dwe secrets`.
+
+project:
+  name: ficbird          # human-readable name
+  "full-name": ficbird-dev
+
+service_defaults: &service_defaults
+  restart: unless-stopped
+  pull: missing
+
+services:
+  app:
+    <<: *service_defaults
+    image: app:latest
+    restart: always        # overrides the anchor
+
+  db:
+    <<: *service_defaults
+    image: postgres:16
+
+vars:
+  telegram:
+    bot_token: placeholder-token
+    chat_id: '42'
+  notes: |
+    first line of the note
+    # this stays part of the literal block
+    last line of the note
+  tags:
+    - alpha
+    - beta
+
+# Trailing note kept at the end of the file.
