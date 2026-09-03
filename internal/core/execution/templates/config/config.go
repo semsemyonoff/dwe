@@ -299,6 +299,11 @@ func renderTemplateFile(absRoot, packName, rel string, ctx *tpl.RenderContext, d
 
 	out, err := tpl.RenderCommand(string(tplBytes), ctx)
 	if err != nil {
+		// tpl.RenderCommand embeds the whole template text in its error, which
+		// for an .age source is the decrypted credential — never wrap it.
+		if encryptedSource {
+			return false, fmt.Errorf("render template %s: the decrypted source is not a valid ${...} template (details withheld — the source is a secret)", rel)
+		}
 		return false, fmt.Errorf("render template %s: %w", rel, err)
 	}
 	// A ${...} substitution of a value that is still an undecrypted marker
