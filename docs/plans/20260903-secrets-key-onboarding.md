@@ -897,11 +897,18 @@ Task 9 doc lists.
 **Files:**
 - Modify: `internal/cli/deploy/menu.go`, `menu_test.go`
 
-- [ ] add `var keygateEnsureFn = keygate.Ensure`; call it after the TTY gate
+- [x] add `var keygateEnsureFn = keygate.Ensure`; call it after the TTY gate
       and before `LoadConfigOrWrap` with the closures over the cobra streams,
       mapping `ErrAborted` / `ErrEnvSourceUnusable` / `ErrKeyfileUnusable`
       to the typed `secrets_no_identity` error with `secrets.IdentityHint`
-- [ ] tests: interactive + unresolved → stub called with the right
+      (➕ the call lives in a small `ensureIdentity(cmd, flags, baseDir)`
+      helper rather than inline: `runDeployMenu` is already 230 lines and the
+      two closures plus the three-sentinel mapping would bury the menu's own
+      entry sequence. ➕ the recipient detail and the hint are attached only
+      when `config.RecipientFromLayers` actually yields one — the three
+      sentinels can in principle arrive without a recipient, and
+      `IdentityHint("")` would print a path with an empty stem)
+- [x] tests: interactive + unresolved → stub called with the right
       `Options` (`Interactive`, `OutputJSON`, `NonInteractive`, non-nil
       hooks) and, on `imported=true`, the menu proceeds to
       `runPreWizardPreflightFn` with a cfg that has no unresolved markers
@@ -913,7 +920,15 @@ Task 9 doc lists.
       `menuPlan` path is gated too (documented); `--output json` /
       `DWE_NONINTERACTIVE` → `Options` carry the flags;
       `TestRunPreWizardPreflight_SecretsUnresolvedBlocks` untouched
-- [ ] run `go test ./internal/cli/deploy/...` — must pass before task 8
+      (➕ the refusal test runs all THREE sentinels through the same table,
+      not just `ErrAborted` — the mapping is one `errors.Is` chain and a
+      single-sentinel test would leave two arms unpinned; it also asserts the
+      absence of key material in the envelope. ➕ the "byte-identical" pin
+      compares the REAL `keygate.Ensure` against the stub on the same project
+      dir, which is stronger than a captured-before snapshot: it proves the
+      shipped gate is silent, not just that the seam can be)
+- [x] run `go test ./internal/cli/deploy/...` — must pass before task 8
+      (plus full `make test` + `make lint`)
 
 ### Task 8: Gate `RunRun` (`dwe run`, `dwe restart`)
 
