@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -117,6 +118,17 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 	if !ok {
 		// The prompt was aborted: a clean no-op, mirroring `dwe vars set`.
 		return nil
+	}
+
+	// A value under secrets.MinRedactRunes is encrypted at rest like any other,
+	// but the redactor deliberately skips it — redacting a 3-rune string would
+	// shred every unrelated line containing it. Say so at write time instead of
+	// letting the developer discover it in a pasted `dwe deploy plan`. Text mode
+	// only: in JSON mode stderr stays free of anything a parser could trip over.
+	if flags.Output != "json" && utf8.RuneCountInString(plain) < secrets.MinRedactRunes {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"warning: the value for %s is shorter than %d characters — it is encrypted at rest, but dwe will not redact it in plan or --debug output\n",
+			path, secrets.MinRedactRunes)
 	}
 
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean. No

@@ -136,6 +136,12 @@ func TestInit_PreservesCommentsAnchorsAndMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading workspace.yml: %v", err)
 	}
+	// `writeRecipient` appends at len(src), so the result must still OPEN with
+	// the fixture verbatim — insertedLines alone would stay green if a future
+	// offset regression spliced the block into the middle of the document.
+	if !strings.HasPrefix(string(data), src) {
+		t.Errorf("workspace.yml no longer starts with the original fixture — the block was not appended")
+	}
 	added := insertedLines(t, src, string(data))
 	joined := strings.Join(added, "\n")
 	if !strings.Contains(joined, "secrets:") || !strings.Contains(joined, "recipient: age1") {

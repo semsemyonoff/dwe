@@ -638,6 +638,58 @@ func TestSet_JSON(t *testing.T) {
 	}
 }
 
+// TestSet_WarnsOnUnredactableValue pins the write-time notice for a value the
+// redactor will skip (< secrets.MinRedactRunes): the value is still stored, the
+// warning goes to stderr and never carries the plaintext, and JSON mode keeps
+// stderr clean.
+func TestSet_WarnsOnUnredactableValue(t *testing.T) {
+	isolateHome(t)
+
+	t.Run("short value warns on stderr", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+		initProject(t, flags)
+
+		_, errOut, err := runSecrets(t, flags, "set", "vars.pin", "k3y")
+		if err != nil {
+			t.Fatalf("secrets set: %v", err)
+		}
+		if !strings.Contains(errOut, "warning:") || !strings.Contains(errOut, "vars.pin") {
+			t.Errorf("stderr = %q, want the not-redacted warning naming the path", errOut)
+		}
+		if strings.Contains(errOut, "k3y") {
+			t.Errorf("the warning echoed the plaintext: %q", errOut)
+		}
+		if got := readSecret(t, flags, "vars.pin"); got != "k3y" {
+			t.Errorf("stored value = %q, want the value written despite the warning", got)
+		}
+	})
+
+	t.Run("a redactable value is silent", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+		initProject(t, flags)
+
+		if _, errOut, err := runSecrets(t, flags, "set", "vars.pin", "k3yy"); err != nil {
+			t.Fatalf("secrets set: %v", err)
+		} else if errOut != "" {
+			t.Errorf("stderr = %q, want no warning at exactly MinRedactRunes", errOut)
+		}
+	})
+
+	t.Run("json mode keeps stderr clean", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+		initProject(t, flags)
+
+		if _, errOut, err := runSecrets(t, flags, "set", "vars.pin", "k3y"); err != nil {
+			t.Fatalf("secrets set --output json: %v", err)
+		} else if errOut != "" {
+			t.Errorf("stderr = %q, want it empty in JSON mode", errOut)
+		}
+	})
+}
+
 // TestStageLayers pins the staging list the pre-write validation runs on. The
 // insert position is load-bearing: ValidateLayerRoots accepts a secrets: block
 // in the FIRST layer only, so a newly created defaults.yml appended at the end

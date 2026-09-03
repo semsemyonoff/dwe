@@ -37,7 +37,9 @@ generated from commit subjects and stay on the
   source individually, so it distinguishes "no key on this machine" from
   "encrypted to somebody else" from "the payload is damaged", and reports a
   half-rekeyed tree per value. `secrets set` takes the value from an argument, `--stdin` or a hidden
-  prompt, writes only under `vars.`, and never coerces types.
+  prompt, writes only under `vars.`, and never coerces types. A value shorter
+  than 4 characters is stored like any other, but `secrets set` warns on stderr
+  that redaction deliberately skips it.
   `dwe secrets` is **not** reachable from a bridged container.
 - **New `secrets` validation domain**, with `dwe validate secrets`.
   `secrets.recipient` reports a missing / malformed recipient and damaged

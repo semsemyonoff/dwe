@@ -555,7 +555,9 @@ value goes. Redaction never touches what is actually executed — a real
 Three properties worth knowing:
 
 - **Values shorter than 4 runes are not redacted.** Redacting `"1"` would shred
-  every line of output.
+  every line of output. `dwe secrets set` still stores such a value, but warns
+  on stderr that it will not be redacted, so the limit is not something you
+  discover from a pasted plan.
 - **Child-process output is not redacted** (an explicit non-goal). A command
   that prints its own configuration prints it.
 - **Redaction is not an access boundary.** `dwe vars get` and `dwe secrets get`

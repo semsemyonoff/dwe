@@ -353,7 +353,10 @@ func TestRunPreWizardPreflight_SecretsUnresolvedBlocks(t *testing.T) {
 		t.Setenv(secrets.EnvKeyFile, "")
 
 		var errOut bytes.Buffer
-		_ = runPreWizardPreflight(context.Background(), load(t), root, &errOut)
+		// The gate must not block at all here: asserting only on the absence of
+		// the secret messages would stay green while some other blocking
+		// diagnostic kept the wizard shut.
+		require.NoError(t, runPreWizardPreflight(context.Background(), load(t), root, &errOut))
 		assert.NotContains(t, errOut.String(), "vars.token")
 		assert.NotContains(t, errOut.String(), "s3cr3t-value")
 		// The secrets domain now affirms a healthy setup with SeverityOK rows;

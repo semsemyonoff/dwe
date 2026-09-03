@@ -249,6 +249,12 @@ func TestShortSecretIsNotRedacted(t *testing.T) {
 	if got, want := StepCommand(config.DeployStep{Type: "shell", Cmd: "echo abc"}, "dwe"), "echo abc"; got != want {
 		t.Errorf("StepCommand = %q, want %q", got, want)
 	}
+	if got, want := FormatAction(&config.Action{Type: "shell", Cmd: "echo abc"}), "shell echo abc"; got != want {
+		t.Errorf("FormatAction = %q, want %q", got, want)
+	}
+	if got, want := FormatCondition(&condition.Condition{Type: condition.TypeShell, Cmd: "test abc"}), "shell test abc"; got != want {
+		t.Errorf("FormatCondition = %q, want %q", got, want)
+	}
 }
 
 // TestDisplayStringsUnchangedWithoutRedaction guards the no-secrets baseline:
