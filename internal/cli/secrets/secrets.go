@@ -24,6 +24,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
@@ -440,6 +441,35 @@ func inspectAgeFile(root, path string) ageFile {
 		return ageFile{path: path, err: fmt.Errorf("%s is not a regular file (mode %s)", path, fi.Mode())}
 	}
 	return ageFile{path: path}
+}
+
+// spliceUnsupportedError maps a splice-writer refusal onto the typed
+// `secrets_write_unsupported` code. The three sentinels mean the same thing to a
+// user — the shape at that spot cannot be edited without reformatting the file —
+// so they share one code and one actionable hint.
+//
+// Every caller branches on this BEFORE its own generic ErrWrap: cmdctx.ErrWrap
+// builds a NEW outer CodedError and the JSON serializer reports the outermost
+// code, so wrapping first would bury the specific refusal under
+// `secrets_recipient_write_failed` or `secrets_rekey_failed`.
+func spliceUnsupportedError(err error, file string) (error, bool) {
+	if !errors.Is(err, localpkg.ErrMultilineScalar) &&
+		!errors.Is(err, localpkg.ErrUnsplicable) &&
+		!errors.Is(err, localpkg.ErrVerify) {
+		return nil, false
+	}
+	return cmdctx.ErrWrap("secrets_write_unsupported", err).
+		WithDetail("file", file).
+		WithHint("dwe secrets writes a layer file by replacing single lines; make the target a single-line value under a block mapping in " + file + " and retry"), true
+}
+
+// spliceWriteError is spliceUnsupportedError with the I/O fallback the plain
+// write paths need: anything that is not a refusal keeps today's code.
+func spliceWriteError(err error, file string) error {
+	if unsupported, ok := spliceUnsupportedError(err, file); ok {
+		return unsupported
+	}
+	return cmdctx.ErrWrap("secrets_write_failed", err).WithDetail("file", file)
 }
 
 // relToRoot renders a path relative to the project root for display; an

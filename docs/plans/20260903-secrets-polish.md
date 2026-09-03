@@ -634,30 +634,30 @@ refused-shapes table.
 - Modify: `internal/cli/secrets/set_test.go`, `init_test.go`, `rekey_test.go`
 - Modify: `internal/core/project/local/local_node.go`, `local_node_test.go` (`!!merge` fix; `ReplaceScalars` tests ported)
 
-- [ ] `writeMarker`: `NewSplicer` → `SetScalar` → `ValidateLayerRoots` on
+- [x] `writeMarker`: `NewSplicer` → `SetScalar` → `ValidateLayerRoots` on
       `Bytes()` (existing `stageLayers`) → `Write`; an `errors.Is` branch on
       the three splice sentinels BEFORE the generic wrap yields
       `secrets_write_unsupported` with the hint
-- [ ] `writeRecipient` (init + rekey phase 5) → Splicer insert / replace;
+- [x] `writeRecipient` (init + rekey phase 5) → Splicer insert / replace;
       `runInit` (`init.go:83`) and `runRekey` (`rekey.go:124,133`) branch on
       the sentinels before `secrets_recipient_write_failed` /
       `secrets_rekey_failed` so the code survives; the rekey recovery hint
       is kept on every other error
-- [ ] `rekeyLayerFile` → `Splicer.ReplaceScalars` with the error-returning
+- [x] `rekeyLayerFile` → `Splicer.ReplaceScalars` with the error-returning
       callback (the `failure` closure goes away)
-- [ ] delete the package-level `local.ReplaceScalars(doc, fn)`
+- [x] delete the package-level `local.ReplaceScalars(doc, fn)`
       (`local_node.go:147`) in THIS task, after `rekeyLayerFile` migrates:
       its callers are `rekey.go:250`, the two `local_node_test.go` tests
       (`TestReplaceScalars` :748, `TestReplaceScalars_NilInputs` :812) and
       the `rekey_test.go:461` helper `reencryptFileForTest` (builds
       crash-state fixtures) — port the helper and the two tests to the
       Splicer; the method and the function coexist until then
-- [ ] `EncodeYAMLNode`: clear `Tag` on `<<` key nodes before `yaml.Marshal`;
+- [x] `EncodeYAMLNode`: clear `Tag` on `<<` key nodes before `yaml.Marshal`;
       tighten `TestWriteYAMLNode_PreservesAnchorsAndMergeKey` to
       `NotContains("!!merge")`; rewrite the `local_node.go:15-32` package
       comment (two writers, which edit uses which, blank lines are NOT
       preserved by the node writer)
-- [ ] tests: `TestSet_PreservesCommentsAndSiblings` and
+- [x] tests: `TestSet_PreservesCommentsAndSiblings` and
       `TestInit_PreservesCommentsAnchorsAndMode` become byte-diff assertions
       on the annotated fixture (copy it into `internal/cli/secrets/testdata/`);
       `rekey` on the fixture with two markers → exactly two lines differ in
@@ -668,7 +668,21 @@ refused-shapes table.
       a NEW path into the fixture → only the inserted lines differ; `set`
       into a project without `defaults.yml` still creates it (the default
       target — `TestSet_WorkspaceFile` stays green)
-- [ ] run `go test ./internal/cli/secrets/... ./internal/core/project/local/...` — must pass before task 4
+- [x] run `go test ./internal/cli/secrets/... ./internal/core/project/local/...` — must pass before task 4
+
+➕ Task 3 notes: `secrets set` through an existing scalar (`vars.db.host.port`
+where `host` is a string) now reports `secrets_write_unsupported` instead of
+`secrets_write_failed` — the node writer refused it as an overlay error, the
+Splicer refuses it as a shape, and the new code is the more actionable of the
+two; `TestSet_Refusals` was updated. The three sentinels are mapped by one
+shared `spliceUnsupportedError` / `spliceWriteError` pair in
+`internal/cli/secrets/secrets.go` rather than per command. Two fixtures were
+added (`testdata/annotated_defaults.yml`, `annotated_workspace.yml`) instead of
+one: `init` and rekey phase 5 write `workspace.yml`, whose annotated shape must
+carry `schema_version`/`project:` to load at all. The ported node-writer
+`ReplaceScalars` coverage landed as `TestSplicer_ReplaceScalars_RekeyPrimitiveShape`
+plus `…_NilCallback` (a nil document is unreachable through a Splicer, which
+always carries its own parse).
 
 ### Task 4: Redact plan surfaces through the display functions
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -976,6 +977,95 @@ func TestSplicer_ReplaceScalars_WriteVerificationFailureLeavesFileUntouched(t *t
 	}
 	if string(onDisk) != src {
 		t.Errorf("file was written despite a failed verification:\n%s", onDisk)
+	}
+}
+
+// TestSplicer_ReplaceScalars_RekeyPrimitiveShape is the rekey contract the node
+// writer's ReplaceScalars used to carry, ported when `secrets rekey` moved onto
+// the Splicer: every value scalar the callback accepts is rewritten exactly once
+// across an anchor, a block sequence element and a nested mapping; mapping keys
+// are never offered; and the document still reloads with the aliases resolving
+// to the rewritten anchor.
+func TestSplicer_ReplaceScalars_RekeyPrimitiveShape(t *testing.T) {
+	src := `# header
+vars:
+  tok: &tok OLD-A # inline
+  alias: *tok
+  list:
+    - OLD-B
+    - plain
+  nested:
+    k: OLD-C
+  OLD-KEY: kept
+`
+	s, path := newSpliceFixture(t, src)
+
+	var seen []string
+	n, err := s.ReplaceScalars(func(v string) (string, bool, error) {
+		if !strings.HasPrefix(v, "OLD-") {
+			return "", false, nil
+		}
+		seen = append(seen, v)
+		return "NEW-" + strings.TrimPrefix(v, "OLD-"), true, nil
+	})
+	if err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("replaced %d scalars, want 3 (anchor, sequence item, nested)", n)
+	}
+	slices.Sort(seen)
+	if strings.Join(seen, ",") != "OLD-A,OLD-B,OLD-C" {
+		t.Errorf("visited scalars = %v; want each value once and no mapping key", seen)
+	}
+
+	after := string(s.Bytes())
+	changed := changedLines(t, src, after)
+	if len(changed) != 3 {
+		t.Fatalf("changed lines = %v, want exactly three\n%s", changed, after)
+	}
+	lines := strings.Split(after, "\n")
+	for i, want := range map[int]string{
+		lineOf(t, src, "tok: &tok"): "  tok: &tok NEW-A # inline",
+		lineOf(t, src, "- OLD-B"):   "    - NEW-B",
+		lineOf(t, src, "k: OLD-C"):  "    k: NEW-C",
+	} {
+		if got := lines[i-1]; got != want {
+			t.Errorf("line %d = %q, want %q", i, got, want)
+		}
+	}
+	if !strings.Contains(after, "  OLD-KEY: kept\n") {
+		t.Errorf("a mapping key was rewritten:\n%s", after)
+	}
+
+	if err := s.Write(path, PreserveOrDefault(0o600)); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	reloaded, err := LoadLocalYAML(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	vars := reloaded["vars"].(map[string]any)
+	if vars["alias"] != "NEW-A" {
+		t.Errorf("alias no longer resolves to the rewritten anchor: %v", vars["alias"])
+	}
+}
+
+// A nil replacement function is a no-op, not a panic (ported from the node
+// writer's TestReplaceScalars_NilInputs; a nil document is not reachable through
+// a Splicer, which always carries its own parse).
+func TestSplicer_ReplaceScalars_NilCallback(t *testing.T) {
+	src := "a: 1\n"
+	s, _ := newSpliceFixture(t, src)
+	n, err := s.ReplaceScalars(nil)
+	if err != nil {
+		t.Fatalf("nil callback error = %v, want nil", err)
+	}
+	if n != 0 {
+		t.Errorf("nil callback count = %d, want 0", n)
+	}
+	if got := string(s.Bytes()); got != src {
+		t.Errorf("bytes changed for a nil callback: %q", got)
 	}
 }
 

@@ -122,6 +122,12 @@ func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	rewrittenLayers := make([]string, 0, len(plan.layers))
 	for _, l := range plan.layers {
 		if _, werr := rekeyLayerFile(l, plan.plain, recipient); werr != nil {
+			// A splice refusal keeps its own code and hint: the fix is to reshape
+			// that value, not to re-run the rekey, so rekeyResumeHint would send
+			// the developer in circles.
+			if unsupported, ok := spliceUnsupportedError(werr, relToRoot(flags.ProjectRoot(), l.path)); ok {
+				return unsupported
+			}
 			return rekeyWriteError(cmdctx.ErrWrap("secrets_rekey_failed", werr), l.path, flags.ProjectRoot())
 		}
 		rewrittenLayers = append(rewrittenLayers, relToRoot(flags.ProjectRoot(), l.path))
@@ -131,6 +137,9 @@ func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	// the old key, which is the identity every already-rewritten value can no
 	// longer be read with — but the straggler lookup covers exactly that gap.
 	if err := writeRecipient(flags.ConfigPath, recipient); err != nil {
+		if unsupported, ok := spliceUnsupportedError(err, relToRoot(flags.ProjectRoot(), flags.ConfigPath)); ok {
+			return unsupported
+		}
 		return rekeyWriteError(cmdctx.ErrWrap("secrets_recipient_write_failed", err), flags.ConfigPath, flags.ProjectRoot())
 	}
 
@@ -235,43 +244,42 @@ func planRekey(flags *cmdctx.RootFlags, layers []config.Layer, recipient string)
 	return plan, nil
 }
 
-// rekeyLayerFile re-encrypts every marker in one layer file in place, preserving
-// comments, anchors and key order. A file whose markers all live behind aliases
-// (rewritten once at the anchor) yields zero replacements and is not touched.
+// rekeyLayerFile re-encrypts every marker in one layer file in place through the
+// splice writer, so the diff is one line per marker and nothing else in the file
+// moves. A file whose markers all live behind aliases (rewritten once at the
+// anchor) yields zero replacements and is not touched.
+//
+// The callback's error channel aborts the whole file with its bytes unchanged:
+// a marker that cannot be re-encrypted must not leave the layer half-rewritten.
 func rekeyLayerFile(l rekeyLayer, plain map[string]string, recipient string) (int, error) {
-	doc, err := localpkg.LoadYAMLNode(l.path, l.label)
+	splicer, err := localpkg.NewSplicer(l.path, l.label)
 	if err != nil {
 		return 0, err
 	}
 
-	// ReplaceScalars has no error channel, so the first failure is captured here
-	// and every later scalar is left alone.
-	var failure error
-	count := localpkg.ReplaceScalars(doc, func(s string) (string, bool) {
-		if failure != nil || !secrets.IsMarker(s) {
-			return s, false
+	count, err := splicer.ReplaceScalars(func(s string) (string, bool, error) {
+		if !secrets.IsMarker(s) {
+			return s, false, nil
 		}
 		value, ok := plain[s]
 		if !ok {
 			// Only reachable if the file changed under the lock between the
 			// read-only pass and now.
-			failure = fmt.Errorf("%s: an encrypted value appeared after the read-only pass", l.path)
-			return s, false
+			return s, false, fmt.Errorf("%s: an encrypted value appeared after the read-only pass", l.path)
 		}
-		marker, err := secrets.Encrypt(value, recipient)
-		if err != nil {
-			failure = err
-			return s, false
+		marker, eerr := secrets.Encrypt(value, recipient)
+		if eerr != nil {
+			return s, false, eerr
 		}
-		return marker, true
+		return marker, true, nil
 	})
-	if failure != nil {
-		return 0, failure
+	if err != nil {
+		return 0, err
 	}
 	if count == 0 {
 		return 0, nil
 	}
-	if err := localpkg.WriteYAMLNode(l.path, doc, l.label, l.policy); err != nil {
+	if err := splicer.Write(l.path, l.policy); err != nil {
 		return 0, err
 	}
 	return count, nil

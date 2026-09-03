@@ -3,6 +3,7 @@ package secrets
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,6 +105,119 @@ func seedSecrets(t *testing.T, flags *cmdctx.RootFlags, recipient string) {
 	root := flags.ProjectRoot()
 	writeAgeFile(t, root, "bot/creds.json.age", recipient, `{"ok":true}`)
 	writeAgeFile(t, root, "api/token.env.age", recipient, "TOKEN=abc")
+}
+
+// TestRekey_RewritesOnlyTheMarkerLines pins the splice-writer contract for phase
+// 4 and phase 5 on an annotated tree: two markers in defaults.yml become two
+// changed lines and nothing else, and the recipient swap in workspace.yml is one
+// changed line. The node writer would have re-encoded both files whole.
+func TestRekey_RewritesOnlyTheMarkerLines(t *testing.T) {
+	isolateHome(t)
+	root := t.TempDir()
+	cfgPath := filepath.Join(root, "workspace.yml")
+	if err := os.WriteFile(cfgPath, []byte(readTestdata(t, "annotated_workspace.yml")), 0o644); err != nil {
+		t.Fatalf("writing workspace.yml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
+	}
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	defaultsSrc := readTestdata(t, "annotated_defaults.yml")
+	if err := os.WriteFile(defaultsPath(root), []byte(defaultsSrc), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	for _, set := range [][2]string{{"vars.telegram.bot_token", "123:abc"}, {"vars.app.name", "hunter2"}} {
+		if _, _, err := runSecrets(t, flags, "set", set[0], set[1]); err != nil {
+			t.Fatalf("secrets set %s: %v", set[0], err)
+		}
+	}
+	beforeDefaults, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+	beforeWorkspace, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading workspace.yml: %v", err)
+	}
+
+	if _, _, err := runSecrets(t, flags, "rekey"); err != nil {
+		t.Fatalf("secrets rekey: %v", err)
+	}
+
+	afterDefaults, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("re-reading defaults.yml: %v", err)
+	}
+	assertOnlyLinesChanged(t, string(beforeDefaults), string(afterDefaults),
+		lineOf(t, string(beforeDefaults), "bot_token:"),
+		lineOf(t, string(beforeDefaults), "name:"))
+
+	afterWorkspace, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("re-reading workspace.yml: %v", err)
+	}
+	assertOnlyLinesChanged(t, string(beforeWorkspace), string(afterWorkspace),
+		lineOf(t, string(beforeWorkspace), "recipient:"))
+
+	// The values still open, with the new identity.
+	if got := readSecret(t, flags, "vars.telegram.bot_token"); got != "123:abc" {
+		t.Errorf("vars.telegram.bot_token = %q after the rekey", got)
+	}
+	if got := readSecret(t, flags, "vars.app.name"); got != "hunter2" {
+		t.Errorf("vars.app.name = %q after the rekey", got)
+	}
+}
+
+// TestRekey_RefusesUnsplicableMarker pins that a marker the splice writer cannot
+// edit — here one written into a flow mapping by hand — aborts phase 4 with the
+// specific secrets_write_unsupported code rather than the generic
+// secrets_rekey_failed wrapper, leaving the layer file byte-identical and no key
+// material on any surface.
+func TestRekey_RefusesUnsplicableMarker(t *testing.T) {
+	for _, mode := range []string{"text", "json"} {
+		t.Run(mode, func(t *testing.T) {
+			isolateHome(t)
+			cfgPath, root := writeFixture(t)
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			recipient := initProject(t, flags)
+
+			marker, err := secrets.Encrypt("flow-plaintext-value", recipient)
+			if err != nil {
+				t.Fatalf("encrypt: %v", err)
+			}
+			src := "vars:\n  telegram: {token: \"" + marker + "\"}\n"
+			if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
+				t.Fatalf("writing defaults.yml: %v", err)
+			}
+			if mode == "json" {
+				flags.Output = "json"
+			}
+
+			stdout, stderr, err := runSecrets(t, flags, "rekey")
+			if err == nil {
+				t.Fatal("rekey succeeded against a marker in a flow mapping")
+			}
+			coded := codedError(t, err)
+			if coded.Code != "secrets_write_unsupported" {
+				t.Errorf("error code = %q, want secrets_write_unsupported (message: %s)", coded.Code, coded.Message)
+			}
+			payload, merr := json.Marshal(coded)
+			if merr != nil {
+				t.Fatalf("marshalling the coded error: %v", merr)
+			}
+			assertNoSecretLeak(t, "flow-plaintext-value", stdout, stderr, coded.Message, coded.Hint, string(payload))
+
+			after, rerr := os.ReadFile(defaultsPath(root))
+			if rerr != nil {
+				t.Fatalf("reading defaults.yml: %v", rerr)
+			}
+			if string(after) != src {
+				t.Errorf("defaults.yml changed after a refused rekey:\n%s", after)
+			}
+		})
+	}
 }
 
 // TestRekey_ReencryptsEverything pins the headline property: after a rekey every
@@ -454,28 +568,31 @@ func reencryptFileForTest(t *testing.T, path, from, to string, layers []config.L
 		t.Fatalf("loading the identity for %s: %v", from, err)
 	}
 	label, policy := layerWritePolicy(path, layers)
-	doc, err := localpkg.LoadYAMLNode(path, label)
+	splicer, err := localpkg.NewSplicer(path, label)
 	if err != nil {
 		t.Fatalf("loading %s: %v", path, err)
 	}
-	count := localpkg.ReplaceScalars(doc, func(s string) (string, bool) {
+	count, err := splicer.ReplaceScalars(func(s string) (string, bool, error) {
 		if !secrets.IsMarker(s) {
-			return s, false
+			return s, false, nil
 		}
 		plain, derr := secrets.Decrypt(s, id)
 		if derr != nil {
-			t.Fatalf("decrypting a marker in %s: %v", path, derr)
+			return s, false, fmt.Errorf("decrypting a marker in %s: %w", path, derr)
 		}
 		marker, eerr := secrets.Encrypt(plain, to)
 		if eerr != nil {
-			t.Fatalf("re-encrypting a marker in %s: %v", path, eerr)
+			return s, false, fmt.Errorf("re-encrypting a marker in %s: %w", path, eerr)
 		}
-		return marker, true
+		return marker, true, nil
 	})
+	if err != nil {
+		t.Fatalf("re-encrypting %s: %v", path, err)
+	}
 	if count == 0 {
 		return
 	}
-	if err := localpkg.WriteYAMLNode(path, doc, label, policy); err != nil {
+	if err := splicer.Write(path, policy); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
 }

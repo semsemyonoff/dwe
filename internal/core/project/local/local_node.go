@@ -13,12 +13,19 @@ import (
 )
 
 // This file implements the comment-preserving yaml.Node round-trip writer for
-// dwe's YAML config layer files. Unlike a map-based marshal, editing a loaded
-// document node in place keeps every comment, blank line, quoting style, and key
-// ordering that the developer wrote — only the touched value nodes change. It is
-// the sanctioned write path for all three layer files (`workspace.yml`,
-// `workspace/defaults.yml`, `workspace/local.yml`); `vars set`, the `services`
-// toggle, the setup wizard and `dwe secrets` all route through it.
+// dwe's YAML config layer files — the STRUCTURAL writer. Editing a loaded
+// document node in place and re-encoding it keeps every comment, quoting style
+// and key ordering that the developer wrote, which is what `vars set`, the
+// `services` toggle and the setup wizard need: they add, reorder and reshape
+// whole blocks.
+//
+// It does NOT preserve blank lines: yaml.v3 keeps them only inside comment
+// blocks, and it re-indents the whole document to its own indent step. On a
+// large hand-annotated layer file that turns a one-value edit into a whole-file
+// diff, which is why the second writer in this package exists —
+// local_splice.go's Splicer replaces only the bytes of the nodes it edits and is
+// the writer for `dwe secrets set` / `init` / `rekey`. Pick the node writer for
+// a structural edit, the Splicer for an edit whose diff must be reviewable.
 //
 // Flow: LoadYAMLNode(path, label) -> ApplyOverlay(doc, overlay, label) ->
 // WriteYAMLNode(path, doc, label, policy). The overlay is a nested
@@ -119,11 +126,34 @@ func WriteLocalYAMLNode(localPath string, doc *yaml.Node) error {
 // disk (`dwe secrets set`) encode, re-decode and validate, then write the same
 // node.
 func EncodeYAMLNode(doc *yaml.Node, label string) ([]byte, error) {
+	clearMergeTags(doc)
 	data, err := yaml.Marshal(doc)
 	if err != nil {
 		return nil, fmt.Errorf("marshal %s node: %w", label, err)
 	}
 	return data, nil
+}
+
+// clearMergeTags drops the resolved "!!merge" tag the parser attaches to every
+// `<<` mapping key. The tag is redundant — yaml.v3 re-resolves `<<` on load —
+// but the emitter prints a non-implicit tag verbatim, turning every merge key in
+// the file into `!!merge <<: *anchor` on the first write. Clearing the tag is
+// idempotent and leaves mappingHasMergeKey (which also matches on the key's
+// value) working.
+func clearMergeTags(node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if key := node.Content[i]; key.Tag == "!!merge" {
+				key.Tag = ""
+			}
+		}
+	}
+	for _, child := range node.Content {
+		clearMergeTags(child)
+	}
 }
 
 // WriteYAMLNode marshals the document node and writes it atomically using the
@@ -134,51 +164,6 @@ func WriteYAMLNode(path string, doc *yaml.Node, label string, policy WritePolicy
 		return err
 	}
 	return writeFileAtomic(path, data, policy)
-}
-
-// ReplaceScalars walks every scalar VALUE node reachable from doc and replaces
-// the ones fn accepts, in place: comments, anchors and (where the new value
-// still allows it) quoting style survive. Mapping KEYS are never offered to fn —
-// a rewrite there would rename config keys, and the only caller (`secrets
-// rekey`) re-encrypts values. Alias nodes are skipped: the anchored node they
-// point at is rewritten once at its definition site, so recursing through the
-// alias would re-encrypt the same scalar twice. Returns the number of
-// replacements.
-func ReplaceScalars(doc *yaml.Node, fn func(string) (string, bool)) int {
-	if doc == nil || fn == nil {
-		return 0
-	}
-	return replaceScalarsIn(doc, fn)
-}
-
-func replaceScalarsIn(node *yaml.Node, fn func(string) (string, bool)) int {
-	if node == nil {
-		return 0
-	}
-	switch node.Kind {
-	case yaml.AliasNode:
-		return 0
-	case yaml.ScalarNode:
-		next, ok := fn(node.Value)
-		if !ok {
-			return 0
-		}
-		node.Value = next
-		node.Tag = "!!str"
-		return 1
-	case yaml.MappingNode:
-		count := 0
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			count += replaceScalarsIn(node.Content[i+1], fn)
-		}
-		return count
-	default: // document and sequence nodes
-		count := 0
-		for _, child := range node.Content {
-			count += replaceScalarsIn(child, fn)
-		}
-		return count
-	}
 }
 
 // emptyMappingDoc returns a fresh document node wrapping an empty mapping.

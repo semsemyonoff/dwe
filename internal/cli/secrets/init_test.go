@@ -110,25 +110,16 @@ func TestInit_RefusesSecondRun(t *testing.T) {
 	}
 }
 
-// TestInit_PreservesCommentsAnchorsAndMode pins the node-writer contract at the
-// workspace.yml layer: comments, anchors and the merge key survive, and a
-// tracked file keeps its 0644 mode (local.yml's forced 0600 must not leak here).
+// TestInit_PreservesCommentsAnchorsAndMode pins the splice-writer contract at
+// the workspace.yml layer, on an annotated file: `init` APPENDS the secrets
+// block and rewrites nothing — every existing line, blank line, comment, anchor,
+// merge key and literal block comes back byte-identical. A tracked file also
+// keeps its 0644 mode (local.yml's forced 0600 must not leak here).
 func TestInit_PreservesCommentsAnchorsAndMode(t *testing.T) {
 	isolateHome(t)
 	root := t.TempDir()
 	cfgPath := filepath.Join(root, "workspace.yml")
-	const src = `schema_version: "2"
-# the project block is load-bearing
-project:
-  name: sectest
-  prefix: dwe
-vars:
-  svc_defaults: &svc
-    enabled: true
-  app:
-    <<: *svc
-    name: myapp # trailing note
-`
+	src := readTestdata(t, "annotated_workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte(src), 0o644); err != nil {
 		t.Fatalf("writing workspace.yml: %v", err)
 	}
@@ -145,18 +136,10 @@ vars:
 	if err != nil {
 		t.Fatalf("reading workspace.yml: %v", err)
 	}
-	got := string(data)
-	for _, want := range []string{
-		"# the project block is load-bearing",
-		"&svc",
-		"<<: *svc",
-		"# trailing note",
-		"secrets:",
-		"recipient:",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("workspace.yml lost %q after init\ngot:\n%s", want, got)
-		}
+	added := insertedLines(t, src, string(data))
+	joined := strings.Join(added, "\n")
+	if !strings.Contains(joined, "secrets:") || !strings.Contains(joined, "recipient: age1") {
+		t.Errorf("the appended block does not hold the recipient: %q", added)
 	}
 	fi, err := os.Stat(cfgPath)
 	if err != nil {
@@ -167,6 +150,63 @@ vars:
 	}
 	if _, err := config.LoadConfig(cfgPath); err != nil {
 		t.Errorf("config no longer loads after init: %v", err)
+	}
+}
+
+// TestInit_RefusesUnsplicableSecretsBlock pins that a workspace.yml whose
+// `secrets:` block is written in flow style is refused with the specific
+// secrets_write_unsupported code rather than the generic
+// secrets_recipient_write_failed wrapper — cmdctx.ErrWrap reports the OUTERMOST
+// code, so the branch order is what makes the refusal reach JSON. The minted
+// keyfile is rolled back, and no key material reaches the output.
+func TestInit_RefusesUnsplicableSecretsBlock(t *testing.T) {
+	for _, mode := range []string{"text", "json"} {
+		t.Run(mode, func(t *testing.T) {
+			isolateHome(t)
+			root := t.TempDir()
+			cfgPath := filepath.Join(root, "workspace.yml")
+			const src = `schema_version: "2"
+project:
+  name: sectest
+  prefix: dwe
+secrets: {}
+`
+			if err := os.WriteFile(cfgPath, []byte(src), 0o644); err != nil {
+				t.Fatalf("writing workspace.yml: %v", err)
+			}
+			if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
+				t.Fatalf("creating workspace dir: %v", err)
+			}
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			if mode == "json" {
+				flags.Output = "json"
+			}
+
+			stdout, stderr, err := runSecrets(t, flags, "init")
+			if err == nil {
+				t.Fatal("init succeeded against a flow-style secrets block")
+			}
+			coded := codedError(t, err)
+			if coded.Code != "secrets_write_unsupported" {
+				t.Errorf("error code = %q, want secrets_write_unsupported (message: %s)", coded.Code, coded.Message)
+			}
+			payload, merr := json.Marshal(coded)
+			if merr != nil {
+				t.Fatalf("marshalling the coded error: %v", merr)
+			}
+			assertNoSecretLeak(t, "", stdout, stderr, coded.Message, coded.Hint, string(payload))
+
+			after, rerr := os.ReadFile(cfgPath)
+			if rerr != nil {
+				t.Fatalf("reading workspace.yml: %v", rerr)
+			}
+			if string(after) != src {
+				t.Errorf("workspace.yml changed after a refused init:\n%s", after)
+			}
+			if names := keyfileNames(t); len(names) != 0 {
+				t.Errorf("keys dir = %v, want the minted keyfile rolled back", names)
+			}
+		})
 	}
 }
 

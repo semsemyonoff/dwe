@@ -82,6 +82,9 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	}
 	if err := writeRecipient(flags.ConfigPath, id.Recipient()); err != nil {
 		_ = os.Remove(keyfile)
+		if unsupported, ok := spliceUnsupportedError(err, relToRoot(flags.ProjectRoot(), flags.ConfigPath)); ok {
+			return unsupported
+		}
 		return cmdctx.ErrWrap("secrets_recipient_write_failed", err)
 	}
 
@@ -97,19 +100,21 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	})
 }
 
-// writeRecipient sets secrets.recipient in workspace.yml through the
-// comment-preserving node writer — the single sanctioned write path for the
-// layer files, so anchors, merge keys and comments survive. workspace.yml is
-// git-tracked, hence PreserveOrDefault(0644) rather than local.yml's forced
-// 0600.
+// writeRecipient sets secrets.recipient in workspace.yml through the splice
+// writer: an `init` on a hand-annotated workspace.yml appends the new block and
+// changes nothing else, where the node writer would re-encode — and reformat —
+// the whole document. workspace.yml is git-tracked, hence
+// PreserveOrDefault(0644) rather than local.yml's forced 0600.
+//
+// Callers must branch on the splice sentinels (spliceUnsupportedError) before
+// their own ErrWrap, so a refusal keeps its specific code.
 func writeRecipient(workspacePath, recipient string) error {
-	doc, err := localpkg.LoadYAMLNode(workspacePath, localpkg.LabelWorkspace)
+	splicer, err := localpkg.NewSplicer(workspacePath, localpkg.LabelWorkspace)
 	if err != nil {
 		return err
 	}
-	overlay := map[string]any{"secrets": map[string]any{"recipient": recipient}}
-	if err := localpkg.ApplyOverlay(doc, overlay, localpkg.LabelWorkspace); err != nil {
+	if err := splicer.SetScalar([]string{"secrets", "recipient"}, recipient); err != nil {
 		return err
 	}
-	return localpkg.WriteYAMLNode(workspacePath, doc, localpkg.LabelWorkspace, localpkg.PreserveOrDefault(0o644))
+	return splicer.Write(workspacePath, localpkg.PreserveOrDefault(0o644))
 }

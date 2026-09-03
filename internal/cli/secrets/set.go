@@ -245,10 +245,17 @@ func trimOneNewline(s string) string {
 }
 
 // writeMarker sets the marker at path in the target layer file through the
-// comment-preserving node writer, staging the result first: the edited document
-// is encoded, decoded back into a layer map, swapped into the raw layer list and
-// run through the loader's own root validation. A `set` can therefore never
-// leave a layer the project would refuse to load afterwards.
+// splice writer, staging the result first: the spliced bytes are decoded back
+// into a layer map, swapped into the raw layer list and run through the loader's
+// own root validation. A `set` can therefore never leave a layer the project
+// would refuse to load afterwards.
+//
+// The splice writer rather than the node writer, because a `set` into a
+// hand-annotated layer file must produce a one-line diff: only the bytes of the
+// marker's own value token change, and indentation, blank lines, comments,
+// anchors and merge keys elsewhere in the file are never re-encoded. A shape it
+// cannot edit in place (a block scalar, a flow collection) is refused with
+// `secrets_write_unsupported` and the file untouched.
 //
 // The target files are git-tracked, hence PreserveOrDefault(0644): forcing
 // local.yml's 0600 on a tracked file would surprise git and editors, and the
@@ -256,20 +263,16 @@ func trimOneNewline(s string) string {
 func writeMarker(target, path, marker string, layers []config.Layer) error {
 	label, policy := layerWritePolicy(target, layers)
 
-	doc, err := localpkg.LoadYAMLNode(target, label)
+	splicer, err := localpkg.NewSplicer(target, label)
 	if err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
+		return spliceWriteError(err, target)
 	}
-	if err := localpkg.ApplyOverlay(doc, buildPathOverlay(path, marker), label); err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
-	}
-	staged, err := localpkg.EncodeYAMLNode(doc, label)
-	if err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
+	if err := splicer.SetScalar(strings.Split(path, "."), marker); err != nil {
+		return spliceWriteError(err, target)
 	}
 
 	var data map[string]any
-	if err := yaml.Unmarshal(staged, &data); err != nil {
+	if err := yaml.Unmarshal(splicer.Bytes(), &data); err != nil {
 		return cmdctx.ErrWrap("secrets_write_failed", fmt.Errorf("parse the staged %s: %w", target, err))
 	}
 	if data == nil {
@@ -279,28 +282,10 @@ func writeMarker(target, path, marker string, layers []config.Layer) error {
 		return cmdctx.ErrWrap("project_invalid_config", err)
 	}
 
-	if err := localpkg.WriteYAMLNode(target, doc, label, policy); err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", err)
+	if err := splicer.Write(target, policy); err != nil {
+		return spliceWriteError(err, target)
 	}
 	return nil
-}
-
-// buildPathOverlay turns a dot-path plus a value into the nested overlay map the
-// node writer consumes: "vars.a.b" → {vars: {a: {b: value}}}.
-func buildPathOverlay(path string, value any) map[string]any {
-	parts := strings.Split(path, ".")
-	root := make(map[string]any)
-	node := root
-	for i, p := range parts {
-		if i == len(parts)-1 {
-			node[p] = value
-			break
-		}
-		child := make(map[string]any)
-		node[p] = child
-		node = child
-	}
-	return root
 }
 
 // stageLayers returns the layer list with target's data replaced by the staged

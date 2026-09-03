@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -36,6 +38,87 @@ func writeFixture(t *testing.T) (cfgPath, root string) {
 		t.Fatalf("creating workspace dir: %v", err)
 	}
 	return cfgPath, root
+}
+
+// readTestdata loads an annotated fixture from testdata/.
+func readTestdata(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatalf("read testdata/%s: %v", name, err)
+	}
+	return string(data)
+}
+
+// changedLines returns the 1-based numbers of the lines that differ between
+// before and after. The whole point of the splice writer is that a `secrets`
+// write replaces the bytes of ONE value token, so a changed line count is itself
+// a failure: it means the document was re-encoded rather than spliced.
+func changedLines(t *testing.T, before, after string) []int {
+	t.Helper()
+	b := strings.Split(before, "\n")
+	a := strings.Split(after, "\n")
+	if len(b) != len(a) {
+		t.Fatalf("line count changed: %d -> %d\n--- before ---\n%s\n--- after ---\n%s", len(b), len(a), before, after)
+	}
+	var out []int
+	for i := range b {
+		if b[i] != a[i] {
+			out = append(out, i+1)
+		}
+	}
+	return out
+}
+
+// assertOnlyLinesChanged pins that exactly the given 1-based lines differ, every
+// other byte of the file being identical.
+func assertOnlyLinesChanged(t *testing.T, before, after string, want ...int) {
+	t.Helper()
+	got := changedLines(t, before, after)
+	if !slices.Equal(got, want) {
+		t.Fatalf("changed lines = %v, want %v\n--- after ---\n%s", got, want, after)
+	}
+}
+
+// insertedLines pins that after is before with a run of new lines spliced in:
+// the bytes before the insertion and the bytes after it are taken verbatim from
+// before. An index-wise line compare cannot be used for an insertion — every
+// following line shifts — so the prefix/suffix equality IS the assertion. It
+// returns the inserted lines.
+func insertedLines(t *testing.T, before, after string) []string {
+	t.Helper()
+	b := strings.Split(before, "\n")
+	a := strings.Split(after, "\n")
+	if len(a) <= len(b) {
+		t.Fatalf("expected lines to be inserted, got %d -> %d\n--- after ---\n%s", len(b), len(a), after)
+	}
+	prefix := 0
+	for prefix < len(b) && b[prefix] == a[prefix] {
+		prefix++
+	}
+	suffix := 0
+	for suffix < len(b)-prefix && b[len(b)-1-suffix] == a[len(a)-1-suffix] {
+		suffix++
+	}
+	if prefix+suffix != len(b) {
+		t.Fatalf("the file changed outside the insertion (matched %d leading + %d trailing of %d lines)\n--- before ---\n%s\n--- after ---\n%s",
+			prefix, suffix, len(b), before, after)
+	}
+	return a[prefix : len(a)-suffix]
+}
+
+// assertNoSecretLeak pins that neither a plaintext nor any private key material
+// reached a user-facing surface.
+func assertNoSecretLeak(t *testing.T, plaintext string, surfaces ...string) {
+	t.Helper()
+	for _, s := range surfaces {
+		if plaintext != "" && strings.Contains(s, plaintext) {
+			t.Errorf("output leaked the plaintext %q:\n%s", plaintext, s)
+		}
+		if strings.Contains(s, "AGE-SECRET-KEY-") {
+			t.Errorf("output leaked private key material:\n%s", s)
+		}
+	}
 }
 
 // isolateHome points HOME at a temp dir so no test can ever read or write the
