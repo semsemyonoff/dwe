@@ -659,6 +659,35 @@ func TestExecuteTogglePlan_EmptyPlanIsNoop(t *testing.T) {
 	}
 }
 
+// TestExecuteTogglePlan_RestartNeverPromptsForAnIdentity pins the toggle
+// executor's side of the age-identity gate: it reaches RunRestart with Yes set
+// and with NO interactive hooks, and a nil hook makes the gate non-interactive.
+// The executor runs unattended inside a larger apply plan — an offer opening
+// mid-plan would block it on a terminal it does not own.
+func TestExecuteTogglePlan_RestartNeverPromptsForAnIdentity(t *testing.T) {
+	var seen lifecycle.RunContext
+	deps, _ := makeExecuteDeps(t, nil,
+		func(rctx lifecycle.RunContext) error {
+			seen = rctx
+			return nil
+		}, nil)
+
+	plan := TogglePlan{ApplySteps: []ApplyStep{{Kind: journal.PendingRestart}}}
+	opts := ExecuteOptions{Contributors: []Contributor{{Service: "foo", Requires: config.RequiresRestart}}}
+	if err := executeTogglePlan(context.Background(), deps, plan, opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !seen.Yes {
+		t.Error("the executor must set Yes — it runs unattended")
+	}
+	if seen.KeyPrompt != nil || seen.KeyConfirm != nil {
+		t.Error("the executor must leave the identity hooks nil so the gate stays non-interactive")
+	}
+	if seen.OutputJSON {
+		t.Error("the executor does not speak JSON output")
+	}
+}
+
 // TestExecuteTogglePlan_FullPlanOrder verifies before → apply → after ordering.
 func TestExecuteTogglePlan_FullPlanOrder(t *testing.T) {
 	var order []string

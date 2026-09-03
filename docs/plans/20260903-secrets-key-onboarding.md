@@ -937,18 +937,25 @@ Task 9 doc lists.
 - Modify: `internal/cli/lifecycle/run.go`, `restart.go` (`RunContext.OutputJSON`, `KeyPrompt`, `KeyConfirm`), `run_test.go`, `restart_test.go`
 - Modify: `internal/cli/service/service_plan_test.go` (no-prompt pin for the toggle executor)
 
-- [ ] `RunContext` gains `OutputJSON`, `KeyPrompt`, `KeyConfirm`;
+- [x] `RunContext` gains `OutputJSON`, `KeyPrompt`, `KeyConfirm`;
       `var KeygateEnsureFunc = keygate.Ensure`; `RunRun` loads raw layers
       and calls it BEFORE `config.LoadConfigOrWrap`; `RunRestart` calls it
       BEFORE `RunStop` (the nested `RunRun` call short-circuits); the
       notifier `defer` treats the three gate errors like `*preflight.Error`
       (no desktop notification)
-- [ ] `cli/lifecycle/run.go` and `restart.go` fill the three new fields
+      (➕ the call lives in a package-local `ensureIdentity(ctx, workDir)`
+      helper, mirroring `cli/deploy`'s, and the three-sentinel test is the
+      exported-free `isKeygateRefusal` so the notifier `defer` reads as one
+      condition next to the preflight / lock ones)
+- [x] `cli/lifecycle/run.go` and `restart.go` fill the three new fields
       (closures over the cobra streams, `flags.Output == "json"`)
-- [ ] add `var runStopFn = RunStop` next to `PreflightFunc` (there is no
+      (➕ the two closures are built by `keyPrompt`/`keyConfirm` in a new
+      `internal/cli/lifecycle/keygate.go`: `run.go` and `restart.go` would
+      otherwise carry the same six lines twice)
+- [x] add `var runStopFn = RunStop` next to `PreflightFunc` (there is no
       stop seam today — `RunRestart` calls `RunStop` directly at :352) and
       route the restart call through it
-- [ ] tests (core): with a stub that installs `DWE_AGE_KEY` and returns
+- [x] tests (core): with a stub that installs `DWE_AGE_KEY` and returns
       `imported=true`, `.env` renders plaintext on the SAME invocation; stub
       returning `ErrAborted` → error before any `.env` write AND, on the
       restart path, before `RunStop` is reached (`runStopFn` stub fails the
@@ -956,11 +963,25 @@ Task 9 doc lists.
       and `RunRun` returns today's `loading config: …` error; project
       without secrets → stub invoked, run output unchanged; `Yes: true` →
       `Options.Yes`; nil hooks → gate non-interactive
-- [ ] tests (cli): `dwe run --output json` and `dwe restart --output json`
+      (➕ the refusal test runs all THREE sentinels through one table, as in
+      Task 7; ➕ `TestRunRun_RealGateNeverPromptsWithoutHooks` runs the
+      SHIPPED gate with nil hooks and pins that the run still dies on today's
+      undecrypted-marker refusal; ➕ the no-secrets pin compares the `.env`
+      the real gate produced against the stubbed one, and
+      `TestRunRun_KeygateRefusalDoesNotNotify` pins the notifier arm)
+- [x] tests (cli): `dwe run --output json` and `dwe restart --output json`
       at a stubbed TTY → `Options.OutputJSON == true`, prompt stub fails the
       test if called; `service_plan` toggle executor reaches `RunRestart`
       with nil hooks and `Yes: true`
-- [ ] run `go test ./internal/core/workflow/lifecycle/... ./internal/cli/lifecycle/... ./internal/cli/service/...` — must pass before task 9
+      (➕ the cli tests do not stub the gate away: the seam FORWARDS to the
+      real `keygate.Ensure` with hooks that fail the test when opened, so
+      `--output json` / `--yes` / `DWE_NONINTERACTIVE` are pinned against the
+      shipped decision rather than against a silent stub. The text row is the
+      positive control — the offer DOES open, and declining refuses.
+      ➕ `TestRestartCmd_PerServiceRestartSkipsTheGate` pins that
+      `dwe restart <name>` stays the gate-free container-level path)
+- [x] run `go test ./internal/core/workflow/lifecycle/... ./internal/cli/lifecycle/... ./internal/cli/service/...` — must pass before task 9
+      (plus full `make test` + `make lint`)
 
 ### Task 9: Reference docs, skill, internals, changelog
 

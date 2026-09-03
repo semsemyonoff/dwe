@@ -22,6 +22,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/envfile"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/git"
@@ -42,6 +43,15 @@ var GitPullFFOnlyFunc = git.PullFFOnly
 // without setting up env probes / validate.yml on disk. Same pattern as
 // GitProbeFunc / GitPullFFOnlyFunc.
 var PreflightFunc = preflight.Run
+
+// KeygateEnsureFunc is the seam over the shared age-identity gate, so tests can
+// drive the offer without a terminal or a real keyfile.
+var KeygateEnsureFunc = keygate.Ensure
+
+// runStopFn is the seam over RunStop used by RunRestart. It exists so a test can
+// prove the identity gate refuses BEFORE the stack is torn down: without it the
+// stop leg is unobservable from the restart path.
+var runStopFn = RunStop
 
 // RunContext carries all parameters for the run (and restart) lifecycle entry points.
 type RunContext struct {
@@ -80,6 +90,16 @@ type RunContext struct {
 	// inner RunRun call: a restarted stack must never keep a daemon from an
 	// older dwe build (design D6). The cycle REPLACES ensure — never both.
 	BridgeDaemonCycle bool
+	// OutputJSON mirrors `--output json`. The identity gate never prompts in
+	// JSON mode — a huh form on stdout would corrupt the parseable stream.
+	OutputJSON bool
+	// KeyPrompt and KeyConfirm are the interactive halves of the age-identity
+	// gate, injected by the cli layer (closures over the cobra streams around
+	// core/ui/secretsprompt). Either nil makes the gate non-interactive, which
+	// is what keeps every non-cobra caller — e.g. the service toggle executor —
+	// from ever opening a form.
+	KeyPrompt  keygate.PromptFunc
+	KeyConfirm keygate.ConfirmFunc
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the top-level update
@@ -122,6 +142,11 @@ func RunRun(ctx RunContext) (err error) {
 			if errors.As(err, new(*lock.ProjectLockHeldError)) {
 				return
 			}
+			// A missing / unusable identity is the same class: the run never
+			// started, so a "run failed" toast would misreport it.
+			if isKeygateRefusal(err) {
+				return
+			}
 			n.Notify(context.Background(), notify.Event{
 				Kind:      notify.OpRun,
 				Operation: "run",
@@ -131,6 +156,15 @@ func RunRun(ctx RunContext) (err error) {
 				Project:   projectName,
 			})
 		}()
+	}
+
+	// Offer the missing age identity BEFORE the config load, so the single load
+	// below is already decrypted and .env renders plaintext on this very
+	// invocation. Without the gate the run dies inside renderAndSourceDotEnv on
+	// an undecrypted marker, before preflight's secrets.unresolved gate can even
+	// speak.
+	if err := ensureIdentity(ctx, workDir); err != nil {
+		return err
 	}
 
 	cfg, err := config.LoadConfigOrWrap(ctx.ConfigPath)
@@ -341,6 +375,12 @@ func RunRun(ctx RunContext) (err error) {
 
 // RunRestart runs the full stop lifecycle then the full run lifecycle with NoUpdate forced to true.
 func RunRestart(ctx RunContext) error {
+	// Offer the identity BEFORE the stop leg: a missing key must not tear the
+	// stack down and only then fail. The nested RunRun call runs the gate again
+	// and short-circuits on the now-usable identity.
+	if err := ensureIdentity(ctx, filepath.Dir(ctx.ConfigPath)); err != nil {
+		return err
+	}
 	stopCtx := StopContext{
 		Ctx:           ctx.Ctx,
 		ConfigPath:    ctx.ConfigPath,
@@ -349,7 +389,7 @@ func RunRestart(ctx RunContext) error {
 		ErrOut:        ctx.ErrOut,
 		OnDefaultUsed: ctx.OnDefaultUsed,
 	}
-	if err := RunStop(stopCtx); err != nil {
+	if err := runStopFn(stopCtx); err != nil {
 		return err
 	}
 	ctx.NoUpdate = true
@@ -374,6 +414,45 @@ func RunRestart(ctx RunContext) error {
 		clearPendingRestart(filepath.Dir(ctx.ConfigPath), "clearing pending restart state after success")
 	}
 	return nil
+}
+
+// ensureIdentity runs the shared age-identity gate for one run / restart.
+//
+// The raw-layer error is deliberately dropped: nil layers make the gate skip
+// itself, and the LoadConfigOrWrap further down reports the very same file with
+// today's `loading config: …` wording. The gate is never the surface that
+// speaks about a broken config.
+//
+// It runs before RunRun's own lock acquisition, so the keyfile write inside the
+// gate can take the project locks without deadlocking against them.
+func ensureIdentity(ctx RunContext, workDir string) error {
+	layers, _ := config.LoadRawLayers(ctx.ConfigPath)
+	gateCtx := ctx.Ctx
+	if gateCtx == nil {
+		gateCtx = context.Background()
+	}
+	_, err := KeygateEnsureFunc(gateCtx, keygate.Options{
+		BaseDir: workDir,
+		Layers:  layers,
+		// The same stdin probe the git-pull prompt below uses.
+		Interactive:    widgets.IsInteractiveFn(os.Stdin),
+		Yes:            ctx.Yes,
+		OutputJSON:     ctx.OutputJSON,
+		NonInteractive: keygate.NonInteractiveEnv(),
+		Prompt:         ctx.KeyPrompt,
+		Confirm:        ctx.KeyConfirm,
+		Out:            os.Stdout,
+	})
+	return err
+}
+
+// isKeygateRefusal reports whether err is one of the gate's three refusals.
+// They are not run failures: nothing was started, so the notifier stays quiet
+// exactly as it does for a preflight block or a held lock.
+func isKeygateRefusal(err error) bool {
+	return errors.Is(err, keygate.ErrAborted) ||
+		errors.Is(err, keygate.ErrEnvSourceUnusable) ||
+		errors.Is(err, keygate.ErrKeyfileUnusable)
 }
 
 // renderAndSourceDotEnv regenerates workspace/.env from the current config and
