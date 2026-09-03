@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/secretsprompt"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
-	"github.com/semsemyonoff/dwe/internal/shared/render"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
@@ -55,6 +58,8 @@ that needs it.`,
 	}
 	cmd.AddCommand(newKeyExportCmd(flags))
 	cmd.AddCommand(newKeyImportCmd(flags))
+	cmd.AddCommand(newKeyListCmd(flags))
+	cmd.AddCommand(newKeyRemoveCmd(flags))
 	return cmd
 }
 
@@ -155,7 +160,7 @@ func runKeyImport(cmd *cobra.Command, flags *cmdctx.RootFlags, file string) erro
 	// are taken AFTER the prompt on purpose — a form can sit open for as long as
 	// the developer needs, and holding the locks meanwhile would block every
 	// other dwe command in the project.
-	w := render.NewWriter(cmd.ErrOrStderr())
+	w := sharedrender.NewWriter(cmd.ErrOrStderr())
 	release, lerr := cmdctx.AcquireProjectLocksOrReport(flags.ProjectRoot(), w)
 	if lerr != nil {
 		return lerr
@@ -275,6 +280,209 @@ func readIdentityText(cmd *cobra.Command, file string) (string, error) {
 			WithHint("pass --file PATH, or pipe the identity in: `pbpaste | dwe secrets key import`")
 	}
 	return string(data), nil
+}
+
+// keyRowJSON is one keyfile in `dwe secrets key list`. State is the fixed
+// secrets.KeyfileState vocabulary: neither an I/O nor a parse error reaches it,
+// because the text of both echoes file content.
+type keyRowJSON struct {
+	Recipient string `json:"recipient"`
+	File      string `json:"file"`
+	State     string `json:"state"`
+	Current   bool   `json:"current"`
+}
+
+// keyListJSON is the `dwe secrets key list` payload. Keys is always non-nil so
+// a consumer can iterate without a null check.
+type keyListJSON struct {
+	Keys []keyRowJSON `json:"keys"`
+}
+
+// keyRemoveJSON reports the deletion. Removed is always true — a refusal is a
+// typed error, not a `removed: false` payload.
+type keyRemoveJSON struct {
+	Recipient string `json:"recipient"`
+	Keyfile   string `json:"keyfile"`
+	Removed   bool   `json:"removed"`
+}
+
+// runConfirm is the package-level wrapper for the removal confirmation;
+// swappable in tests. Package-level state: callers MUST NOT run in parallel.
+var runConfirm = widgets.RunConfirm
+
+func newKeyListCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List the identities installed on this machine",
+		Long: `List every identity stored in ` + "`~/" + secrets.KeysDirRel + "`" + `.
+
+The directory is machine-wide, not per project: a key here may belong to any
+project on this machine, which is why nothing is ever pruned automatically. The
+identity this project needs is marked "current project".
+
+A file that cannot be read or holds no age identity is listed with its state
+and nothing else — its content is never echoed. A file whose identity belongs
+to another recipient than its name claims is listed as "misnamed" under the
+recipient it actually holds.
+
+Runs outside a project too: with no project resolved, no row is marked.`,
+		Example:      `  dwe secrets key list`,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runKeyList(cmd, flags)
+		},
+	}
+}
+
+func runKeyList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+	infos, err := secrets.ListKeyfiles()
+	if err != nil {
+		return cmdctx.ErrWrap("secrets_key_list_failed", err)
+	}
+	// Display only: ListKeyfiles already failed above if the home directory is
+	// unresolvable, so the error here cannot be new information.
+	dir, _ := secrets.KeysDir()
+	current := currentRecipient(flags)
+
+	data := keyListJSON{Keys: make([]keyRowJSON, 0, len(infos))}
+	for _, info := range infos {
+		data.Keys = append(data.Keys, keyRowJSON{
+			Recipient: info.Recipient,
+			File:      info.Path,
+			State:     string(info.State),
+			Current:   current != "" && info.Recipient == current,
+		})
+	}
+	return cmdctx.WriteData(flags, cmd, data, func(d keyListJSON) string {
+		return render.SecretsKeyList(keyListView(d, dir))
+	})
+}
+
+// keyListView maps the JSON payload onto the renderer's view, so the two
+// surfaces can never report different rows. The FILE column carries the file
+// name only — the directory is a header line, and repeating it on every row
+// would be the widest cell in the table.
+func keyListView(d keyListJSON, dir string) render.SecretsKeyListView {
+	v := render.SecretsKeyListView{Dir: dir, Keys: make([]render.SecretsKeyRow, len(d.Keys))}
+	for i, k := range d.Keys {
+		v.Keys[i] = render.SecretsKeyRow{
+			Recipient: k.Recipient,
+			File:      filepath.Base(k.File),
+			State:     k.State,
+			Current:   k.Current,
+			OK:        k.State == string(secrets.KeyfileOK),
+		}
+	}
+	return v
+}
+
+// currentRecipient reports the project's secrets.recipient, or "" when the
+// command runs outside a project (both housekeeping subcommands are in
+// allowedWithoutProject) or the config does not load. The raw layers are read
+// directly rather than through loadRawLayers: a keyfile listing must not fail
+// over a config it only uses to add a marker to one row.
+func currentRecipient(flags *cmdctx.RootFlags) string {
+	if flags.ConfigPath == "" {
+		return ""
+	}
+	layers, err := config.LoadRawLayers(flags.ConfigPath)
+	if err != nil {
+		return ""
+	}
+	return config.RecipientFromLayers(layers)
+}
+
+func newKeyRemoveCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	var force, yes bool
+	cmd := &cobra.Command{
+		Use:   "remove <recipient>",
+		Short: "Delete an installed identity from this machine",
+		Long: `Delete ` + "`~/" + secrets.KeysDirRel + "/<recipient>.key`" + `.
+
+Only the canonical file name is targeted: a keyfile whose name does not match
+the identity it holds (listed as "misnamed" by ` + "`dwe secrets key list`" + `) is never
+touched, so removing it stays a deliberate manual act.
+
+Removing the identity this project uses is refused unless --force is passed:
+the encrypted values in the repository become unreadable here until the key is
+imported again, and it exists nowhere else unless it was exported.`,
+		Example: `  dwe secrets key list
+  dwe secrets key remove age1qyqs…
+  dwe secrets key remove age1qyqs… --force --yes`,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runKeyRemove(cmd, flags, args[0], force, yes)
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "remove the identity this project itself uses")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
+	return cmd
+}
+
+func runKeyRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient string, force, yes bool) error {
+	path, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		return cmdctx.ErrWrap("secrets_recipient_invalid", err).
+			WithHint("the recipient is the age1… value committed as secrets.recipient; `dwe secrets key list` prints the installed ones")
+	}
+	if !force && recipient == currentRecipient(flags) {
+		return cmdctx.Err("secrets_key_in_use",
+			fmt.Sprintf("%s is the identity this project uses", recipient)).
+			WithDetail("recipient", recipient).
+			WithDetail("keyfile", path).
+			WithHint("export it first with 'dwe secrets key export', or pass --force to remove it anyway")
+	}
+	if _, serr := os.Stat(path); serr != nil {
+		return cmdctx.Err("secrets_key_not_found",
+			fmt.Sprintf("no identity for %s is installed on this machine", recipient)).
+			WithDetail("recipient", recipient).
+			WithDetail("keyfile", path).
+			WithHint("run 'dwe secrets key list' to see the installed identities")
+	}
+
+	if !yes {
+		if flags.Output == "json" || cmdctx.NonInteractiveEnv() || !widgets.IsInteractiveFn(cmd.InOrStdin()) {
+			return cmdctx.Err("secrets_confirmation_required",
+				"removing an identity needs confirmation (no interactive prompt in this mode)").
+				WithDetail("recipient", recipient).
+				WithDetail("keyfile", path).
+				WithHint("pass --yes to remove it non-interactively")
+		}
+		confirmed, cerr := runConfirm(fmt.Sprintf("Remove the identity for %s?", recipient), "Remove", "Cancel")
+		if cerr != nil && !errors.Is(cerr, widgets.ErrCancelled) {
+			return cmdctx.ErrWrap("secrets_confirmation_required", cerr)
+		}
+		// A decline is a finished command, not a failure: nothing was asked for
+		// that could still be done.
+		if !confirmed || cerr != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "kept %s\n", path)
+			return nil
+		}
+	}
+
+	// The project locks are held for the same reason `key import` holds them: a
+	// removal racing a `rekey` would retire the key the rekey is installing.
+	// Outside a project there is nothing to lock — and nothing to race.
+	if root := flags.ProjectRoot(); root != "" {
+		release, lerr := cmdctx.AcquireProjectLocksOrReport(root, sharedrender.NewWriter(cmd.ErrOrStderr()))
+		if lerr != nil {
+			return lerr
+		}
+		defer release()
+	}
+
+	if rerr := os.Remove(path); rerr != nil {
+		return cmdctx.ErrWrap("secrets_key_remove_failed", rerr).
+			WithDetail("recipient", recipient).
+			WithDetail("keyfile", path)
+	}
+
+	data := keyRemoveJSON{Recipient: recipient, Keyfile: path, Removed: true}
+	return cmdctx.WriteData(flags, cmd, data, func(d keyRemoveJSON) string {
+		return "removed " + d.Keyfile
+	})
 }
 
 // identityError turns a LoadIdentity failure into the typed envelope, naming

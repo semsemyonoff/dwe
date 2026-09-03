@@ -672,3 +672,415 @@ func assertNoKeyTail(t *testing.T, key string, surfaces ...string) {
 		}
 	}
 }
+
+// --- key list / key remove ---------------------------------------------------
+
+// stubRunConfirm swaps the removal confirmation. Package-level state: callers
+// MUST NOT run in parallel.
+func stubRunConfirm(t *testing.T, fn func(title, affirmative, negative string) (bool, error)) {
+	t.Helper()
+	prev := runConfirm
+	runConfirm = fn
+	t.Cleanup(func() { runConfirm = prev })
+}
+
+// forbidConfirm installs a confirmation that fails the test if it is opened.
+func forbidConfirm(t *testing.T) {
+	t.Helper()
+	stubRunConfirm(t, func(string, string, string) (bool, error) {
+		t.Error("the removal confirmation opened in a mode that must never prompt")
+		return false, nil
+	})
+}
+
+// writeKeyfile drops a file straight into the isolated keys directory, which is
+// how the broken shapes (`unreadable`, `unparsable`, `misnamed`) are produced —
+// no dwe command can create one.
+func writeKeyfile(t *testing.T, name, content string, mode os.FileMode) string {
+	t.Helper()
+	dir, err := secrets.KeysDir()
+	if err != nil {
+		t.Fatalf("keys dir: %v", err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("creating keys dir: %v", err)
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatalf("writing %s: %v", name, err)
+	}
+	return path
+}
+
+// foreignIdentity mints a key pair that belongs to no project here.
+func foreignIdentity(t *testing.T) secrets.Identity {
+	t.Helper()
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	return id
+}
+
+// TestKeyList_ReportsEveryKeyfile pins the listing over all five shapes: the
+// project's own identity, a foreign one, and the three broken files. Neither
+// output may carry the unparsable file's content.
+func TestKeyList_ReportsEveryKeyfile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits are not enforced")
+	}
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	current := initProject(t, flags)
+
+	foreign := foreignIdentity(t)
+	writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o600)
+	const junk = "definitely-not-a-key-0123456789"
+	writeKeyfile(t, "age1junk.key", junk, 0o600)
+	unreadable := writeKeyfile(t, "age1locked.key", "whatever", 0o000)
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+	misnamed := foreignIdentity(t)
+	writeKeyfile(t, "age1stale.key", misnamed.Export()+"\n", 0o600)
+
+	out, _, err := runSecrets(t, flags, "key", "list")
+	if err != nil {
+		t.Fatalf("secrets key list: %v", err)
+	}
+	for _, want := range []string{current, foreign.Recipient(), misnamed.Recipient(),
+		"age1junk", "age1locked", "ok (current project)", "unparsable", "unreadable", "misnamed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("listing is missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, junk) {
+		t.Errorf("listing echoed an unparsable file's content:\n%s", out)
+	}
+	assertNoKeyTail(t, foreign.Export(), out)
+
+	jsonFlags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+	raw, _, err := runSecrets(t, jsonFlags, "key", "list")
+	if err != nil {
+		t.Fatalf("secrets key list --output json: %v", err)
+	}
+	var data keyListJSON
+	if e := json.Unmarshal([]byte(raw), &data); e != nil {
+		t.Fatalf("unmarshal key list json: %v\nraw: %s", e, raw)
+	}
+	if len(data.Keys) != 5 {
+		t.Fatalf("got %d rows, want 5: %+v", len(data.Keys), data.Keys)
+	}
+	states := map[string]string{}
+	currents := 0
+	for _, k := range data.Keys {
+		states[k.Recipient] = k.State
+		if k.Current {
+			currents++
+			if k.Recipient != current {
+				t.Errorf("current marker on %s, want %s", k.Recipient, current)
+			}
+		}
+		if !strings.HasSuffix(k.File, ".key") {
+			t.Errorf("file = %q, want an absolute *.key path", k.File)
+		}
+	}
+	if currents != 1 {
+		t.Errorf("%d rows marked current, want exactly 1", currents)
+	}
+	want := map[string]string{
+		current:              "ok",
+		foreign.Recipient():  "ok",
+		misnamed.Recipient(): "misnamed",
+		"age1junk":           "unparsable",
+		"age1locked":         "unreadable",
+	}
+	for recipient, state := range want {
+		if states[recipient] != state {
+			t.Errorf("%s: state = %q, want %q", recipient, states[recipient], state)
+		}
+	}
+	assertNoKeyTail(t, foreign.Export(), raw)
+	if strings.Contains(raw, junk) {
+		t.Errorf("json echoed an unparsable file's content:\n%s", raw)
+	}
+}
+
+// TestKeyList_OutsideProject pins that the listing works with no project
+// resolved (both housekeeping subcommands are in allowedWithoutProject) and
+// marks nothing as current.
+func TestKeyList_OutsideProject(t *testing.T) {
+	isolateHome(t)
+	foreign := foreignIdentity(t)
+	writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o600)
+
+	flags := &cmdctx.RootFlags{Output: "json"}
+	raw, _, err := runSecrets(t, flags, "key", "list")
+	if err != nil {
+		t.Fatalf("secrets key list outside a project: %v", err)
+	}
+	var data keyListJSON
+	if e := json.Unmarshal([]byte(raw), &data); e != nil {
+		t.Fatalf("unmarshal key list json: %v\nraw: %s", e, raw)
+	}
+	if len(data.Keys) != 1 || data.Keys[0].Recipient != foreign.Recipient() {
+		t.Fatalf("rows = %+v, want the one installed identity", data.Keys)
+	}
+	if data.Keys[0].Current {
+		t.Error("a row is marked current with no project resolved")
+	}
+}
+
+// TestKeyList_EmptyDirectory pins the empty listing: a finished report naming
+// where identities live, and `[]` rather than null in JSON.
+func TestKeyList_EmptyDirectory(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+
+	out, _, err := runSecrets(t, flags, "key", "list")
+	if err != nil {
+		t.Fatalf("secrets key list: %v", err)
+	}
+	if !strings.Contains(out, "No identities in") {
+		t.Errorf("empty listing = %q, want the no-identities note", out)
+	}
+
+	jsonFlags := &cmdctx.RootFlags{Output: "json"}
+	raw, _, err := runSecrets(t, jsonFlags, "key", "list")
+	if err != nil {
+		t.Fatalf("secrets key list --output json: %v", err)
+	}
+	if !strings.Contains(raw, `"keys": []`) && !strings.Contains(raw, `"keys":[]`) {
+		t.Errorf("json = %s, want an empty keys array", raw)
+	}
+}
+
+// TestKeyRemove_RemovesForeignIdentity pins the happy path in both output
+// modes: the file is gone and the payload says so.
+func TestKeyRemove_RemovesForeignIdentity(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+	forbidConfirm(t)
+
+	foreign := foreignIdentity(t)
+	path := writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o600)
+
+	out, _, err := runSecrets(t, flags, "key", "remove", foreign.Recipient(), "--yes")
+	if err != nil {
+		t.Fatalf("secrets key remove: %v", err)
+	}
+	if !strings.Contains(out, "removed "+path) {
+		t.Errorf("output = %q, want the removed path", out)
+	}
+	if _, serr := os.Stat(path); !os.IsNotExist(serr) {
+		t.Errorf("keyfile still present after remove: %v", serr)
+	}
+
+	second := foreignIdentity(t)
+	secondPath := writeKeyfile(t, second.Recipient()+".key", second.Export()+"\n", 0o600)
+	jsonFlags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+	raw, _, err := runSecrets(t, jsonFlags, "key", "remove", second.Recipient(), "--yes")
+	if err != nil {
+		t.Fatalf("secrets key remove --output json: %v", err)
+	}
+	var data keyRemoveJSON
+	if e := json.Unmarshal([]byte(raw), &data); e != nil {
+		t.Fatalf("unmarshal key remove json: %v\nraw: %s", e, raw)
+	}
+	if data.Recipient != second.Recipient() || data.Keyfile != secondPath || !data.Removed {
+		t.Errorf("payload = %+v, want the removed keyfile", data)
+	}
+	if _, serr := os.Stat(secondPath); !os.IsNotExist(serr) {
+		t.Errorf("keyfile still present after remove: %v", serr)
+	}
+	assertNoKeyTail(t, second.Export(), out, raw)
+}
+
+// TestKeyRemove_MissingFile pins the typed refusal when nothing is installed
+// for the recipient.
+func TestKeyRemove_MissingFile(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	forbidConfirm(t)
+	foreign := foreignIdentity(t)
+
+	_, _, err := runSecrets(t, flags, "key", "remove", foreign.Recipient(), "--yes")
+	if err == nil {
+		t.Fatal("removing an absent identity succeeded")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_key_not_found" {
+		t.Errorf("code = %q, want secrets_key_not_found", coded.Code)
+	}
+}
+
+// TestKeyRemove_InvalidRecipient pins that a malformed argument never reaches
+// the filesystem.
+func TestKeyRemove_InvalidRecipient(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	forbidConfirm(t)
+
+	_, _, err := runSecrets(t, flags, "key", "remove", "../../etc/passwd", "--yes")
+	if err == nil {
+		t.Fatal("removing a malformed recipient succeeded")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_recipient_invalid" {
+		t.Errorf("code = %q, want secrets_recipient_invalid", coded.Code)
+	}
+}
+
+// TestKeyRemove_CurrentRecipientNeedsForce pins the guard on the one key whose
+// loss is not recoverable from the repository, and that --force lifts it.
+func TestKeyRemove_CurrentRecipientNeedsForce(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+	forbidConfirm(t)
+	path, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+
+	_, _, err = runSecrets(t, flags, "key", "remove", recipient, "--yes")
+	if err == nil {
+		t.Fatal("removing the project's own identity succeeded without --force")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_key_in_use" {
+		t.Errorf("code = %q, want secrets_key_in_use", coded.Code)
+	}
+	if !strings.Contains(coded.Hint, "--force") {
+		t.Errorf("hint = %q, want it to name --force", coded.Hint)
+	}
+	if _, serr := os.Stat(path); serr != nil {
+		t.Fatalf("a refused removal deleted the keyfile: %v", serr)
+	}
+
+	if _, _, ferr := runSecrets(t, flags, "key", "remove", recipient, "--force", "--yes"); ferr != nil {
+		t.Fatalf("secrets key remove --force: %v", ferr)
+	}
+	if _, serr := os.Stat(path); !os.IsNotExist(serr) {
+		t.Errorf("--force did not remove the keyfile: %v", serr)
+	}
+}
+
+// TestKeyRemove_NoConfirmationInNonInteractiveModes pins R3.2 for this command:
+// every mode that cannot ask refuses instead of deleting, and the file stays.
+func TestKeyRemove_NoConfirmationInNonInteractiveModes(t *testing.T) {
+	cases := []struct {
+		name     string
+		tty      bool
+		output   string
+		nonInter bool
+	}{
+		{name: "piped stdin", tty: false},
+		{name: "json at a terminal", tty: true, output: "json"},
+		{name: "DWE_NONINTERACTIVE", tty: true, nonInter: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateHome(t)
+			flags := &cmdctx.RootFlags{Output: tc.output}
+			foreign := foreignIdentity(t)
+			path := writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o600)
+
+			if tc.nonInter {
+				t.Setenv("DWE_NONINTERACTIVE", "1")
+			} else {
+				t.Setenv("DWE_NONINTERACTIVE", "")
+			}
+			stubStdinTTY(t, tc.tty)
+			forbidConfirm(t)
+
+			_, _, err := runSecrets(t, flags, "key", "remove", foreign.Recipient())
+			if err == nil {
+				t.Fatal("removal without --yes succeeded")
+			}
+			coded := codedError(t, err)
+			if coded.Code != "secrets_confirmation_required" {
+				t.Errorf("code = %q, want secrets_confirmation_required", coded.Code)
+			}
+			if _, serr := os.Stat(path); serr != nil {
+				t.Errorf("a refused removal deleted the keyfile: %v", serr)
+			}
+			assertNoKeyTail(t, foreign.Export(), coded.Message, coded.Hint, jsonErrorEnvelope(t, err))
+		})
+	}
+}
+
+// TestKeyRemove_DeclineIsANoOp pins that answering "Cancel" leaves the file in
+// place and still exits 0 — nothing was asked for that could still be done.
+func TestKeyRemove_DeclineIsANoOp(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	foreign := foreignIdentity(t)
+	path := writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o600)
+
+	stubStdinTTY(t, true)
+	t.Setenv("DWE_NONINTERACTIVE", "")
+	asked := 0
+	stubRunConfirm(t, func(title, _, _ string) (bool, error) {
+		asked++
+		if !strings.Contains(title, foreign.Recipient()) {
+			t.Errorf("confirmation title = %q, want it to name the recipient", title)
+		}
+		return false, nil
+	})
+
+	_, errOut, err := runSecrets(t, flags, "key", "remove", foreign.Recipient())
+	if err != nil {
+		t.Fatalf("a declined removal returned an error: %v", err)
+	}
+	if asked != 1 {
+		t.Errorf("confirmation asked %d times, want 1", asked)
+	}
+	if !strings.Contains(errOut, "kept "+path) {
+		t.Errorf("stderr = %q, want the kept note", errOut)
+	}
+	if _, serr := os.Stat(path); serr != nil {
+		t.Errorf("a declined removal deleted the keyfile: %v", serr)
+	}
+}
+
+// TestKeyRemove_ConfirmedRemoves pins the interactive accept path.
+func TestKeyRemove_ConfirmedRemoves(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	foreign := foreignIdentity(t)
+	path := writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o600)
+
+	stubStdinTTY(t, true)
+	t.Setenv("DWE_NONINTERACTIVE", "")
+	stubRunConfirm(t, func(string, string, string) (bool, error) { return true, nil })
+
+	if _, _, err := runSecrets(t, flags, "key", "remove", foreign.Recipient()); err != nil {
+		t.Fatalf("secrets key remove: %v", err)
+	}
+	if _, serr := os.Stat(path); !os.IsNotExist(serr) {
+		t.Errorf("keyfile still present after a confirmed remove: %v", serr)
+	}
+}
+
+// TestKeyRemove_MisnamedFileNeverTargeted pins that only the canonical
+// <recipient>.key is deleted: a file whose name does not match the identity it
+// holds is reported by `key list` and left alone.
+func TestKeyRemove_MisnamedFileNeverTargeted(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	forbidConfirm(t)
+	misnamed := foreignIdentity(t)
+	path := writeKeyfile(t, "age1stale.key", misnamed.Export()+"\n", 0o600)
+
+	_, _, err := runSecrets(t, flags, "key", "remove", misnamed.Recipient(), "--yes")
+	if err == nil {
+		t.Fatal("removing a misnamed file's recipient succeeded")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_key_not_found" {
+		t.Errorf("code = %q, want secrets_key_not_found", coded.Code)
+	}
+	if _, serr := os.Stat(path); serr != nil {
+		t.Errorf("the misnamed file was removed: %v", serr)
+	}
+}

@@ -66,6 +66,18 @@ generated from commit subjects and stay on the
   `--output json`, `identity.source` is now the **consulted** source on failure
   too (it used to go empty), and `identity` gained `reason` and `hint`; every
   string is DWE-authored, never an `age` parse error.
+- **New `dwe secrets key list` and `dwe secrets key remove <recipient>`** for
+  the machine-wide keys directory. `list` reports every `~/.config/dwe/keys/*.key`
+  with a fixed state (`ok`, `unreadable`, `unparsable`, `misnamed`) and marks
+  the one this project uses; the content of a file that does not parse is never
+  echoed. `remove` deletes only the canonical `<recipient>.key` — a misnamed
+  file is reported and left — refuses the current project's identity without
+  `--force`, and needs `--yes` wherever it cannot ask. Both run outside a
+  project (the directory is not project-scoped) and neither is reachable from a
+  bridged container. New error codes: `secrets_key_in_use`,
+  `secrets_key_not_found`, `secrets_confirmation_required`,
+  `secrets_recipient_invalid`, `secrets_key_list_failed`,
+  `secrets_key_remove_failed`.
 
 ### Changed
 

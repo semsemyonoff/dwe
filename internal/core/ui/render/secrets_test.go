@@ -294,6 +294,104 @@ func TestSecretsStatus_StateStyling(t *testing.T) {
 	}
 }
 
+// goldenSecretsKeyList is the representative keys directory: the project's own
+// identity, a foreign one, and the three broken shapes.
+func goldenSecretsKeyList() SecretsKeyListView {
+	return SecretsKeyListView{
+		Dir: "/home/dev/.config/dwe/keys",
+		Keys: []SecretsKeyRow{
+			{Recipient: "age1broken", File: "age1broken.key", State: "unparsable"},
+			{Recipient: "age1current", File: "age1current.key", State: "ok", Current: true, OK: true},
+			{Recipient: "age1locked", File: "age1locked.key", State: "unreadable"},
+			{Recipient: "age1other", File: "age1other.key", State: "ok", OK: true},
+			{Recipient: "age1parsed", File: "age1stale.key", State: "misnamed"},
+		},
+	}
+}
+
+func TestGolden_SecretsKeyList(t *testing.T) {
+	pinGoldenPalette(t)
+	assertGolden(t, "secrets_key_list.golden", SecretsKeyList(goldenSecretsKeyList()))
+}
+
+// TestSecretsKeyList_EmptyNamesTheDirectory pins that an empty keys directory
+// still reads as a finished report, and names where identities would live.
+func TestSecretsKeyList_EmptyNamesTheDirectory(t *testing.T) {
+	resetStyles()
+	got := stripANSI(SecretsKeyListAt(SecretsKeyListView{Dir: "/home/dev/.config/dwe/keys"}, 0))
+	if want := "No identities in /home/dev/.config/dwe/keys."; got != want {
+		t.Errorf("empty listing = %q, want %q", got, want)
+	}
+}
+
+// TestSecretsKeyList_MarksTheCurrentProject pins the one qualifier the table
+// carries, and that it marks exactly one row.
+func TestSecretsKeyList_MarksTheCurrentProject(t *testing.T) {
+	resetStyles()
+	got := stripANSI(SecretsKeyListAt(goldenSecretsKeyList(), 0))
+	if n := strings.Count(got, "current project"); n != 1 {
+		t.Errorf("current-project marker appears %d times, want 1:\n%s", n, got)
+	}
+	if !strings.Contains(got, "ok (current project)") {
+		t.Errorf("the marker is not attached to its state:\n%s", got)
+	}
+}
+
+// TestSecretsKeyList_RowOrderPreserved pins that the renderer emits rows in the
+// order ListKeyfiles supplied them (sorted by filename), rather than grouping
+// by state or floating the current project to the top.
+func TestSecretsKeyList_RowOrderPreserved(t *testing.T) {
+	resetStyles()
+	got := stripANSI(SecretsKeyListAt(goldenSecretsKeyList(), 0))
+	pos := -1
+	for _, want := range []string{"age1broken.key", "age1current.key", "age1locked.key", "age1other.key", "age1stale.key"} {
+		at := strings.Index(got, want)
+		if at < 0 {
+			t.Fatalf("row %q missing from output:\n%s", want, got)
+		}
+		if at < pos {
+			t.Errorf("row %q rendered out of order:\n%s", want, got)
+		}
+		pos = at
+	}
+}
+
+// TestSecretsKeyListAt_DegradesWithinBudget pins the responsive contract: the
+// table shrinks and finally drops to records, and no line overflows either way.
+func TestSecretsKeyListAt_DegradesWithinBudget(t *testing.T) {
+	resetStyles()
+	for _, budget := range []int{80, 50, 24} {
+		out := SecretsKeyListAt(goldenSecretsKeyList(), budget)
+		assertWithinBudget(t, out, budget)
+	}
+}
+
+// TestSecretsKeyList_DelegatesProbedWidth pins that SecretsKeyList hands the
+// width it probes to SecretsKeyListAt (TestMain pins the probe to 0, so the
+// golden alone cannot catch a dropped argument).
+func TestSecretsKeyList_DelegatesProbedWidth(t *testing.T) {
+	resetStyles()
+	v := goldenSecretsKeyList()
+	withTermWidth(t, 60)
+	if got, want := SecretsKeyList(v), SecretsKeyListAt(v, 60); got != want {
+		t.Errorf("SecretsKeyList at a probed width of 60 diverged from SecretsKeyListAt(v, 60)")
+	}
+}
+
+// TestSecretsKeyList_NoTrailingNewline pins the WriteData contract for both
+// shapes of the listing.
+func TestSecretsKeyList_NoTrailingNewline(t *testing.T) {
+	resetStyles()
+	for name, out := range map[string]string{
+		"rows":  SecretsKeyListAt(goldenSecretsKeyList(), 0),
+		"empty": SecretsKeyListAt(SecretsKeyListView{Dir: "/keys"}, 0),
+	} {
+		if strings.HasSuffix(out, "\n") {
+			t.Errorf("%s: output ends with a newline: %q", name, out)
+		}
+	}
+}
+
 // TestSecretsStatus_NeverPrintsAKey is the negative pin required by the plan's
 // testing strategy: no surface of the report may carry key material.
 func TestSecretsStatus_NeverPrintsAKey(t *testing.T) {

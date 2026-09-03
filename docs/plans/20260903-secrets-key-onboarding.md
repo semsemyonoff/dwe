@@ -573,6 +573,12 @@ desktop notification).
 `secrets_identity_source_required`, `secrets_keyfile_write_failed`. All four
 new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 
+➕ Task 6 added three more, for failures the codes above would have
+mislabelled: `secrets_recipient_invalid` (a malformed `key remove` argument),
+`secrets_key_list_failed` (the keys directory could not be scanned) and
+`secrets_key_remove_failed` (the delete itself failed). Seven codes go into the
+Task 9 doc lists.
+
 ## What Goes Where
 
 - **Implementation Steps** (`[ ]`): code, tests, docs in this repo.
@@ -842,26 +848,49 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/root.go` (`allowedWithoutProject`), `root_test.go` (or wherever the allowlist is pinned)
 - Modify: `internal/cli/bridgepolicy_test.go` (pin `secrets key list/remove` blocked)
 
-- [ ] `key list`: `secrets.ListKeyfiles` → rows with `current` computed from
+- [x] `key list`: `secrets.ListKeyfiles` → rows with `current` computed from
       the resolved project's recipient when a project is present (use
       `flags.ConfigPath != ""` / the raw layers; tolerate no project);
       `render.SecretsKeyList` + its `SecretsKeyListAt(width)` sibling (the
       responsive-tables contract; `SecretsStatus`/`SecretsStatusAt` is the
       precedent in the same file); JSON `{"keys":[…]}` with `[]` never
       `null`; empty → `No identities in <dir>.`
-- [ ] `key remove <recipient> [--force] [-y]` per Technical Details;
+      (➕ the `current` flag renders INSIDE the STATE cell as
+      `ok (current project)` rather than as a fifth state value: a row has both
+      a state and a project relation, and a fourth column would be empty on
+      every machine-wide key. ➕ the FILE column carries the file NAME, with the
+      directory as a `secretsField("Directory", …)` header line — repeating the
+      same absolute prefix on every row would be the widest cell in the table;
+      JSON `file` stays the absolute path. ➕ `currentRecipient` calls
+      `config.LoadRawLayers` directly, NOT the package's `loadRawLayers`
+      wrapper: a listing must not fail over `ValidateLayerRoots` on a config it
+      only consults to mark one row)
+- [x] `key remove <recipient> [--force] [-y]` per Technical Details;
       confirmation via `widgets.RunConfirm` (seam `var runConfirm`); project
       locks around the delete when a project is resolved; JSON DTO
       `{recipient, keyfile, removed}`
-- [ ] add both to `allowedWithoutProject`
-- [ ] tests: list with five files (current, foreign, unreadable, unparsable,
+      (➕ three error codes beyond the four the plan named:
+      `secrets_recipient_invalid` (a malformed argument, refused before it
+      reaches the filesystem), `secrets_key_list_failed` and
+      `secrets_key_remove_failed`. Each names a distinct failure the reused
+      codes would have mislabelled; all three join the Task 9 doc lists)
+- [x] add both to `allowedWithoutProject`
+- [x] tests: list with five files (current, foreign, unreadable, unparsable,
       misnamed) inside and outside a project, text golden + JSON, the
       unparsable file's content absent from both; remove: happy path text +
       JSON, missing file, current recipient refused without `--force`,
       allowed with it, non-interactive without `--yes` → typed envelope and
       file still present, confirm-decline → no-op, misnamed file never
       targeted; optional bridge-policy rows
-- [ ] run `go test ./internal/cli/...` — must pass before task 7
+      (➕ the bridge-policy rows landed; ➕ `TestAllowedWithoutProject_KeyHousekeeping`
+      in `internal/cli/root_test.go` pins the allowlist positively AND
+      negatively — `key import`/`key export`/`status` must still require a
+      project; ➕ a malformed-recipient case and an interactive-accept case
+      were added alongside the listed ones)
+- [x] run `go test ./internal/cli/...` — must pass before task 7
+      (plus full `make test` + `make lint`; ➕ two new subcommands and their
+      error codes are user-facing, so a `CHANGELOG.md` entry landed in the same
+      commit — Task 9 keeps the reference prose)
 
 ### Task 7: Gate the `dwe deploy` menu
 
