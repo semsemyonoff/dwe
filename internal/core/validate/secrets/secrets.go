@@ -86,20 +86,6 @@ func (v *recipientValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			Hint:     hint,
 		})
 	}
-	// A silent domain is indistinguishable from one that did not run:
-	// FormatSummary renders an all-zero counter set as "validation skipped (no
-	// files found)". Emitting an OK row is what makes `dwe validate secrets`
-	// usable as the self-check after onboarding.
-	emitOK := func(target, msgFile, msg string) {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityOK,
-			Domain:   domain,
-			Target:   target,
-			File:     msgFile,
-			Message:  msg,
-		})
-	}
-
 	if recipient == "" {
 		if len(markers) > 0 || len(sources) > 0 {
 			emit("secrets.recipient", file,
@@ -123,13 +109,23 @@ func (v *recipientValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
+	// A silent domain is indistinguishable from one that did not run:
+	// FormatSummary renders an all-zero counter set as "validation skipped (no
+	// files found)". Emitting an OK row is what makes `dwe validate secrets`
+	// usable as the self-check after onboarding.
+	//
 	// Only a project that HAS a recipient gets the positive row: without a
 	// secrets: block there is nothing to affirm, and `dwe validate` output for
 	// projects that use no secrets stays exactly as it was. The message is
 	// empty on purpose — the config domain's OK rows read the same way, the
 	// table shows the target.
 	if len(diags) == 0 && recipient != "" {
-		emitOK("secrets.recipient", file, "")
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   domain,
+			Target:   "secrets.recipient",
+			File:     file,
+		})
 	}
 
 	return diags
@@ -151,11 +147,22 @@ func (v *unresolvedValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	recipient := config.SecretsRecipient(ctx.Cfg)
 
-	// The inventory is built FIRST, before any early return: a project whose
-	// only encrypted things are markers must still reach the OK row at the end,
-	// and the row's counters need both halves.
+	// A project that carries neither markers nor a recipient has nothing this
+	// validator can say, and it must not pay for the answer: this runs in
+	// PREFLIGHT, so the pack scan below (ResolveTemplatePack + LoadManifest per
+	// app service) would otherwise hit the disk on every lifecycle command in
+	// every project, including the ones with no secrets: block at all. An .age
+	// source without a recipient is the recipient validator's content error,
+	// which is why skipping the scan here cannot hide one.
 	state := ctx.Cfg.SecretsState
 	markers := len(state.Decrypted) + len(state.Unresolved)
+	if markers == 0 && recipient == "" {
+		return nil
+	}
+
+	// Past that gate the inventory is built BEFORE any further early return: a
+	// project whose only encrypted things are markers must still reach the OK
+	// row at the end, and the row's counters need both halves.
 	sources := collectEncryptedSources(ctx)
 	if markers == 0 && len(sources) == 0 {
 		return nil

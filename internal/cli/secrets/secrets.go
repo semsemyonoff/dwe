@@ -444,15 +444,16 @@ func inspectAgeFile(root, path string) ageFile {
 }
 
 // spliceUnsupportedError maps a splice-writer refusal onto the typed
-// `secrets_write_unsupported` code. The three sentinels mean the same thing to a
-// user — the shape at that spot cannot be edited without reformatting the file —
-// so they share one code and one actionable hint.
+// `secrets_write_unsupported` code. The three sentinels share one code — the
+// file was left untouched and the document has to change before a retry can
+// work — but not one hint: a shape refusal names the reshaping, while a
+// verification failure is about the file NOT reading back as written.
 //
 // Every caller branches on this BEFORE its own generic ErrWrap: cmdctx.ErrWrap
 // builds a NEW outer CodedError and the JSON serializer reports the outermost
 // code, so wrapping first would bury the specific refusal under
 // `secrets_recipient_write_failed` or `secrets_rekey_failed`.
-func spliceUnsupportedError(err error, file string) (error, bool) {
+func spliceUnsupportedError(err error, file string) (*cmdctx.CodedError, bool) {
 	if !errors.Is(err, localpkg.ErrMultilineScalar) &&
 		!errors.Is(err, localpkg.ErrUnsplicable) &&
 		!errors.Is(err, localpkg.ErrVerify) {
@@ -460,7 +461,21 @@ func spliceUnsupportedError(err error, file string) (error, bool) {
 	}
 	return cmdctx.ErrWrap("secrets_write_unsupported", err).
 		WithDetail("file", file).
-		WithHint("dwe secrets writes a layer file by replacing single lines; make the target a single-line value under a block mapping in " + file + " and retry"), true
+		WithHint(spliceUnsupportedHint(err, file)), true
+}
+
+// spliceUnsupportedHint is the fix for a refusal. ErrVerify is not a shape the
+// author can reshape at the target — the write DID splice and then failed to
+// read back — so pointing at the target's own formatting would send the
+// developer to a line that is already fine; a duplicate or merge-inherited key
+// elsewhere in the file is the shape that produces it.
+func spliceUnsupportedHint(err error, file string) string {
+	if errors.Is(err, localpkg.ErrVerify) {
+		return "the edited " + file + " did not read back as written; check it for a duplicate key " +
+			"or a '<<:' merge key that shadows the target, then retry"
+	}
+	return "dwe secrets writes a layer file by replacing single lines; make the target a single-line " +
+		"value under a block mapping in " + file + " and retry"
 }
 
 // spliceWriteError is spliceUnsupportedError with the I/O fallback the plain

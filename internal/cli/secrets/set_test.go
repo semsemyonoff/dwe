@@ -168,6 +168,45 @@ func TestSet_InsertsNewPathIntoAnnotatedFixture(t *testing.T) {
 	}
 }
 
+// TestSet_RotatesAnExistingMarker pins the rotation flow — a `set` over a path
+// that ALREADY holds a marker. It is the common case after a leak, and it is the
+// one where the replaced token is itself long and quoted, so it exercises the
+// span logic on a marker rather than on a placeholder.
+func TestSet_RotatesAnExistingMarker(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	src := readTestdata(t, "annotated_defaults.yml")
+	if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.bot_token", "first-value"); err != nil {
+		t.Fatalf("secrets set (first): %v", err)
+	}
+	before, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+
+	if _, _, err := runSecrets(t, flags, "set", "vars.telegram.bot_token", "second-value"); err != nil {
+		t.Fatalf("secrets set (rotation): %v", err)
+	}
+	after, err := os.ReadFile(defaultsPath(root))
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+
+	assertOnlyLinesChanged(t, string(before), string(after), lineOf(t, string(before), "bot_token:"))
+	if plain := readSecret(t, flags, "vars.telegram.bot_token"); plain != "second-value" {
+		t.Errorf("decrypted value = %q, want %q", plain, "second-value")
+	}
+	if strings.Contains(string(after), "first-value") {
+		t.Error("the rotated file carries the previous plaintext")
+	}
+}
+
 // TestSet_RefusedShapesLeaveTheFileUntouched pins the shapes the splice writer
 // will not guess at. Each is a typed secrets_write_unsupported in text AND JSON
 // mode, with the file byte-identical afterwards and no plaintext or private key
@@ -219,6 +258,12 @@ func TestSet_RefusedShapesLeaveTheFileUntouched(t *testing.T) {
 				}
 				if coded.Hint == "" {
 					t.Error("the refusal carries no hint")
+				}
+				// One path shape per code: `init` and `rekey` report the layer
+				// file relative to the project root, and so does this command's
+				// own success payload.
+				if got := coded.Details["file"]; got != filepath.Join("workspace", "defaults.yml") {
+					t.Errorf("details[file] = %v, want the project-relative path", got)
 				}
 				payload, merr := json.Marshal(coded)
 				if merr != nil {

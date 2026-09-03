@@ -122,10 +122,11 @@ func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	rewrittenLayers := make([]string, 0, len(plan.layers))
 	for _, l := range plan.layers {
 		if _, werr := rekeyLayerFile(l, plan.plain, recipient); werr != nil {
-			// A splice refusal keeps its own code and hint: the fix is to reshape
-			// that value, not to re-run the rekey, so rekeyResumeHint would send
-			// the developer in circles.
-			if unsupported, ok := spliceUnsupportedError(werr, relToRoot(flags.ProjectRoot(), l.path)); ok {
+			// A splice refusal keeps its own code, because the first step is to
+			// reshape that value rather than to re-run blindly — but the keyfile
+			// is already minted and part of the tree is already re-encoded, so
+			// the resume half of the story has to travel with it.
+			if unsupported, ok := rekeySpliceError(werr, relToRoot(flags.ProjectRoot(), l.path)); ok {
 				return unsupported
 			}
 			return rekeyWriteError(cmdctx.ErrWrap("secrets_rekey_failed", werr), l.path, flags.ProjectRoot())
@@ -137,7 +138,7 @@ func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	// the old key, which is the identity every already-rewritten value can no
 	// longer be read with — but the straggler lookup covers exactly that gap.
 	if err := writeRecipient(flags.ConfigPath, recipient); err != nil {
-		if unsupported, ok := spliceUnsupportedError(err, relToRoot(flags.ProjectRoot(), flags.ConfigPath)); ok {
+		if unsupported, ok := rekeySpliceError(err, relToRoot(flags.ProjectRoot(), flags.ConfigPath)); ok {
 			return unsupported
 		}
 		return rekeyWriteError(cmdctx.ErrWrap("secrets_recipient_write_failed", err), flags.ConfigPath, flags.ProjectRoot())
@@ -357,4 +358,20 @@ func rekeyReadError(recipient, what string, err error) error {
 // rather than as damage.
 func rekeyWriteError(err *cmdctx.CodedError, path, root string) error {
 	return err.WithDetail("file", relToRoot(root, path)).WithHint(rekeyResumeHint)
+}
+
+// rekeySpliceError is spliceUnsupportedError for a refusal that lands in phase 4
+// or 5 — after the new keyfile exists and part of the tree is re-encoded. The
+// refusal keeps its own code and its reshape hint, because reshaping the value
+// is the first thing to do; the resume text is appended rather than substituted,
+// since without it the message reads as "nothing happened" while the tree is in
+// fact mixed, and reshape-then-rerun is what actually finishes the rekey.
+func rekeySpliceError(err error, file string) (error, bool) {
+	unsupported, ok := spliceUnsupportedError(err, file)
+	if !ok {
+		return nil, false
+	}
+	return unsupported.
+		WithDetail("written", true).
+		WithHint(unsupported.Hint + "; " + rekeyResumeHint), true
 }

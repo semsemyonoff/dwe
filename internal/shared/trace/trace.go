@@ -117,25 +117,23 @@ func ResetRedaction() {
 	mu.Unlock()
 }
 
-// redact applies the registered redactor to s.
-func redact(s string) string {
-	mu.Lock()
-	r := redactor
-	mu.Unlock()
-	return r.Redact(s)
-}
-
 // Redact replaces every registered secret in s with secrets.RedactPlaceholder.
-// It is the same process-global redactor Command applies per argument and emit
-// applies per line, installed solely by config.LoadConfig via RegisterRedaction;
-// with nothing registered it is the identity function.
+// It is the single redaction primitive of this package — Command applies it per
+// argument and emit per line — over the process-global redactor installed solely
+// by config.LoadConfig via RegisterRedaction; with nothing registered it is the
+// identity function.
 //
 // It is exported for display code outside the diagnostic path — the pipeline's
 // plan/dry-run strings (pipeline.StepCommand, FormatAction, FormatCondition) —
 // so a decrypted value cannot reach stdout through a surface trace never sees.
 // Values shorter than secrets.MinRedactRunes are never redacted, here or
 // anywhere else.
-func Redact(s string) string { return redact(s) }
+func Redact(s string) string {
+	mu.Lock()
+	r := redactor
+	mu.Unlock()
+	return r.Redact(s)
+}
 
 // Command echoes an executed command at Verbose+ as a copy-pasteable line
 // prefixed with "$ ".
@@ -150,9 +148,9 @@ func Command(ctx context.Context, name string, args ...string) {
 		return
 	}
 	parts := make([]string, 0, len(args)+1)
-	parts = append(parts, redact(name))
+	parts = append(parts, Redact(name))
 	for _, a := range args {
-		parts = append(parts, redact(a))
+		parts = append(parts, Redact(a))
 	}
 	emit(ctx, "$ "+FormatCommand(parts))
 }
@@ -180,7 +178,7 @@ func Debugf(ctx context.Context, format string, a ...any) {
 func emit(ctx context.Context, line string) {
 	// Redact before ANY printer sees the line: this single point covers the
 	// -v / --debug echoes and their .dwe/logs mirrors for parallel steps.
-	line = redact(line)
+	line = Redact(line)
 	if p := printerFrom(ctx); p != nil {
 		p.PrintLine(line)
 		return

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -424,5 +426,69 @@ func TestCollectInventory_NoSecrets(t *testing.T) {
 	}
 	if inv.IdentityErr == nil {
 		t.Error("IdentityErr = nil with no recipient; want the no-identity sentinel")
+	}
+}
+
+// TestSpliceErrorMapping pins the code/hint routing of the three splice
+// sentinels. They share one code, but a verification failure is not a shape the
+// author can reshape at the target — the write DID splice and then failed to
+// read back — so its hint must point elsewhere in the file.
+func TestSpliceErrorMapping(t *testing.T) {
+	const file = "workspace/defaults.yml"
+
+	tests := []struct {
+		name      string
+		err       error
+		wantCode  string
+		wantHint  string
+		wantSplic bool
+	}{
+		{
+			name:      "shape refusal",
+			err:       fmt.Errorf("%w: nope", localpkg.ErrUnsplicable),
+			wantCode:  "secrets_write_unsupported",
+			wantHint:  "single-line",
+			wantSplic: true,
+		},
+		{
+			name:      "multi-line scalar",
+			err:       fmt.Errorf("%w: nope", localpkg.ErrMultilineScalar),
+			wantCode:  "secrets_write_unsupported",
+			wantHint:  "single-line",
+			wantSplic: true,
+		},
+		{
+			name:      "verification failure",
+			err:       fmt.Errorf("%w: nope", localpkg.ErrVerify),
+			wantCode:  "secrets_write_unsupported",
+			wantHint:  "did not read back",
+			wantSplic: true,
+		},
+		{
+			name:     "plain I/O failure",
+			err:      errors.New("permission denied"),
+			wantCode: "secrets_write_failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, ok := spliceUnsupportedError(tt.err, file); ok != tt.wantSplic {
+				t.Fatalf("spliceUnsupportedError recognised = %v, want %v", ok, tt.wantSplic)
+			}
+			var coded *cmdctx.CodedError
+			if !errors.As(spliceWriteError(tt.err, file), &coded) {
+				t.Fatal("spliceWriteError did not return a coded error")
+			}
+			if coded.Code != tt.wantCode {
+				t.Errorf("code = %q, want %q", coded.Code, tt.wantCode)
+			}
+			if coded.Details["file"] != file {
+				t.Errorf("details[file] = %v, want %q", coded.Details["file"], file)
+			}
+			if tt.wantHint != "" && !strings.Contains(coded.Hint, tt.wantHint) {
+				t.Errorf("hint = %q, want it to mention %q", coded.Hint, tt.wantHint)
+			}
+		})
 	}
 }

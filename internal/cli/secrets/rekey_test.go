@@ -203,6 +203,16 @@ func TestRekey_RefusesUnsplicableMarker(t *testing.T) {
 			if coded.Code != "secrets_write_unsupported" {
 				t.Errorf("error code = %q, want secrets_write_unsupported (message: %s)", coded.Code, coded.Message)
 			}
+			// The refusal lands AFTER phase 2 minted the new keyfile, so the
+			// reshape hint alone would read as "nothing happened": the resume
+			// half has to travel with it, or the developer is never told the
+			// mixed tree is readable and that a re-run finishes it.
+			if !strings.Contains(coded.Hint, rekeyResumeHint) {
+				t.Errorf("hint = %q, want it to carry the resume instruction", coded.Hint)
+			}
+			if coded.Details["written"] != true {
+				t.Errorf("details[written] = %v, want true", coded.Details["written"])
+			}
 			payload, merr := json.Marshal(coded)
 			if merr != nil {
 				t.Fatalf("marshalling the coded error: %v", merr)

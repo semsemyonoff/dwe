@@ -136,7 +136,7 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 		return cmdctx.ErrWrap("secrets_encrypt_failed", err)
 	}
 
-	if err := writeMarker(target, path, marker, layers); err != nil {
+	if err := writeMarker(target, path, marker, layers, flags.ProjectRoot()); err != nil {
 		return err
 	}
 
@@ -260,20 +260,24 @@ func trimOneNewline(s string) string {
 // The target files are git-tracked, hence PreserveOrDefault(0644): forcing
 // local.yml's 0600 on a tracked file would surprise git and editors, and the
 // marker is ciphertext anyway.
-func writeMarker(target, path, marker string, layers []config.Layer) error {
+// The reported file is project-relative, matching `init` and `rekey` and this
+// command's own success payload: a machine consumer of the error envelope must
+// not have to handle two path shapes for one code.
+func writeMarker(target, path, marker string, layers []config.Layer, root string) error {
 	label, policy := layerWritePolicy(target, layers)
+	display := relToRoot(root, target)
 
 	splicer, err := localpkg.NewSplicer(target, label)
 	if err != nil {
-		return spliceWriteError(err, target)
+		return spliceWriteError(err, display)
 	}
 	if err := splicer.SetScalar(strings.Split(path, "."), marker); err != nil {
-		return spliceWriteError(err, target)
+		return spliceWriteError(err, display)
 	}
 
 	var data map[string]any
 	if err := yaml.Unmarshal(splicer.Bytes(), &data); err != nil {
-		return cmdctx.ErrWrap("secrets_write_failed", fmt.Errorf("parse the staged %s: %w", target, err))
+		return cmdctx.ErrWrap("secrets_write_failed", fmt.Errorf("parse the staged %s: %w", display, err))
 	}
 	if data == nil {
 		data = make(map[string]any)
@@ -283,7 +287,7 @@ func writeMarker(target, path, marker string, layers []config.Layer) error {
 	}
 
 	if err := splicer.Write(target, policy); err != nil {
-		return spliceWriteError(err, target)
+		return spliceWriteError(err, display)
 	}
 	return nil
 }

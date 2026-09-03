@@ -140,6 +140,39 @@ func TestStepCommandDoesNotMutateWith(t *testing.T) {
 	}
 }
 
+// TestRedactWithValueCoversEveryContainerShape pins the two `with:` shapes the
+// deep copy handles but no plan surface exercises directly: a YAML-decoded
+// map[any]any (what an untyped nested map decodes to outside the strict
+// loaders) and a []string. A missed arm would copy the container by reference
+// AND leak the plaintext.
+func TestRedactWithValueCoversEveryContainerShape(t *testing.T) {
+	registerPlanSecret(t)
+
+	inner := map[any]any{"k": planSecret, 2: []string{planSecret, "public"}}
+	with := map[string]any{"nested": inner}
+
+	out := redactWithValues(with)
+
+	got, ok := out["nested"].(map[any]any)
+	if !ok {
+		t.Fatalf("nested = %#v, want map[any]any", out["nested"])
+	}
+	if got["k"] != "***" {
+		t.Errorf("nested[k] = %v, want ***", got["k"])
+	}
+	list, ok := got[2].([]string)
+	if !ok {
+		t.Fatalf("nested[2] = %#v, want []string", got[2])
+	}
+	if !reflect.DeepEqual(list, []string{"***", "public"}) {
+		t.Errorf("nested[2] = %#v, want [*** public]", list)
+	}
+	// The caller's map must be untouched — same contract as the top-level copy.
+	if !reflect.DeepEqual(inner, map[any]any{"k": planSecret, 2: []string{planSecret, "public"}}) {
+		t.Errorf("the source map was mutated: %#v", inner)
+	}
+}
+
 // TestStepCommandRedactsEveryStepType pins the redaction on all four branches
 // plus the default one.
 func TestStepCommandRedactsEveryStepType(t *testing.T) {

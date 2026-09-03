@@ -308,6 +308,23 @@ func TestSplicer_SetScalar_RefusedShapes(t *testing.T) {
 	}
 }
 
+func TestSplicer_SetScalar_RefusesAMultiLineNewValue(t *testing.T) {
+	// The refusal is symmetric: a target that fits on one line is still not
+	// splicable when the VALUE would need several, since the replacement text
+	// is written into a single line's span.
+	src := "a: 1\nb: 2\n"
+	for _, value := range []string{"one\ntwo", "trailing\n"} {
+		s, _ := newSpliceFixture(t, src)
+		err := s.SetScalar([]string{"a"}, value)
+		if !errors.Is(err, ErrMultilineScalar) {
+			t.Fatalf("SetScalar(%q) error = %v, want ErrMultilineScalar", value, err)
+		}
+		if got := string(s.Bytes()); got != src {
+			t.Errorf("bytes changed on a refused splice:\n%q", got)
+		}
+	}
+}
+
 func TestSplicer_SetScalar_KeepsCRLFOnTheTouchedLine(t *testing.T) {
 	src := "# header\r\na: 1\r\nb: \"old\"  # note\r\nc: 3\r\n"
 	s, _ := newSpliceFixture(t, src)
@@ -707,6 +724,53 @@ func TestSplicer_SetScalar_InsertsTopLevelBlockAtEOF(t *testing.T) {
 			}
 			if got, ok := scalarAt(s.doc, []string{"secrets", "recipient"}); !ok || got != "age1xyz" {
 				t.Errorf("recipient reads back as (%q, %v)", got, ok)
+			}
+		})
+	}
+}
+
+func TestSplicer_SetScalar_InsertKeepsKeptBlockScalarValue(t *testing.T) {
+	// A `|+` scalar's value swallows every trailing line break in the file, so
+	// the cosmetic separator blank line an appended top-level block would
+	// normally gain would EXTEND it — a data change verify() cannot see, since
+	// it only re-reads the paths this Splicer set.
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "keep-chomped literal loses the cosmetic blank line",
+			src:  "project:\n  name: demo\n\nnote: |+\n  body\n",
+			want: "project:\n  name: demo\n\nnote: |+\n  body\nsecrets:\n  recipient: age1xyz\n",
+		},
+		{
+			name: "keep-chomped folded loses it too",
+			src:  "project:\n  name: demo\n\nnote: >+\n  body\n",
+			want: "project:\n  name: demo\n\nnote: >+\n  body\nsecrets:\n  recipient: age1xyz\n",
+		},
+		{
+			name: "clip-chomped literal keeps the house style",
+			src:  "project:\n  name: demo\n\nnote: |\n  body\n",
+			want: "project:\n  name: demo\n\nnote: |\n  body\n\nsecrets:\n  recipient: age1xyz\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newSpliceFixture(t, tt.src)
+			before, ok := scalarAt(s.doc, []string{"note"})
+			if !ok {
+				t.Fatalf("fixture has no note scalar")
+			}
+			if err := s.SetScalar([]string{"secrets", "recipient"}, "age1xyz"); err != nil {
+				t.Fatalf("SetScalar: %v", err)
+			}
+			if got := string(s.Bytes()); got != tt.want {
+				t.Errorf("bytes =\n%q\nwant\n%q", got, tt.want)
+			}
+			if after, ok := scalarAt(s.doc, []string{"note"}); !ok || after != before {
+				t.Errorf("note changed from %q to (%q, %v)", before, after, ok)
 			}
 		})
 	}

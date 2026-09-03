@@ -248,9 +248,16 @@ A decrypted secret prints in full like any other value.
 
 `dwe vars set` writes `workspace/local.yml` through a `yaml.Node` round-trip:
 load the file as a node tree, patch only the targeted path, and re-serialize.
-Comments, blank lines, and key ordering are preserved; only the edited value
-node changes. Coercion is honoured at the node level — overwriting a quoted
-string with `true`/`42` emits a **bare** scalar so it reloads typed.
+Comments and key ordering are preserved; only the edited value node changes.
+Coercion is honoured at the node level — overwriting a quoted string with
+`true`/`42` emits a **bare** scalar so it reloads typed.
+
+Blank lines are **not** preserved: the document is re-encoded, and the YAML
+library keeps blank lines only inside comment blocks, so an edit may also
+re-indent the file to its own indent step. That is acceptable for `local.yml`,
+which is gitignored developer state. `dwe secrets set` / `init` / `rekey` write
+tracked layer files and therefore use a different, line-splicing writer that
+does preserve blank lines — see [`secrets.md`](secrets.md#subcommands).
 
 This writer backs **`dwe vars set`**, **`dwe services enable/disable`**, and
 the **setup wizard**, so comments in `local.yml` survive every DWE-driven edit.
