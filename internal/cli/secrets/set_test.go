@@ -677,6 +677,26 @@ func TestSet_WarnsOnUnredactableValue(t *testing.T) {
 		}
 	})
 
+	t.Run("a refused write warns about nothing", func(t *testing.T) {
+		cfgPath, root := writeFixture(t)
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+		initProject(t, flags)
+		// A flow mapping the splice writer refuses: the command fails before any
+		// marker exists, so a warning saying the value "is encrypted at rest"
+		// would be a lie.
+		if err := os.WriteFile(defaultsPath(root), []byte("vars:\n  telegram: {pin: placeholder}\n"), 0o644); err != nil {
+			t.Fatalf("writing defaults.yml: %v", err)
+		}
+
+		_, errOut, err := runSecrets(t, flags, "set", "vars.telegram.pin", "k3y")
+		if err == nil {
+			t.Fatal("set succeeded on a shape the splice writer must refuse")
+		}
+		if strings.Contains(errOut, "warning:") {
+			t.Errorf("stderr = %q, want no redaction warning when the write failed", errOut)
+		}
+	})
+
 	t.Run("json mode keeps stderr clean", func(t *testing.T) {
 		cfgPath, root := writeFixture(t)
 		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}

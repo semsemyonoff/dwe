@@ -120,17 +120,6 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 		return nil
 	}
 
-	// A value under secrets.MinRedactRunes is encrypted at rest like any other,
-	// but the redactor deliberately skips it — redacting a 3-rune string would
-	// shred every unrelated line containing it. Say so at write time instead of
-	// letting the developer discover it in a pasted `dwe deploy plan`. Text mode
-	// only: in JSON mode stderr stays free of anything a parser could trip over.
-	if flags.Output != "json" && utf8.RuneCountInString(plain) < secrets.MinRedactRunes {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-			"warning: the value for %s is shorter than %d characters — it is encrypted at rest, but dwe will not redact it in plan or --debug output\n",
-			path, secrets.MinRedactRunes)
-	}
-
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean. No
 	// preflight: writing a marker touches no container and no stack state.
 	w := render.NewWriter(cmd.ErrOrStderr())
@@ -158,6 +147,20 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 
 	if err := writeMarker(target, path, marker, layers, flags.ProjectRoot()); err != nil {
 		return err
+	}
+
+	// A value under secrets.MinRedactRunes is encrypted at rest like any other,
+	// but the redactor deliberately skips it — redacting a 3-rune string would
+	// shred every unrelated line containing it. Say so here instead of letting
+	// the developer discover it in a pasted `dwe deploy plan`. It comes AFTER
+	// writeMarker on purpose: emitted earlier, a refused write or a lost lock
+	// would leave a warning claiming the value is encrypted at rest when no
+	// marker exists. Text mode only: in JSON mode stderr stays free of anything
+	// a parser could trip over.
+	if flags.Output != "json" && utf8.RuneCountInString(plain) < secrets.MinRedactRunes {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"warning: the value for %s is shorter than %d characters — it is encrypted at rest, but dwe will not redact it in plan or --debug output\n",
+			path, secrets.MinRedactRunes)
 	}
 
 	data := secretSetJSON{Path: path, File: relToRoot(flags.ProjectRoot(), target)}
