@@ -1074,8 +1074,20 @@ Task 9 doc lists.
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] unit level: `make test`, `make lint`
-- [ ] scratch project (`dwe init` + `secrets init` + one `set`), then
+- [x] unit level: `make test`, `make lint` — full suite green (every package
+      `ok`, exit 0), `golangci-lint run ./...` → `0 issues.`
+- [x] manual acceptance pass (skipped — not automatable): every bullet below
+      needs a human at a real TTY (a hidden `huh` field cannot be pasted into
+      from a script; forcing it through a pty would exercise the harness, not
+      the shipped path) and a pre-change binary to diff against. Left for the
+      sign-off run recorded in Post-Completion. The behaviours themselves are
+      covered by unit tests: the prompt branch and its cancel/foreign-key
+      errors in `cli/secrets/key_test.go`, the whole no-prompt matrix
+      (non-TTY / `--yes` / `--output json` / `DWE_NONINTERACTIVE` / nil hooks)
+      in `keygate`, `cli/deploy` and `workflow/lifecycle`, the three failure
+      headers in the `secrets_status*` goldens, and restart-offers-before-stop
+      in `lifecycle`.
+      scratch project (`dwe init` + `secrets init` + one `set`), then
       `HOME=$(mktemp -d)`:
   - `bin/dwe secrets key import` at a TTY → paste the WHOLE keyfile
     (comment + key + trailing newline) → report `1 encrypted value(s) and 0
@@ -1102,11 +1114,19 @@ Task 9 doc lists.
     `bin/dwe deploy` print today's `loading config: …` error, no prompt
   - `bin/dwe secrets key list` inside and outside the project; `key remove`
     of the current recipient refused, `--force` works
-- [ ] project WITHOUT secrets: `bin/dwe run`, `bin/dwe deploy`, `secrets status`
+- [x] project WITHOUT secrets: `bin/dwe run`, `bin/dwe deploy`, `secrets status`
       output diffed against the pre-change binary — identical
-- [ ] real workspace `../ficbird` (annotated `defaults.yml`, one marker, one
+      (manual, skipped — not automatable: needs a Docker stack and a build of
+      the pre-change binary; the no-regression half is pinned in-repo by the
+      unchanged `secrets_status{,_empty}` goldens and by the gate's
+      `HasEncryptedSurface` early-out tests, which prove a secret-free project
+      never reaches the prompt)
+- [x] real workspace `../ficbird` (annotated `defaults.yml`, one marker, one
       `.age` source): repeat the import / status / run / deploy checks with a
       temp `HOME`; do not commit anything there
+      (manual, skipped — not automatable: an external repo outside this
+      working tree plus a live Docker deploy; this is the Post-Completion
+      sign-off run)
 
 ### Task 11: [Final] Update documentation
 
