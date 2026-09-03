@@ -992,7 +992,7 @@ Task 9 doc lists.
 - Modify: `docs/internals/packages.md`, `AGENTS.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] `secrets.md`: new section **"New developer / new machine"** (three
+- [x] `secrets.md`: new section **"New developer / new machine"** (three
       sources, lookup order, "the first present source must match the
       recipient — there is no fall-through", the interactive import walkthrough
       with the readability report, what the wizard / `dwe run` / `dwe restart`
@@ -1005,12 +1005,26 @@ Task 9 doc lists.
       gain `invalid_identity`; JSON section gains the new fields; error-code
       list (`:566`) gains the four new codes; ru mirror (`:220-222`, `:584`)
       updated in the same commit
-- [ ] `SKILL.md`: interactive import is a **human handoff** — the agent never
+      (➕ the error-code list gained SIX codes, not four — the three Task 6
+      additions (`secrets_recipient_invalid`, `secrets_key_list_failed`,
+      `secrets_key_remove_failed`) plus `secrets_key_in_use`,
+      `secrets_key_not_found`, `secrets_confirmation_required`;
+      `secrets_import_cancelled` was already documented by Task 4. ➕ the
+      "Validation and preflight" section also gained a paragraph placing the
+      offer BEFORE the wall, since the two would otherwise read as competing
+      descriptions of the same block. ➕ both ru mirrors' `> Translated from: …
+      @ <hash>` headers were refreshed — `TestRussianTranslationsCurrent`
+      compares them against the generated content hash of the English file)
+- [x] `SKILL.md`: interactive import is a **human handoff** — the agent never
       types a key; on `<encrypted>` run `secrets status --output json`, read
       `identity.reason`/`identity.hint`, hand off; never edit yml to "fix" a
       marker; `key list` in the READ table; the `secrets.unresolved` gate
       may now be an interactive offer when a human runs `dwe run`/`dwe deploy`
-- [ ] `packages.md`: new top-level `` - `internal/core/workflow/keygate/` ``
+      (➕ the handoff rule is stated as "never ask the user for the identity
+      text so you can type it" — the risk is not the agent running a command,
+      it is a private key passing through a transcript; ➕ `key remove` joined
+      the MUST-NOT-invoke list in the same edit)
+- [x] `packages.md`: new top-level `` - `internal/core/workflow/keygate/` ``
       and `` - `internal/core/ui/secretsprompt/` `` bullets (the `§` pointer
       test requires line-leading bullets) — contracts: runs BEFORE
       `LoadConfig` on raw layers, skips itself on any raw-load/validation
@@ -1027,16 +1041,36 @@ Task 9 doc lists.
       `cli/deploy` and `workflow/lifecycle` sections name the seams
       (`keygateEnsureFn`, `KeygateEnsureFunc`, `runStopFn`) and the
       restart-before-stop order
-- [ ] `AGENTS.md` "Encrypted secrets" bullet: **net-zero byte delta** —
+      (➕ the mirror sentence had already moved to the `shared/secrets` bullet
+      (the old `:287`), so all three stale claims were rewritten there:
+      `identitySet.reason()` → `keygate.IdentityReason`, `classifyMarker` /
+      `identitySet.decrypt` → their `keygate.IdentitySet` homes. ➕ the
+      `cli/secrets` bullet also documents `key import`'s three input branches
+      and the `key list` / `key remove` refusals, which the plan had not
+      enumerated)
+- [x] `AGENTS.md` "Encrypted secrets" bullet: **net-zero byte delta** —
       tighten an existing clause to pay for one sentence on the gate
       (`wc -c AGENTS.md` ≤ 40960, line ≤ 600 runes); run
       `go test ./internal/cli/docs/ -run TestAgentsMd` in this task
-- [ ] `CHANGELOG.md` `## [Unreleased]`: interactive `key import` + report,
+      (➕ the gate sentence cost ~170 B and the bullet had only ~40 B of
+      headroom, so three of its own clauses were tightened
+      (`LoadConfigSanitized`, the redaction installer, the Splicer line) plus
+      two illustrative parentheticals elsewhere in the file — the
+      packages.md-pointer examples, which the two Critical Patterns bullets
+      right below already state, and the `web/public/` image note. Final size
+      40904 B: net **−14**, not merely zero. No `§ internal/core/workflow/keygate/`
+      pointer was added — a fourth pointer is ~40 B the budget cannot pay for,
+      and the two new bullets are reachable from the `cli/secrets` pointer)
+- [x] `CHANGELOG.md` `## [Unreleased]`: interactive `key import` + report,
       wizard / `run` / `restart` key offer, `status` identity header +
       hint, `invalid_identity` reason, `key list` / `key remove`,
       `ParseIdentity` first-token rule
-- [ ] `make build` (refreshes embedded docs), `go test ./internal/core/docs/... ./internal/cli/docs/...`
-      — must pass before task 10
+      (➕ four of the six had already landed with their own tasks; this task
+      added the interactive-import entry, the run/restart/deploy offer entry
+      and the `ParseIdentity` first-token entry (under `### Changed`, since it
+      changes how an existing input is read))
+- [x] `make build` (refreshes embedded docs), `go test ./internal/core/docs/... ./internal/cli/docs/...`
+      — must pass before task 10 (plus full `make test` + `make lint`)
 
 ### Task 10: Verify acceptance criteria
 

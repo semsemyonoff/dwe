@@ -78,9 +78,48 @@ generated from commit subjects and stay on the
   `secrets_key_not_found`, `secrets_confirmation_required`,
   `secrets_recipient_invalid`, `secrets_key_list_failed`,
   `secrets_key_remove_failed`.
+- **`dwe secrets key import` asks for the identity** when it runs at a terminal
+  with no `--file` and nothing piped. The field is hidden and validates in
+  place, so a key that does not parse — or one belonging to another project —
+  is corrected without losing the form, and an identity that is already
+  installed is reported **before** the form opens rather than after the key was
+  typed. A successful import now ends with what the key opened: a second line
+  `N encrypted value(s) and M .age file(s) are now readable`, and
+  `markers_readable` / `files_readable` in `--output json`. The first output
+  line and the pre-existing JSON fields are unchanged, `--file` and piped
+  imports behave exactly as before, and the prompt never opens without a
+  terminal, under `--output json` or under `DWE_NONINTERACTIVE=1`. Cancelling
+  it is the new `secrets_import_cancelled`.
+- **`dwe run`, `dwe restart` and the `dwe deploy` menu now offer to take the
+  missing identity** instead of only reporting that it is missing — the
+  new-machine path no longer requires knowing `dwe secrets key import` by
+  heart. The offer appears when the project has encrypted material, no usable
+  identity and a human at a terminal; accepting opens the same hidden prompt
+  and the command **continues in the same invocation** (the gate runs on the
+  raw config layers before the config is loaded, so there is no reload and no
+  window in which the wizard proceeds with unresolved state). `dwe restart`
+  offers **before it stops anything**, so declining leaves the stack running,
+  and declining anywhere ends the command with `secrets_no_identity` and the
+  fix instruction. Nothing changes without a terminal, with `--yes`, with
+  `--output json` or under `DWE_NONINTERACTIVE=1`: the `secrets.unresolved`
+  preflight wall fires exactly as before, so CI output and exit codes are
+  untouched. `dwe deploy run`, `dwe reset` and `dwe render env` / `config`
+  keep their hard error and hint. A `DWE_AGE_KEY` / `DWE_AGE_KEY_FILE` that is
+  set but does not hold the project's identity is **reported, never
+  prompted** — the lookup takes the first present source with no fall-through,
+  so an imported keyfile would not even be consulted; the message names the
+  variable to repair, and never its value.
 
 ### Changed
 
+- **An age identity is now read as the first `AGE-SECRET-KEY-1…` token anywhere
+  in the text**, instead of the first line that is neither blank nor a `#`
+  comment. Every shape that worked before still works, and two that did not now
+  do: a keyfile whose lines a paste joined into one (`# public key: age1…
+  AGE-SECRET-KEY-1…`, previously read as a comment and skipped) and a file
+  whose live key sits below a commented-out old one. A later token is still
+  ignored rather than an error. Text that holds no token is the new
+  `ErrInvalidIdentity` — surfaced as `invalid_identity`, not `corrupt`.
 - **Without a usable identity a project still loads**, but surfaces degrade
   explicitly rather than silently: `dwe vars list` / `get` / `inspect` and the
   vars TUI render `<encrypted>` instead of the ciphertext (`vars list`,

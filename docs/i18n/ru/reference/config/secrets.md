@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ 4e36978ac88d
+> Translated from: reference/config/secrets.md @ 5bafd6e97e7c
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -19,6 +19,7 @@
 - [Блок `secrets:`](#блок-secrets)
 - [Ключи: где живёт identity](#ключи-где-живёт-identity)
 - [С чего начать](#с-чего-начать)
+- [Новый разработчик / новая машина](#новый-разработчик--новая-машина)
 - [Подкоманды](#подкоманды)
   - [`dwe secrets init`](#dwe-secrets-init)
   - [`dwe secrets status`](#dwe-secrets-status)
@@ -26,6 +27,8 @@
   - [`dwe secrets get`](#dwe-secrets-get)
   - [`dwe secrets encrypt` / `decrypt`](#dwe-secrets-encrypt--decrypt)
   - [`dwe secrets key export` / `import`](#dwe-secrets-key-export--import)
+  - [`dwe secrets key list`](#dwe-secrets-key-list)
+  - [`dwe secrets key remove`](#dwe-secrets-key-remove)
   - [`dwe secrets rekey`](#dwe-secrets-rekey)
 - [Без ключа: что продолжает работать](#без-ключа-что-продолжает-работать)
 - [Защита вывода: маркер никогда не попадает в отрендеренный файл](#защита-вывода-маркер-никогда-не-попадает-в-отрендеренный-файл)
@@ -139,9 +142,12 @@ secrets:
 ужимается), каждый keyfile пишется с `0600` и `O_CREATE|O_EXCL` — DWE никогда не
 перезаписывает файл identity.
 
-Пустые строки и строки-комментарии `#` в файле identity пропускаются, поэтому
-keyfile от CLI `age` (в котором есть заголовок `# public key:`) можно
-использовать как есть.
+Identity читается как **первый токен `AGE-SECRET-KEY-1…` в любом месте текста**,
+поэтому keyfile от CLI `age` (в котором есть заголовок `# public key:`)
+используется как есть — в том числе когда вставка склеила его строки в одну, и в
+том числе файл, где живой ключ лежит под закомментированным старым. Более
+поздний токен игнорируется, а не считается ошибкой: multi-identity
+`DWE_AGE_KEY_FILE` — документированная форма `age`.
 
 ## С чего начать
 
@@ -157,11 +163,104 @@ git add workspace/defaults.yml && git commit
 # Онбординг коллеги — identity передаётся вне репозитория:
 dwe secrets key export                            # → менеджер паролей
 # …на другой машине:
-dwe secrets key import --file identity.txt
+dwe secrets key import                            # скрытый ввод: вставить ключ
+dwe secrets key import --file identity.txt        # …или прочитать из файла
 ```
 
 После этого `${vars.telegram.token}` везде резолвится в открытый текст, а
 `dwe vars get vars.telegram.token` его печатает.
+
+## Новый разработчик / новая машина
+
+Клон несёт публичный recipient; приватный identity вместе с ним не едет. Пока
+identity нет на этой машине, любое зашифрованное значение читается как
+`<encrypted>`, а любая lifecycle-команда упирается в `secrets.unresolved`.
+
+Мест ровно три — [порядок поиска выше](#ключи-где-живёт-identity):
+`DWE_AGE_KEY`, `DWE_AGE_KEY_FILE` или keyfile проекта, который пишет
+`dwe secrets key import`. **Первый найденный источник обязан совпасть с
+recipient**; перехода к следующему не происходит.
+
+### Интерактивный импорт
+
+В терминале, без `--file` и без пайпа, `import` спрашивает ключ сам:
+
+```
+$ dwe secrets key import
+Private identity for age1qyqs…
+Paste the AGE-SECRET-KEY-… line, or the whole keyfile; the typed characters are not echoed.
+> ••••••••••••
+
+identity for age1qyqs… stored at /home/dev/.config/dwe/keys/age1qyqs….key
+2 encrypted value(s) and 1 .age file(s) are now readable
+```
+
+Поле скрытое, и принимается keyfile целиком — вместе с заголовком-комментарием
+и даже когда вставка приехала одной склеенной строкой. Проверка идёт **внутри
+формы**: ключ, который не парсится, или ключ от другого проекта показываются без
+закрытия формы, поэтому опечатку исправляют, а не начинают заново. `Esc`
+отменяет с `secrets_import_cancelled` и без keyfile.
+
+Вторая строка — ради чего всё и затевалось: это тот же скан, что рендерит
+[`dwe secrets status`](#dwe-secrets-status), поэтому импорт заканчивается
+отчётом о том, что ключ реально открыл, а не оставляет проверять это вручную.
+
+### Предложение в `dwe deploy`, `dwe run` и `dwe restart`
+
+Знать команду импорта наизусть не обязательно. Когда в проекте есть
+зашифрованные данные, пригодного identity нет, а за терминалом сидит человек,
+интерактивные точки входа предлагают ввести ключ прямо здесь:
+
+```
+Enter the private identity now?
+This project has encrypted values that need the age identity for age1qyqs…, and
+this machine does not have it. run 'dwe secrets key import' to store the identity
+at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_FILE
+  [ Enter key ]   [ Abort ]
+```
+
+`Enter key` открывает тот же скрытый ввод; сохранённый identity проверяется
+настоящим поиском, и команда **продолжается в том же запуске** — предложение
+работает на сырых слоях *до* загрузки конфига, поэтому конфиг читается один раз
+и уже расшифрованным. `Abort` (или `Esc`) завершает команду с
+`secrets_no_identity` и подсказкой; ничего не записано.
+
+Три детали:
+
+- **`dwe restart` предлагает до того, как что-то остановит.** Отказ оставляет
+  стек работающим, а не роняет его, чтобы потом не суметь поднять.
+- **В `dwe deploy` предложение стоит на входе в меню**, поэтому покрывает и
+  `Plan`, а не только `Run` и мастера: план, построенный без ключа, печатал бы
+  команды, выведенные из `<encrypted>`.
+- **Неинтерактивные точки входа сохраняют сегодняшнюю жёсткую ошибку**:
+  `dwe deploy run`, `dwe reset`, `dwe render env` и `dwe render config` падают с
+  теми же сообщением и подсказкой. Это предложение там, где человек уже ждёт, а
+  не глобальный хук.
+
+### Что видят CI и скрипты
+
+Предложение не открывается, когда отвечать на него некому: stdin не терминал,
+`--yes`, `--output json` или `DWE_NONINTERACTIVE=1`. В каждом из этих случаев
+остаётся прежнее поведение — стена preflight `secrets.unresolved` для
+lifecycle-команд, `secrets_identity_source_required` для `key import`, — так что
+вывод и код возврата пайплайна не меняются.
+
+### Сломанный источник сообщают, а не предлагают починить вводом
+
+Раз побеждает первый найденный источник и перехода к следующему нет, заданный
+`DWE_AGE_KEY`, который не содержит identity этого проекта, **импортом ключа не
+чинится**: свежий keyfile просто не будет прочитан. Поэтому вместо формы, чей
+результат нельзя использовать, гейт называет источник:
+
+```
+$DWE_AGE_KEY is set but does not hold the identity for age1qyqs…;
+unset it or fix it — a keyfile is not consulted while it is set
+```
+
+Уже существующий keyfile с чужим ключом отклоняется так же — с указанием на
+[`dwe secrets key remove`](#dwe-secrets-key-remove): запись идёт с `O_EXCL` и
+его бы не заменила. Оба отказа срабатывают в **любом** режиме, интерактивном или
+нет: они точнее общего «нет identity», и ни один из них не вопрос.
 
 ## Подкоманды
 
@@ -427,6 +526,71 @@ identity for age1… stored at ~/.config/dwe/keys/age1….key
 считаются только значения, которые открывает *настроенный* identity: значение,
 оставшееся от прерванного `rekey`, — всё ещё задача, поэтому оно не в счёт.
 
+### `dwe secrets key list`
+
+```
+dwe secrets key list
+```
+
+Все identity, установленные на этой машине, отсортированные по имени файла:
+
+```
+  Directory — /home/dev/.config/dwe/keys
+
+╭───────────┬───────────────┬────────────────────╮
+│RECIPIENT  │FILE           │STATE               │
+├───────────┼───────────────┼────────────────────┤
+│age1broken │age1broken.key │unparsable          │
+│age1current│age1current.key│ok (current project)│
+│age1locked │age1locked.key │unreadable          │
+│age1other  │age1other.key  │ok                  │
+│age1parsed │age1stale.key  │misnamed            │
+╰───────────┴───────────────┴────────────────────╯
+```
+
+Директория ключей **общемашинная, а не проектная**, и именно поэтому ничего не
+удаляется автоматически: лежащий здесь ключ может принадлежать любому другому
+проекту на этой машине, так что «неиспользуемый» вычислить нельзя. Единственное
+отношение, которое `list` может назвать, — то, что он знает: строка текущего
+проекта помечается `current project`. Вне проекта не помечается ничего, и
+команда всё равно работает (она в списке команд, которым проект не нужен).
+
+| Состояние | Значение |
+|-----------|----------|
+| `ok` | Файл содержит тот age-identity, который заявлен его именем |
+| `unreadable` | Файл не удалось прочитать (права, директория, битая ссылка) |
+| `unparsable` | В файле нет age-identity |
+| `misnamed` | Парсится, но identity принадлежит другому recipient, чем говорит имя файла — в строке показан **распарсенный** recipient |
+
+Состояния — фиксированный словарь: текст ошибки ввода-вывода или парсера в вывод
+не попадает никогда, потому что и то и другое повторяет содержимое файла. Для
+`unreadable` и `unparsable` в колонке RECIPIENT стоит основа имени файла —
+recipient и есть имя файла по построению, — а не что-то прочитанное изнутри.
+
+### `dwe secrets key remove`
+
+```
+dwe secrets key remove <recipient> [--force] [--yes|-y]
+```
+
+Удаляет `~/.config/dwe/keys/<recipient>.key`. **Целью является только
+каноническое имя файла**, поэтому файл `misnamed` никогда не удаляется командой,
+нацеленной на recipient, который он случайно содержит: удаление такого файла
+остаётся осознанным ручным действием.
+
+Удаление identity, которым пользуется текущий проект, отклоняется
+(`secrets_key_in_use`), пока не передан `--force`: зашифрованные значения станут
+здесь нечитаемыми, и, если ключ не экспортировали, он больше нигде не
+существует. Отсутствующий файл — `secrets_key_not_found`.
+
+В остальных случаях удаление подтверждается интерактивно. Там, где спросить
+нельзя — нет терминала, `--output json`, `DWE_NONINTERACTIVE=1`, — это
+`secrets_confirmation_required`, и путь дальше — `--yes`; отказ же ничего не
+делает, печатает `kept <path>` и завершается с кодом 0. Локи проекта держатся
+вокруг удаления, когда проект определён, — по той же причине, по которой их
+держит `key import`: удаление, гоняющееся с `rekey`, сняло бы ключ, который
+`rekey` как раз ставит.
+
 ### `dwe secrets rekey`
 
 ```
@@ -471,7 +635,7 @@ dwe secrets rekey
 | `dwe status`, `dwe docs`, `dwe validate`, `dwe prompt`, `dwe commands` | Работают штатно |
 | `dwe vars list` / `get` / `inspect`, TUI-браузер | Показывают `<encrypted>` — никогда шифротекст |
 | `dwe secrets status` | Сообщает про каждое значение и причину; код возврата 0 |
-| `dwe run`, `dwe deploy`, `dwe reset`, `dwe stop`, мастер деплоя | **Блокируются** валидатором preflight `secrets.unresolved` с указанием, что делать |
+| `dwe run`, `dwe deploy`, `dwe reset`, `dwe stop`, мастер деплоя | **Блокируются** валидатором preflight `secrets.unresolved` с указанием, что делать. В терминале `dwe run` / `dwe restart` и меню `dwe deploy` сначала [предлагают ввести identity](#предложение-в-dwe-deploy-dwe-run-и-dwe-restart) |
 | `dwe render env`, `dwe render config` | **Падают**, называя значение, которое было бы записано |
 | `dwe render ide` / `ai` / `git` | Работают — они рендерят по санитизированному конфигу и выдают маркер |
 
@@ -541,6 +705,13 @@ recipient, а не остаётся слепым.
 сейчас». Он подмешан и в `preflight.Run`, и в pre-flight-гейт мастера деплоя,
 поэтому `dwe run` / `deploy` / `reset` и меню останавливаются с одной и той же
 понятной подсказкой.
+
+Он по-прежнему та же стена. Изменилось то, с чем человек сталкивается *до* неё:
+в интерактивном `dwe run` / `dwe restart` / `dwe deploy` сначала срабатывает
+[предложение ввести ключ](#предложение-в-dwe-deploy-dwe-run-и-dwe-restart),
+поэтому к моменту preflight identity уже есть и валидатору нечего сообщать.
+Откажитесь от предложения или запуститесь без терминала — и он заблокирует
+ровно так, как описано здесь.
 
 Нерасшифрованные маркеры группируются **по причине**: одна диагностика на
 причину со списком отсортированных путей. У разработчика без ключа все маркеры
@@ -682,7 +853,14 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |
 | `key export` | `{"recipient": "age1…", "identity": "AGE-SECRET-KEY-1…"}` |
 | `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "markers_readable": N, "files_readable": N}` |
+| `key list` | `{"keys": [{"recipient": "age1…", "file": "/…/age1….key", "state": "ok\|unreadable\|unparsable\|misnamed", "current": true}]}` |
+| `key remove` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "removed": true}` |
 | `rekey` | `{"old_recipient": "age1…", "recipient": "age1…", "keyfile": "…", "markers": N, "layers": ["…"], "files": ["…"]}` |
+
+`key list` всегда отдаёт `keys` массивом — `[]`, когда директория пуста или
+отсутствует, но никогда `null`. `key remove` всегда сообщает `removed: true`:
+отказ — это типизированный конверт ошибки, а не payload, говорящий, что ничего
+не произошло.
 
 В `status` `identity` — объект, а не плоская строка: `source` — стабильный
 словарь, по которому ветвится скрипт (**прочитанный** источник, заполняется и
@@ -698,7 +876,12 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 `secrets_rekey_blocked`, `secrets_import_cancelled` (скрытый запрос
 `key import` был отменён), `secrets_write_unsupported`
 ([отклонённая форма](#подкоманды) — файл не тронут; подсказка называет путь и
-что нужно изменить).
+что нужно изменить), а для директории ключей — `secrets_key_in_use` (identity
+текущего проекта, без `--force`), `secrets_key_not_found`,
+`secrets_confirmation_required` (удаление, которое негде подтвердить, без
+`--yes`), `secrets_recipient_invalid` (некорректный аргумент `key remove`,
+отклонённый до обращения к файловой системе), `secrets_key_list_failed` и
+`secrets_key_remove_failed`.
 
 ## Чего здесь нет намеренно
 

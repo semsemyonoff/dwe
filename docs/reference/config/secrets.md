@@ -16,6 +16,7 @@ file as plaintext.
 - [The `secrets:` block](#the-secrets-block)
 - [Keys: where the identity lives](#keys-where-the-identity-lives)
 - [Getting started](#getting-started)
+- [New developer / new machine](#new-developer--new-machine)
 - [Subcommands](#subcommands)
   - [`dwe secrets init`](#dwe-secrets-init)
   - [`dwe secrets status`](#dwe-secrets-status)
@@ -23,6 +24,8 @@ file as plaintext.
   - [`dwe secrets get`](#dwe-secrets-get)
   - [`dwe secrets encrypt` / `decrypt`](#dwe-secrets-encrypt--decrypt)
   - [`dwe secrets key export` / `import`](#dwe-secrets-key-export--import)
+  - [`dwe secrets key list`](#dwe-secrets-key-list)
+  - [`dwe secrets key remove`](#dwe-secrets-key-remove)
   - [`dwe secrets rekey`](#dwe-secrets-rekey)
 - [Without a key: what still works](#without-a-key-what-still-works)
 - [Output guards: no marker ever reaches a rendered file](#output-guards-no-marker-ever-reaches-a-rendered-file)
@@ -133,8 +136,11 @@ The keys directory is created `0700` (an existing looser directory is tightened)
 and each keyfile is written `0600` with `O_CREATE|O_EXCL` — DWE never
 overwrites an identity file.
 
-Blank lines and `#` comment lines in an identity file are skipped, so an `age`
-CLI keyfile (which carries a `# public key:` header) can be used verbatim.
+An identity is read as the **first `AGE-SECRET-KEY-1…` token anywhere in the
+text**, so an `age` CLI keyfile (which carries a `# public key:` header) is used
+verbatim — including when a paste joins its lines into one, and including a file
+whose live key sits under a commented-out old one. A later token is ignored, not
+an error: a multi-identity `DWE_AGE_KEY_FILE` is a documented `age` shape.
 
 ## Getting started
 
@@ -150,11 +156,107 @@ git add workspace/defaults.yml && git commit
 # Onboard a teammate — share the identity out of band:
 dwe secrets key export                            # → password manager
 # …on the other machine:
-dwe secrets key import --file identity.txt
+dwe secrets key import                            # hidden prompt: paste it
+dwe secrets key import --file identity.txt        # …or read it from a file
 ```
 
 Then `${vars.telegram.token}` resolves to the plaintext everywhere, and
 `dwe vars get vars.telegram.token` prints it.
+
+## New developer / new machine
+
+A clone carries the public recipient; the private identity does not travel with
+it. Until the identity is on this machine every encrypted value reads
+`<encrypted>` and every lifecycle command stops at `secrets.unresolved`.
+
+There are exactly three places to put it —
+[the lookup order above](#keys-where-the-identity-lives): `DWE_AGE_KEY`,
+`DWE_AGE_KEY_FILE`, or the per-project keyfile that `dwe secrets key import`
+writes. The **first present source must match the recipient**; there is no
+fall-through to the next one.
+
+### The interactive import
+
+On a terminal, with no `--file` and nothing piped, `import` asks for the key
+itself:
+
+```
+$ dwe secrets key import
+Private identity for age1qyqs…
+Paste the AGE-SECRET-KEY-… line, or the whole keyfile; the typed characters are not echoed.
+> ••••••••••••
+
+identity for age1qyqs… stored at /home/dev/.config/dwe/keys/age1qyqs….key
+2 encrypted value(s) and 1 .age file(s) are now readable
+```
+
+The field is hidden, and the whole keyfile is accepted — comment header
+included, even when the paste arrives as a single joined line. Validation runs
+**in the form**: a key that does not parse, or one belonging to another project,
+is reported without closing the prompt, so a mistyped paste is corrected rather
+than restarted. `Esc` cancels with `secrets_import_cancelled` and no keyfile.
+
+The second line is the point of the exercise: it is the same scan
+[`dwe secrets status`](#dwe-secrets-status) renders, so the import ends by
+telling you what it actually opened instead of leaving you to check.
+
+### The offer inside `dwe deploy`, `dwe run` and `dwe restart`
+
+Nobody has to know the import command by heart. When a project has encrypted
+material, no usable identity, and a human at a terminal, the interactive entry
+points offer to take the key right there:
+
+```
+Enter the private identity now?
+This project has encrypted values that need the age identity for age1qyqs…, and
+this machine does not have it. run 'dwe secrets key import' to store the identity
+at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_FILE
+  [ Enter key ]   [ Abort ]
+```
+
+`Enter key` opens the same hidden prompt; the stored identity is verified by a
+real lookup, and the command **continues in the same invocation** — the offer
+runs on the raw layers *before* the config is loaded, so the config is read once
+and already decrypted. `Abort` (or `Esc`) ends the command with
+`secrets_no_identity` and the fix instruction; nothing was written.
+
+Three details worth knowing:
+
+- **`dwe restart` offers before it stops anything.** Declining leaves the stack
+  running, rather than tearing it down and then failing to bring it back.
+- **The `dwe deploy` offer sits at the menu's entry**, so it covers `Plan` as
+  well as `Run` and the wizard — a plan built without the key would print
+  commands derived from `<encrypted>`.
+- **Non-interactive entry points keep today's hard error**: `dwe deploy run`,
+  `dwe reset`, `dwe render env` and `dwe render config` fail with the same
+  message and hint as before. The gate is an offer where a human is already
+  waiting, not a global hook.
+
+### What CI and scripts see
+
+The offer never opens when there is nobody to answer it: stdin is not a
+terminal, `--yes`, `--output json`, or `DWE_NONINTERACTIVE=1`. Each of those
+keeps the existing failure — the `secrets.unresolved` preflight wall for the
+lifecycle commands, `secrets_identity_source_required` for `key import` — so a
+pipeline's output and exit code do not change.
+
+### A broken source is reported, never prompted
+
+Because the first present source wins with no fall-through, a `DWE_AGE_KEY` that
+is set but does not hold this project's identity **cannot be fixed by importing
+a key**: the freshly written keyfile would not be consulted at all. So instead
+of opening a form whose result could not be used, the gate names the source:
+
+```
+$DWE_AGE_KEY is set but does not hold the identity for age1qyqs…;
+unset it or fix it — a keyfile is not consulted while it is set
+```
+
+A keyfile that already exists but holds another key is refused the same way,
+pointing at [`dwe secrets key remove`](#dwe-secrets-key-remove) — the write is
+`O_EXCL` and would not replace it. Both refusals fire in **every** mode,
+interactive or not: they are more precise than the generic "no identity"
+message, and neither is a question.
 
 ## Subcommands
 
@@ -414,6 +516,69 @@ The counts come from the same scan `dwe secrets status` renders, and only
 values the *configured* identity opens are counted — a value left behind by an
 interrupted `rekey` is still a to-do, so it is not.
 
+### `dwe secrets key list`
+
+```
+dwe secrets key list
+```
+
+Every identity installed on this machine, sorted by file name:
+
+```
+  Directory — /home/dev/.config/dwe/keys
+
+╭───────────┬───────────────┬────────────────────╮
+│RECIPIENT  │FILE           │STATE               │
+├───────────┼───────────────┼────────────────────┤
+│age1broken │age1broken.key │unparsable          │
+│age1current│age1current.key│ok (current project)│
+│age1locked │age1locked.key │unreadable          │
+│age1other  │age1other.key  │ok                  │
+│age1parsed │age1stale.key  │misnamed            │
+╰───────────┴───────────────┴────────────────────╯
+```
+
+The keys directory is **machine-wide, not per project**, which is why nothing is
+ever pruned automatically: a key here may belong to any other project on this
+machine, so "unused" is not computable. The only relation `list` can state is
+the one it knows — the row this project uses is marked `current project`.
+Outside a project no row is marked, and the command still runs (it is in the
+allowlist of commands that need no project).
+
+| State | Meaning |
+|-------|---------|
+| `ok` | The file holds the age identity its name claims |
+| `unreadable` | The file could not be read (permissions, a directory, a dangling link) |
+| `unparsable` | The file holds no age identity |
+| `misnamed` | It parses, but the identity belongs to another recipient than the file name says — the row shows the **parsed** recipient |
+
+The states are a fixed vocabulary: no I/O or parse error text ever reaches the
+output, because both echo file content. For an `unreadable` or `unparsable` file
+the RECIPIENT column shows the file name's stem — the recipient is the file name
+by construction — never anything read out of the file.
+
+### `dwe secrets key remove`
+
+```
+dwe secrets key remove <recipient> [--force] [--yes|-y]
+```
+
+Deletes `~/.config/dwe/keys/<recipient>.key`. **Only the canonical file name is
+targeted**, so a `misnamed` file is never removed by a command aimed at the
+recipient it happens to hold — deleting it stays a deliberate manual act.
+
+Removing the identity the current project uses is refused
+(`secrets_key_in_use`) unless `--force` is passed: those encrypted values become
+unreadable here, and unless the key was exported it exists nowhere else. A file
+that is not there is `secrets_key_not_found`.
+
+Otherwise the removal is confirmed interactively. Where it cannot ask — no
+terminal, `--output json`, `DWE_NONINTERACTIVE=1` — it is
+`secrets_confirmation_required`, and `--yes` is the way through; declining is a
+no-op that prints `kept <path>` and exits 0. The project locks are held around
+the delete when a project is resolved, for the same reason `key import` holds
+them: a removal racing a `rekey` would retire the key the rekey is installing.
+
 ### `dwe secrets rekey`
 
 ```
@@ -458,7 +623,7 @@ literal in the config, and:
 | `dwe status`, `dwe docs`, `dwe validate`, `dwe prompt`, `dwe commands` | Work normally |
 | `dwe vars list` / `get` / `inspect`, the TUI browser | Show `<encrypted>` — never the ciphertext |
 | `dwe secrets status` | Reports every value and its reason; exits 0 |
-| `dwe run`, `dwe deploy`, `dwe reset`, `dwe stop`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator, naming the fix |
+| `dwe run`, `dwe deploy`, `dwe reset`, `dwe stop`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator, naming the fix. At a terminal, `dwe run` / `dwe restart` and the `dwe deploy` menu first [offer to take the identity](#the-offer-inside-dwe-deploy-dwe-run-and-dwe-restart) |
 | `dwe render env`, `dwe render config` | **Fail** naming the value that would have been written |
 | `dwe render ide` / `ai` / `git` | Work — they render against a sanitized config and emit the marker |
 
@@ -527,6 +692,13 @@ readiness question, not a content one — "can this machine actually deploy righ
 now". It is cherry-picked into `preflight.Run` **and** into the deploy wizard's
 pre-flight gate, so `dwe run` / `deploy` / `reset` and the menu all stop with
 the same named fix.
+
+It is still that wall. What changed is what a human meets *before* it: at an
+interactive `dwe run` / `dwe restart` / `dwe deploy` the
+[key offer](#the-offer-inside-dwe-deploy-dwe-run-and-dwe-restart) runs first, so
+by the time preflight executes the identity is there and the validator has
+nothing to report. Decline the offer, or run without a terminal, and it blocks
+exactly as described here.
 
 Unresolved markers are grouped **by reason**, one diagnostic per reason listing
 the sorted paths. A keyless developer has every marker unresolved for one
@@ -663,7 +835,13 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |
 | `key export` | `{"recipient": "age1…", "identity": "AGE-SECRET-KEY-1…"}` |
 | `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "markers_readable": N, "files_readable": N}` |
+| `key list` | `{"keys": [{"recipient": "age1…", "file": "/…/age1….key", "state": "ok\|unreadable\|unparsable\|misnamed", "current": true}]}` |
+| `key remove` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "removed": true}` |
 | `rekey` | `{"old_recipient": "age1…", "recipient": "age1…", "keyfile": "…", "markers": N, "layers": ["…"], "files": ["…"]}` |
+
+`key list` always emits `keys` as an array — `[]` when the directory is empty or
+absent, never `null`. `key remove` always reports `removed: true`: a refusal is
+a typed error envelope, not a payload saying nothing happened.
 
 On `status`, `identity` is an object rather than a flat string: `source` is the
 stable vocabulary a script branches on (the **consulted** source, filled on
@@ -677,7 +855,12 @@ Typed error codes include `secrets_already_initialized`, `secrets_no_identity`,
 `secrets_output_exists`, `secrets_raw_stream`, `secrets_rekey_blocked`,
 `secrets_import_cancelled` (the hidden `key import` prompt was cancelled),
 `secrets_write_unsupported` (a [refused shape](#subcommands) — the file is
-untouched; the hint names the path and what to change).
+untouched; the hint names the path and what to change), and, for the keys
+directory, `secrets_key_in_use` (the current project's identity, without
+`--force`), `secrets_key_not_found`, `secrets_confirmation_required` (a removal
+with no way to ask and no `--yes`), `secrets_recipient_invalid` (a malformed
+`key remove` argument, refused before the filesystem is touched),
+`secrets_key_list_failed` and `secrets_key_remove_failed`.
 
 ## Non-goals
 
