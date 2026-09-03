@@ -98,7 +98,7 @@ pass validation either way, and are the ones a fresh project gets wrong.
 | Diagnose configuration | `dwe validate --output json` |
 | Search docs / read one topic | `dwe docs search <term> --lang en` · `dwe docs show <topic> --lang en` |
 | Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` — that writes `local.yml` (this dev only). Hand-edit `defaults.yml` **only** when the new value is right for everyone who clones the repo; a machine-local one there breaks every clean deploy. |
-| Read the encrypted-secret inventory | `dwe secrets status --output json` — read-only, always exits 0. Reports every `ENC[age:…]` marker and `*.age` pack source as `decrypted`/`decryptable` or `unresolved: no_identity\|wrong_identity\|corrupt`. Run it FIRST when `dwe vars` shows `<encrypted>` or a lifecycle command is blocked by `secrets.unresolved`. |
+| Read the encrypted-secret inventory | `dwe secrets status --output json` — read-only, always exits 0. Reports every `ENC[age:…]` marker and `*.age` pack source as `decrypted`/`decryptable` or `unresolved: no_identity\|wrong_identity\|invalid_identity\|corrupt` (`invalid_identity` = a source IS set but holds no key — fix that source, not the missing key). Run it FIRST when `dwe vars` shows `<encrypted>` or a lifecycle command is blocked by `secrets.unresolved`. |
 | **Populate a fresh repo from git URL(s)** | `references/populate-init-repo.md` (ends in user-run `dwe deploy run`) |
 | **Add a service / tool / infra** | `references/add-service-and-tools.md` |
 | **Author a command or background daemon** | `references/authoring-commands.md` |

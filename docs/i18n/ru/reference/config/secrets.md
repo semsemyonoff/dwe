@@ -241,6 +241,7 @@ dwe secrets status
 | `decrypted: stale_key` / `decryptable: stale_key` | Здесь читается, но только *старым* keyfile — настроенный identity его не открывает |
 | `unresolved: no_identity` | На этой машине нет identity для этого recipient |
 | `unresolved: wrong_identity` | Identity найден, но это значение он не открывает |
+| `unresolved: invalid_identity` | Источник identity задан, но не содержит ключа age — например, обрезанный `DWE_AGE_KEY`. Чинить нужно сам источник: пока задана env-переменная, keyfile не читается |
 | `unresolved: corrupt` | Payload повреждён — проблема не в ключе |
 
 `corrupt` определяется без ключа (форма маркера, base64, заголовок age), поэтому

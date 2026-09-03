@@ -172,6 +172,8 @@ func (s identitySet) reason() string {
 		return ""
 	case errors.Is(s.err, secrets.ErrWrongIdentity):
 		return config.ReasonWrongIdentity
+	case errors.Is(s.err, secrets.ErrInvalidIdentity):
+		return config.ReasonInvalidIdentity
 	default:
 		return config.ReasonNoIdentity
 	}

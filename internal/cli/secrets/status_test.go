@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -235,6 +236,67 @@ func TestStatus_JSON_Keyless(t *testing.T) {
 		t.Errorf("files = %+v, want one not-decryptable no_identity row", got.Files)
 	}
 }
+
+// A truncated DWE_AGE_KEY is a broken source, not a missing one. The CLI's
+// identitySet.reason() is the mirror of config.identityReason; the two must
+// agree, so the marker and file rows say invalid_identity here too. The header
+// still reads "none (looked at …)" — that is Task 5's change.
+func TestStatus_JSON_InvalidIdentity(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	writeAgeFile(t, root, "app/creds.age", recipient, "hello")
+
+	keyfile, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	key, err := os.ReadFile(keyfile)
+	if err != nil {
+		t.Fatalf("reading keyfile: %v", err)
+	}
+	if err := os.Remove(keyfile); err != nil {
+		t.Fatalf("removing keyfile: %v", err)
+	}
+	truncated := strings.TrimSpace(string(key))
+	truncated = truncated[:len(truncated)-10]
+	t.Setenv(secrets.EnvKey, truncated)
+
+	got := statusOf(t, flags)
+	if len(got.Markers) != 1 || got.Markers[0].Reason != config.ReasonInvalidIdentity {
+		t.Errorf("markers = %+v, want one invalid_identity row", got.Markers)
+	}
+	if len(got.Files) != 1 || got.Files[0].State != stateNotDecryptable || got.Files[0].Reason != config.ReasonInvalidIdentity {
+		t.Errorf("files = %+v, want one not-decryptable invalid_identity row", got.Files)
+	}
+	// The set-but-broken key must not be echoed anywhere in the payload.
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(raw), truncated[len(truncated)-20:]) {
+		t.Error("status JSON echoes the broken key text")
+	}
+	// The literal token name may appear in DWE-authored wording ("no
+	// AGE-SECRET-KEY-1… key found"); a real key never can — one is 74 runes.
+	if secretKeyRe.MatchString(string(raw)) {
+		t.Error("status JSON contains key material")
+	}
+}
+
+// secretKeyRe matches a whole age private key, so a leak assertion can tell one
+// apart from the DWE-authored wording that merely names the token.
+var secretKeyRe = regexp.MustCompile(`AGE-SECRET-KEY-1[AC-HJ-NP-Z02-9]{58}`)
 
 // TestStatus_JSON_HalfRekeyed pins decision 11's recovery property end to end:
 // after an interrupted rekey both recipients' values still report as readable,

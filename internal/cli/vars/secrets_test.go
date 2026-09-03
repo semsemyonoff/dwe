@@ -310,6 +310,30 @@ func TestVarsInspect_UnresolvedSecret(t *testing.T) {
 	}
 }
 
+// invalid_identity has no note of its own: unresolvedNote's default: arm words
+// any new reason generically, so `vars inspect` degrades instead of going
+// silent. Pinned here so the fallback is a decision, not an accident.
+func TestVarsInspect_InvalidIdentityUsesGenericNote(t *testing.T) {
+	id := newVarsIdentity(t)
+	cfgPath, root := writeSecretVarsFixture(t, id.Recipient())
+	hideVarsIdentity(t)
+	truncated := id.Export()[:len(id.Export())-10]
+	t.Setenv(secrets.EnvKey, truncated)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	out, _, err := runVarsCmd(t, flags, "inspect", "api.token")
+	if err != nil {
+		t.Fatalf("vars inspect: %v", err)
+	}
+	assertNoCiphertext(t, "vars inspect", out)
+	if !strings.Contains(out, "unresolved (invalid_identity)") {
+		t.Errorf("inspect missing the generic invalid_identity note:\n%s", out)
+	}
+	if strings.Contains(out, truncated[len(truncated)-20:]) {
+		t.Errorf("inspect echoed the broken key text:\n%s", out)
+	}
+}
+
 func TestVarsInspect_UnresolvedSecretJSON(t *testing.T) {
 	id := newVarsIdentity(t)
 	cfgPath, root := writeSecretVarsFixture(t, id.Recipient())

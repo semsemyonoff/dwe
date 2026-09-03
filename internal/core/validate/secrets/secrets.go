@@ -274,24 +274,45 @@ func unresolvedMarkerDiags(ctx validate.Context, recipient string) []validate.Di
 			Target:   "secrets.unresolved:" + reason,
 			File:     relPath(ctx.ProjectRoot, workspacePath(ctx)),
 			Message: fmt.Sprintf("%d encrypted value(s) could not be decrypted (%s): %s",
-				len(paths), reasonPhrase(reason, recipient), strings.Join(paths, ", ")),
+				len(paths), reasonPhrase(reason, recipient, ctx.Cfg.SecretsState.IdentitySource), strings.Join(paths, ", ")),
 			Hint: secrets.IdentityHint(recipient),
 		})
 	}
 	return diags
 }
 
-// reasonPhrase turns a SecretsState reason into a sentence fragment.
-func reasonPhrase(reason, recipient string) string {
+// reasonPhrase turns a SecretsState reason into a sentence fragment. source is
+// the identity source the load consulted, used only by the invalid phrase.
+func reasonPhrase(reason, recipient, source string) string {
 	switch reason {
 	case config.ReasonNoIdentity:
 		return "no identity for " + displayRecipient(recipient) + " is available on this machine"
 	case config.ReasonWrongIdentity:
 		return "the available identity does not match " + displayRecipient(recipient)
+	case config.ReasonInvalidIdentity:
+		return invalidIdentityPhrase(source)
 	case config.ReasonCorrupt:
 		return "the encrypted payload is damaged"
 	default:
 		return reason
+	}
+}
+
+// invalidIdentityPhrase names the source that is set but holds no key. The
+// wording is fixed per source and DWE-authored: an age parse error echoes the
+// input characters, which here are private-key bytes.
+//
+// SecretsState.IdentitySource is empty while an identity load fails, so the
+// source is re-derived from the environment along LoadIdentity's own
+// first-present-wins precedence; a recorded source is honoured when present.
+func invalidIdentityPhrase(source string) string {
+	switch {
+	case source == string(secrets.SourceEnv) || os.Getenv(secrets.EnvKey) != "":
+		return "$" + secrets.EnvKey + " is set but holds no age identity"
+	case source == string(secrets.SourceEnvFile) || os.Getenv(secrets.EnvKeyFile) != "":
+		return "$" + secrets.EnvKeyFile + " is set but the file it points at holds no age identity"
+	default:
+		return "the keyfile on this machine holds no age identity"
 	}
 }
 

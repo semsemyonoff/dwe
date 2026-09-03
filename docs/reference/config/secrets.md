@@ -232,6 +232,7 @@ causes rather than lumping them together:
 | `decrypted: stale_key` / `decryptable: stale_key` | Readable here, but only with an *older* keyfile — the configured identity does not open it |
 | `unresolved: no_identity` | No identity for this recipient is available here |
 | `unresolved: wrong_identity` | An identity was found, but it does not open this value |
+| `unresolved: invalid_identity` | An identity source was set but holds no age key — e.g. a truncated `DWE_AGE_KEY`. Repair that source; a keyfile is not consulted while an env source is set |
 | `unresolved: corrupt` | The payload is damaged — not a key problem |
 
 `corrupt` is detected without a key (marker shape, base64, age header), so a

@@ -245,6 +245,58 @@ func TestUnresolvedValidator_wrongIdentity(t *testing.T) {
 	require.Contains(t, diags[0].Message, project.Recipient())
 }
 
+// A truncated DWE_AGE_KEY is a BROKEN source, not a missing one: reporting it
+// as no_identity sends the reader looking for a key they already have.
+func TestUnresolvedValidator_invalidIdentity(t *testing.T) {
+	root := t.TempDir()
+	project := mustKeygen(t)
+	truncated := project.Export()[:len(project.Export())-10]
+	noIdentity(t)
+	t.Setenv(secrets.EnvKey, truncated)
+	marker := mustEncrypt(t, "s3cr3t", project.Recipient())
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+project.Recipient()+
+		"\nvars:\n  token: "+marker+"\n  other: "+mustEncrypt(t, "second", project.Recipient())+"\n")
+
+	ctx := loadCtx(t, root, path)
+	require.NotNil(t, ctx.Cfg)
+
+	diags := (&unresolvedValidator{}).Run(ctx)
+	require.Len(t, diags, 1, messages(diags))
+	require.Equal(t, "secrets.unresolved:invalid_identity", diags[0].Target)
+	require.Contains(t, diags[0].Message, "$"+secrets.EnvKey+" is set but holds no age identity")
+	require.Contains(t, diags[0].Message, "2 encrypted value(s)")
+	require.Equal(t, secrets.IdentityHint(project.Recipient()), diags[0].Hint)
+	// The broken key text is a private key with 10 characters lopped off; no
+	// surface may echo it, and the age parse error would.
+	require.NotContains(t, messages(diags), truncated[len(truncated)-20:])
+	require.NotContains(t, messages(diags), "AGE-SECRET-KEY-")
+}
+
+// The env-file source gets its own fixed phrase: "unset DWE_AGE_KEY" is the
+// wrong fix when the file is the broken one.
+func TestUnresolvedValidator_invalidIdentityFromEnvFile(t *testing.T) {
+	root := t.TempDir()
+	project := mustKeygen(t)
+	noIdentity(t)
+	keyfile := filepath.Join(t.TempDir(), "broken.key")
+	require.NoError(t, os.WriteFile(keyfile, []byte("# public key: nothing useful\n"), 0o600))
+	t.Setenv(secrets.EnvKeyFile, keyfile)
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+project.Recipient()+
+		"\nvars:\n  token: "+mustEncrypt(t, "s3cr3t", project.Recipient())+"\n")
+
+	diags := (&unresolvedValidator{}).Run(loadCtx(t, root, path))
+	require.Len(t, diags, 1, messages(diags))
+	require.Equal(t, "secrets.unresolved:invalid_identity", diags[0].Target)
+	require.Contains(t, diags[0].Message, "$"+secrets.EnvKeyFile+" is set but the file it points at holds no age identity")
+}
+
+// With no env source set the phrase blames the keyfile — the only source left.
+func TestReasonPhrase_invalidIdentityFallsBackToKeyfile(t *testing.T) {
+	noIdentity(t)
+	got := reasonPhrase(config.ReasonInvalidIdentity, "age1whatever", "")
+	require.Equal(t, "the keyfile on this machine holds no age identity", got)
+}
+
 // A marker-only project is the case the pre-restructure early return skipped
 // entirely: it returned before any source was known, so the OK row was
 // unreachable however healthy the project was.

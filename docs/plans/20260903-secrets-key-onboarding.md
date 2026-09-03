@@ -619,13 +619,17 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/core/validate/secrets/secrets.go`, `secrets_test.go`
 - Modify: `docs/internals/packages.md` (the `:287` mirror sentence)
 
-- [ ] add `ReasonInvalidIdentity`; map `ErrInvalidIdentity` in
+- [x] add `ReasonInvalidIdentity`; map `ErrInvalidIdentity` in
       `identityReason` (fix its doc comment) AND in the CLI mirror
       `identitySet.reason()`; leave `unresolvedReason` alone
-- [ ] `reasonPhrase` gains the invalid phrase with fixed wording per source
+- [x] `reasonPhrase` gains the invalid phrase with fixed wording per source
       (`$DWE_AGE_KEY is set but holds no age identity` — no parse error text);
       `unresolvedMarkerDiags` groups it like the other reasons
-- [ ] tests: a layer load with a truncated `DWE_AGE_KEY` yields
+      (➕ `reasonPhrase` took a third `source` argument; since
+      `SecretsState.IdentitySource` is empty on a failed load until Task 5,
+      `invalidIdentityPhrase` re-derives the source from the environment along
+      `LoadIdentity`'s own precedence and honours a recorded source when present)
+- [x] tests: a layer load with a truncated `DWE_AGE_KEY` yields
       `invalid_identity` on every marker (not `corrupt`) —
       `TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt`
       (`config/secrets_test.go:227`) currently expects `no_identity` for a
@@ -637,7 +641,11 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       which does not contain the env value; `vars inspect` on the same
       project shows `unresolved (invalid_identity)` via the existing
       `default:` fallback (`cli/vars/secrets.go:51`) — pinned, no new wording
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/validate/... ./internal/cli/secrets/...` — must pass before task 3
+- [x] run `go test ./internal/core/project/config/... ./internal/core/validate/... ./internal/cli/secrets/...` — must pass before task 3
+      (plus full `make test` + `make lint`; ➕ the reason enum is a documented
+      user-facing contract, so the new row also landed in
+      `docs/reference/config/secrets.md`, its ru mirror, `skills/dwe/SKILL.md`
+      and `CHANGELOG.md` — Task 9 keeps the onboarding prose)
 
 ### Task 3: `keygate` (decision + scan) and `secretsprompt` (form) packages
 

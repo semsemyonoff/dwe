@@ -22,6 +22,11 @@ const (
 	// ReasonWrongIdentity means an identity was found but does not match the
 	// recipient the value was encrypted to.
 	ReasonWrongIdentity = "wrong_identity"
+	// ReasonInvalidIdentity means an identity source was PRESENT but its
+	// content is not an age identity — a truncated DWE_AGE_KEY, a keyfile that
+	// lost its key line. It is deliberately distinct from ReasonNoIdentity: the
+	// fix is repairing the source, not obtaining a key.
+	ReasonInvalidIdentity = "invalid_identity"
 	// ReasonCorrupt means the marker payload is malformed.
 	ReasonCorrupt = "corrupt"
 )

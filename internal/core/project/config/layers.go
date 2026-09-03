@@ -266,17 +266,22 @@ func unresolvedReason(err error) string {
 
 // identityReason maps an identity-LOAD failure onto the same reason strings.
 // It must not share unresolvedReason's default: LoadIdentity deliberately
-// returns a keyfile permission error unwrapped (pinned by its own test) and a
-// malformed keyfile as ErrCorrupt, and both would then be reported as "the
-// encrypted payload is damaged" for every marker in the project — sending the
-// developer to `dwe secrets rekey` over what is a local key problem. No
-// identity could be loaded, so anything short of a recipient mismatch is
-// no_identity, which is also what `dwe secrets status` reports for it.
+// returns a keyfile permission error unwrapped (pinned by its own test), which
+// would then be reported as "the encrypted payload is damaged" for every marker
+// in the project — sending the developer to `dwe secrets rekey` over what is a
+// local key problem. A source that WAS present but holds no age key is
+// invalid_identity, because the fix is repairing that source rather than
+// obtaining a key; anything else short of a recipient mismatch is no_identity,
+// which is also what `dwe secrets status` reports for it.
 func identityReason(err error) string {
-	if errors.Is(err, secrets.ErrWrongIdentity) {
+	switch {
+	case errors.Is(err, secrets.ErrWrongIdentity):
 		return ReasonWrongIdentity
+	case errors.Is(err, secrets.ErrInvalidIdentity):
+		return ReasonInvalidIdentity
+	default:
+		return ReasonNoIdentity
 	}
-	return ReasonNoIdentity
 }
 
 // walkScalars visits every string scalar reachable from v, depth-first, with

@@ -51,6 +51,13 @@ generated from commit subjects and stay on the
   (plus the Russian mirror), covering the model, the marker format, key
   locations, every command with its JSON shape, the render guards, where
   plaintext goes, `age` CLI interoperability and rekey recovery.
+- **A broken identity source now reports as `invalid_identity`** instead of
+  `no_identity`, in `dwe secrets status`, `dwe validate secrets` and
+  `SecretsState`. A truncated `DWE_AGE_KEY` or a keyfile that lost its key line
+  is a source to repair, not a key to obtain, and the validator says which
+  source it is (`$DWE_AGE_KEY is set but holds no age identity`) from fixed
+  wording — the `age` parse error is never echoed, because its text repeats the
+  input's private-key bytes.
 
 ### Changed
 
