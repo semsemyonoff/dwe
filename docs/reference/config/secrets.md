@@ -217,8 +217,9 @@ at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_
 `Enter key` opens the same hidden prompt; the stored identity is verified by a
 real lookup, and the command **continues in the same invocation** — the offer
 runs on the raw layers *before* the config is loaded, so the config is read once
-and already decrypted. `Abort` (or `Esc`) ends the command with
-`secrets_no_identity` and the fix instruction; nothing was written.
+and already decrypted. `Abort` (or `Esc`) ends the command with the fix
+instruction and nothing written — in the `dwe deploy` menu as the typed
+`secrets_no_identity`, in `dwe run` / `dwe restart` as the same sentence.
 
 Three details worth knowing:
 
@@ -237,8 +238,10 @@ Three details worth knowing:
 The offer never opens when there is nobody to answer it: stdin is not a
 terminal, `--yes`, `--output json`, or `DWE_NONINTERACTIVE=1`. Each of those
 keeps the existing failure — the `secrets.unresolved` preflight wall for the
-lifecycle commands, `secrets_identity_source_required` for `key import` — so a
-pipeline's output and exit code do not change.
+lifecycle commands — so a pipeline's output and exit code do not change.
+`key import` is unchanged too: a piped identity is read as before, and at a
+terminal `--output json` and `DWE_NONINTERACTIVE=1` refuse with
+`secrets_identity_source_required` instead of prompting.
 
 ### A broken source is reported, never prompted
 
@@ -501,9 +504,11 @@ retried rather than restarted. `Esc` cancels with `secrets_import_cancelled`
 and no keyfile. Because the write is `O_EXCL`, an already-installed identity is
 reported **before** the form opens rather than after the key is typed.
 
-The prompt never opens without a terminal (`pbpaste | dwe secrets key import`,
-CI), under `--output json`, or under `DWE_NONINTERACTIVE=1`; those keep today's
-`secrets_identity_source_required` refusal.
+The prompt never opens without a terminal — a piped identity
+(`pbpaste | dwe secrets key import`, CI) is read from stdin as before, and an
+empty stdin is `secrets_identity_source_required`. At a terminal, `--output
+json` and `DWE_NONINTERACTIVE=1` refuse with the same code rather than
+prompting.
 
 A successful import ends with what the key opened:
 
@@ -543,7 +548,8 @@ ever pruned automatically: a key here may belong to any other project on this
 machine, so "unused" is not computable. The only relation `list` can state is
 the one it knows — the row this project uses is marked `current project`.
 Outside a project no row is marked, and the command still runs (it is in the
-allowlist of commands that need no project).
+allowlist of commands that need no project). An empty or absent keys directory
+prints `No identities in <dir>.` and exits 0.
 
 | State | Meaning |
 |-------|---------|
@@ -829,7 +835,7 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 | Command | Shape |
 |---------|-------|
 | `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
-| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "error": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…"}]}` |
+| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…"}]}` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |

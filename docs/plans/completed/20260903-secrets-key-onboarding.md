@@ -1130,10 +1130,33 @@ Task 9 doc lists.
 
 ### Task 11: [Final] Update documentation
 
-- [ ] re-read `docs/reference/config/secrets.md` end-to-end for consistency
+- [x] re-read `docs/reference/config/secrets.md` end-to-end for consistency
       with the shipped messages (copy the exact strings from the goldens)
-- [ ] `AGENTS.md` / `packages.md` reflect any ➕ deviations recorded above
-- [ ] move this plan to `docs/plans/completed/`
+      (➕ the prompt/confirm/report/refusal strings, the four identity headers,
+      the hint sentence and the `key list` table all matched the goldens and the
+      shipped code verbatim; four passages were corrected against the code:
+      the `Abort` outcome is typed `secrets_no_identity` only in the `dwe deploy`
+      menu — `dwe run` / `dwe restart` return the same sentence untyped
+      (`lifecycle/run.go` `ensureIdentity` returns the gate error as-is); the
+      two "no prompt without a terminal" claims conflated a piped `key import`
+      (which reads stdin as before, `secrets_identity_source_required` only on
+      an EMPTY stdin) with the JSON / `DWE_NONINTERACTIVE` refusals at a TTY;
+      the `status` JSON row lacked the `reason` / `hint` fields the prose below
+      it already documented; and the empty `key list` line
+      (`No identities in <dir>.`) was undocumented. Both ru mirrors updated and
+      the `Translated from: … @ <hash>` header refreshed)
+- [x] `AGENTS.md` / `packages.md` reflect any ➕ deviations recorded above
+      (➕ `AGENTS.md` needed no change — its "Encrypted secrets" bullet already
+      carries the gate sentence at the size Task 9 paid for. `packages.md`
+      gained the two display-side deviations Task 5/6 recorded but did not
+      write down: `identityDisplay` switching on `Reason` first and sharing
+      `identityJSON.Error` verbatim with the JSON payload (plus
+      `identityErrorText`'s single filesystem-error pass-through and the
+      `$DWE_AGE_KEY_FILE`-missing wording) in the `cli/secrets` bullet, and
+      `IdentityHint` closing the report + `SecretsKeyList`/`SecretsKeyListAt`
+      with the folded `current project` cell and the empty-directory line in
+      the `ui/render` bullet)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

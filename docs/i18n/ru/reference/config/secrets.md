@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ 5bafd6e97e7c
+> Translated from: reference/config/secrets.md @ d80cdc5b04ac
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -222,8 +222,9 @@ at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_
 `Enter key` открывает тот же скрытый ввод; сохранённый identity проверяется
 настоящим поиском, и команда **продолжается в том же запуске** — предложение
 работает на сырых слоях *до* загрузки конфига, поэтому конфиг читается один раз
-и уже расшифрованным. `Abort` (или `Esc`) завершает команду с
-`secrets_no_identity` и подсказкой; ничего не записано.
+и уже расшифрованным. `Abort` (или `Esc`) завершает команду подсказкой и ничего
+не записывает — в меню `dwe deploy` это типизированный `secrets_no_identity`,
+в `dwe run` / `dwe restart` — та же фраза.
 
 Три детали:
 
@@ -242,8 +243,10 @@ at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_
 Предложение не открывается, когда отвечать на него некому: stdin не терминал,
 `--yes`, `--output json` или `DWE_NONINTERACTIVE=1`. В каждом из этих случаев
 остаётся прежнее поведение — стена preflight `secrets.unresolved` для
-lifecycle-команд, `secrets_identity_source_required` для `key import`, — так что
-вывод и код возврата пайплайна не меняются.
+lifecycle-команд, — так что вывод и код возврата пайплайна не меняются.
+`key import` тоже не изменился: identity из пайпа читается как раньше, а на
+терминале `--output json` и `DWE_NONINTERACTIVE=1` вместо запроса отказывают с
+`secrets_identity_source_required`.
 
 ### Сломанный источник сообщают, а не предлагают починить вводом
 
@@ -511,9 +514,10 @@ Identity никогда не лежит в git — он передаётся ч�
 установленный identity сообщается **до** открытия формы, а не после того, как
 ключ набран.
 
-Запрос никогда не открывается без терминала (`pbpaste | dwe secrets key
-import`, CI), под `--output json` и под `DWE_NONINTERACTIVE=1` — там остаётся
-сегодняшний отказ `secrets_identity_source_required`.
+Запрос никогда не открывается без терминала: identity из пайпа
+(`pbpaste | dwe secrets key import`, CI) читается со stdin как раньше, а пустой
+stdin — это `secrets_identity_source_required`. На терминале `--output json` и
+`DWE_NONINTERACTIVE=1` отказывают тем же кодом вместо запроса.
 
 Успешный импорт заканчивается тем, что открыл ключ:
 
@@ -554,6 +558,8 @@ dwe secrets key list
 отношение, которое `list` может назвать, — то, что он знает: строка текущего
 проекта помечается `current project`. Вне проекта не помечается ничего, и
 команда всё равно работает (она в списке команд, которым проект не нужен).
+Пустая или отсутствующая директория ключей печатает `No identities in <dir>.`
+и завершается с кодом 0.
 
 | Состояние | Значение |
 |-----------|----------|
@@ -847,7 +853,7 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 | Команда | Форма |
 |---------|-------|
 | `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
-| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "error": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…"}]}` |
+| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…"}]}` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |
