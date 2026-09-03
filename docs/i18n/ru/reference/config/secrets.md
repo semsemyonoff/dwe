@@ -374,11 +374,38 @@ Identity никогда не лежит в git — он передаётся ч�
 дополнительно предупреждает в stderr (только в текстовом режиме), потому что
 ключ сейчас осядет в скроллбеке.
 
-`import` читает identity из `--file` или stdin, **проверяет, что его recipient
-совпадает с настроенным** (`secrets_identity_mismatch`), и только тогда пишет
-keyfile с правами `0600`. Он тоже берёт локи проекта: импорт, гонящийся с
-`rekey`, иначе установил бы выводимый из обращения identity. TTY-stdin без
-`--file` отклоняется вместо блокировки на невидимом чтении.
+`import` читает identity из `--file`, из stdin, когда тот приходит по пайпу,
+или — на терминале, когда нет ни того, ни другого — из **скрытого запроса**.
+Каким бы ни был источник, он **проверяет, что recipient совпадает с
+настроенным** (`secrets_identity_mismatch`), и только тогда пишет keyfile с
+правами `0600`. Он тоже берёт локи проекта: импорт, гонящийся с `rekey`, иначе
+установил бы выводимый из обращения identity.
+
+Вставлять можно как строку `AGE-SECRET-KEY-1…`, так и весь keyfile целиком —
+комментарий-заголовок age-keyfile игнорируется, в том числе когда вставка
+склеила его строки в одну.
+
+Запрос валидирует ввод на месте: ключ, который не разбирается, или ключ от
+другого проекта показываются как ошибка, не закрывая форму, поэтому опечатку
+в вставке не приходится начинать заново. `Esc` отменяет с
+`secrets_import_cancelled` и без keyfile. Так как запись идёт с `O_EXCL`, уже
+установленный identity сообщается **до** открытия формы, а не после того, как
+ключ набран.
+
+Запрос никогда не открывается без терминала (`pbpaste | dwe secrets key
+import`, CI), под `--output json` и под `DWE_NONINTERACTIVE=1` — там остаётся
+сегодняшний отказ `secrets_identity_source_required`.
+
+Успешный импорт заканчивается тем, что открыл ключ:
+
+```
+identity for age1… stored at ~/.config/dwe/keys/age1….key
+2 encrypted value(s) and 1 .age file(s) are now readable
+```
+
+Счётчики берутся из того же скана, который печатает `dwe secrets status`, и
+считаются только значения, которые открывает *настроенный* identity: значение,
+оставшееся от прерванного `rekey`, — всё ещё задача, поэтому оно не в счёт.
 
 ### `dwe secrets rekey`
 
@@ -634,7 +661,7 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |
 | `key export` | `{"recipient": "age1…", "identity": "AGE-SECRET-KEY-1…"}` |
-| `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
+| `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "markers_readable": N, "files_readable": N}` |
 | `rekey` | `{"old_recipient": "age1…", "recipient": "age1…", "keyfile": "…", "markers": N, "layers": ["…"], "files": ["…"]}` |
 
 В `status` `identity` — объект, а не плоская строка: `source` — стабильный
@@ -646,7 +673,8 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 `secrets_no_identity`, `secrets_identity_mismatch`, `secrets_not_encrypted`,
 `secrets_path_invalid`, `secrets_file_invalid`, `secrets_value_ambiguous`,
 `secrets_value_required`, `secrets_output_exists`, `secrets_raw_stream`,
-`secrets_rekey_blocked`, `secrets_write_unsupported`
+`secrets_rekey_blocked`, `secrets_import_cancelled` (скрытый запрос
+`key import` был отменён), `secrets_write_unsupported`
 ([отклонённая форма](#подкоманды) — файл не тронут; подсказка называет путь и
 что нужно изменить).
 

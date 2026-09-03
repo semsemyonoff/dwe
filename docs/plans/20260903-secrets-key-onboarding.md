@@ -727,17 +727,28 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/secrets/key_test.go`
 - Modify: `docs/reference/config/secrets.md` (subcommand section only; the new-machine section is Task 9)
 
-- [ ] `readIdentityText`: `--file` → non-TTY stdin → `promptIdentityFn` (default `secretsprompt.PromptIdentity`);
+- [x] `readIdentityText`: `--file` → non-TTY stdin → `promptIdentityFn` (default `secretsprompt.PromptIdentity`);
       keep `secrets_identity_source_required` for `--output json` at a TTY and
       `DWE_NONINTERACTIVE`; add a keyfile-exists pre-check ONLY on the
       interactive branch (`--file`/stdin keep parse → recipient check →
       `O_EXCL` write; `TestKeyImport_RejectsMismatch` stays green unchanged);
       update the command's `Long`/examples (`pbpaste |` stays the first example)
-- [ ] after `WriteKeyfile`, run `keygate.Inventory` with the new identity;
+      (➕ the branch point moved UP into a new `resolveIdentity`, because the
+      prompt yields a `secrets.Identity` and not text: `readIdentityText` now
+      only serves `--file`/piped stdin, `promptIdentity` owns the JSON /
+      `DWE_NONINTERACTIVE` refusal, the keyfile pre-check and the
+      `ErrCancelled` mapping, and the recipient check is the shared
+      `identityMismatchError` so all three branches produce one wording)
+- [x] after `WriteKeyfile`, run `keygate.Inventory` with the new identity;
       `keyImportJSON` gains `markers_readable`, `files_readable`; text output
       becomes two lines (`identity for … stored at …` + `N encrypted value(s)
       and M .age file(s) are now readable`)
-- [ ] tests: `TestKeyImport_FromStdin` / `_FromFile` keep their existing
+      (➕ `runKeyImport` loads the raw layers ONCE — `requireRecipient` →
+      `loadRawLayers` + `recipientOrErr` — and reuses them for the report, so
+      the counters describe the same tree the recipient check ran against; an
+      inventory error degrades to zero counters rather than failing a command
+      whose keyfile is already written)
+- [x] tests: `TestKeyImport_FromStdin` / `_FromFile` keep their existing
       assertions on the first line and JSON fields; new `TestKeyImport_Prompt`
       (IsInteractiveFn=true + `promptIdentityFn` stub → keyfile 0600 +
       counts); `TestKeyImport_PromptCancelled` → `secrets_import_cancelled`,
@@ -747,7 +758,16 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       (interactive branch only; `TestKeyImport_RejectsMismatch` unchanged);
       `TestKeyImport_ReportCounts` on a fixture with 2 markers + 1 `.age`;
       leak assertions on error envelopes in JSON mode
-- [ ] run `go test ./internal/cli/secrets/...` — must pass before task 5
+      (➕ the leak assertion lives on `TestKeyImport_PromptRejectsForeignIdentity`
+      and covers message + hint + every detail + the real
+      `cmdctx.WriteError` envelope bytes, via a new `jsonErrorEnvelope` helper;
+      the case itself runs in text mode, since `--output json` refuses the
+      prompt before it can be reached)
+- [x] run `go test ./internal/cli/secrets/...` — must pass before task 5
+      (plus full `make test` + `make lint`; ➕ the ru mirror
+      `docs/i18n/ru/reference/config/secrets.md` was updated in the same
+      commit — the `key import` section, the JSON row and the error-code list
+      would otherwise describe a command that no longer exists)
 
 ### Task 5: `secrets status` — honest identity header and fix hint
 

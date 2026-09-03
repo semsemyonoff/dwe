@@ -362,11 +362,37 @@ out-of-band channel.
 also warns on stderr (text mode only), because the key is about to sit in the
 scrollback.
 
-`import` reads the identity from `--file` or stdin, **verifies that its
-recipient matches the configured one** (`secrets_identity_mismatch`), and only
-then writes the keyfile `0600`. It takes the project locks too: an import
-racing a `rekey` would otherwise install the identity being retired. A TTY
-stdin with no `--file` is refused rather than blocking on an invisible read.
+`import` reads the identity from `--file`, from stdin when it is piped, or —
+on a terminal with neither — from a **hidden prompt**. Whatever the source, it
+**verifies that the recipient matches the configured one**
+(`secrets_identity_mismatch`) and only then writes the keyfile `0600`. It takes
+the project locks too: an import racing a `rekey` would otherwise install the
+identity being retired.
+
+Paste either the `AGE-SECRET-KEY-1…` line or the whole keyfile — the comment
+header an `age` keyfile carries is ignored, including when a paste joins its
+lines into one.
+
+The prompt validates in place: a key that does not parse, or one belonging to
+another project, is reported without closing the form, so a mistyped paste is
+retried rather than restarted. `Esc` cancels with `secrets_import_cancelled`
+and no keyfile. Because the write is `O_EXCL`, an already-installed identity is
+reported **before** the form opens rather than after the key is typed.
+
+The prompt never opens without a terminal (`pbpaste | dwe secrets key import`,
+CI), under `--output json`, or under `DWE_NONINTERACTIVE=1`; those keep today's
+`secrets_identity_source_required` refusal.
+
+A successful import ends with what the key opened:
+
+```
+identity for age1… stored at ~/.config/dwe/keys/age1….key
+2 encrypted value(s) and 1 .age file(s) are now readable
+```
+
+The counts come from the same scan `dwe secrets status` renders, and only
+values the *configured* identity opens are counted — a value left behind by an
+interrupted `rekey` is still a to-do, so it is not.
 
 ### `dwe secrets rekey`
 
@@ -616,7 +642,7 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |
 | `key export` | `{"recipient": "age1…", "identity": "AGE-SECRET-KEY-1…"}` |
-| `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
+| `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "markers_readable": N, "files_readable": N}` |
 | `rekey` | `{"old_recipient": "age1…", "recipient": "age1…", "keyfile": "…", "markers": N, "layers": ["…"], "files": ["…"]}` |
 
 On `status`, `identity` is an object rather than a flat string: `source` is the
@@ -628,6 +654,7 @@ Typed error codes include `secrets_already_initialized`, `secrets_no_identity`,
 `secrets_identity_mismatch`, `secrets_not_encrypted`, `secrets_path_invalid`,
 `secrets_file_invalid`, `secrets_value_ambiguous`, `secrets_value_required`,
 `secrets_output_exists`, `secrets_raw_stream`, `secrets_rekey_blocked`,
+`secrets_import_cancelled` (the hidden `key import` prompt was cancelled),
 `secrets_write_unsupported` (a [refused shape](#subcommands) — the file is
 untouched; the hint names the path and what to change).
 
