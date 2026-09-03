@@ -366,6 +366,45 @@ func TestEnsure_KeyfileUnusable(t *testing.T) {
 	assertNoKeyLeak(t, foreign.Export(), gerr.Error())
 }
 
+// TestEnsure_DanglingKeyfileSymlinkUnusable pins that the refusal is about the
+// path ENTRY, not the file behind it: O_EXCL fails on a dangling symlink too,
+// so a gate that followed the link would open a form whose write is already
+// doomed and collect a private key for nothing.
+func TestEnsure_DanglingKeyfileSymlinkUnusable(t *testing.T) {
+	isolateHome(t)
+	root := t.TempDir()
+	id := installIdentityElsewhere(t)
+
+	path, err := secrets.KeyfilePath(id.Recipient())
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("creating keys dir: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "gone.key"), path); err != nil {
+		t.Fatalf("creating dangling symlink: %v", err)
+	}
+
+	opts := Options{
+		BaseDir:     root,
+		Layers:      layersWithMarker(t, root, id.Recipient(), encrypt(t, "v", id.Recipient())),
+		Interactive: true,
+	}
+	opts.Prompt, opts.Confirm = hostileHooks(t)
+
+	imported, gerr := Ensure(t.Context(), opts)
+	if imported {
+		t.Error("Ensure reported an import over a dangling keyfile symlink")
+	}
+	if !errors.Is(gerr, ErrKeyfileUnusable) {
+		t.Fatalf("err = %v, want ErrKeyfileUnusable", gerr)
+	}
+	if !strings.Contains(gerr.Error(), "key remove") || !strings.Contains(gerr.Error(), path) {
+		t.Errorf("error %q must name the keyfile and 'dwe secrets key remove'", gerr)
+	}
+}
+
 // TestEnsure_ImportsAndReports is the happy path: confirm, type the key, and
 // the gate writes the keyfile 0600, verifies it through the real lookup and
 // reports what became readable.

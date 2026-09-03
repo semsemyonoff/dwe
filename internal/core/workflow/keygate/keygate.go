@@ -199,12 +199,17 @@ func envSourceUnusable(recipient string) error {
 
 // keyfileUnusable refuses a canonical keyfile that exists but failed the
 // lookup: unreadable, or holding somebody else's key.
+//
+// Lstat, not Stat: WriteKeyfile is O_EXCL, which fails on a dangling symlink
+// just as it does on a regular file, so the path ENTRY is what makes an import
+// impossible. Following the link would let the gate open a form whose write is
+// already doomed — the developer would hand over a private key for nothing.
 func keyfileUnusable(recipient string) error {
 	path, err := secrets.KeyfilePath(recipient)
 	if err != nil {
 		return nil
 	}
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Lstat(path); err != nil {
 		return nil
 	}
 	return fmt.Errorf("%w: %s exists but does not hold a usable identity for %s; "+

@@ -219,8 +219,11 @@ func promptIdentity(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient strin
 			"no identity on stdin (no interactive prompt in this mode)").
 			WithHint("pass --file PATH, or pipe the identity in: `pbpaste | dwe secrets key import`")
 	}
+	// Lstat, not Stat: O_EXCL fails on a dangling symlink too, so the path entry
+	// itself is what blocks the write — following it would call the doomed import
+	// viable and collect the key anyway.
 	if path, perr := secrets.KeyfilePath(recipient); perr == nil {
-		if _, serr := os.Stat(path); serr == nil {
+		if _, serr := os.Lstat(path); serr == nil {
 			return secrets.Identity{}, cmdctx.Err("secrets_keyfile_write_failed",
 				fmt.Sprintf("an identity for %s is already installed at %s", recipient, path)).
 				WithDetail("recipient", recipient).
@@ -430,7 +433,12 @@ func runKeyRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient string,
 	// Existence is checked FIRST: on a machine that never imported the key,
 	// "this project uses it, export it first" describes a file that is not
 	// there and sends the reader to an export that cannot succeed.
-	if _, serr := os.Stat(path); serr != nil {
+	//
+	// Lstat, not Stat: `key list` reports a dangling symlink as an unreadable
+	// keyfile and O_EXCL refuses to write over it, so this command — the one that
+	// clears the way — must see it too. os.Remove below unlinks the symlink
+	// itself, never its target.
+	if _, serr := os.Lstat(path); serr != nil {
 		return cmdctx.Err("secrets_key_not_found",
 			fmt.Sprintf("no identity for %s is installed on this machine", recipient)).
 			WithDetail("recipient", recipient).

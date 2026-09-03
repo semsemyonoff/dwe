@@ -597,6 +597,31 @@ func TestKeyImport_ExistingKeyfileRefusedBeforePrompt(t *testing.T) {
 	}
 }
 
+// TestKeyImport_DanglingSymlinkRefusedBeforePrompt pins the same R1.6 guard for
+// the path shape Stat cannot see: O_EXCL fails on a dangling symlink too, so
+// following the link would collect a private key for a write that cannot land.
+func TestKeyImport_DanglingSymlinkRefusedBeforePrompt(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+	path := danglingKeyfile(t, recipient)
+
+	stubStdinTTY(t, true)
+	forbidPrompt(t)
+
+	_, _, err := runSecrets(t, flags, "key", "import")
+	if err == nil {
+		t.Fatal("import over a dangling keyfile symlink succeeded")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_keyfile_write_failed" {
+		t.Errorf("code = %q, want secrets_keyfile_write_failed", coded.Code)
+	}
+	if _, serr := os.Lstat(path); serr != nil {
+		t.Errorf("the refused import disturbed the existing path entry: %v", serr)
+	}
+}
+
 // TestKeyImport_NoPromptWhenNonInteractive pins R3.2 for this command: a piped
 // stdin, --output json at a terminal and DWE_NONINTERACTIVE all keep today's
 // typed refusal, and none of them opens a form.
@@ -708,6 +733,28 @@ func writeKeyfile(t *testing.T, name, content string, mode os.FileMode) string {
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		t.Fatalf("writing %s: %v", name, err)
+	}
+	return path
+}
+
+// danglingKeyfile replaces the canonical keyfile with a symlink to a path that
+// does not exist. It is the one keyfile shape os.Stat reports as absent while
+// O_EXCL still refuses to write over it, so both the import guard and the
+// removal have to see it through os.Lstat.
+func danglingKeyfile(t *testing.T, recipient string) string {
+	t.Helper()
+	path, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	if rerr := os.Remove(path); rerr != nil && !os.IsNotExist(rerr) {
+		t.Fatalf("clearing %s: %v", path, rerr)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("creating keys dir: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "gone.key"), path); err != nil {
+		t.Fatalf("creating dangling symlink: %v", err)
 	}
 	return path
 }
@@ -990,6 +1037,25 @@ func TestKeyRemove_CurrentRecipientNotInstalled(t *testing.T) {
 	}
 	if coded := codedError(t, err); coded.Code != "secrets_key_not_found" {
 		t.Errorf("code = %q, want secrets_key_not_found", coded.Code)
+	}
+}
+
+// TestKeyRemove_DanglingSymlink pins that the command which clears the way can
+// clear this shape too: `key list` reports the dangling symlink as an
+// unreadable keyfile and O_EXCL refuses to write over it, so answering
+// "nothing is installed" would leave the path unremovable through dwe. The
+// symlink itself is unlinked; nothing is followed.
+func TestKeyRemove_DanglingSymlink(t *testing.T) {
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	foreign := foreignIdentity(t)
+	path := danglingKeyfile(t, foreign.Recipient())
+
+	if _, _, err := runSecrets(t, flags, "key", "remove", foreign.Recipient(), "--yes"); err != nil {
+		t.Fatalf("secrets key remove over a dangling symlink: %v", err)
+	}
+	if _, serr := os.Lstat(path); !os.IsNotExist(serr) {
+		t.Errorf("the dangling symlink survived the removal: %v", serr)
 	}
 }
 
