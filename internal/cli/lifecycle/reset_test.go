@@ -21,6 +21,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"github.com/spf13/cobra"
 )
@@ -1901,4 +1903,89 @@ func TestResetStepCmd_UserInvoked(t *testing.T) {
 			t.Errorf("%s: UserInvoked = %t, want %t", id, invoked, wantInvoked)
 		}
 	}
+}
+
+// TestResetPlanAndStep_RedactDecryptedSecret pins that neither `reset plan`
+// (table and shell) nor `reset step --dry-run` prints a decrypted value. The
+// plaintext is unique to this test: the redactor is process-global and
+// union-only, so a value shared with another test would be redacted anyway and
+// prove nothing.
+func TestResetPlanAndStep_RedactDecryptedSecret(t *testing.T) {
+	const plaintext = "r3s3t-plan-token-value"
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("Keygen: %v", err)
+	}
+	marker, err := secrets.Encrypt(plaintext, id.Recipient())
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+
+	dir := t.TempDir()
+	workspaceYAML := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n" +
+		"secrets:\n  recipient: " + id.Recipient() + "\n" +
+		"vars:\n  token: " + marker + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resetYAML := "phases:\n" +
+		"  - name: probe\n" +
+		"    steps:\n" +
+		"      - name: greet\n" +
+		"        type: shell\n" +
+		"        cmd: \"echo 'token is ${vars.token}'\"\n" +
+		"        check:\n" +
+		"          type: shell\n" +
+		"          cmd: \"grep -q '${vars.token}' /tmp/state\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(resetYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+
+	assertRedacted := func(t *testing.T, out string) {
+		t.Helper()
+		if strings.Contains(out, plaintext) {
+			t.Errorf("output carries the decrypted value:\n%s", out)
+		}
+		if !strings.Contains(out, "***") {
+			t.Errorf("output missing the *** placeholder:\n%s", out)
+		}
+	}
+
+	for _, format := range []string{"", "shell"} {
+		name := "plan table"
+		if format == "shell" {
+			name = "plan shell"
+		}
+		t.Run(name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			var outBuf bytes.Buffer
+			cmd.SetOut(&outBuf)
+			cmd.SetErr(io.Discard)
+			if err := runResetPlan(cmd, flags, resetPlanOpts{Format: format}); err != nil {
+				t.Fatalf("runResetPlan(%q): %v", format, err)
+			}
+			assertRedacted(t, outBuf.String())
+		})
+	}
+
+	t.Run("step dry-run", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(io.Discard)
+		if err := resetStepCmd(cmd, flags, "probe/greet", true); err != nil {
+			t.Fatalf("resetStepCmd: %v", err)
+		}
+		assertRedacted(t, outBuf.String())
+	})
 }

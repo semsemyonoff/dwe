@@ -694,24 +694,24 @@ always carries its own parse).
 - Modify: `internal/cli/lifecycle/reset_test.go` (`reset plan`, `reset step --dry-run`)
 - Modify: `internal/core/workflow/deploy/print.go` (:10 comment), `print_test.go` (:458), `internal/core/workflow/reset/print_test.go`
 
-- [ ] export `trace.Redact(s)`; document that it is the same redactor
+- [x] export `trace.Redact(s)`; document that it is the same redactor
       `trace.Command` and `emit` apply and that `LoadConfig` is its single
       installer
-- [ ] `StepCommand`: redact `step.Cmd` and every string leaf of `step.With`
+- [x] `StepCommand`: redact `step.Cmd` and every string leaf of `step.With`
       BEFORE `builtin.Describe` / `--set` formatting, then `trace.Redact` the
       result; same leaf-first + final pattern in `FormatAction` and
       `FormatCondition`; grep every caller of the three and add the
       display-only/redacted contract comment on each
-- [ ] reword the shell-plan comment (`print.go:10`), the cobra help
+- [x] reword the shell-plan comment (`print.go:10`), the cobra help
       (`deploy.go:243`, "script-friendly") and the wording of
       `print_test.go:458` (`TestPrintPlanShell_noUnresolvedAnnotation` — it
       asserts on annotations, does not execute the script; only its comment
       changes): the script is a redacted preview, not executable when a
       step references a secret
-- [ ] test: `StepCommand` leaves the caller's `step.With` (nested map +
+- [x] test: `StepCommand` leaves the caller's `step.With` (nested map +
       slice) byte-identical — the deep-copy guard for `reset step` without
       `--dry-run`
-- [ ] tests (pipeline, `redact_test.go`): fixture with a secret in `cmd`,
+- [x] tests (pipeline, `redact_test.go`): fixture with a secret in `cmd`,
       in `with:` of a `type: command` step, in `with:` of a builtin
       `confirm` whose value holds `"`, `\` and a newline, in `check:` and in
       shell `when:`; after `ResetRedaction` + `RegisterRedaction`, each
@@ -719,7 +719,7 @@ always carries its own parse).
       on the display string of a secret containing `${x}` reports nothing;
       a 3-rune secret is NOT redacted (pins `MinRedactRunes`);
       `ResetRedaction` in `t.Cleanup`, no `t.Parallel`
-- [ ] tests (cli + workflow printers): `deploy plan` table / `--format
+- [x] tests (cli + workflow printers): `deploy plan` table / `--format
       shell` / `--output json` (incl. the `unresolved` field) and
       `reset plan` / `reset step --dry-run` on a project with a marker and a
       usable identity (`DWE_AGE_KEY`) → no plaintext, `***` present; each
@@ -727,7 +727,21 @@ always carries its own parse).
       unique to the package (the deploy package already registers
       `s3cr3t-value` via `menu_test.go`); existing secret-free assertions
       unchanged
-- [ ] run `go test ./internal/shared/trace/... ./internal/core/execution/pipeline/... ./internal/core/workflow/deploy/... ./internal/core/workflow/reset/... ./internal/cli/deploy/... ./internal/cli/lifecycle/...` — must pass before task 5
+- [x] run `go test ./internal/shared/trace/... ./internal/core/execution/pipeline/... ./internal/core/workflow/deploy/... ./internal/core/workflow/reset/... ./internal/cli/deploy/... ./internal/cli/lifecycle/...` — must pass before task 5
+
+➕ Task 4 notes: `StepCommand` redacts `step.Cmd` and the string leaves of a deep
+copy of `step.With` (nested maps, `map[any]any`, `[]any` and `[]string` all
+copied) before formatting, then redacts the assembled line. The caller contract
+comment landed on `StepCommand`, `FormatAction` and `FormatCondition`
+themselves plus the three non-obvious call sites (`pipeline/print.go`,
+`buildPlanStepJSON`, `cli/lifecycle/reset.go` — the one that also executes the
+step); the remaining printer call sites are unambiguous display code and were
+left alone. `deploy.go`'s cobra help gained a redaction paragraph rather than
+only losing the word "script-friendly", so `--format shell`'s status is stated
+where users read it. The builtin-`confirm`-with-quotes case is covered in
+`pipeline/redact_test.go` through `ResolvePhaseSteps` (a `type: builtin`
+`with:` leaf still renders on a known `${vars.*}` head — only the wide `{{ }}`
+gate excludes it).
 
 ### Task 5: `validate secrets` emits OK rows on a healthy project
 

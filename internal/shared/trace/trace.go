@@ -125,6 +125,18 @@ func redact(s string) string {
 	return r.Redact(s)
 }
 
+// Redact replaces every registered secret in s with secrets.RedactPlaceholder.
+// It is the same process-global redactor Command applies per argument and emit
+// applies per line, installed solely by config.LoadConfig via RegisterRedaction;
+// with nothing registered it is the identity function.
+//
+// It is exported for display code outside the diagnostic path — the pipeline's
+// plan/dry-run strings (pipeline.StepCommand, FormatAction, FormatCondition) —
+// so a decrypted value cannot reach stdout through a surface trace never sees.
+// Values shorter than secrets.MinRedactRunes are never redacted, here or
+// anywhere else.
+func Redact(s string) string { return redact(s) }
+
 // Command echoes an executed command at Verbose+ as a copy-pasteable line
 // prefixed with "$ ".
 //

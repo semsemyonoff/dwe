@@ -720,6 +720,8 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 		render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
 	}
 
+	// Display only, and redacted — StepCommand works on a deep copy, so the
+	// real execution below still sees the step's own (plaintext) with: values.
 	resolved := pipeline.StepCommand(step, config.DweBin(cfg))
 	if dryRun {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
