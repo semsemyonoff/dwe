@@ -754,6 +754,18 @@ func TestSplicer_SetScalar_InsertKeepsKeptBlockScalarValue(t *testing.T) {
 			src:  "project:\n  name: demo\n\nnote: |\n  body\n",
 			want: "project:\n  name: demo\n\nnote: |\n  body\n\nsecrets:\n  recipient: age1xyz\n",
 		},
+		{
+			// The `>` in the header comment must not be read as the block marker:
+			// matching it would report clip chomping and re-arm the separator.
+			name: "keep-chomped header with a comment holding a block marker",
+			src:  "project:\n  name: demo\n\nnote: |+ # see a > b\n  body\n",
+			want: "project:\n  name: demo\n\nnote: |+ # see a > b\n  body\nsecrets:\n  recipient: age1xyz\n",
+		},
+		{
+			name: "keep-chomped header with an explicit indent indicator",
+			src:  "project:\n  name: demo\n\nnote: |2+\n  body\n",
+			want: "project:\n  name: demo\n\nnote: |2+\n  body\nsecrets:\n  recipient: age1xyz\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -771,6 +783,61 @@ func TestSplicer_SetScalar_InsertKeepsKeptBlockScalarValue(t *testing.T) {
 			}
 			if after, ok := scalarAt(s.doc, []string{"note"}); !ok || after != before {
 				t.Errorf("note changed from %q to (%q, %v)", before, after, ok)
+			}
+		})
+	}
+}
+
+func TestSplicer_SetScalar_InsertAfterKeptBlockScalarInMapping(t *testing.T) {
+	// The blank lines trailing a `|+` scalar are part of its VALUE. A nested
+	// insertion whose anchor mapping ends in one must land after them, or the
+	// untouched neighbour silently loses a line break — and verify() cannot see
+	// it, because it only re-reads the paths this Splicer set.
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "kept blank line at end of file",
+			src:  "vars:\n  telegram:\n    note: |+\n      body\n\n",
+			want: "vars:\n  telegram:\n    note: |+\n      body\n\n    token: dwe:secret:v1:XYZ\n",
+		},
+		{
+			name: "kept blank line before a shallower key",
+			src:  "vars:\n  telegram:\n    note: |+\n      body\n\nother: y\n",
+			want: "vars:\n  telegram:\n    note: |+\n      body\n\n    token: dwe:secret:v1:XYZ\nother: y\n",
+		},
+		{
+			name: "kept blank lines before a trailing comment",
+			src:  "vars:\n  telegram:\n    note: |+\n      body\n\n\n# footer\n",
+			want: "vars:\n  telegram:\n    note: |+\n      body\n\n\n    token: dwe:secret:v1:XYZ\n# footer\n",
+		},
+		{
+			name: "clip-chomped neighbour keeps the blank line outside the value",
+			src:  "vars:\n  telegram:\n    note: |\n      body\n\nother: y\n",
+			want: "vars:\n  telegram:\n    note: |\n      body\n    token: dwe:secret:v1:XYZ\n\nother: y\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newSpliceFixture(t, tt.src)
+			before, ok := scalarAt(s.doc, []string{"vars", "telegram", "note"})
+			if !ok {
+				t.Fatalf("fixture has no note scalar")
+			}
+			if err := s.SetScalar([]string{"vars", "telegram", "token"}, "dwe:secret:v1:XYZ"); err != nil {
+				t.Fatalf("SetScalar: %v", err)
+			}
+			if got := string(s.Bytes()); got != tt.want {
+				t.Errorf("bytes =\n%q\nwant\n%q", got, tt.want)
+			}
+			if after, ok := scalarAt(s.doc, []string{"vars", "telegram", "note"}); !ok || after != before {
+				t.Errorf("note changed from %q to (%q, %v)", before, after, ok)
+			}
+			if err := s.verify(); err != nil {
+				t.Errorf("verify: %v", err)
 			}
 		})
 	}

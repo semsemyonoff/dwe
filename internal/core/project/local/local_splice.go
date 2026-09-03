@@ -209,7 +209,7 @@ func (s *Splicer) insertScalar(parent *yaml.Node, path []string, missIdx int, va
 		if off > 0 && !endsWithNewline(s.src) {
 			lead = s.eol
 		}
-		if parent != nil && s.topLevelBlocksSeparated() && !s.endsWithBlankLine() && !s.endsInKeptBlockScalar() {
+		if parent != nil && s.topLevelBlocksSeparated() && !s.endsWithBlankLine() && !s.endsInKeptBlockScalar(spliceRoot(s.doc)) {
 			lead += s.eol
 		}
 	default:
@@ -268,6 +268,12 @@ func (s *Splicer) renderBlock(keys []string, value string, column int) (string, 
 // part of the block. Blank and shallower comment lines are scanned past but do
 // not extend the mapping, which keeps a trailing comment attached to whatever
 // follows the mapping.
+//
+// The one exception is a mapping whose last value is a keep-chomped block scalar
+// (`|+` / `>+`): there the trailing blank lines ARE part of the value, so the
+// insertion point moves past them. Splicing before them would silently shorten a
+// value the caller never touched, and verify() cannot see that — it re-reads only
+// the values this Splicer set.
 func (s *Splicer) mappingInsertOffset(mapping *yaml.Node) int {
 	if len(mapping.Content) == 0 {
 		return len(s.src)
@@ -285,6 +291,11 @@ scan:
 		case strings.HasPrefix(trimmed, "#"):
 		default:
 			break scan // a shallower key ends the mapping
+		}
+	}
+	if s.endsInKeptBlockScalar(mapping) {
+		for lastContent < len(s.lines) && strings.TrimLeft(s.lineText(lastContent+1), " \t") == "" {
+			lastContent++
 		}
 	}
 	if lastContent < len(s.lines) {
@@ -313,14 +324,14 @@ func (s *Splicer) topLevelBlocksSeparated() bool {
 	return false
 }
 
-// endsInKeptBlockScalar reports whether the file's LAST value scalar is a block
+// endsInKeptBlockScalar reports whether node's LAST value scalar is a block
 // scalar with the "keep" chomping indicator (`|+` / `>+`), whose value swallows
-// every trailing line break in the file. Appending the cosmetic separator blank
-// line to such a file would silently extend that value by one newline — an edit
-// verify() cannot see, since it only re-reads the values this Splicer set.
-// Cosmetic style-matching must never change data, so the separator is dropped.
-func (s *Splicer) endsInKeptBlockScalar() bool {
-	sites := collectValueScalars(spliceRoot(s.doc))
+// the trailing line breaks that follow it. The blank lines after such a scalar
+// are DATA, so neither the cosmetic append separator nor a mapping insertion may
+// be placed before them — an edit verify() cannot see, since it only re-reads
+// the values this Splicer set.
+func (s *Splicer) endsInKeptBlockScalar(node *yaml.Node) bool {
+	sites := collectValueScalars(node)
 	if len(sites) == 0 {
 		return false
 	}
@@ -330,21 +341,28 @@ func (s *Splicer) endsInKeptBlockScalar() bool {
 	}
 	// yaml.v3 reports a block scalar's position at its HEADER (`key: |+`), which
 	// is the only line carrying the chomping indicator.
-	if last.Line < 1 || last.Line > len(s.lines) {
+	off, err := s.offsetAt(last.Line, last.Column)
+	if err != nil {
 		return false
 	}
-	return hasKeepChomping(s.lineText(last.Line))
+	_, limit := s.lineBounds(off)
+	off = s.skipProperties(off, limit)
+	if off >= limit {
+		return false
+	}
+	return hasKeepChomping(string(s.src[off:limit]))
 }
 
-// hasKeepChomping reports whether a block-scalar header line carries the `+`
-// chomping indicator. The indicator follows the `|`/`>` marker, in either order
-// with an optional indentation digit, and may be followed by a comment.
-func hasKeepChomping(header string) bool {
-	i := strings.LastIndexAny(header, "|>")
-	if i < 0 {
+// hasKeepChomping reports whether a block scalar carries the `+` chomping
+// indicator. text must start AT the `|`/`>` marker — matching the marker
+// anywhere on the header line would let a header comment (`notes: |+ # a > b`)
+// decide the answer. The indicator follows the marker, in either order with an
+// optional indentation digit.
+func hasKeepChomping(text string) bool {
+	if text == "" || (text[0] != '|' && text[0] != '>') {
 		return false
 	}
-	return strings.HasPrefix(strings.TrimLeft(header[i+1:], "0123456789"), "+")
+	return strings.HasPrefix(strings.TrimLeft(text[1:], "0123456789"), "+")
 }
 
 // endsWithBlankLine reports whether the file's last line is empty.
