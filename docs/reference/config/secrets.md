@@ -251,6 +251,26 @@ refusal as its reason — never silently skipped.
 Rows are sorted (layer order, then path), so the output is stable across runs
 and diffable.
 
+The **Identity** line reports the lookup honestly — a source that was consulted
+and rejected never reads as a missing key:
+
+| Header | Meaning |
+|--------|---------|
+| `keyfile (…)` / `$DWE_AGE_KEY` / `$DWE_AGE_KEY_FILE` | The identity loaded from that source |
+| `none (looked at …)` | No identity anywhere; the line names every place the lookup looked |
+| `invalid (…)` | A source was set but holds no age key — the line names the source to repair |
+| `wrong recipient (…)` | A readable identity for **another** recipient; the line names both |
+
+Whenever the identity did not load, the report closes with the fix instruction
+(`run 'dwe secrets key import' to store the identity at …, or set DWE_AGE_KEY /
+DWE_AGE_KEY_FILE`) — the same sentence `dwe validate` prints. In `--output
+json` the same facts are structured: `identity.source` is the **consulted**
+source even on failure, `identity.reason` carries the stable reason word
+(`no_identity` / `invalid_identity` / `wrong_identity`), `identity.error` the
+sentence, `identity.hint` the fix. Every one of them is DWE-authored: an `age`
+parse error echoes the input characters, which for a broken identity source are
+private-key bytes, so it is never printed.
+
 ### `dwe secrets set`
 
 ```
@@ -646,9 +666,10 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 | `rekey` | `{"old_recipient": "age1…", "recipient": "age1…", "keyfile": "…", "markers": N, "layers": ["…"], "files": ["…"]}` |
 
 On `status`, `identity` is an object rather than a flat string: `source` is the
-stable vocabulary a script branches on, `error` is the human sentence. An
-identity load failure is **data** here, not an error — reporting "no identity,
-and here is where it looked" is the command's whole job.
+stable vocabulary a script branches on (the **consulted** source, filled on
+failure too), `reason` the stable reason word, `error` the human sentence and
+`hint` the fix. An identity load failure is **data** here, not an error —
+reporting "no identity, and here is where it looked" is the command's whole job.
 
 Typed error codes include `secrets_already_initialized`, `secrets_no_identity`,
 `secrets_identity_mismatch`, `secrets_not_encrypted`, `secrets_path_invalid`,

@@ -778,26 +778,61 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/core/ui/render/secrets.go`, `secrets_test.go`
 - Modify/Create: `internal/core/ui/render/testdata/secrets_status*.golden`
 
-- [ ] `LoadIdentity` returns the consulted `Source` with every error
+- [x] `LoadIdentity` returns the consulted `Source` with every error
       (`SourceEnv`, `SourceEnvFile`, `SourceKeyfile`; `SourceNone` only for
       an empty recipient); `finishLoad` threads it; doc comment states the
       contract; `layers.go:128` records it in `SecretsState.IdentitySource`
       on failure too (`config/secrets_test.go:382` — no-secrets project keeps
       an empty source — still holds because the lookup is skipped)
-- [ ] `identityJSON` gains `Reason`, `Hint`; `identityPayload` fills the
+      (➕ a recipient mismatch is now the typed `secrets.WrongIdentityError`
+      (`Source`/`Have`/`Want`, unwraps to `ErrWrongIdentity`, message
+      unchanged): the header must name both recipients, and re-parsing them
+      out of a sentence would be the one place a display surface could drift
+      from the loader. ➕ `secrets.SourceLabel(src, recipient)` is the single
+      place a source is NAMED for display — locations only, never content)
+- [x] `identityJSON` gains `Reason`, `Hint`; `identityPayload` fills the
       consulted source + reason on failure; `identityDisplay` renders the
       four variants from the table in Technical Details (same commit as the
       `LoadIdentity` change — never a green `keyfile (…)` header for a failed
       lookup)
-- [ ] `render.SecretsStatusView` gains `IdentityHint`; text appends the hint
+      (➕ `identityDisplay` switches on `Reason` FIRST and puts
+      `identityJSON.Error` verbatim inside the parentheses, so the text header
+      and the JSON payload cannot word the same failure differently; the
+      parenthetical therefore reads `wrong recipient (keyfile <path> holds the
+      identity for age1…, but the project uses age1…)` rather than the plan's
+      shorter draft. ➕ `identityErrorText` composes that sentence from fixed
+      per-source wording; its ONE pass-through is a bare filesystem error
+      (permission, missing home), which carries a path and an OS message but
+      never file content — swallowing it would report a permissions problem as
+      "no key on this machine". ➕ a set `DWE_AGE_KEY_FILE` pointing at nothing
+      renders `none ($DWE_AGE_KEY_FILE <path>, which does not exist)`: the
+      lookup stopped at the first source, so the generic "looked at …" list
+      would describe a search that never happened. ➕ `keygate.IdentityReason`
+      extracted so `Result.IdentityReason()` and `IdentitySet.Reason()` share
+      one mapper)
+- [x] `render.SecretsStatusView` gains `IdentityHint`; text appends the hint
       line when set (R6); `secretsNoneNote` path unchanged
-- [ ] tests: `TestIdentityDisplay` covers all four variants;
+      (➕ the hint CLOSES the report rather than sitting under the Identity
+      line: it applies to every unresolved row below it, and a two-line header
+      pushes the inventory off a short screen)
+- [x] tests: `TestIdentityDisplay` covers all four variants;
       `TestStatus_JSON_*` assert `identity.reason`/`identity.hint` for keyless,
       invalid env, wrong keyfile; `TestStatus_ExitsZeroWithUnresolvedSecrets`
       still exit 0 and now contains the hint; render goldens regenerated +
       two new; `TestStatus_NeverPrintsKeyMaterial` extended with a truncated
       `DWE_AGE_KEY` whose *content* must not be echoed either
-- [ ] run `go test ./internal/cli/secrets/... ./internal/core/ui/render/...` — must pass before task 6
+      (➕ the truncated-key leak case is its own test,
+      `TestStatus_NeverEchoesABrokenIdentitySource`, because it needs a
+      different fixture (no keyfile, poisoned env) than the plaintext leak
+      test; ➕ `TestLoadIdentityReportsConsultedSourceOnFailure` +
+      `TestSourceLabel` pin the leaf contract, and the config table test now
+      pins `IdentitySource` per failure mode)
+- [x] run `go test ./internal/cli/secrets/... ./internal/core/ui/render/...` — must pass before task 6
+      (plus full `make test` + `make lint`; ➕ the identity header, the hint
+      line and the two new JSON fields are a user-facing contract, so
+      `docs/reference/config/secrets.md`, its ru mirror and `CHANGELOG.md`
+      landed in the same commit — Task 9 keeps the onboarding prose;
+      `docs/internals/packages.md` gained the consulted-source sentence)
 
 ### Task 6: `secrets key list` and `secrets key remove`
 

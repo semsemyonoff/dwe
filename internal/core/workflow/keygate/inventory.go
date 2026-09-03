@@ -82,13 +82,19 @@ func (s IdentitySet) Err() error { return s.err }
 // Reason maps the configured identity's load failure onto the stable
 // SecretsState reason strings, so status, the validators and the loader all
 // name the same causes.
-func (s IdentitySet) Reason() string {
+func (s IdentitySet) Reason() string { return IdentityReason(s.err) }
+
+// IdentityReason maps an identity-LOAD failure onto the stable
+// config.Reason* strings. It is the CLI-side mirror of config.identityReason
+// (packages.md pins that the two must agree) and the single implementation
+// behind IdentitySet.Reason and Result.IdentityReason.
+func IdentityReason(err error) string {
 	switch {
-	case s.err == nil:
+	case err == nil:
 		return ""
-	case errors.Is(s.err, secrets.ErrWrongIdentity):
+	case errors.Is(err, secrets.ErrWrongIdentity):
 		return config.ReasonWrongIdentity
-	case errors.Is(s.err, secrets.ErrInvalidIdentity):
+	case errors.Is(err, secrets.ErrInvalidIdentity):
 		return config.ReasonInvalidIdentity
 	default:
 		return config.ReasonNoIdentity
@@ -244,6 +250,10 @@ type Result struct {
 
 // HasSecrets reports whether the project carries anything encrypted at all.
 func (r Result) HasSecrets() bool { return len(r.Markers) > 0 || len(r.Files) > 0 }
+
+// IdentityReason names why the configured identity did not load, in the stable
+// config.Reason* vocabulary; "" when it loaded.
+func (r Result) IdentityReason() string { return IdentityReason(r.IdentityErr) }
 
 // Readable counts the rows this machine can actually open: the two numbers the
 // post-import report turns into "N encrypted value(s) and M .age file(s) are

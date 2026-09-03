@@ -58,6 +58,14 @@ generated from commit subjects and stay on the
   source it is (`$DWE_AGE_KEY is set but holds no age identity`) from fixed
   wording — the `age` parse error is never echoed, because its text repeats the
   input's private-key bytes.
+- **`dwe secrets status` now says what is actually wrong with the identity.**
+  The header has four shapes instead of two: the source that supplied the key,
+  `none (looked at …)`, `invalid (…)` naming the source that is set but holds
+  no key, and `wrong recipient (…)` naming both recipients. Whenever the
+  identity did not load, the report closes with the fix instruction. In
+  `--output json`, `identity.source` is now the **consulted** source on failure
+  too (it used to go empty), and `identity` gained `reason` and `hint`; every
+  string is DWE-authored, never an `age` parse error.
 
 ### Changed
 

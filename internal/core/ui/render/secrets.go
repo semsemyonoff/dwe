@@ -36,8 +36,12 @@ type SecretsFileRow struct {
 type SecretsStatusView struct {
 	Recipient string
 	Identity  string
-	Markers   []SecretsMarkerRow
-	Files     []SecretsFileRow
+	// IdentityHint is the fix instruction for an identity that did not load —
+	// the same sentence the validator prints. Empty when the identity is
+	// usable, and then no trailing line is rendered at all.
+	IdentityHint string
+	Markers      []SecretsMarkerRow
+	Files        []SecretsFileRow
 }
 
 // secretsNoRecipient is shown in place of an unset secrets.recipient — the
@@ -81,6 +85,12 @@ func SecretsStatusAt(v SecretsStatusView, width int) string {
 			blocks = append(blocks, styles.StyleSubheader(fmt.Sprintf("Encrypted files (%d):", len(v.Files)))+
 				"\n"+secretsFileTable(v.Files).Render(width))
 		}
+	}
+	// The fix instruction closes the report rather than sitting next to the
+	// Identity line: it applies to every unresolved row below it, and a header
+	// that grows a second line pushes the inventory off a short screen.
+	if v.IdentityHint != "" {
+		blocks = append(blocks, styles.MutedStyle().Render(v.IdentityHint))
 	}
 	return strings.Join(blocks, "\n\n")
 }

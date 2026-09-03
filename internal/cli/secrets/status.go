@@ -1,9 +1,11 @@
 package secrets
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
@@ -12,12 +14,19 @@ import (
 
 // identityJSON says where the identity came from, or why none was loaded.
 // Source is the stable secrets.Source vocabulary ("env" / "env-file" /
-// "keyfile" / "" for none), so a script can branch on it without parsing the
-// human sentence in Error.
+// "keyfile" / "" for none) and names the CONSULTED source on failure too;
+// Reason is the stable config.Reason* vocabulary, so a script can branch on
+// either without parsing the human sentence in Error.
+//
+// Error carries DWE-authored wording only. The age parse error is never
+// interpolated anywhere on this path: its text echoes the input characters,
+// which for a broken identity source are private-key bytes.
 type identityJSON struct {
 	Source  string `json:"source"`
 	Keyfile string `json:"keyfile,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 	Error   string `json:"error,omitempty"`
+	Hint    string `json:"hint,omitempty"`
 }
 
 // statusJSON is the `dwe secrets status` payload. Markers and Files are always
@@ -76,6 +85,10 @@ func runStatus(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 // identityPayload describes the identity lookup's outcome. A failure is data
 // here, not an error: reporting "no identity, and here is where it looked" is
 // the whole job of the command.
+//
+// Source is the consulted source even on failure, so Keyfile names the path
+// that was actually read (or looked for) rather than going quiet exactly when
+// the reader needs it.
 func identityPayload(inv inventory) identityJSON {
 	out := identityJSON{Source: string(inv.IdentitySource)}
 	if inv.IdentitySource == secrets.SourceKeyfile && inv.Recipient != "" {
@@ -84,9 +97,47 @@ func identityPayload(inv inventory) identityJSON {
 		}
 	}
 	if inv.IdentityErr != nil {
-		out.Error = inv.IdentityErr.Error()
+		out.Reason = inv.IdentityReason()
+		out.Error = identityErrorText(inv)
+		if inv.Recipient != "" {
+			out.Hint = secrets.IdentityHint(inv.Recipient)
+		}
 	}
 	return out
+}
+
+// identityErrorText words the failure. Every sentence is DWE-authored: an age
+// parse error echoes the input characters, which for a broken identity source
+// are private-key bytes, so it is never interpolated here.
+//
+// The one pass-through is a bare filesystem error (an unreadable keyfile, a
+// missing home directory): it carries a path and an OS message, never file
+// CONTENT, and swallowing it would report a permissions problem as "no key on
+// this machine" — the exact confusion this report exists to end.
+func identityErrorText(inv inventory) string {
+	if inv.Recipient == "" {
+		return "no secrets.recipient configured"
+	}
+	label := secrets.SourceLabel(inv.IdentitySource, inv.Recipient)
+	var wrong *secrets.WrongIdentityError
+	switch {
+	case errors.As(inv.IdentityErr, &wrong):
+		return fmt.Sprintf("%s holds the identity for %s, but the project uses %s",
+			label, wrong.Have, wrong.Want)
+	case errors.Is(inv.IdentityErr, secrets.ErrInvalidIdentity):
+		return label + " is set but holds no age identity"
+	case errors.Is(inv.IdentityErr, secrets.ErrNoIdentity):
+		// A set DWE_AGE_KEY_FILE pointing at nothing is its own failure: the
+		// generic "looked at …" sentence would send the reader looking for a
+		// key while the variable is the thing to fix.
+		if inv.IdentitySource == secrets.SourceEnvFile {
+			return label + ", which does not exist"
+		}
+		return fmt.Sprintf("no identity found (looked at %s, $%s, $%s)",
+			secrets.DisplayKeyfilePath(inv.Recipient), secrets.EnvKey, secrets.EnvKeyFile)
+	default:
+		return inv.IdentityErr.Error()
+	}
 }
 
 // statusView maps the JSON payload onto the renderer's view, so the two
@@ -94,10 +145,11 @@ func identityPayload(inv inventory) identityJSON {
 // struct the JSON mode encodes.
 func statusView(d statusJSON) render.SecretsStatusView {
 	v := render.SecretsStatusView{
-		Recipient: d.Recipient,
-		Identity:  identityDisplay(d),
-		Markers:   make([]render.SecretsMarkerRow, len(d.Markers)),
-		Files:     make([]render.SecretsFileRow, len(d.Files)),
+		Recipient:    d.Recipient,
+		Identity:     identityDisplay(d),
+		IdentityHint: d.Identity.Hint,
+		Markers:      make([]render.SecretsMarkerRow, len(d.Markers)),
+		Files:        make([]render.SecretsFileRow, len(d.Files)),
 	}
 	// A reason on a readable row is the stale-key qualifier: this machine can
 	// open the value but the CONFIGURED identity cannot, so the loader still
@@ -118,9 +170,28 @@ func statusView(d statusJSON) render.SecretsStatusView {
 }
 
 // identityDisplay words the identity line for the text report: which source
-// supplied the key, or — when none did — where the lookup looked, so the fix
-// does not depend on knowing the precedence rules.
+// supplied the key, or — when none did — WHY, so the fix does not depend on
+// knowing the precedence rules.
+//
+// The reason leads, not the source: a source that was consulted and rejected
+// must never render as the green "keyfile (…)" header a working lookup gets.
+// The parenthetical is identityJSON.Error verbatim, so the text report and the
+// JSON payload cannot describe the same failure differently.
 func identityDisplay(d statusJSON) string {
+	switch d.Identity.Reason {
+	case "":
+		return identitySourceDisplay(d)
+	case config.ReasonInvalidIdentity:
+		return "invalid (" + d.Identity.Error + ")"
+	case config.ReasonWrongIdentity:
+		return "wrong recipient (" + d.Identity.Error + ")"
+	default:
+		return identityNoneDisplay(d)
+	}
+}
+
+// identitySourceDisplay names the source of a usable identity.
+func identitySourceDisplay(d statusJSON) string {
 	switch secrets.Source(d.Identity.Source) {
 	case secrets.SourceEnv:
 		return "$" + secrets.EnvKey
@@ -132,12 +203,23 @@ func identityDisplay(d statusJSON) string {
 		}
 		return "keyfile"
 	default:
-		if d.Recipient == "" {
-			return "none"
-		}
-		return fmt.Sprintf("none (looked at %s, $%s, $%s)",
-			secrets.DisplayKeyfilePath(d.Recipient), secrets.EnvKey, secrets.EnvKeyFile)
+		return identityNoneDisplay(d)
 	}
+}
+
+// identityNoneDisplay words the "no key here" header: where the lookup would
+// look, in its own precedence order. A DWE_AGE_KEY_FILE pointing at nothing is
+// the exception — it stops the lookup at the first source, so listing the other
+// two would describe a search that never happened.
+func identityNoneDisplay(d statusJSON) string {
+	if d.Recipient == "" {
+		return "none"
+	}
+	if secrets.Source(d.Identity.Source) == secrets.SourceEnvFile && d.Identity.Error != "" {
+		return "none (" + d.Identity.Error + ")"
+	}
+	return fmt.Sprintf("none (looked at %s, $%s, $%s)",
+		secrets.DisplayKeyfilePath(d.Recipient), secrets.EnvKey, secrets.EnvKeyFile)
 }
 
 // nonNilMarkers / nonNilFiles keep the JSON arrays as `[]` rather than `null`

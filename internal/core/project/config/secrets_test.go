@@ -241,16 +241,19 @@ func TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt(t *testing.T) {
 		name       string
 		setup      func(t *testing.T)
 		wantReason string
+		wantSource secrets.Source
 	}{
 		{
 			name:       "malformed keyfile",
 			setup:      func(t *testing.T) { setEnvKeyFile(t, "not a key at all\n") },
 			wantReason: ReasonInvalidIdentity,
+			wantSource: secrets.SourceEnvFile,
 		},
 		{
 			name:       "empty keyfile",
 			setup:      func(t *testing.T) { setEnvKeyFile(t, "") },
 			wantReason: ReasonInvalidIdentity,
+			wantSource: secrets.SourceEnvFile,
 		},
 		{
 			name: "truncated DWE_AGE_KEY",
@@ -259,6 +262,7 @@ func TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt(t *testing.T) {
 				t.Setenv(secrets.EnvKey, truncated)
 			},
 			wantReason: ReasonInvalidIdentity,
+			wantSource: secrets.SourceEnv,
 		},
 		{
 			name: "env key file points nowhere",
@@ -267,6 +271,13 @@ func TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt(t *testing.T) {
 				t.Setenv(secrets.EnvKeyFile, filepath.Join(t.TempDir(), "absent.key"))
 			},
 			wantReason: ReasonNoIdentity,
+			wantSource: secrets.SourceEnvFile,
+		},
+		{
+			name:       "no identity at all",
+			setup:      hideIdentity,
+			wantReason: ReasonNoIdentity,
+			wantSource: secrets.SourceKeyfile,
 		},
 	}
 	for _, tc := range tests {
@@ -287,6 +298,11 @@ func TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt(t *testing.T) {
 				if u.Reason != tc.wantReason {
 					t.Errorf("%s: reason = %q, want %q", u.Path, u.Reason, tc.wantReason)
 				}
+			}
+			// The CONSULTED source is recorded on failure too — it is what tells
+			// the reader which source to repair.
+			if state.IdentitySource != string(tc.wantSource) {
+				t.Errorf("identity source = %q, want %q", state.IdentitySource, tc.wantSource)
 			}
 		})
 	}

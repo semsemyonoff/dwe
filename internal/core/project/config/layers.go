@@ -125,6 +125,8 @@ func LoadLayersWithSecrets(workspacePath string) ([]Layer, SecretsState, error) 
 		source secrets.Source
 	)
 	id, source, idErr = secrets.LoadIdentity(state.Recipient)
+	// The CONSULTED source, recorded on failure too: "invalid_identity" only
+	// becomes actionable once the reader knows which source is the broken one.
 	state.IdentitySource = string(source)
 
 	for _, layer := range layers {

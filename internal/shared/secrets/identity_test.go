@@ -472,6 +472,101 @@ func TestLoadIdentityMissingSources(t *testing.T) {
 	})
 }
 
+// TestLoadIdentityReportsConsultedSourceOnFailure pins the contract every
+// diagnostic surface rests on: a failed lookup still says WHICH source it
+// consulted, so "no key on this machine" can be told apart from "the variable
+// you set is broken". SourceNone means nothing was consulted at all.
+func TestLoadIdentityReportsConsultedSourceOnFailure(t *testing.T) {
+	t.Run("env holds no key", func(t *testing.T) {
+		isolateHome(t)
+		id := testIdentity(t)
+		t.Setenv(EnvKey, "garbage")
+		_, src, err := LoadIdentity(id.Recipient())
+		if !errors.Is(err, ErrInvalidIdentity) {
+			t.Fatalf("LoadIdentity = %v, want ErrInvalidIdentity", err)
+		}
+		if src != SourceEnv {
+			t.Fatalf("source = %q, want %q", src, SourceEnv)
+		}
+	})
+
+	t.Run("env holds another identity", func(t *testing.T) {
+		isolateHome(t)
+		id := testIdentity(t)
+		other := testIdentity(t)
+		t.Setenv(EnvKey, other.Export())
+		_, src, err := LoadIdentity(id.Recipient())
+		if src != SourceEnv {
+			t.Fatalf("source = %q, want %q", src, SourceEnv)
+		}
+		var wrong *WrongIdentityError
+		if !errors.As(err, &wrong) {
+			t.Fatalf("LoadIdentity = %v, want a *WrongIdentityError", err)
+		}
+		if !errors.Is(err, ErrWrongIdentity) {
+			t.Fatalf("*WrongIdentityError must unwrap to ErrWrongIdentity: %v", err)
+		}
+		if wrong.Have != other.Recipient() || wrong.Want != id.Recipient() || wrong.Source != SourceEnv {
+			t.Fatalf("WrongIdentityError = %+v, want have=%s want=%s source=%s",
+				wrong, other.Recipient(), id.Recipient(), SourceEnv)
+		}
+		// Both recipients are public; the private key is not, and the sentence
+		// carries the source name rather than its content.
+		if key := other.Export(); strings.Contains(err.Error(), key) {
+			t.Fatalf("error text carries the private key: %v", err)
+		}
+	})
+
+	t.Run("env file missing", func(t *testing.T) {
+		isolateHome(t)
+		id := testIdentity(t)
+		t.Setenv(EnvKeyFile, filepath.Join(t.TempDir(), "nope.key"))
+		_, src, err := LoadIdentity(id.Recipient())
+		if err == nil {
+			t.Fatal("LoadIdentity: expected an error")
+		}
+		if src != SourceEnvFile {
+			t.Fatalf("source = %q, want %q", src, SourceEnvFile)
+		}
+	})
+
+	t.Run("keyfile missing", func(t *testing.T) {
+		isolateHome(t)
+		id := testIdentity(t)
+		_, src, err := LoadIdentity(id.Recipient())
+		if !errors.Is(err, ErrNoIdentity) {
+			t.Fatalf("LoadIdentity = %v, want ErrNoIdentity", err)
+		}
+		if src != SourceKeyfile {
+			t.Fatalf("source = %q, want %q", src, SourceKeyfile)
+		}
+	})
+}
+
+// TestSourceLabel pins the display wording for each consulted source. It names
+// locations only — a label never carries file content.
+func TestSourceLabel(t *testing.T) {
+	isolateHome(t)
+	id := testIdentity(t)
+
+	if got, want := SourceLabel(SourceEnv, id.Recipient()), "$"+EnvKey; got != want {
+		t.Errorf("SourceLabel(env) = %q, want %q", got, want)
+	}
+	if got := SourceLabel(SourceEnvFile, id.Recipient()); got != "$"+EnvKeyFile {
+		t.Errorf("SourceLabel(env-file) without the variable = %q, want %q", got, "$"+EnvKeyFile)
+	}
+	t.Setenv(EnvKeyFile, "/ci/age.key")
+	if got, want := SourceLabel(SourceEnvFile, id.Recipient()), "$"+EnvKeyFile+" /ci/age.key"; got != want {
+		t.Errorf("SourceLabel(env-file) = %q, want %q", got, want)
+	}
+	if got, want := SourceLabel(SourceKeyfile, id.Recipient()), "keyfile "+DisplayKeyfilePath(id.Recipient()); got != want {
+		t.Errorf("SourceLabel(keyfile) = %q, want %q", got, want)
+	}
+	if got := SourceLabel(SourceNone, id.Recipient()); got != "" {
+		t.Errorf("SourceLabel(none) = %q, want empty", got)
+	}
+}
+
 func TestLoadAnyIdentity(t *testing.T) {
 	t.Run("missing dir is empty", func(t *testing.T) {
 		isolateHome(t)

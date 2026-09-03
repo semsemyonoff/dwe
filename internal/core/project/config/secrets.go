@@ -55,7 +55,10 @@ type UnresolvedSecret struct {
 // Decrypted and Unresolved are ordered by layer (lowest precedence first) and
 // then by path, so every list and table built from them is deterministic.
 type SecretsState struct {
-	Recipient      string             `json:"recipient,omitempty"`
+	Recipient string `json:"recipient,omitempty"`
+	// IdentitySource is the source LoadIdentity CONSULTED, filled on a failed
+	// lookup as well — it is what tells a reader which source to repair. It is
+	// empty only when no lookup ran (a project with no markers).
 	IdentitySource string             `json:"identity_source,omitempty"`
 	Decrypted      []SecretRef        `json:"decrypted,omitempty"`
 	Unresolved     []UnresolvedSecret `json:"unresolved,omitempty"`

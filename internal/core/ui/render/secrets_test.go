@@ -28,11 +28,12 @@ func goldenSecretsStatus() SecretsStatusView {
 
 // goldenSecretsStatusKeyless is the new-developer state: the recipient is
 // committed, no identity is installed, and every marker fails for the one
-// actionable reason.
+// actionable reason — so the report closes with the fix.
 func goldenSecretsStatusKeyless() SecretsStatusView {
 	return SecretsStatusView{
-		Recipient: "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p",
-		Identity:  "none (looked at /home/dev/.config/dwe/keys/age1qyqs….key, $DWE_AGE_KEY, $DWE_AGE_KEY_FILE)",
+		Recipient:    "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p",
+		Identity:     "none (looked at /home/dev/.config/dwe/keys/age1qyqs….key, $DWE_AGE_KEY, $DWE_AGE_KEY_FILE)",
+		IdentityHint: "run 'dwe secrets key import' to store the identity at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_FILE",
 		Markers: []SecretsMarkerRow{
 			{Layer: "workspace/defaults.yml", Path: "vars.telegram.token", State: "unresolved", Reason: "no_identity"},
 		},
@@ -40,6 +41,26 @@ func goldenSecretsStatusKeyless() SecretsStatusView {
 			{File: "workspace/templates/config/app/creds.json.age", State: "not decryptable", Reason: "no_identity"},
 		},
 	}
+}
+
+// goldenSecretsStatusInvalid is the set-but-broken source: the header names the
+// variable to repair rather than a key to obtain.
+func goldenSecretsStatusInvalid() SecretsStatusView {
+	v := goldenSecretsStatusKeyless()
+	v.Identity = "invalid ($DWE_AGE_KEY is set but holds no age identity)"
+	v.Markers[0].Reason = "invalid_identity"
+	v.Files[0].Reason = "invalid_identity"
+	return v
+}
+
+// goldenSecretsStatusWrong is the foreign-key state: a readable keyfile that
+// opens nothing here, with both recipients on the header line.
+func goldenSecretsStatusWrong() SecretsStatusView {
+	v := goldenSecretsStatusKeyless()
+	v.Identity = "wrong recipient (keyfile /home/dev/.config/dwe/keys/age1qyqs….key holds the identity for age1other, but the project uses " + v.Recipient + ")"
+	v.Markers[0].Reason = "wrong_identity"
+	v.Files[0].Reason = "wrong_identity"
+	return v
 }
 
 // goldenSecretsStatusEmpty is a project that uses no secrets at all — the
@@ -61,6 +82,33 @@ func TestGolden_SecretsStatusKeyless(t *testing.T) {
 func TestGolden_SecretsStatusEmpty(t *testing.T) {
 	pinGoldenPalette(t)
 	assertGolden(t, "secrets_status_empty.golden", SecretsStatus(goldenSecretsStatusEmpty()))
+}
+
+func TestGolden_SecretsStatusInvalid(t *testing.T) {
+	pinGoldenPalette(t)
+	assertGolden(t, "secrets_status_invalid.golden", SecretsStatus(goldenSecretsStatusInvalid()))
+}
+
+func TestGolden_SecretsStatusWrong(t *testing.T) {
+	pinGoldenPalette(t)
+	assertGolden(t, "secrets_status_wrong.golden", SecretsStatus(goldenSecretsStatusWrong()))
+}
+
+// TestSecretsStatus_HintClosesTheReport pins where the fix instruction lands:
+// last, after the inventory it applies to — and only when the view carries one,
+// so a healthy project's report is byte-identical to before.
+func TestSecretsStatus_HintClosesTheReport(t *testing.T) {
+	pinGoldenPalette(t)
+	v := goldenSecretsStatusKeyless()
+	got := stripANSI(SecretsStatusAt(v, 0))
+	if !strings.HasSuffix(got, v.IdentityHint) {
+		t.Errorf("report does not end with the hint:\n%s", got)
+	}
+
+	v.IdentityHint = ""
+	if bare := stripANSI(SecretsStatusAt(v, 0)); strings.Contains(bare, "dwe secrets key import") {
+		t.Errorf("a hintless view still renders a hint:\n%s", bare)
+	}
 }
 
 // TestSecretsStatus_StableAcrossRuns pins that two consecutive renders of the

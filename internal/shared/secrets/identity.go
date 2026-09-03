@@ -137,6 +137,11 @@ func ParseRecipient(text string) error {
 // working keyfile. An empty recipient is ErrNoIdentity without touching the
 // filesystem; a missing keyfile is ErrNoIdentity; any other read error is
 // returned as-is so permission problems are never hidden.
+//
+// The returned Source is the CONSULTED source, on failure as well: a caller
+// that reports "no identity" must be able to say which source it looked at and
+// whether that source was set-but-broken. SourceNone means nothing was
+// consulted at all, which happens only for an empty recipient.
 func LoadIdentity(recipient string) (Identity, Source, error) {
 	if recipient == "" {
 		return Identity{}, SourceNone, fmt.Errorf("%w: no secrets.recipient configured", ErrNoIdentity)
@@ -150,23 +155,23 @@ func LoadIdentity(recipient string) (Identity, Source, error) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				return Identity{}, SourceNone, fmt.Errorf("%w: %s points at %s, which does not exist", ErrNoIdentity, EnvKeyFile, path)
+				return Identity{}, SourceEnvFile, fmt.Errorf("%w: %s points at %s, which does not exist", ErrNoIdentity, EnvKeyFile, path)
 			}
-			return Identity{}, SourceNone, fmt.Errorf("read %s (%s): %w", path, EnvKeyFile, err)
+			return Identity{}, SourceEnvFile, fmt.Errorf("read %s (%s): %w", path, EnvKeyFile, err)
 		}
 		return finishLoad(string(data), recipient, SourceEnvFile, EnvKeyFile+" "+path)
 	}
 
 	path, err := KeyfilePath(recipient)
 	if err != nil {
-		return Identity{}, SourceNone, err
+		return Identity{}, SourceKeyfile, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return Identity{}, SourceNone, fmt.Errorf("%w: no keyfile at %s", ErrNoIdentity, path)
+			return Identity{}, SourceKeyfile, fmt.Errorf("%w: no keyfile at %s", ErrNoIdentity, path)
 		}
-		return Identity{}, SourceNone, fmt.Errorf("read keyfile %s: %w", path, err)
+		return Identity{}, SourceKeyfile, fmt.Errorf("read keyfile %s: %w", path, err)
 	}
 	return finishLoad(string(data), recipient, SourceKeyfile, path)
 }
@@ -174,13 +179,53 @@ func LoadIdentity(recipient string) (Identity, Source, error) {
 func finishLoad(text, recipient string, src Source, label string) (Identity, Source, error) {
 	id, err := ParseIdentity(text)
 	if err != nil {
-		return Identity{}, SourceNone, fmt.Errorf("parse identity from %s: %w", label, err)
+		return Identity{}, src, fmt.Errorf("parse identity from %s: %w", label, err)
 	}
 	if id.Recipient() != recipient {
-		return Identity{}, SourceNone, fmt.Errorf("%w: %s holds the identity for %s, but the project uses %s",
-			ErrWrongIdentity, label, id.Recipient(), recipient)
+		return Identity{}, src, &WrongIdentityError{Source: src, label: label, Have: id.Recipient(), Want: recipient}
 	}
 	return id, src, nil
+}
+
+// WrongIdentityError reports that the consulted source holds a usable age
+// identity for a DIFFERENT recipient than the project's.
+//
+// Both recipients are public values, so they are carried structurally rather
+// than only inside the sentence: `dwe secrets status` words its own header from
+// them, instead of re-parsing an error string.
+type WrongIdentityError struct {
+	Source Source // the consulted source
+	Have   string // the recipient the source actually holds
+	Want   string // the recipient the project uses
+	label  string // how LoadIdentity names the source in prose
+}
+
+func (e *WrongIdentityError) Error() string {
+	return fmt.Sprintf("%v: %s holds the identity for %s, but the project uses %s",
+		ErrWrongIdentity, e.label, e.Have, e.Want)
+}
+
+// Unwrap keeps errors.Is(err, ErrWrongIdentity) working for every caller that
+// only classifies the failure.
+func (e *WrongIdentityError) Unwrap() error { return ErrWrongIdentity }
+
+// SourceLabel names a consulted identity source for display: "$DWE_AGE_KEY",
+// "$DWE_AGE_KEY_FILE <path>", "keyfile <path>". The paths are locations, never
+// content — no key material passes through here. An unknown source yields "".
+func SourceLabel(src Source, recipient string) string {
+	switch src {
+	case SourceEnv:
+		return "$" + EnvKey
+	case SourceEnvFile:
+		if path := os.Getenv(EnvKeyFile); path != "" {
+			return "$" + EnvKeyFile + " " + path
+		}
+		return "$" + EnvKeyFile
+	case SourceKeyfile:
+		return "keyfile " + DisplayKeyfilePath(recipient)
+	default:
+		return ""
+	}
 }
 
 // KeysDir returns the absolute identity directory (~/.config/dwe/keys).
