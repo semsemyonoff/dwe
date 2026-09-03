@@ -48,7 +48,8 @@ recipient is written to workspace.yml last.
 
 This machine must be able to READ every existing secret, so run it where the
 current identity lives. The whole tree is decrypted and validated in memory
-first: a value this machine cannot open aborts the command with nothing written.
+first: a value this machine cannot open — or one whose YAML shape cannot be
+rewritten in place — aborts the command with nothing written.
 
 Recovery: the new keyfile is written before anything is re-encrypted and the old
 one is kept, so an interrupted run leaves a readable — if mixed — tree that a
@@ -117,7 +118,7 @@ func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		rewrittenFiles = append(rewrittenFiles, relToRoot(flags.ProjectRoot(), f.path))
 	}
 
-	// Phase 4 — rewrite the markers in each layer file through the node writer,
+	// Phase 4 — rewrite the markers in each layer file through the splice writer,
 	// so comments, anchors and quoting survive.
 	rewrittenLayers := make([]string, 0, len(plan.layers))
 	for _, l := range plan.layers {
@@ -242,7 +243,70 @@ func planRekey(flags *cmdctx.RootFlags, layers []config.Layer, recipient string)
 		}
 		plan.files = append(plan.files, rekeyFile{path: f.path, plain: plain, mode: mode})
 	}
+
+	if err := dryRunSplices(plan, root, flags.ConfigPath, recipient); err != nil {
+		return rekeyPlan{}, err
+	}
 	return plan, nil
+}
+
+// dryRunSplices proves on throwaway Splicers that every edit phases 4 and 5 will
+// attempt can actually be spliced. Decryptability alone is not enough: a marker
+// written as a block scalar or inside a flow mapping decrypts fine and only
+// refuses at splice time — which would abort AFTER the new keyfile was minted
+// and every .age source re-encrypted to it, leaving a tree whose ciphertext is
+// sealed to a key pair that was never exported. Committing that tree locks every
+// other developer out of those files, and the shape is detectable read-only, so
+// it belongs in phase 1 with the rest of the validation.
+//
+// The probe value is each marker re-encrypted to the CURRENT recipient: age
+// ciphertext length depends on the plaintext, not on which X25519 recipient it
+// is sealed to, so the probe splices exactly like the real replacement will.
+func dryRunSplices(plan rekeyPlan, root, configPath, recipient string) error {
+	for _, l := range plan.layers {
+		splicer, err := localpkg.NewSplicer(l.path, l.label)
+		if err != nil {
+			return rekeyPlanSpliceError(err, relToRoot(root, l.path))
+		}
+		if _, err := splicer.ReplaceScalars(func(s string) (string, bool, error) {
+			value, ok := plan.plain[s]
+			if !secrets.IsMarker(s) || !ok {
+				return s, false, nil
+			}
+			probe, eerr := secrets.Encrypt(value, recipient)
+			if eerr != nil {
+				return s, false, eerr
+			}
+			return probe, true, nil
+		}); err != nil {
+			return rekeyPlanSpliceError(err, relToRoot(root, l.path))
+		}
+	}
+
+	// Phase 5's target. A recipient is a fixed-length age1… string, so rewriting
+	// it with the current one probes that site at its real width.
+	splicer, err := localpkg.NewSplicer(configPath, localpkg.LabelWorkspace)
+	if err != nil {
+		return rekeyPlanSpliceError(err, relToRoot(root, configPath))
+	}
+	if err := splicer.SetScalar([]string{"secrets", "recipient"}, recipient); err != nil {
+		return rekeyPlanSpliceError(err, relToRoot(root, configPath))
+	}
+	return nil
+}
+
+// rekeyPlanSpliceError decorates a refusal the read-only dry run found. Unlike
+// rekeySpliceError it carries `written: false` and no resume text: no key pair
+// has been minted and nothing re-encoded, so reshaping the value and re-running
+// is the whole recovery.
+func rekeyPlanSpliceError(err error, file string) error {
+	if unsupported, ok := spliceUnsupportedError(err, file); ok {
+		return unsupported.WithDetail("written", false)
+	}
+	return cmdctx.ErrWrap("secrets_rekey_blocked", err).
+		WithDetail("file", file).
+		WithDetail("written", false).
+		WithHint("nothing was written; " + file + " could not be prepared for an in-place rewrite")
 }
 
 // rekeyLayerFile re-encrypts every marker in one layer file in place through the
@@ -286,7 +350,7 @@ func rekeyLayerFile(l rekeyLayer, plain map[string]string, recipient string) (in
 	return count, nil
 }
 
-// layerWritePolicy names a layer file for the node writer and picks its mode
+// layerWritePolicy names a layer file for the splice writer and picks its mode
 // policy. local.yml is gitignored developer state and stays FORCED to 0600; the
 // two tracked files keep whatever mode the repository gave them, because forcing
 // 0600 on a tracked file would surprise git and editors.

@@ -384,8 +384,10 @@ half-rekeyed tree finishes cleanly).
 
 The order is a **recoverable sequence, not a transaction**:
 
-1. **Read-only pass** — decrypt and validate everything into memory. A corrupt
-   marker or an undecryptable `.age` aborts here, with **nothing written**.
+1. **Read-only pass** — decrypt and validate everything into memory, then
+   rehearse every layer-file edit on a throwaway copy. A corrupt marker, an
+   undecryptable `.age`, or a marker whose YAML shape cannot be rewritten in
+   place (a block scalar, a flow mapping) aborts here, with **nothing written**.
 2. **Write the new keyfile** — the first mutation. The old keyfile is kept.
 3. **Re-encrypt** every `.age` file (atomically) and every layer file (one
    spliced line per marker, so the diff is one line per re-encrypted value).

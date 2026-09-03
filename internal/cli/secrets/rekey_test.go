@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -171,62 +172,91 @@ func TestRekey_RewritesOnlyTheMarkerLines(t *testing.T) {
 }
 
 // TestRekey_RefusesUnsplicableMarker pins that a marker the splice writer cannot
-// edit — here one written into a flow mapping by hand — aborts phase 4 with the
-// specific secrets_write_unsupported code rather than the generic
-// secrets_rekey_failed wrapper, leaving the layer file byte-identical and no key
-// material on any surface.
+// edit aborts in the READ-ONLY pass with the specific secrets_write_unsupported
+// code rather than the generic secrets_rekey_failed wrapper. Both refused shapes
+// decrypt perfectly, so only the dry run can see them — and it has to, because a
+// phase-4 abort would already have minted a key pair and re-encrypted every .age
+// source to it, sealing them to an identity nobody else can import.
 func TestRekey_RefusesUnsplicableMarker(t *testing.T) {
-	for _, mode := range []string{"text", "json"} {
-		t.Run(mode, func(t *testing.T) {
-			isolateHome(t)
-			cfgPath, root := writeFixture(t)
-			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
-			recipient := initProject(t, flags)
+	shapes := []struct {
+		name string
+		src  func(marker string) string
+	}{
+		{
+			name: "flow mapping",
+			src:  func(m string) string { return "vars:\n  telegram: {token: \"" + m + "\"}\n" },
+		},
+		{
+			name: "block scalar",
+			src:  func(m string) string { return "vars:\n  token: |-\n    " + m + "\n" },
+		},
+	}
 
-			marker, err := secrets.Encrypt("flow-plaintext-value", recipient)
-			if err != nil {
-				t.Fatalf("encrypt: %v", err)
-			}
-			src := "vars:\n  telegram: {token: \"" + marker + "\"}\n"
-			if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
-				t.Fatalf("writing defaults.yml: %v", err)
-			}
-			if mode == "json" {
-				flags.Output = "json"
-			}
+	for _, shape := range shapes {
+		for _, mode := range []string{"text", "json"} {
+			t.Run(shape.name+"/"+mode, func(t *testing.T) {
+				isolateHome(t)
+				cfgPath, root := writeFixture(t)
+				flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+				recipient := initProject(t, flags)
 
-			stdout, stderr, err := runSecrets(t, flags, "rekey")
-			if err == nil {
-				t.Fatal("rekey succeeded against a marker in a flow mapping")
-			}
-			coded := codedError(t, err)
-			if coded.Code != "secrets_write_unsupported" {
-				t.Errorf("error code = %q, want secrets_write_unsupported (message: %s)", coded.Code, coded.Message)
-			}
-			// The refusal lands AFTER phase 2 minted the new keyfile, so the
-			// reshape hint alone would read as "nothing happened": the resume
-			// half has to travel with it, or the developer is never told the
-			// mixed tree is readable and that a re-run finishes it.
-			if !strings.Contains(coded.Hint, rekeyResumeHint) {
-				t.Errorf("hint = %q, want it to carry the resume instruction", coded.Hint)
-			}
-			if coded.Details["written"] != true {
-				t.Errorf("details[written] = %v, want true", coded.Details["written"])
-			}
-			payload, merr := json.Marshal(coded)
-			if merr != nil {
-				t.Fatalf("marshalling the coded error: %v", merr)
-			}
-			assertNoSecretLeak(t, "flow-plaintext-value", stdout, stderr, coded.Message, coded.Hint, string(payload))
+				marker, err := secrets.Encrypt("flow-plaintext-value", recipient)
+				if err != nil {
+					t.Fatalf("encrypt: %v", err)
+				}
+				src := shape.src(marker)
+				if err := os.WriteFile(defaultsPath(root), []byte(src), 0o644); err != nil {
+					t.Fatalf("writing defaults.yml: %v", err)
+				}
+				agePath := writeAgeFile(t, root, "bot/token.age", recipient, "pack-source-value")
+				ageBefore, err := os.ReadFile(agePath)
+				if err != nil {
+					t.Fatalf("reading the .age source: %v", err)
+				}
+				if mode == "json" {
+					flags.Output = "json"
+				}
 
-			after, rerr := os.ReadFile(defaultsPath(root))
-			if rerr != nil {
-				t.Fatalf("reading defaults.yml: %v", rerr)
-			}
-			if string(after) != src {
-				t.Errorf("defaults.yml changed after a refused rekey:\n%s", after)
-			}
-		})
+				keysBefore := keyfileNames(t)
+
+				stdout, stderr, err := runSecrets(t, flags, "rekey")
+				if err == nil {
+					t.Fatalf("rekey succeeded against a marker in a %s", shape.name)
+				}
+				coded := codedError(t, err)
+				if coded.Code != "secrets_write_unsupported" {
+					t.Errorf("error code = %q, want secrets_write_unsupported (message: %s)", coded.Code, coded.Message)
+				}
+				// The shape is detectable read-only, so the refusal carries
+				// written=false and no resume text: there is no mixed tree to
+				// finish, only a value to reshape before running again.
+				if coded.Details["written"] != false {
+					t.Errorf("details[written] = %v, want false", coded.Details["written"])
+				}
+				if strings.Contains(coded.Hint, rekeyResumeHint) {
+					t.Errorf("hint = %q, want no resume instruction when nothing was written", coded.Hint)
+				}
+				if got := keyfileNames(t); !slices.Equal(got, keysBefore) {
+					t.Errorf("keys dir = %v, want it untouched (%v)", got, keysBefore)
+				}
+				payload, merr := json.Marshal(coded)
+				if merr != nil {
+					t.Fatalf("marshalling the coded error: %v", merr)
+				}
+				assertNoSecretLeak(t, "flow-plaintext-value", stdout, stderr, coded.Message, coded.Hint, string(payload))
+
+				after, rerr := os.ReadFile(defaultsPath(root))
+				if rerr != nil {
+					t.Fatalf("reading defaults.yml: %v", rerr)
+				}
+				if string(after) != src {
+					t.Errorf("defaults.yml changed after a refused rekey:\n%s", after)
+				}
+				if ageAfter, _ := os.ReadFile(agePath); !bytes.Equal(ageAfter, ageBefore) {
+					t.Error("the .age source was re-encrypted by a rekey that refused a layer file")
+				}
+			})
+		}
 	}
 }
 

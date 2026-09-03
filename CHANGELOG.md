@@ -85,7 +85,10 @@ generated from commit subjects and stay on the
   scalar, a target inside a flow collection, a `null` / sequence / non-mapping
   scalar / alias parent — and are refused with the new
   `secrets_write_unsupported` code, naming the path and the fix, with the file
-  untouched. Descending through an existing scalar (`vars.db.host.port` where
+  untouched. `rekey` detects those shapes in its read-only pass, so it aborts
+  with `written: false` before minting a key pair or re-encrypting any `.age`
+  source, rather than part-way through. Descending through an existing scalar
+  (`vars.db.host.port` where
   `host` is a string) previously reported `secrets_write_failed`; it now
   reports `secrets_write_unsupported` like the other refused shapes.
 - `dwe vars set`, `dwe services enable` / `disable` and the setup wizard no
