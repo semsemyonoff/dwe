@@ -848,25 +848,66 @@ writer for all three layer files".
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] `make test`, `make lint`
-- [ ] scratch project: `secrets set vars.x.y v` on a hand-annotated
+- [x] `make test`, `make lint`
+- [x] scratch project: `secrets set vars.x.y v` on a hand-annotated
       `defaults.yml` (2-space, blank lines, comments, quoted keys, anchor +
       `<<:`) → `git diff --stat` shows `1 insertion(+), 1 deletion(-)`;
       `secrets init` on an annotated `workspace.yml` → only the appended
       block; `rekey` → one changed line per marker + the recipient line
-- [ ] `dwe deploy plan`, `deploy plan --format shell`, `deploy plan --output json`,
+- [x] `dwe deploy plan`, `deploy plan --format shell`, `deploy plan --output json`,
       `reset plan`, `reset step <addr> --dry-run` with a step
       `echo 'token is ${vars.telegram.bot_token}'` and a builtin `confirm`
       whose message embeds the token → `***`, no registered secret ≥ 4
       runes anywhere in the output; the same step under `dwe run -v` →
       `***` (unchanged)
-- [ ] `dwe validate secrets` on the healthy scratch project → two ✓ rows,
+- [x] `dwe validate secrets` on the healthy scratch project → two ✓ rows,
       `validation result: 2 checks`; `--output json` → `summary.ok: 2`; on a
       project without secrets → output identical to the pre-change binary
-- [ ] `../ficbird` (759-line annotated `defaults.yml`, one marker, one
+- [x] `../ficbird` (420-line annotated `defaults.yml`, four markers, one
       `.age`): `secrets set vars.telegram.bot_token <same value>` on a clean
       tree → one-line diff; `deploy plan` → no token; `validate secrets` → ✓
       rows; revert the ficbird change afterwards, commit nothing there
+
+➕ Task 7 results (all four checks pass; scratch trees removed afterwards):
+
+- `make test` exit 0 (whole tree), `make lint` → `0 issues.`
+- Scratch project built from `internal/cli/secrets/testdata/annotated_{defaults,workspace}.yml`
+  with an isolated `HOME` (so `secrets init` never wrote into the real
+  `~/.config/dwe/keys/`): `secrets init` → `workspace.yml | 3 +++` (appended
+  block only, blank-line separated); `secrets set vars.telegram.bot_token` →
+  `workspace/defaults.yml | 2 +-` (`1 insertion(+), 1 deletion(-)`);
+  `secrets rekey` with two markers → `workspace/defaults.yml | 4 ++--`
+  (one line per marker) + `workspace.yml | 2 +-` (the recipient line). The
+  anchor, `<<: *service_defaults`, the quoted key + its trailing comment, the
+  `|` literal block and both header/footer comments survived byte-for-byte.
+- Plan surfaces on that project (`echo 'token is ${vars.telegram.bot_token}'`
+  plus a builtin `confirm` whose message embeds the token): `deploy plan`,
+  `deploy plan --format shell`, `deploy plan --output json` (valid JSON per
+  `jq`), `reset plan` and `reset step <addr> --dry-run` all show `***` and
+  none contains the plaintext. Executing the step with `-v` echoes
+  `$ sh -c 'echo '\''token is ***'\''` while the child process prints the real
+  token on its own stdout — that is the deep-copy guard working: display
+  redacted, execution unaffected.
+- `dwe validate secrets` on the healthy scratch project → the two ✓ rows,
+  `validation result: 2 checks (scope: secrets)`, `--output json` →
+  `summary.ok: 2` with scopes `secrets/secrets.recipient` (empty `message`)
+  and `secrets/secrets.unresolved`
+  (`2 encrypted value(s) and 0 config-pack source(s) readable via keyfile`),
+  no keyfile path and no `AGE-SECRET-KEY-`. On a project without secrets both
+  `validate secrets` and the full `validate --output json --pretty` are
+  **byte-identical** to a binary built at `ae0d7290` (pre-Task-5).
+- ⚠️ The `../ficbird` tree was **dirty** (8 modified files on
+  `dwe-0.6-secrets`), and the plan's pass requires a clean tree, so the run
+  happened on a throwaway copy of `workspace/`, `workspace.yml` and `.env`
+  under `/tmp` instead of the live tree — same 420-line annotated
+  `defaults.yml`, same real identity out of `~/.config/dwe/keys/`. Result:
+  `secrets set vars.telegram.bot_token <same value>` → `1 insertion(+),
+  1 deletion(-)`; every plan surface (table / shell / json / `reset plan`)
+  scanned against all four decrypted markers → no plaintext;
+  `validate secrets` → the two ✓ rows,
+  `4 encrypted value(s) and 1 config-pack source(s) readable via keyfile`.
+  `git status --porcelain` in the real `../ficbird` is unchanged from before
+  the run; nothing was committed there.
 
 ### Task 8: [Final] Update documentation
 
