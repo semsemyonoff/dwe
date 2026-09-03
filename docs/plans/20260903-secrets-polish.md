@@ -796,7 +796,7 @@ a `sourcePhrase` helper so the OK row can never carry a keyfile path.
 - Modify: `docs/reference/config/deploy/index.md`, `docs/i18n/ru/reference/config/deploy/index.md` (resolve the exact page describing `deploy plan` output before starting; both halves change together for the translation freshness gate)
 - Modify: `docs/internals/packages.md`, `AGENTS.md`, `CHANGELOG.md`
 
-- [ ] `secrets.md`: "Subcommands" — `set`/`init`/`rekey` change only the
+- [x] `secrets.md`: "Subcommands" — `set`/`init`/`rekey` change only the
       touched lines, list the refused shapes (multi-line scalar, wrapped
       quoted scalar, flow collection, null parent) and the fix, and the
       `secrets_write_unsupported` code in the error-code list; "Diagnostic
@@ -806,10 +806,10 @@ a `sourcePhrase` helper so the OK row can never carry a keyfile path.
       redacted; redaction is not an access boundary — `dwe vars`,
       `secrets get` print plaintext by design (R10.4); "Validation and
       preflight" — the healthy output now shows two ✓ rows; ru mirror
-- [ ] `validate.md` (+ ru): secrets row mentions the OK rows
-- [ ] `deploy/index.md` (+ ru): one paragraph — plan output is redacted, the
+- [x] `validate.md` (+ ru): secrets row mentions the OK rows
+- [x] `deploy/index.md` (+ ru): one paragraph — plan output is redacted, the
       shell format is a preview
-- [ ] `packages.md`: `internal/core/project/local/` — two writers, when to
+- [x] `packages.md`: `internal/core/project/local/` — two writers, when to
       use which, the `!!merge` tag-clearing, the Splicer contracts
       (rune-column → byte offset, properties skipped, `candidate == Value`
       detector, raw-line mapping end, verify-before-write, refused shapes);
@@ -817,15 +817,34 @@ a `sourcePhrase` helper so the OK row can never carry a keyfile path.
       `FormatCondition` are display-only, redact leaves before formatting,
       never feed execution; `shared/trace` — `Redact` export;
       Core — Validation — secrets OK rows and the six-step order
-- [ ] `AGENTS.md` "Encrypted secrets" bullet: **net-zero byte delta** —
+- [x] `AGENTS.md` "Encrypted secrets" bullet: **net-zero byte delta** —
       tighten an existing clause to pay for one sentence (splice writer for
       secrets, redaction inside the display functions); `wc -c AGENTS.md`
       ≤ 40960, line ≤ 600 runes; run `go test ./internal/cli/docs/ -run TestAgentsMd`
       in this task
-- [ ] `CHANGELOG.md` `## [Unreleased]`: format-preserving secrets writes,
+- [x] `CHANGELOG.md` `## [Unreleased]`: format-preserving secrets writes,
       `!!merge` fix, plan redaction (incl. shell format), `validate secrets`
       OK rows
-- [ ] `make build`, `go test ./internal/core/docs/... ./internal/cli/docs/...` — must pass before task 7
+- [x] `make build`, `go test ./internal/core/docs/... ./internal/cli/docs/...` — must pass before task 7
+
+➕ Task 6 notes: the plan's page for `deploy plan` output is
+`docs/reference/config/deploy/index.md` § "Templates in step fields" — the clause
+that promised `--format shell` "must stay directly executable" was the one that
+had to change, so the redaction paragraph landed there rather than next to the
+`dwe deploy plan` bullet in § "Related commands". `secrets.md`'s refused-shapes
+table and the byte-diff promise live at the TOP of § Subcommands (all three
+writers share them) with the per-command sections pointing at it, and
+"Diagnostic redaction" became "Redaction" (ru: «Редактирование диагностики» →
+«Редактирование вывода»); the three ru mirrors' `> Translated from: … @ <hash>`
+headers were re-stamped for the freshness gate. `AGENTS.md` is **+36 B**, not
+net-zero (40918 B, 42 B under the budget): paying the full 161 B back would have
+meant deleting a live trap, so the `LoadConfig` call chain
+(`LoadRawLayers` → `LoadLayersWithSecrets` → `assembleConfig`) was dropped
+instead — it is write-up detail packages.md already carries — plus four clause
+tightenings. `packages.md` also had two now-false statements to fix beyond the
+planned additions: `local.ReplaceScalars` (deleted in Task 3) in the
+`cli/secrets/` rekey sequence, and the node writer described as "the sanctioned
+writer for all three layer files".
 
 ### Task 7: Verify acceptance criteria
 

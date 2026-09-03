@@ -285,10 +285,11 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   (3) `fitRows` must raise each natural width back to its `columnFloors` value before distributing the deficit — a `Max` cap can clamp a column below an unbreakable token, and skipping the raise makes `distributeDeficit` see negative headroom, *widen* the column, and overflow while still reporting `ok=true`.
   See § `internal/core/ui/render/`, § `internal/core/ui/styles/` and § `internal/core/project/stack/`.
 
-- **Encrypted secrets** — decryption happens ONCE in `LoadConfig` (`LoadRawLayers` → `LoadLayersWithSecrets` → `assembleConfig`), so every merged-config consumer stays crypto-unaware; `LoadConfigSanitized` is that assembly over the RAW layers and what ide/ai/git load, so a tracked output can only carry the marker.
-  `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext by design (age output is non-deterministic), and `LoadConfig` is the SINGLE installer of `trace.RegisterRedaction`.
-  `render env` / `render config` run no preflight and refuse a marker themselves; `secrets.unresolved` is preflight's 2nd cherry-pick, mirrored in `runPreWizardPreflight`.
-  Only `internal/shared/secrets/` imports `filippo.io/age`; `dwe secrets` is not in `bridgeAllowedTopLevel`, but container READS stay open.
+- **Encrypted secrets** — decryption happens ONCE in `LoadConfig`, so merged-config consumers stay crypto-unaware; `LoadConfigSanitized` assembles the RAW layers and is what ide/ai/git load, so a tracked output can only carry the marker.
+  `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext (age output is non-deterministic), and `LoadConfig` is the SINGLE installer of `trace.RegisterRedaction`.
+  `secrets init`/`set`/`rekey` write through the `local` Splicer, not the node writer; `StepCommand`/`FormatAction`/`FormatCondition` redact every plan surface.
+  `render env`/`config` run no preflight and refuse a marker; `secrets.unresolved` is preflight's 2nd cherry-pick, also in `runPreWizardPreflight`.
+  Only `shared/secrets/` imports `filippo.io/age`; `dwe secrets` is not in `bridgeAllowedTopLevel`, but container READS stay open.
   See § Core — Foundation (`project/config/`), § `internal/shared/secrets/` and § `internal/cli/secrets/`.
 
 ## Agent-Specific Instructions

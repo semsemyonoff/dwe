@@ -28,7 +28,7 @@ file as plaintext.
 - [Output guards: no marker ever reaches a rendered file](#output-guards-no-marker-ever-reaches-a-rendered-file)
 - [Validation and preflight](#validation-and-preflight)
 - [Where plaintext goes](#where-plaintext-goes)
-- [Diagnostic redaction](#diagnostic-redaction)
+- [Redaction](#redaction)
 - [Container behavior](#container-behavior)
 - [`age` CLI interoperability](#age-cli-interoperability)
 - [JSON output](#json-output)
@@ -163,6 +163,28 @@ All writers take the project locks (`deploy.lock` → `snapshot.lock`) and run
 and `key export` write nothing at all. `decrypt` takes no locks either — it
 does not touch the config — but it does write a plaintext file (see below).
 
+**`init`, `set` and `rekey` edit a layer file by replacing single lines.** They
+do not re-encode the document, so indentation, blank lines, comments, anchors,
+`<<:` merge keys, quoting style and line endings all survive byte-for-byte: one
+`dwe secrets set` into a several-hundred-line annotated `defaults.yml` produces
+a one-line diff. A new key is inserted rather than replaced — at the end of the
+file for a new top-level block, otherwise after the end of the nearest existing
+mapping.
+
+The price is that a handful of shapes cannot be edited in place and are
+**refused with the file untouched** (`secrets_write_unsupported`), naming the
+path and the fix:
+
+| Refused shape | Fix |
+|---------------|-----|
+| A literal or folded block scalar, or a plain/quoted scalar wrapped over several lines | Write the value on one line |
+| A target inside a flow collection (`{a: 1}`, `[x, y]`) | Write it as a block collection |
+| A parent that is `null` (`vars:` with nothing under it), a sequence, or a non-mapping scalar | Materialize the parent as a block mapping |
+| A parent reached through a YAML alias (`vars: *common`), or a key that may be inherited through a `<<:` merge key | Write the key explicitly in that mapping |
+
+The spliced bytes are re-parsed and the value is read back at its path before
+anything is persisted; a mismatch is refused too, and nothing is written.
+
 ### `dwe secrets init`
 
 ```
@@ -170,9 +192,9 @@ dwe secrets init
 ```
 
 Generates an X25519 key pair, writes the identity to
-`~/.config/dwe/keys/<recipient>.key`, and writes `secrets.recipient` into
-`workspace.yml` through the comment-preserving node writer (comments, anchors
-and a `<<:` merge key survive; the file keeps its mode).
+`~/.config/dwe/keys/<recipient>.key`, and splices `secrets.recipient` into
+`workspace.yml` (a project with no `secrets:` block yet gets the block appended
+at the end of the file; the rest of the file is untouched and keeps its mode).
 
 The keyfile is written **first**: a recipient committed without a readable
 identity would lock the project out of its own secrets. If the `workspace.yml`
@@ -264,7 +286,8 @@ Rules:
   nothing.
 - Descending through an existing mapping is normal; descending through an
   existing **non-mapping** node (`vars.db.host.port` where `host` is a scalar)
-  is refused, leaving the file untouched.
+  is refused as an unsupported shape, leaving the file untouched — as are the
+  other [refused shapes](#subcommands).
 - The staged document is validated as a config layer **before** it is
   persisted, so a `set` can never leave a layer unloadable.
 
@@ -274,9 +297,10 @@ every other `dwe` command in the project. The recipient is then re-read **under
 the lock**, so a value can never be encrypted to a recipient that a concurrent
 `rekey` retired in between.
 
-Writes preserve comments, key order and formatting; a missing
-`workspace/defaults.yml` is created `0644` (tracked files keep a normal mode —
-only `local.yml` is forced to `0600`).
+Writes change only the target line — comments, key order, blank lines and
+formatting are preserved byte-for-byte; a missing `workspace/defaults.yml` is
+created `0644` (tracked files keep a normal mode — only `local.yml` is forced to
+`0600`).
 
 ### `dwe secrets get`
 
@@ -363,8 +387,8 @@ The order is a **recoverable sequence, not a transaction**:
 1. **Read-only pass** — decrypt and validate everything into memory. A corrupt
    marker or an undecryptable `.age` aborts here, with **nothing written**.
 2. **Write the new keyfile** — the first mutation. The old keyfile is kept.
-3. **Re-encrypt** every `.age` file (atomically) and every layer file (through
-   the comment-preserving node writer, so comments and anchors survive).
+3. **Re-encrypt** every `.age` file (atomically) and every layer file (one
+   spliced line per marker, so the diff is one line per re-encrypted value).
 4. **Update `secrets.recipient` last.**
 
 A crash mid-way leaves both identities on disk and a mixed tree; re-running
@@ -463,6 +487,22 @@ The `.age` source scan mirrors what `render config` actually iterates, so a
 disabled service or an unresolvable pack is invisible to the validator exactly
 as it is at render time.
 
+**A healthy project says so.** Both validators emit an `✓` row when they find
+nothing wrong, so `dwe validate secrets` after onboarding reports
+`validation result: 2 checks` instead of `validation skipped (no files found)`.
+The `secrets.recipient` row carries no message — the target is the statement —
+and the `secrets.unresolved` row counts the inventory it just read:
+`1 encrypted value(s) and 0 config-pack source(s) readable via keyfile`.
+
+The rows are tied to what each validator actually checked: the recipient row
+needs only a valid `secrets.recipient` (a project that ran `dwe secrets init`
+and has nothing encrypted yet still gets it), and the unresolved row appears
+only when there is an inventory to read *and* no diagnostic was produced. A
+project with no `secrets:` block and nothing encrypted stays silent, exactly as
+before. The identity is named by source word (`env` / `env-file` / `keyfile`) —
+never by path, and never with key material. Preflight and the deploy wizard's
+gate filter `✓` rows, so neither prints anything extra.
+
 ## Where plaintext goes
 
 Decrypted values exist, by design, in:
@@ -480,8 +520,8 @@ They are kept **out of**:
 
 - **git-tracked files** — ide / ai / git pack outputs render against a sanitized
   config (see [output guards](#output-guards-no-marker-ever-reaches-a-rendered-file));
-- **dwe's own diagnostic echoes** — `-v` / `--debug` traces and their `.dwe/logs`
-  copies are redacted (see below);
+- **dwe's own command echoes** — `-v` / `--debug` traces, their `.dwe/logs`
+  copies and every plan / dry-run surface are redacted (see below);
 - **`dwe vars` output** when the key is absent — `<encrypted>`, never the
   ciphertext.
 
@@ -489,20 +529,36 @@ A value passed to `dwe secrets set` **on the command line lands in shell
 history** like any other argument. Use `--stdin` or the hidden prompt for
 anything that matters.
 
-## Diagnostic redaction
+## Redaction
 
-Every value the config loader decrypts is registered with the diagnostic trace
-subsystem, so `-v` / `--debug` command echoes — and the `.dwe/logs` mirrors of
-parallel pipeline steps — print `***` in place of the secret. The registration
-lives in the loader because ~60 call sites load config and the root command hook
-does not.
+Every value the config loader decrypts is registered with the trace subsystem,
+which prints `***` in place of it. The registration lives in the loader because
+~60 call sites load config and the root command hook does not.
 
-Two properties worth knowing:
+Redaction covers two families of output:
+
+- **Diagnostic echoes** — `-v` / `--debug` command echoes, and the `.dwe/logs`
+  mirrors of parallel pipeline steps.
+- **Plan and dry-run surfaces** — `dwe deploy plan` (table, `--format shell` and
+  `--output json`, including the `unresolved` field), `dwe reset plan` and
+  `dwe reset step --dry-run`. Redaction is a property of the display functions
+  that build those lines, so it applies before the value is quoted or embedded
+  into a `--set k=v` argument, and any future print surface inherits it.
+
+Because `--format shell` is redacted too, **it is a preview of what will run,
+not a script to execute**: a step referencing a secret prints `***` where the
+value goes. Redaction never touches what is actually executed — a real
+`dwe reset step <addr>` runs with the real value.
+
+Three properties worth knowing:
 
 - **Values shorter than 4 runes are not redacted.** Redacting `"1"` would shred
   every line of output.
 - **Child-process output is not redacted** (an explicit non-goal). A command
   that prints its own configuration prints it.
+- **Redaction is not an access boundary.** `dwe vars get` and `dwe secrets get`
+  print plaintext by design — see
+  [`vars.md` → Output is not redacted](vars.md#output-is-not-redacted).
 
 Redaction is a union that lives for the process, so concurrent pipelines and
 `dwe test --parallel` scenarios all see one consistent set.
@@ -566,7 +622,9 @@ and here is where it looked" is the command's whole job.
 Typed error codes include `secrets_already_initialized`, `secrets_no_identity`,
 `secrets_identity_mismatch`, `secrets_not_encrypted`, `secrets_path_invalid`,
 `secrets_file_invalid`, `secrets_value_ambiguous`, `secrets_value_required`,
-`secrets_output_exists`, `secrets_raw_stream`, `secrets_rekey_blocked`.
+`secrets_output_exists`, `secrets_raw_stream`, `secrets_rekey_blocked`,
+`secrets_write_unsupported` (a [refused shape](#subcommands) — the file is
+untouched; the hint names the path and what to change).
 
 ## Non-goals
 
