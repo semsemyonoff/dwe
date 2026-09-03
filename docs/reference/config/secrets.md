@@ -136,11 +136,14 @@ The keys directory is created `0700` (an existing looser directory is tightened)
 and each keyfile is written `0600` with `O_CREATE|O_EXCL` — DWE never
 overwrites an identity file.
 
-An identity is read as the **first `AGE-SECRET-KEY-1…` token anywhere in the
-text**, so an `age` CLI keyfile (which carries a `# public key:` header) is used
-verbatim — including when a paste joins its lines into one, and including a file
-whose live key sits under a commented-out old one. A later token is ignored, not
-an error: a multi-identity `DWE_AGE_KEY_FILE` is a documented `age` shape.
+An identity is read as the **first `AGE-SECRET-KEY-1…` token on a line that is
+not a `#` comment**, so an `age` CLI keyfile (which carries a `# public key:`
+header) is used verbatim, and a file whose live key sits under a commented-out
+old one resolves to the live key — the same one `age` itself would use. A later
+token is ignored, not an error: a multi-identity `DWE_AGE_KEY_FILE` is a
+documented `age` shape. When *every* token sits inside a comment — the shape a
+paste produces when it joins a keyfile's header and key onto one line — the
+whole text is scanned instead, so that paste still parses.
 
 ## Getting started
 
@@ -762,10 +765,14 @@ Every value the config loader decrypts is registered with the trace subsystem,
 which prints `***` in place of it. The registration lives in the loader because
 ~60 call sites load config and the root command hook does not.
 
-Redaction covers two families of output:
+Redaction covers three families of output:
 
 - **Diagnostic echoes** — `-v` / `--debug` command echoes, and the `.dwe/logs`
   mirrors of parallel pipeline steps.
+- **Live-run skip reasons** — the `Skipped: <step> (when: …)` line `dwe deploy
+  run` and `dwe reset run` print at default verbosity, and its parallel-group
+  equivalent. The reason is display-only: it is never persisted to
+  `.dwe/deploy/state.yml`, so the deployment hash is unaffected.
 - **Plan and dry-run surfaces** — `dwe deploy plan` (table, `--format shell` and
   `--output json`, including the `unresolved` field), `dwe reset plan` and
   `dwe reset step --dry-run`. Redaction is a property of the display functions

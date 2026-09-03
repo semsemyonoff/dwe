@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
@@ -24,6 +26,16 @@ func isolateKeyEnv(t *testing.T) {
 	t.Setenv(secrets.EnvKey, "")
 	t.Setenv(secrets.EnvKeyFile, "")
 	t.Setenv("DWE_NONINTERACTIVE", "")
+}
+
+// stubStdinTTY pins the stdin terminal probe the gate's Interactive flag is
+// derived from, so the wiring is asserted rather than inherited from whatever
+// stream the test binary happens to run under.
+func stubStdinTTY(t *testing.T, tty bool) {
+	t.Helper()
+	prev := widgets.IsInteractiveFn
+	widgets.IsInteractiveFn = func(io.Reader) bool { return tty }
+	t.Cleanup(func() { widgets.IsInteractiveFn = prev })
 }
 
 // writeSecretsWorkspaceYML lays down a project whose workspace.yml carries one
@@ -167,19 +179,25 @@ func TestRunRun_KeygateSkippedOnUnloadableConfig(t *testing.T) {
 }
 
 // TestRunRun_KeygateOptions pins the interactivity inputs RunRun evaluates for
-// the gate: --yes and --output json both suppress the offer, and a caller that
-// wires no hooks (the service toggle executor) can never open a form.
+// the gate: a non-terminal stdin, --yes and --output json each suppress the
+// offer, and a caller that wires no hooks (the service toggle executor) can
+// never open a form.
+//
+// The stdin probe is asserted through the widgets seam rather than assumed:
+// hardcoding Interactive would block `dwe run` on a huh form in a pipe.
 func TestRunRun_KeygateOptions(t *testing.T) {
 	cases := []struct {
 		name       string
 		ctx        RunContext
+		tty        bool
 		wantYes    bool
 		wantJSON   bool
 		wantPrompt bool
 	}{
-		{name: "plain"},
-		{name: "yes", ctx: RunContext{Yes: true}, wantYes: true},
-		{name: "json", ctx: RunContext{OutputJSON: true}, wantJSON: true},
+		{name: "plain", tty: true},
+		{name: "stdin is not a terminal"},
+		{name: "yes", ctx: RunContext{Yes: true}, tty: true, wantYes: true},
+		{name: "json", ctx: RunContext{OutputJSON: true}, tty: true, wantJSON: true},
 		{
 			name: "hooks wired",
 			ctx: RunContext{
@@ -194,6 +212,7 @@ func TestRunRun_KeygateOptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			isolateKeyEnv(t)
 			stubRunPhases(t)
+			stubStdinTTY(t, tc.tty)
 
 			dir := t.TempDir()
 			rctx := tc.ctx
@@ -209,6 +228,9 @@ func TestRunRun_KeygateOptions(t *testing.T) {
 			}
 			if opts.BaseDir != dir {
 				t.Errorf("Options.BaseDir = %q, want %q", opts.BaseDir, dir)
+			}
+			if opts.Interactive != tc.tty {
+				t.Errorf("Options.Interactive = %v, want %v", opts.Interactive, tc.tty)
 			}
 			if opts.Yes != tc.wantYes {
 				t.Errorf("Options.Yes = %v, want %v", opts.Yes, tc.wantYes)

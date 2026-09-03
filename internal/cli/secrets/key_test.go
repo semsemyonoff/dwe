@@ -966,6 +966,33 @@ func TestKeyRemove_CurrentRecipientNeedsForce(t *testing.T) {
 	}
 }
 
+// TestKeyRemove_CurrentRecipientNotInstalled pins that the existence check runs
+// BEFORE the in-use guard: on a machine that never imported the project's key
+// there is nothing to protect, and "export it first" names a file that is not
+// there.
+func TestKeyRemove_CurrentRecipientNotInstalled(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+	forbidConfirm(t)
+	path, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	if rerr := os.Remove(path); rerr != nil {
+		t.Fatalf("remove keyfile: %v", rerr)
+	}
+
+	_, _, err = runSecrets(t, flags, "key", "remove", recipient, "--yes")
+	if err == nil {
+		t.Fatal("removing an absent identity succeeded")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_key_not_found" {
+		t.Errorf("code = %q, want secrets_key_not_found", coded.Code)
+	}
+}
+
 // TestKeyRemove_NoConfirmationInNonInteractiveModes pins R3.2 for this command:
 // every mode that cannot ask refuses instead of deleting, and the file stays.
 func TestKeyRemove_NoConfirmationInNonInteractiveModes(t *testing.T) {

@@ -427,19 +427,22 @@ func runKeyRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient string,
 		return cmdctx.ErrWrap("secrets_recipient_invalid", err).
 			WithHint("the recipient is the age1… value committed as secrets.recipient; `dwe secrets key list` prints the installed ones")
 	}
-	if !force && recipient == currentRecipient(flags) {
-		return cmdctx.Err("secrets_key_in_use",
-			fmt.Sprintf("%s is the identity this project uses", recipient)).
-			WithDetail("recipient", recipient).
-			WithDetail("keyfile", path).
-			WithHint("export it first with 'dwe secrets key export', or pass --force to remove it anyway")
-	}
+	// Existence is checked FIRST: on a machine that never imported the key,
+	// "this project uses it, export it first" describes a file that is not
+	// there and sends the reader to an export that cannot succeed.
 	if _, serr := os.Stat(path); serr != nil {
 		return cmdctx.Err("secrets_key_not_found",
 			fmt.Sprintf("no identity for %s is installed on this machine", recipient)).
 			WithDetail("recipient", recipient).
 			WithDetail("keyfile", path).
 			WithHint("run 'dwe secrets key list' to see the installed identities")
+	}
+	if !force && recipient == currentRecipient(flags) {
+		return cmdctx.Err("secrets_key_in_use",
+			fmt.Sprintf("%s is the identity this project uses", recipient)).
+			WithDetail("recipient", recipient).
+			WithDetail("keyfile", path).
+			WithHint("export it first with 'dwe secrets key export', or pass --force to remove it anyway")
 	}
 
 	if !yes {

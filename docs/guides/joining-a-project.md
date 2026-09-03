@@ -9,6 +9,7 @@ DWE itself is a single binary; the local stack it manages is Docker-based. Befor
 - The `dwe` binary is on your `PATH` — `dwe --version` prints a version string.
 - The Docker daemon is reachable — `docker info` returns without an error.
 - The repository contains a `workspace.yml` at its root (the project marker).
+- If the project commits encrypted secrets (a `secrets.recipient` key in `workspace.yml`), you also need the project's private age identity. Ask a teammate for it — they hand it over with `dwe secrets key export`. `dwe secrets status` tells you whether this machine can already read the encrypted values.
 
 If any of these are wrong, `dwe validate` will tell you exactly what is missing. Otherwise, you can keep reading.
 
@@ -34,6 +35,7 @@ dwe deploy
 
 What happens, in order:
 
+0. **Key onboarding** (only when the project has encrypted secrets and this machine has no identity for them). At a terminal, `dwe deploy` offers to take the key before anything else runs; accepting opens a hidden prompt, stores the identity at `~/.config/dwe/keys/<recipient>.key` and continues the deploy in the same invocation. Declining — or running non-interactively, with `--yes`, or with `--output json` — skips the offer, and the deploy then stops at the `secrets.unresolved` preflight gate naming the values it cannot read. `dwe run` and `dwe restart` make the same offer. See [Encrypted secrets](../reference/config/secrets.md).
 1. **Setup wizard** (only on first run). The project may declare prompts in `workspace/setup.yml` — port conflicts, choice of optional services, license keys, anything the maintainer flagged as machine-local. Your answers land in `workspace/local.yml` (gitignored).
 2. **Preflight**. The same `validate` checks run as a gate; failures abort here instead of mid-deploy.
 3. **Deploy steps**. The project's `workspace/deploy.yml` (and per-service `deploy.yml` files) execute in order — building images, pulling dependencies, seeding databases, generating template-pack outputs (IDE config, AGENTS.md, gitignored helpers).

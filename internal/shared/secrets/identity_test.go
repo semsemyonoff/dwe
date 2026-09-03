@@ -93,8 +93,15 @@ func TestParseIdentity(t *testing.T) {
 		{"crlf", fmt.Sprintf("# public key: %s\r\n%s\r\n", id.Recipient(), id.Export()), id.Recipient()},
 		{"surrounding whitespace", "  \n\t" + id.Export() + " \n ", id.Recipient()},
 		{"multi-identity keyfile: first wins", id.Export() + "\n" + other.Export() + "\n", id.Recipient()},
-		{"commented-out old key above the live one: first token wins",
-			fmt.Sprintf("# old: %s\n%s\n", id.Export(), other.Export()), id.Recipient()},
+		// A rotation leftover: the retired key is commented out above the live
+		// one. age skips the comment, so DWE must too — reading the commented
+		// key would report a perfectly good file as the wrong identity.
+		{"commented-out old key above the live one: the live key wins",
+			fmt.Sprintf("# old: %s\n%s\n", other.Export(), id.Export()), id.Recipient()},
+		// The joined paste is the one case where the only token IS inside a
+		// comment, which is what the whole-text fallback exists for.
+		{"joined paste of a keyfile whose header carries an old key",
+			fmt.Sprintf("# public key: %s %s", id.Recipient(), id.Export()), id.Recipient()},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

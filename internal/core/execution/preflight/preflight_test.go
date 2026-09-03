@@ -11,6 +11,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestStagesForPreflight(t *testing.T) {
@@ -59,12 +60,18 @@ func TestRun_secretsUnresolvedBlocks(t *testing.T) {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
+	// LoadConfig registers every plaintext it decrypts with the process-global
+	// trace redactor. Leaving it installed would make the "must not carry the
+	// plaintext" assertions below test the redactor rather than preflight: a
+	// diagnostic that started echoing the value would print `***` and pass.
 	load := func(t *testing.T) *config.DweConfig {
 		t.Helper()
 		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
+		trace.ResetRedaction()
+		t.Cleanup(trace.ResetRedaction)
 		return cfg
 	}
 

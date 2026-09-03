@@ -96,17 +96,18 @@ var secretKeyRe = regexp.MustCompile(`AGE-SECRET-KEY-1[AC-HJ-NP-Z02-9]{58}`)
 
 // ParseIdentity reads an identity from key text.
 //
-// The FIRST AGE-SECRET-KEY-1… token anywhere in text wins, so a bare key line,
-// a whole keyfile (comment plus key), age-keygen output, CRLF, surrounding
-// whitespace and a keyfile whose lines a paste joined into one all parse. Later
-// tokens are ignored: a multi-identity keyfile and a commented-out old key
-// above the live one are both shapes age itself accepts.
+// The first AGE-SECRET-KEY-1… token on a line that is not a `#` comment wins,
+// so a bare key line, a whole age CLI keyfile (comment header plus key),
+// age-keygen output, CRLF, surrounding whitespace and a file whose live key
+// sits below a commented-out old one all resolve to the LIVE key — the same
+// key age itself would use. Later tokens are ignored: a multi-identity keyfile
+// is a shape age accepts.
 //
 // No token, or a token age refuses, is ErrInvalidIdentity — never ErrCorrupt,
 // which means a damaged payload. The age error is not interpolated: its text
 // echoes the input characters, which here are private-key bytes.
 func ParseIdentity(text string) (Identity, error) {
-	token := secretKeyRe.FindString(text)
+	token := findSecretKey(text)
 	if token == "" {
 		return Identity{}, fmt.Errorf("%w: no AGE-SECRET-KEY-1… key found", ErrInvalidIdentity)
 	}
@@ -115,6 +116,27 @@ func ParseIdentity(text string) (Identity, error) {
 		return Identity{}, fmt.Errorf("%w: not a valid age X25519 identity", ErrInvalidIdentity)
 	}
 	return Identity{id: id}, nil
+}
+
+// findSecretKey returns the first key token on a non-comment line, falling back
+// to a scan of the whole text when every token sits inside a comment.
+//
+// The two passes are both load-bearing. The comment-aware pass is what stops a
+// commented-out old key from outranking the live key below it — a rotation
+// leftover age itself skips, and picking it up reports the file as the wrong
+// identity. The fallback is what parses a keyfile pasted into a single-line
+// field, where the `# public key:` header and the key arrive joined and the
+// only token there is therefore inside a comment.
+func findSecretKey(text string) string {
+	for line := range strings.SplitSeq(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		if token := secretKeyRe.FindString(line); token != "" {
+			return token
+		}
+	}
+	return secretKeyRe.FindString(text)
 }
 
 // ParseRecipient checks that text is a well-formed age recipient ("age1…").

@@ -125,6 +125,11 @@ func identityErrorText(inv inventory) string {
 		return fmt.Sprintf("%s holds the identity for %s, but the project uses %s",
 			label, wrong.Have, wrong.Want)
 	case errors.Is(inv.IdentityErr, secrets.ErrInvalidIdentity):
+		// "is set" belongs to a variable, not to a file on disk — the keyfile
+		// arm would otherwise read "keyfile /… is set but holds no key".
+		if inv.IdentitySource == secrets.SourceKeyfile {
+			return label + " holds no age identity"
+		}
 		return label + " is set but holds no age identity"
 	case errors.Is(inv.IdentityErr, secrets.ErrNoIdentity):
 		// A set DWE_AGE_KEY_FILE pointing at nothing is its own failure: the

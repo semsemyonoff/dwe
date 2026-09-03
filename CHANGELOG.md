@@ -112,13 +112,14 @@ generated from commit subjects and stay on the
 
 ### Changed
 
-- **An age identity is now read as the first `AGE-SECRET-KEY-1…` token anywhere
-  in the text**, instead of the first line that is neither blank nor a `#`
-  comment. Every shape that worked before still works, and two that did not now
-  do: a keyfile whose lines a paste joined into one (`# public key: age1…
-  AGE-SECRET-KEY-1…`, previously read as a comment and skipped) and a file
-  whose live key sits below a commented-out old one. A later token is still
-  ignored rather than an error. Text that holds no token is the new
+- **An age identity is now read as the first `AGE-SECRET-KEY-1…` token on a
+  non-comment line**, instead of the first line that is neither blank nor a `#`
+  comment. Every shape that worked before still works, including a file whose
+  live key sits below a commented-out old one, and one that did not now does: a
+  keyfile whose lines a paste joined into one (`# public key: age1…
+  AGE-SECRET-KEY-1…`, previously read as a comment and skipped) parses, because
+  when every token sits inside a comment the whole text is scanned instead. A
+  later token is still ignored rather than an error. Text that holds no token is the new
   `ErrInvalidIdentity` — surfaced as `invalid_identity`, not `corrupt`.
 - **Without a usable identity a project still loads**, but surfaces degrade
   explicitly rather than silently: `dwe vars list` / `get` / `inspect` and the
@@ -184,6 +185,12 @@ generated from commit subjects and stay on the
   declared. Multi-line material — a PEM key, a service-account blob, exactly
   what `dwe secrets set --stdin` accepts — belongs in a `render config` pack
   file, not in `exports.env`.
+- **`dwe prompt` no longer paints an `ENC[age:…]` marker into the shell
+  prompt.** The prompt hot path reads a `workspace.yml` stub and never loads
+  the full config, so it cannot decrypt: an encrypted `project.name` now falls
+  back to the directory name, and an encrypted `project.prefix` or `name` falls
+  back to the display name when building the compose label filter, instead of
+  building one that matches no container and reporting the stack as stopped.
 
 
 - **Breaking:** container commands now decide three runtime defaults themselves
