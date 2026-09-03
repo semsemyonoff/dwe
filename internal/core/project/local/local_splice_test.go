@@ -262,12 +262,6 @@ func TestSplicer_SetScalar_RefusedShapes(t *testing.T) {
 			wantErr: ErrUnsplicable,
 		},
 		{
-			name:    "missing key",
-			src:     "a: 1\nb: 2\n",
-			path:    []string{"c"},
-			wantErr: ErrUnsplicable,
-		},
-		{
 			name:    "leaf is a mapping",
 			src:     "a:\n  b: 1\n",
 			path:    []string{"a"},
@@ -544,6 +538,444 @@ func TestSplicer_DominantEOL(t *testing.T) {
 				t.Errorf("eol = %q, want %q", s.eol, tt.want)
 			}
 		})
+	}
+}
+
+// insertedLines asserts that after is before with exactly one contiguous block
+// of whole lines inserted, and returns that block with the 0-based line index it
+// landed at. Every other line must be byte-identical and in the same order.
+func insertedLines(t *testing.T, before, after string) ([]string, int) {
+	t.Helper()
+	b := strings.Split(before, "\n")
+	a := strings.Split(after, "\n")
+	if len(a) <= len(b) {
+		t.Fatalf("expected inserted lines, count went %d -> %d\n--- after ---\n%s", len(b), len(a), after)
+	}
+	i := 0
+	for i < len(b) && b[i] == a[i] {
+		i++
+	}
+	n := len(a) - len(b)
+	for k := i + n; k < len(a); k++ {
+		if a[k] != b[k-n] {
+			t.Fatalf("after is not before with one contiguous insertion at line %d\n--- before ---\n%s\n--- after ---\n%s", i+1, before, after)
+		}
+	}
+	return a[i : i+n], i
+}
+
+// assertInsertion asserts the inserted block equals want and reports where it
+// landed.
+func assertInsertion(t *testing.T, before, after string, want []string) int {
+	t.Helper()
+	got, at := insertedLines(t, before, after)
+	if len(got) != len(want) {
+		t.Fatalf("inserted %d lines %q, want %d %q", len(got), got, len(want), want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("inserted lines = %q, want %q", got, want)
+		}
+	}
+	return at
+}
+
+func TestSplicer_SetScalar_InsertsIntoNestedMapping(t *testing.T) {
+	tests := []struct {
+		name     string
+		src      string
+		path     []string
+		want     []string
+		wantLine int // 0-based index the block lands at
+	}{
+		{
+			name:     "after a plain scalar, before a trailing comment and a blank line",
+			src:      "vars:\n  token: old\n  # note about vars\n\nnext: 1\n",
+			path:     []string{"vars", "new", "key"},
+			want:     []string{"  new:", "    key: v"},
+			wantLine: 2,
+		},
+		{
+			name:     "after a folded scalar's continuation lines",
+			src:      "vars:\n  token: old\n  note: >\n    folded text\n    continues here\nnext: 1\n",
+			path:     []string{"vars", "new", "key"},
+			want:     []string{"  new:", "    key: v"},
+			wantLine: 5,
+		},
+		{
+			name:     "after a literal scalar whose content line starts with a hash",
+			src:      "vars:\n  token: old\n  notes: |\n    first\n    # not a comment\n    last\nnext: 1\n",
+			path:     []string{"vars", "new", "key"},
+			want:     []string{"  new:", "    key: v"},
+			wantLine: 6,
+		},
+		{
+			name:     "two missing levels render both",
+			src:      "vars:\n  a:\n    keep: 1\nnext: 2\n",
+			path:     []string{"vars", "a", "b", "c"},
+			want:     []string{"    b:", "      c: v"},
+			wantLine: 3,
+		},
+		{
+			name:     "four-space file keeps its indent step",
+			src:      "vars:\n    token: old\nnext: 1\n",
+			path:     []string{"vars", "new", "key"},
+			want:     []string{"    new:", "        key: v"},
+			wantLine: 2,
+		},
+		{
+			name:     "mapping at end of file",
+			src:      "vars:\n  token: old\n",
+			path:     []string{"vars", "new", "key"},
+			want:     []string{"  new:", "    key: v"},
+			wantLine: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newSpliceFixture(t, tt.src)
+			if err := s.SetScalar(tt.path, "v"); err != nil {
+				t.Fatalf("SetScalar: %v", err)
+			}
+			after := string(s.Bytes())
+			if at := assertInsertion(t, tt.src, after, tt.want); at != tt.wantLine {
+				t.Errorf("inserted at line index %d, want %d\n%s", at, tt.wantLine, after)
+			}
+			if got, ok := scalarAt(s.doc, tt.path); !ok || got != "v" {
+				t.Errorf("value at %v reads back as (%q, %v)", tt.path, got, ok)
+			}
+		})
+	}
+}
+
+func TestSplicer_SetScalar_InsertKeepsTrailingCommentOutsideTheMapping(t *testing.T) {
+	src := "vars:\n  token: old\n\n# belongs to the next block\nnext: 1\n"
+	s, _ := newSpliceFixture(t, src)
+	if err := s.SetScalar([]string{"vars", "new"}, "v"); err != nil {
+		t.Fatalf("SetScalar: %v", err)
+	}
+	after := string(s.Bytes())
+	assertInsertion(t, src, after, []string{"  new: v"})
+
+	// The comment must still introduce `next`, not trail inside `vars`.
+	if !strings.Contains(after, "  new: v\n\n# belongs to the next block\nnext: 1\n") {
+		t.Errorf("comment moved:\n%s", after)
+	}
+}
+
+func TestSplicer_SetScalar_InsertsTopLevelBlockAtEOF(t *testing.T) {
+	// A top-level block is appended, so the whole prior file is the prefix: an
+	// exact byte comparison is the strongest form of "nothing else changed".
+	block := "secrets:\n  recipient: age1xyz\n"
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "blank-line separated file gains a separating blank line",
+			src:  "project:\n  name: demo\n\nvars:\n  a: 1\n",
+			want: "project:\n  name: demo\n\nvars:\n  a: 1\n\n" + block,
+		},
+		{
+			name: "compact file gains no blank line",
+			src:  "project:\n  name: demo\nvars:\n  a: 1\n",
+			want: "project:\n  name: demo\nvars:\n  a: 1\n" + block,
+		},
+		{
+			name: "file already ending in a blank line gains no second one",
+			src:  "project:\n  name: demo\n\nvars:\n  a: 1\n\n",
+			want: "project:\n  name: demo\n\nvars:\n  a: 1\n\n" + block,
+		},
+		{
+			name: "file without a final newline gains one",
+			src:  "project:\n  name: demo\nvars:\n  a: 1",
+			want: "project:\n  name: demo\nvars:\n  a: 1\n" + block,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newSpliceFixture(t, tt.src)
+			if err := s.SetScalar([]string{"secrets", "recipient"}, "age1xyz"); err != nil {
+				t.Fatalf("SetScalar: %v", err)
+			}
+			if got := string(s.Bytes()); got != tt.want {
+				t.Errorf("bytes =\n%q\nwant\n%q", got, tt.want)
+			}
+			if got, ok := scalarAt(s.doc, []string{"secrets", "recipient"}); !ok || got != "age1xyz" {
+				t.Errorf("recipient reads back as (%q, %v)", got, ok)
+			}
+		})
+	}
+}
+
+func TestSplicer_SetScalar_InsertsIntoAnnotatedFixture(t *testing.T) {
+	src := readTestdata(t, "annotated_defaults.yml")
+	s, _ := newSpliceFixture(t, src)
+	if err := s.SetScalar([]string{"secrets", "recipient"}, "age1xyz"); err != nil {
+		t.Fatalf("SetScalar: %v", err)
+	}
+	want := src + "\nsecrets:\n  recipient: age1xyz\n"
+	if got := string(s.Bytes()); got != want {
+		t.Errorf("bytes =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestSplicer_SetScalar_InsertsIntoEmptyDocuments(t *testing.T) {
+	tests := []struct {
+		name  string
+		src   string
+		write bool // false: the file does not exist at all
+	}{
+		{name: "missing file"},
+		{name: "empty file", src: "", write: true},
+		{name: "whitespace-only file", src: "\n\n", write: true},
+		{name: "comment-only file", src: "# only a comment\n# and another\n", write: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "layer.yml")
+			if tt.write {
+				if err := os.WriteFile(path, []byte(tt.src), 0o600); err != nil {
+					t.Fatalf("write fixture: %v", err)
+				}
+			}
+			s, err := NewSplicer(path, LabelDefaults)
+			if err != nil {
+				t.Fatalf("NewSplicer: %v", err)
+			}
+			if err := s.SetScalar([]string{"secrets", "recipient"}, "age1xyz"); err != nil {
+				t.Fatalf("SetScalar: %v", err)
+			}
+			got := string(s.Bytes())
+			want := tt.src + "secrets:\n  recipient: age1xyz\n"
+			if got != want {
+				t.Errorf("bytes =\n%q\nwant\n%q", got, want)
+			}
+			if err := s.Write(path, PreserveOrDefault(0o600)); err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+		})
+	}
+}
+
+func TestSplicer_SetScalar_InsertUsesCRLFWhenTheFileDoes(t *testing.T) {
+	src := "a: 1\r\nvars:\r\n  x: 1\r\n"
+	s, _ := newSpliceFixture(t, src)
+	if err := s.SetScalar([]string{"vars", "new", "key"}, "v"); err != nil {
+		t.Fatalf("SetScalar: %v", err)
+	}
+	after := string(s.Bytes())
+	if after != "a: 1\r\nvars:\r\n  x: 1\r\n  new:\r\n    key: v\r\n" {
+		t.Errorf("bytes = %q", after)
+	}
+}
+
+func TestSplicer_SetScalar_InsertRefusedShapes(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		path []string
+	}{
+		{name: "flow mapping parent", src: "vars: {a: 1}\n", path: []string{"vars", "b"}},
+		{name: "null parent", src: "vars:\nnext: 1\n", path: []string{"vars", "b"}},
+		{name: "sequence parent", src: "vars:\n  - one\nnext: 1\n", path: []string{"vars", "b"}},
+		{name: "alias parent", src: "base: &b\n  x: 1\nother: *b\n", path: []string{"other", "y"}},
+		{name: "merge-carrying parent", src: "base: &b\n  x: 1\nsvc:\n  <<: *b\n  y: 2\n", path: []string{"svc", "z"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newSpliceFixture(t, tt.src)
+			if err := s.SetScalar(tt.path, "v"); !errors.Is(err, ErrUnsplicable) {
+				t.Fatalf("SetScalar error = %v, want ErrUnsplicable", err)
+			}
+			if got := string(s.Bytes()); got != tt.src {
+				t.Errorf("bytes changed on a refused insert:\n%q", got)
+			}
+		})
+	}
+}
+
+// rekeyMarkers is a ReplaceScalars callback shaped like `dwe secrets rekey`'s:
+// it accepts encrypted markers and declines everything else.
+func rekeyMarkers(next string) func(string) (string, bool, error) {
+	return func(v string) (string, bool, error) {
+		if !strings.HasPrefix(v, "ENC[age:") {
+			return "", false, nil
+		}
+		return next, true, nil
+	}
+}
+
+func TestSplicer_ReplaceScalars_ReplacesEveryAcceptedMarker(t *testing.T) {
+	// No trailing newline: the last marker is the file's final bytes.
+	src := "# header\nvars:\n  a: ENC[age:AAA]\n  notes: |\n    line one\n    line two\n  b: \"ENC[age:BBB]\"\n  c: ENC[age:CCC]"
+	s, _ := newSpliceFixture(t, src)
+
+	n, err := s.ReplaceScalars(rekeyMarkers(spliceMarker))
+	if err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("replaced %d scalars, want 3", n)
+	}
+	after := string(s.Bytes())
+	changed := changedLines(t, src, after)
+	if len(changed) != 3 {
+		t.Fatalf("expected three changed lines, got %v\n%s", changed, after)
+	}
+	lines := strings.Split(after, "\n")
+	for _, i := range changed {
+		if !strings.HasSuffix(lines[i], spliceMarker) {
+			t.Errorf("line %d = %q, want it to end with the new marker", i+1, lines[i])
+		}
+	}
+	if strings.HasSuffix(after, "\n") {
+		t.Error("a trailing newline was added to a file that had none")
+	}
+	if !strings.Contains(after, "  notes: |\n    line one\n    line two\n") {
+		t.Errorf("the declined literal block was disturbed:\n%s", after)
+	}
+}
+
+func TestSplicer_ReplaceScalars_BlockSequenceElement(t *testing.T) {
+	src := "tokens:\n  - ENC[age:AAA]\n  - plain\n"
+	s, path := newSpliceFixture(t, src)
+
+	n, err := s.ReplaceScalars(rekeyMarkers(spliceMarker))
+	if err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("replaced %d scalars, want 1", n)
+	}
+	assertSingleLineChange(t, src, string(s.Bytes()), 2, "  - "+spliceMarker)
+	if err := s.Write(path, PreserveOrDefault(0o600)); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+}
+
+func TestSplicer_ReplaceScalars_RefusalsLeaveBytesUnchanged(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		fn      func(string) (string, bool, error)
+		wantErr error
+	}{
+		{
+			name:    "marker inside a flow sequence",
+			src:     "tokens: [\"ENC[age:AAA]\", plain]\n",
+			fn:      rekeyMarkers(spliceMarker),
+			wantErr: ErrUnsplicable,
+		},
+		{
+			name:    "marker inside a flow mapping",
+			src:     "vars: {a: \"ENC[age:AAA]\"}\n",
+			fn:      rekeyMarkers(spliceMarker),
+			wantErr: ErrUnsplicable,
+		},
+		{
+			name:    "accepted literal block scalar",
+			src:     "a: |\n  ENC[age:AAA]\nb: 1\n",
+			fn:      func(string) (string, bool, error) { return spliceMarker, true, nil },
+			wantErr: ErrMultilineScalar,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newSpliceFixture(t, tt.src)
+			n, err := s.ReplaceScalars(tt.fn)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ReplaceScalars error = %v, want %v", err, tt.wantErr)
+			}
+			if n != 0 {
+				t.Errorf("count = %d, want 0", n)
+			}
+			if got := string(s.Bytes()); got != tt.src {
+				t.Errorf("bytes changed on a refused bulk replace:\n%q", got)
+			}
+		})
+	}
+}
+
+func TestSplicer_ReplaceScalars_CallbackErrorAborts(t *testing.T) {
+	src := "a: ENC[age:AAA]\nb: ENC[age:BBB]\n"
+	s, _ := newSpliceFixture(t, src)
+	sentinel := errors.New("encrypt failed")
+
+	n, err := s.ReplaceScalars(func(v string) (string, bool, error) {
+		if v == "ENC[age:BBB]" {
+			return "", false, sentinel
+		}
+		return spliceMarker, true, nil
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("error = %v, want the callback's error", err)
+	}
+	if n != 0 {
+		t.Errorf("count = %d, want 0", n)
+	}
+	if got := string(s.Bytes()); got != src {
+		t.Errorf("bytes changed after a failed callback:\n%q", got)
+	}
+}
+
+func TestSplicer_ReplaceScalars_SkipsAliasesAndKeys(t *testing.T) {
+	src := "anchor: &a ENC[age:AAA]\nalias: *a\n\"ENC[age:KEY]\": mapping-key-stays\n"
+	s, _ := newSpliceFixture(t, src)
+
+	n, err := s.ReplaceScalars(rekeyMarkers(spliceMarker))
+	if err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("replaced %d scalars, want 1 (the anchored definition only)", n)
+	}
+	assertSingleLineChange(t, src, string(s.Bytes()), 1, "anchor: &a "+spliceMarker)
+}
+
+func TestSplicer_ReplaceScalars_AnnotatedFixtureKeepsEverythingElse(t *testing.T) {
+	src := readTestdata(t, "annotated_defaults.yml")
+	s, _ := newSpliceFixture(t, src)
+
+	n, err := s.ReplaceScalars(func(v string) (string, bool, error) {
+		if v != "placeholder-token" {
+			return "", false, nil
+		}
+		return spliceMarker, true, nil
+	})
+	if err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("replaced %d scalars, want 1", n)
+	}
+	assertSingleLineChange(t, src, string(s.Bytes()), lineOf(t, src, "bot_token:"), "    bot_token: "+spliceMarker)
+}
+
+func TestSplicer_ReplaceScalars_WriteVerificationFailureLeavesFileUntouched(t *testing.T) {
+	src := "a: ENC[age:AAA]\nb: 2\n"
+	s, path := newSpliceFixture(t, src)
+	if _, err := s.ReplaceScalars(rekeyMarkers(spliceMarker)); err != nil {
+		t.Fatalf("ReplaceScalars: %v", err)
+	}
+	// Simulate a splice that did not land where the writer recorded it.
+	s.bulk[0].value = "something-else"
+
+	if err := s.Write(path, PreserveOrDefault(0o600)); !errors.Is(err, ErrVerify) {
+		t.Fatalf("Write error = %v, want ErrVerify", err)
+	}
+	onDisk, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if string(onDisk) != src {
+		t.Errorf("file was written despite a failed verification:\n%s", onDisk)
 	}
 }
 

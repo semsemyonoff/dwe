@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -31,6 +33,12 @@ import (
 // scalars, plain or quoted scalars wrapped over several lines, anything inside
 // a flow collection — are refused (ErrMultilineScalar / ErrUnsplicable) with the
 // file left untouched, rather than guessed at.
+//
+// A key the file does not hold yet is INSERTED rather than replaced: at the end
+// of the file for a new top-level block, otherwise after the physical end of the
+// nearest existing ancestor mapping. That end is found on the RAW lines (blank,
+// comment and deeper-indented lines belong to the mapping), because a block
+// scalar's continuation lines are invisible in the decoded node.
 
 // Sentinel errors for splice refusals. The CLI maps all three onto the
 // `secrets_write_unsupported` error code.
@@ -71,12 +79,21 @@ type Splicer struct {
 	indent int
 
 	sets []spliceSet
+	bulk []spliceBulk
 }
 
 // spliceSet records a completed SetScalar so Write can verify it reads back.
 type spliceSet struct {
 	path  []string
 	value string
+}
+
+// spliceBulk records one accepted ReplaceScalars edit for Write's verification.
+// It is keyed by the dotted node path (sequence elements by index) rather than
+// by walk position, so a later SetScalar insertion cannot invalidate it.
+type spliceBulk struct {
+	dotted string
+	value  string
 }
 
 // NewSplicer reads and parses path. A missing, empty or comment-only file is not
@@ -114,20 +131,23 @@ func (s *Splicer) Write(path string, policy WritePolicy) error {
 	return writeFileAtomic(path, s.src, policy)
 }
 
-// SetScalar sets the scalar at the dotted path to value, replacing only the
-// bytes of that value token. The path is a chain of mapping keys.
+// SetScalar sets the scalar at the dotted path to value. An existing scalar has
+// only the bytes of its value token replaced; a path the file does not hold yet
+// is inserted as a block subtree. The path is a chain of mapping keys.
 func (s *Splicer) SetScalar(path []string, value string) error {
 	if len(path) == 0 {
 		return fmt.Errorf("%w: empty path in %s", ErrUnsplicable, s.path)
 	}
-	val, _, err := s.lookupPath(path)
+	val, parent, missIdx, err := s.lookupPath(path)
 	if err != nil {
 		return err
 	}
-	if val == nil {
-		return fmt.Errorf("%w: %q is not present in %s", ErrUnsplicable, strings.Join(path, "."), s.path)
+	if val != nil {
+		err = s.replaceScalarNode(val, path, value)
+	} else {
+		err = s.insertScalar(parent, path, missIdx, value)
 	}
-	if err := s.replaceScalarNode(val, path, value); err != nil {
+	if err != nil {
 		return err
 	}
 	s.recordSet(path, value)
@@ -136,23 +156,191 @@ func (s *Splicer) SetScalar(path []string, value string) error {
 
 // replaceScalarNode splices value over the value token of node.
 func (s *Splicer) replaceScalarNode(node *yaml.Node, path []string, value string) error {
-	start, end, err := s.scalarSpan(node, path)
+	start, end, text, err := s.valueSplice(node, path, value)
 	if err != nil {
 		return err
 	}
-	text, err := renderScalarText(value)
+	return s.applySplice(start, end, text)
+}
+
+// valueSplice resolves the byte span of node's value token and the replacement
+// text for value, without touching src.
+func (s *Splicer) valueSplice(node *yaml.Node, path []string, value string) (start, end int, text string, err error) {
+	start, end, err = s.scalarSpan(node, path)
 	if err != nil {
-		return fmt.Errorf("encode value at %q: %w", strings.Join(path, "."), err)
+		return 0, 0, "", err
+	}
+	text, err = renderScalarText(value)
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("encode value at %q: %w", strings.Join(path, "."), err)
 	}
 	if strings.ContainsAny(text, "\n\r") {
-		return fmt.Errorf("%w: the new value at %q cannot be written on one line", ErrMultilineScalar, strings.Join(path, "."))
+		return 0, 0, "", fmt.Errorf("%w: the new value at %q cannot be written on one line", ErrMultilineScalar, strings.Join(path, "."))
 	}
 	// An empty span means the node is an implicit null (`key:` with nothing
 	// after the colon); the rendered value needs its own separating space.
 	if start == end && start > 0 && s.src[start-1] != ' ' && s.src[start-1] != '\t' {
 		text = " " + text
 	}
-	return s.applySplice(start, end, text)
+	return start, end, text, nil
+}
+
+// insertScalar writes the missing tail of path (path[missIdx:]) as a new block
+// subtree. parent is the deepest existing mapping, or nil when the file holds no
+// document at all.
+func (s *Splicer) insertScalar(parent *yaml.Node, path []string, missIdx int, value string) error {
+	column := 1
+	if parent != nil && len(parent.Content) > 0 {
+		column = parent.Content[0].Column
+	}
+	block, err := s.renderBlock(path[missIdx:], value, column)
+	if err != nil {
+		return fmt.Errorf("encode value at %q: %w", strings.Join(path, "."), err)
+	}
+
+	var off int
+	var lead string
+	switch {
+	case parent == nil || missIdx == 0:
+		// A new top-level block (or a file with no document at all) goes at the
+		// end: appending never disturbs the reading order of what is already
+		// there, and there is no enclosing mapping whose end to find.
+		off = len(s.src)
+		if off > 0 && !endsWithNewline(s.src) {
+			lead = s.eol
+		}
+		if parent != nil && s.topLevelBlocksSeparated() && !s.endsWithBlankLine() {
+			lead += s.eol
+		}
+	default:
+		off = s.mappingInsertOffset(parent)
+		if off == len(s.src) && off > 0 && !endsWithNewline(s.src) {
+			lead = s.eol
+		}
+	}
+	return s.applySplice(off, off, lead+block)
+}
+
+// renderBlock renders the key chain and its leaf value as block YAML indented to
+// start at column, using the file's own indent step and line ending.
+func (s *Splicer) renderBlock(keys []string, value string, column int) (string, error) {
+	node, err := encodeValueNode(value)
+	if err != nil {
+		return "", err
+	}
+	for _, key := range slices.Backward(keys) {
+		node = &yaml.Node{
+			Kind:    yaml.MappingNode,
+			Tag:     "!!map",
+			Content: []*yaml.Node{scalarKeyNode(key), node},
+		}
+	}
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(s.indent)
+	if err := enc.Encode(node); err != nil {
+		_ = enc.Close()
+		return "", err
+	}
+	if err := enc.Close(); err != nil {
+		return "", err
+	}
+
+	pad := strings.Repeat(" ", column-1)
+	var out strings.Builder
+	for line := range strings.SplitSeq(strings.TrimRight(buf.String(), "\n"), "\n") {
+		if line != "" {
+			out.WriteString(pad)
+		}
+		out.WriteString(line)
+		out.WriteString(s.eol)
+	}
+	return out.String(), nil
+}
+
+// mappingInsertOffset returns the byte offset at which a new pair for mapping
+// belongs: the start of the line after the mapping's physical end.
+//
+// The end is derived from the raw lines rather than from the decoded nodes,
+// because a block scalar's continuation lines carry no node of their own. A line
+// is tested for "indented deeper than the mapping's keys" BEFORE "is a comment",
+// so a literal scalar's content line that happens to start with `#` counts as
+// part of the block. Blank and shallower comment lines are scanned past but do
+// not extend the mapping, which keeps a trailing comment attached to whatever
+// follows the mapping.
+func (s *Splicer) mappingInsertOffset(mapping *yaml.Node) int {
+	keyColumn := mapping.Content[0].Column
+	lastContent := maxNodeLine(mapping)
+scan:
+	for line := lastContent + 1; line <= len(s.lines); line++ {
+		text := s.lineText(line)
+		trimmed := strings.TrimLeft(text, " \t")
+		switch {
+		case trimmed == "":
+		case len(text)-len(trimmed) >= keyColumn:
+			lastContent = line
+		case strings.HasPrefix(trimmed, "#"):
+		default:
+			break scan // a shallower key ends the mapping
+		}
+	}
+	if lastContent < len(s.lines) {
+		return s.lines[lastContent]
+	}
+	return len(s.src)
+}
+
+// topLevelBlocksSeparated reports whether the file already puts a blank line
+// before some top-level key, so an appended block matches the house style.
+func (s *Splicer) topLevelBlocksSeparated() bool {
+	blank := false
+	for line := 1; line <= len(s.lines); line++ {
+		text := s.lineText(line)
+		switch {
+		case strings.TrimSpace(text) == "":
+			blank = true
+		case text[0] == ' ' || text[0] == '\t' || text[0] == '#':
+			blank = false
+		case blank:
+			return true
+		default:
+			blank = false
+		}
+	}
+	return false
+}
+
+// endsWithBlankLine reports whether the file's last line is empty.
+func (s *Splicer) endsWithBlankLine() bool {
+	trimmed := strings.TrimSuffix(strings.TrimSuffix(string(s.src), "\n"), "\r")
+	return strings.HasSuffix(trimmed, "\n")
+}
+
+// lineText returns the content of a 1-based line, without its line ending.
+func (s *Splicer) lineText(line int) string {
+	start := s.lines[line-1]
+	_, end := s.lineBounds(start)
+	return string(s.src[start:end])
+}
+
+// maxNodeLine returns the highest line number reported anywhere in node's
+// subtree.
+func maxNodeLine(node *yaml.Node) int {
+	if node == nil {
+		return 0
+	}
+	last := node.Line
+	for _, child := range node.Content {
+		if n := maxNodeLine(child); n > last {
+			last = n
+		}
+	}
+	return last
+}
+
+// endsWithNewline reports whether src's last byte terminates a line.
+func endsWithNewline(src []byte) bool {
+	return len(src) > 0 && src[len(src)-1] == '\n'
 }
 
 // recordSet remembers a completed set for Write's verification, last write wins.
@@ -168,23 +356,28 @@ func (s *Splicer) recordSet(path []string, value string) {
 }
 
 // lookupPath resolves path against the document root. It returns the value node
-// for the full path (nil when the leaf key is absent) and the mapping that would
-// hold it. Shapes the splice writer refuses — flow collections, aliases,
+// for the full path (nil when some segment is absent), the deepest existing
+// mapping (nil when the file holds no document), and the index of the first
+// missing segment. Shapes the splice writer refuses — flow collections, aliases,
 // non-mapping parents, keys that may be merge-inherited — are errors.
-func (s *Splicer) lookupPath(path []string) (val, parent *yaml.Node, err error) {
+func (s *Splicer) lookupPath(path []string) (val, parent *yaml.Node, missIdx int, err error) {
 	node := spliceRoot(s.doc)
 	if node == nil {
-		return nil, nil, nil
+		return nil, nil, 0, nil
 	}
 	for i, seg := range path {
 		dotted := strings.Join(path[:i+1], ".")
 		switch {
 		case node.Kind == yaml.AliasNode:
-			return nil, nil, fmt.Errorf("%w: %q is reached through a YAML alias in %s; materialize it as a block mapping first", ErrUnsplicable, dotted, s.path)
+			return nil, nil, 0, fmt.Errorf("%w: %q is reached through a YAML alias in %s; materialize it as a block mapping first", ErrUnsplicable, dotted, s.path)
 		case node.Kind != yaml.MappingNode:
-			return nil, nil, fmt.Errorf("%w: cannot descend into the %s value at %q in %s", ErrUnsplicable, kindName(node.Kind), dotted, s.path)
+			where := "the document root"
+			if i > 0 {
+				where = fmt.Sprintf("%q", strings.Join(path[:i], "."))
+			}
+			return nil, nil, 0, fmt.Errorf("%w: %s in %s is a %s, not a block mapping; materialize it as a block mapping first", ErrUnsplicable, where, s.path, kindName(node.Kind))
 		case node.Style&yaml.FlowStyle != 0:
-			return nil, nil, fmt.Errorf("%w: %q sits in a flow mapping in %s; write it as a block collection first", ErrUnsplicable, dotted, s.path)
+			return nil, nil, 0, fmt.Errorf("%w: %q sits in a flow mapping in %s; write it as a block collection first", ErrUnsplicable, dotted, s.path)
 		}
 		_, next := findMappingPair(node, seg)
 		if next == nil {
@@ -193,19 +386,132 @@ func (s *Splicer) lookupPath(path []string) (val, parent *yaml.Node, err error) 
 			// silently shadow the merge-inherited value, so refuse — same rule
 			// as applyOverlayToMapping.
 			if mappingHasMergeKey(node) {
-				return nil, nil, fmt.Errorf("%w: cannot set %q: parent mapping uses a YAML merge key (<<) and the key may be merge-inherited; materialize it explicitly in %s first", ErrUnsplicable, dotted, s.path)
+				return nil, nil, 0, fmt.Errorf("%w: cannot set %q: parent mapping uses a YAML merge key (<<) and the key may be merge-inherited; materialize it explicitly in %s first", ErrUnsplicable, dotted, s.path)
 			}
-			return nil, node, nil
+			return nil, node, i, nil
 		}
 		if i == len(path)-1 {
 			if next.Kind != yaml.ScalarNode {
-				return nil, nil, fmt.Errorf("%w: cannot replace the %s value at %q in %s with a scalar", ErrUnsplicable, kindName(next.Kind), dotted, s.path)
+				return nil, nil, 0, fmt.Errorf("%w: cannot replace the %s value at %q in %s with a scalar", ErrUnsplicable, kindName(next.Kind), dotted, s.path)
 			}
-			return next, node, nil
+			return next, node, 0, nil
 		}
 		node = next
 	}
-	return nil, nil, nil
+	return nil, nil, 0, nil
+}
+
+// ReplaceScalars rewrites every value scalar fn accepts, splicing each one in
+// place. fn is offered every value scalar of the document in reading order —
+// mapping KEYS are never offered (a rewrite there would rename config keys) and
+// alias nodes are skipped, since the anchored definition is visited once at its
+// own site. It returns (replacement, true, nil) to accept, (_, false, nil) to
+// decline, or an error to abort.
+//
+// Splice-ability is checked only for scalars fn ACCEPTED: a declined block
+// scalar — every real annotated layer file has some — is simply left alone,
+// while an accepted one that cannot be spliced is an error, never a silent skip.
+// The first error leaves Bytes() unchanged.
+func (s *Splicer) ReplaceScalars(fn func(string) (string, bool, error)) (int, error) {
+	if fn == nil {
+		return 0, nil
+	}
+	type spliceEdit struct {
+		start, end int
+		text       string
+	}
+	var (
+		edits   []spliceEdit
+		accepts []spliceBulk
+	)
+	for _, site := range collectValueScalars(spliceRoot(s.doc)) {
+		next, ok, err := fn(site.node.Value)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			continue
+		}
+		if site.flow {
+			return 0, fmt.Errorf("%w: %q sits in a flow collection in %s; write it as a block collection first", ErrUnsplicable, site.dotted(), s.path)
+		}
+		start, end, text, err := s.valueSplice(site.node, site.path, next)
+		if err != nil {
+			return 0, err
+		}
+		edits = append(edits, spliceEdit{start: start, end: end, text: text})
+		accepts = append(accepts, spliceBulk{dotted: site.dotted(), value: next})
+	}
+	if len(edits) == 0 {
+		return 0, nil
+	}
+
+	// Bottom-up, so an earlier edit's offsets stay valid while later ones apply.
+	slices.SortFunc(edits, func(a, b spliceEdit) int { return b.start - a.start })
+	prev := s.src
+	next := bytes.Clone(s.src)
+	for _, e := range edits {
+		spliced := make([]byte, 0, len(next)-(e.end-e.start)+len(e.text))
+		spliced = append(spliced, next[:e.start]...)
+		spliced = append(spliced, e.text...)
+		spliced = append(spliced, next[e.end:]...)
+		next = spliced
+	}
+	s.src = next
+	if err := s.reparse(); err != nil {
+		s.src = prev
+		if rollback := s.reparse(); rollback != nil {
+			return 0, fmt.Errorf("%w: %v", ErrVerify, rollback)
+		}
+		return 0, fmt.Errorf("%w: %v", ErrVerify, err)
+	}
+	s.bulk = append(s.bulk, accepts...)
+	return len(edits), nil
+}
+
+// scalarSite is one value scalar of a parsed document, with the dotted path that
+// locates it and whether any ancestor collection is written in flow style.
+type scalarSite struct {
+	node *yaml.Node
+	path []string
+	flow bool
+}
+
+func (site scalarSite) dotted() string { return strings.Join(site.path, ".") }
+
+// collectValueScalars walks a document's value scalars in reading order. Mapping
+// keys are not visited; alias nodes are skipped so an anchored scalar is offered
+// exactly once, at its definition.
+func collectValueScalars(node *yaml.Node) []scalarSite {
+	var out []scalarSite
+	var walk func(n *yaml.Node, path []string, flow bool)
+	walk = func(n *yaml.Node, path []string, flow bool) {
+		if n == nil {
+			return
+		}
+		switch n.Kind {
+		case yaml.AliasNode:
+			return
+		case yaml.ScalarNode:
+			out = append(out, scalarSite{node: n, path: path, flow: flow})
+		case yaml.MappingNode:
+			flow = flow || n.Style&yaml.FlowStyle != 0
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				walk(n.Content[i+1], append(append([]string{}, path...), n.Content[i].Value), flow)
+			}
+		case yaml.SequenceNode:
+			flow = flow || n.Style&yaml.FlowStyle != 0
+			for i, child := range n.Content {
+				walk(child, append(append([]string{}, path...), strconv.Itoa(i)), flow)
+			}
+		default:
+			for _, child := range n.Content {
+				walk(child, path, flow)
+			}
+		}
+	}
+	walk(node, nil, false)
+	return out
 }
 
 // scalarSpan returns the [start, end) byte range of node's value token, with its
@@ -273,6 +579,17 @@ func (s *Splicer) verify() error {
 		got, found := scalarAt(probe.doc, set.path)
 		if !found || got != set.value {
 			return fmt.Errorf("%w: %q does not read back as the requested value in %s", ErrVerify, strings.Join(set.path, "."), s.path)
+		}
+	}
+	if len(s.bulk) > 0 {
+		values := make(map[string]string)
+		for _, site := range collectValueScalars(spliceRoot(probe.doc)) {
+			values[site.dotted()] = site.node.Value
+		}
+		for _, b := range s.bulk {
+			if got, found := values[b.dotted]; !found || got != b.value {
+				return fmt.Errorf("%w: %q does not read back as the requested value in %s", ErrVerify, b.dotted, s.path)
+			}
 		}
 	}
 	return nil

@@ -572,7 +572,7 @@ Task 2's insertion rendering.
 **Files:**
 - Modify: `internal/core/project/local/local_splice.go`, `local_splice_test.go`
 
-- [ ] implement insertion in `SetScalar` per the three cases in Solution
+- [x] implement insertion in `SetScalar` per the three cases in Solution
       Overview: empty/`Kind == 0` root (append after preserved comment
       bytes), block-mapping parent (root → EOF with the blank-line
       heuristic; nested → physical end found on raw lines: skip blank /
@@ -580,17 +580,17 @@ Task 2's insertion rendering.
       subtree rendered with `SetIndent(indent)` and re-indented, dominant
       EOL on inserted lines; `ErrUnsplicable` for flow / `null` / sequence
       parent and for a merge-carrying parent when the key is absent
-- [ ] implement `ReplaceScalars(fn func(string) (string, bool, error))` —
+- [x] implement `ReplaceScalars(fn func(string) (string, bool, error))` —
       on one snapshot call `fn` for every value scalar FIRST; check
       splice-ability (flow ancestor, multi-line → error, never a silent
       skip) only for scalars `fn` accepted; declined `|`/`>` scalars are
       left alone; apply accepted spans bottom-up and re-parse; alias nodes
       skipped; first error aborts with `Bytes()` unchanged
-- [ ] alias-parent refusal (`AliasNode` on the path → `ErrUnsplicable`) and
+- [x] alias-parent refusal (`AliasNode` on the path → `ErrUnsplicable`) and
       the deeper-indent-before-comment classifier order in the raw-line scan;
       `Write` verification for `ReplaceScalars` edits (accepted scalars read
       back as their replacements)
-- [ ] tests (prefix/insert/suffix assertions): insert `vars.new.key` under
+- [x] tests (prefix/insert/suffix assertions): insert `vars.new.key` under
       an existing `vars:` whose last pair is (a) a plain scalar followed by
       a trailing comment line and a blank line before the next top-level key,
       (b) a folded `>` scalar, (c) a literal `|` scalar — in each case the
@@ -612,7 +612,20 @@ Task 2's insertion rendering.
       a literal scalar with a `#`-leading content line → lands after the
       block, not inside it; alias parent (`vars: *common`) →
       `ErrUnsplicable`; failed `Write` verification → file untouched
-- [ ] run `go test ./internal/core/project/local/...` — must pass before task 3
+- [x] run `go test ./internal/core/project/local/...` — must pass before task 3
+
+➕ Task 2 notes: a **top-level** insertion is asserted by exact byte comparison
+(`want == src + block`) rather than through the prefix/insert/suffix helper —
+appending makes the whole prior file the prefix, so equality is the stronger
+statement and avoids the helper's ambiguity about which side of the file's final
+empty line the block lands on. The nested cases use the line-based
+`insertedLines`/`assertInsertion` helper as planned. `ReplaceScalars`
+verification is keyed by the scalar's **dotted node path** (sequence elements by
+index, e.g. `tokens.0`) rather than by walk position, so a later `SetScalar`
+insertion cannot invalidate a recorded expectation; markers inside a BLOCK
+sequence are therefore supported, flow ones are refused. `SetScalar` on a
+missing path is no longer `ErrUnsplicable`, so that case left the Task 1
+refused-shapes table.
 
 ### Task 3: Move `secrets init` / `set` / `rekey` onto the Splicer; fix `!!merge` in the node writer
 
