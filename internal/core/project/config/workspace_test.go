@@ -450,10 +450,13 @@ func TestLoadConfig_strictRoot_unknownKeyRejected(t *testing.T) {
 // migration message.
 func TestLoadConfig_strictRoot_removedKeysRejected(t *testing.T) {
 	removed := []struct {
+		name string
 		key  string
 		body string
 	}{
-		{key: "state", body: "state: staging\n"},
+		{name: "state", key: "state", body: "state: staging\n"},
+		{name: "ui/commands", key: "ui", body: "ui:\n  commands:\n    default_expanded_depth: 2\n"},
+		{name: "ui/empty-commands", key: "ui", body: "ui:\n  commands: {}\n"},
 	}
 	layers := []struct {
 		name     string
@@ -465,7 +468,7 @@ func TestLoadConfig_strictRoot_removedKeysRejected(t *testing.T) {
 	}
 	for _, rk := range removed {
 		for _, layer := range layers {
-			t.Run(rk.key+"/"+layer.name, func(t *testing.T) {
+			t.Run(rk.name+"/"+layer.name, func(t *testing.T) {
 				ws, defaults, lc := sampleWorkspaceYML, "", ""
 				switch layer.name {
 				case "workspace.yml":

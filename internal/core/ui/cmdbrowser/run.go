@@ -48,8 +48,8 @@ const (
 // Mode selects which intent the TUI is gathering. ModeUnknown sits at iota 0
 // so a zero-value Options.Mode is detectable; applyDefaults promotes it to
 // ModeRun. This is the only field with auto-defaulting — int/bool fields are
-// preserved verbatim so legitimate user opt-outs like
-// `default_expanded_depth: 0` reach the model unchanged.
+// preserved verbatim so a legitimate opt-out like DefaultExpandedDepth: 0
+// reaches the model unchanged.
 type Mode int
 
 // Mode values selecting the TUI intent. ModeUnknown sits at iota 0; the
@@ -147,10 +147,10 @@ type RunFormSpec struct {
 	Harvest func(idx int, res ask.Result) map[string]string
 }
 
-// Options carries already-resolved configuration. Defaulting happens in the
-// config accessors (config.UICommands*); auto-defaulting int/bool fields
-// here would silently overwrite legitimate opt-outs. Callers without a
-// *config.DweConfig should use DefaultOptions().
+// Options carries already-resolved configuration. Int/bool fields are never
+// auto-defaulted here — that would silently overwrite a legitimate opt-out
+// such as DefaultExpandedDepth: 0. Start from DefaultOptions() and set only
+// the fields the caller cares about.
 type Options struct {
 	DefaultExpandedDepth int
 	AutoCollapseEmpty    bool
@@ -221,10 +221,9 @@ type Result struct {
 	Values map[string]string
 }
 
-// DefaultOptions returns the spec defaults for callers that don't have a
-// *config.DweConfig (tests and future programmatic callers). Options{}
-// is intentionally NOT a useful zero value — use this factory or the
-// config.UICommands* accessors.
+// DefaultOptions returns the spec defaults every caller starts from. Options{}
+// is intentionally NOT a useful zero value — build from this factory and
+// override only the fields you need.
 func DefaultOptions() Options {
 	return Options{
 		DefaultExpandedDepth: 1,

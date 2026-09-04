@@ -467,13 +467,13 @@ get the qualification.
 - Modify: `internal/core/ui/tui/help.go`
 - Modify: `.golangci.yml`
 
-- [ ] delete the four `ui.go` / `ui_test.go` files; remove `"ui"` from
+- [x] delete the four `ui.go` / `ui_test.go` files; remove `"ui"` from
       `allowedRootKeys` (`workspace.go:47`), the `UI UIConfig` field (`:124`)
       and `KnownVarHeads` (`render_command.go:141`)
-- [ ] remove `&uiValidator{}` from `validate/config/all.go:12`; confirm
+- [x] remove `&uiValidator{}` from `validate/config/all.go:12`; confirm
       `findMappingChild` / `rawChild` had no other callers (grep) and are gone
       with the file
-- [ ] `formal_blocks.go:22-26`: delete only the sentences about `ui` and keep
+- [x] `formal_blocks.go:22-26`: delete only the sentences about `ui` and keep
       the "`vars` (free-form) and `services` (per-service) are likewise out of
       scope by design" sentence at `:25-26` (line 25 mixes the tail of the
       `ui` sentence with the start of the kept one — reflow);
@@ -481,20 +481,23 @@ get the qualification.
       `port_release_timeout` assertion, keep it; the sentence opener on `:155`
       needs the same reflow) and `:168-171` (`hasUI` comment + assertion):
       delete both
-- [ ] `cli/command/list.go:205-208` and `cli/vars/browser.go:54-58`: build
+- [x] `cli/command/list.go:205-208` and `cli/vars/browser.go:54-58`: build
       from `cmdbrowser.DefaultOptions()` and set only the consumer's own fields
-- [ ] rewrite the comments at `cmdbrowser/run.go:52,151,153,227` (no
+- [x] rewrite the comments at `cmdbrowser/run.go:52,151,153,227` (no
       `config.UICommands*` reference — `:227` is the `DefaultOptions` godoc;
       the `Options` doc describes the fields on their own) and
       `tui/help.go:24-27` (drop the sentence about the workspace.yml validator)
-- [ ] `.golangci.yml:34-41`: narrow the exclusion path to
+- [x] `.golangci.yml:34-41`: narrow the exclusion path to
       `config/info_test\.go` and delete the stale comment line `:35` about
       `ui_test.go`'s `intPtr`; that helper lived only in the deleted
       `config/ui_test.go` (`info_test.go` uses its own `ptrBool`) — confirm
       with a grep that nothing else in the package references `intPtr`
-- [ ] add a test asserting `ui: {commands: {}}` in any layer fails
+- [x] add a test asserting `ui: {commands: {}}` in any layer fails
       `LoadConfig` with the strict-root error (extend the table from Task 1)
-- [ ] run `make lint` and `go test ./internal/core/project/config/... ./internal/core/validate/... ./internal/cli/command/... ./internal/cli/vars/... ./internal/core/ui/...` — must pass before Task 4
+      — added two rows (`ui.commands` with a key, and empty `ui.commands`) to
+      `TestLoadConfig_strictRoot_removedKeysRejected`; the table gained a
+      `name` field so the two `ui` rows get distinct subtest names
+- [x] run `make lint` and `go test ./internal/core/project/config/... ./internal/core/validate/... ./internal/cli/command/... ./internal/cli/vars/... ./internal/core/ui/...` — must pass before Task 4 (ran the full `make test` too — green)
 
 ### Task 4: `ui:` — relocate browser docs, fix cross-references; commit 2
 

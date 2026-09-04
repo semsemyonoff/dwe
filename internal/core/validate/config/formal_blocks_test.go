@@ -152,9 +152,8 @@ func TestFormalBlockFields_DerivedFromStructs(t *testing.T) {
 	require.True(t, formalBlockFields["secrets"]["recipient"])
 
 	// The field sets are reflected off the backing structs, so a struct field
-	// addition flows through automatically. Spot-check the derivation and the two
-	// deliberate exceptions (compose.extra is yaml:"-" but allowed; ui is owned by
-	// uiValidator so it is NOT in the table).
+	// addition flows through automatically. Spot-check the derivation and the
+	// deliberate exception (compose.extra is yaml:"-" but allowed).
 	require.True(t, formalBlockFields["stop"]["port_release_timeout"])
 	require.True(t, formalBlockFields["update"]["mode"])
 	require.True(t, formalBlockFields["bridge"]["vars_writable"])
@@ -164,9 +163,4 @@ func TestFormalBlockFields_DerivedFromStructs(t *testing.T) {
 	// compose.base is struct-decoded; compose.extra is yaml:"-" yet re-added.
 	require.True(t, formalBlockFields["compose"]["base"])
 	require.True(t, formalBlockFields["compose"]["extra"], "compose.extra must be allowed despite yaml:\"-\"")
-
-	// ui is intentionally excluded (uiValidator owns it) — guard against a
-	// re-introduction that would double-report.
-	_, hasUI := formalBlockFields["ui"]
-	require.False(t, hasUI, "ui must not be in formalBlockFields — uiValidator owns the ui: block")
 }

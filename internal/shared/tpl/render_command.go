@@ -137,7 +137,6 @@ var KnownVarHeads = []string{
 	"runtime",
 	"exports",
 	"compose",
-	"ui",
 	"docs",
 	"services",
 	"vars",

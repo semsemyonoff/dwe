@@ -52,15 +52,11 @@ func runVarsBrowser(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		}
 
 		title := uirender.BrandedSelectorTitle(cfg.Project.Name, "Vars")
-		opts := cmdbrowser.Options{
-			DefaultExpandedDepth: config.UICommandsDefaultDepth(cfg),
-			AutoCollapseEmpty:    config.UICommandsAutoCollapseEmpty(cfg),
-			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
-			Mode:                 cmdbrowser.ModeEdit,
-			Edit:                 newVarsEditSpec(flags, leaves, inspectCache),
-			Translator:           i18n.TranslatorOrNop(flags.I18n),
-			Locale:               flags.Locale,
-		}
+		opts := cmdbrowser.DefaultOptions()
+		opts.Mode = cmdbrowser.ModeEdit
+		opts.Edit = newVarsEditSpec(flags, leaves, inspectCache)
+		opts.Translator = i18n.TranslatorOrNop(flags.I18n)
+		opts.Locale = flags.Locale
 		res, err := runBrowser(title, items, opts)
 		if err != nil {
 			if errors.Is(err, widgets.ErrCancelled) {

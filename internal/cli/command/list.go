@@ -202,16 +202,12 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 				},
 			}
 		}
-		opts := cmdbrowser.Options{
-			DefaultExpandedDepth: config.UICommandsDefaultDepth(cfg),
-			AutoCollapseEmpty:    config.UICommandsAutoCollapseEmpty(cfg),
-			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
-			IncludePrivate:       includePrivate,
-			Mode:                 mode,
-			RunForm:              makeRunFormSpec(cfg, mode, defs, setFlags, translator, locale),
-			Translator:           translator,
-			Locale:               locale,
-		}
+		opts := cmdbrowser.DefaultOptions()
+		opts.IncludePrivate = includePrivate
+		opts.Mode = mode
+		opts.RunForm = makeRunFormSpec(cfg, mode, defs, setFlags, translator, locale)
+		opts.Translator = translator
+		opts.Locale = locale
 		res, err := cmdbrowser.Run(title, items, opts)
 		if err != nil {
 			return "", err

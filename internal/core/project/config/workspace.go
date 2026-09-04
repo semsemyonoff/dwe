@@ -43,7 +43,6 @@ var allowedRootKeys = []string{
 	"runtime",
 	"exports",
 	"compose",
-	"ui",
 	"docs",
 	"services",
 	"vars",
@@ -119,7 +118,6 @@ type DweConfig struct {
 	Exports ExportsConfig        `yaml:"exports"`
 	Compose ComposeConfig        `yaml:"compose"`
 	Deploy  *ProjectDeployConfig `yaml:"-"`
-	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
 
 	// Update is the formalized top-level self-update policy. It participates in

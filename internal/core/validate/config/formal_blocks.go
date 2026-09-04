@@ -20,10 +20,8 @@ import (
 // struct gains a field, which would otherwise make a newly-valid field warn as
 // "unknown" (a false positive that fails open).
 //
-// `ui` is intentionally absent: the dedicated uiValidator already warns on
-// unknown keys directly under `ui:` AND descends into `ui.commands`, so listing
-// it here would only double-report the shallow `ui:` level. `vars` (free-form)
-// and `services` (per-service) are likewise out of scope by design.
+// `vars` (free-form) and `services` (per-service) are intentionally absent:
+// they are out of scope by design.
 var formalBlockStructs = map[string]reflect.Type{
 	"project": reflect.TypeFor[config.ProjectConfig](),
 	"runtime": reflect.TypeFor[config.RuntimeConfig](),
