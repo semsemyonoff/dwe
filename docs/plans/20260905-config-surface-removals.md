@@ -423,26 +423,30 @@ get the qualification.
 - Modify: `CHANGELOG.md`
 - Modify: `internal/core/docs/content_hashes_gen.go` (generated, git-tracked)
 
-- [ ] delete the `# state: ""` line from `defaults.yml.tmpl:28`; regenerate
+- [x] delete the `# state: ""` line from `defaults.yml.tmpl:28`; regenerate
       `golden_default.txt` and confirm the diff is that single line
-- [ ] `workspace.md`: drop the TOC entry (`:21`), the layer-placement row
+- [x] `workspace.md`: drop the TOC entry (`:21`), the layer-placement row
       (`:63`), `state` from the strict-root list (`:104`) and the layer table
       (`:278`), the whole `### state` section (`:326-332`), the
       `state: staging` line in the `local.yml` example (`:408`), and the two
       "Common mistakes" bullets (`:502-503`); same edits in the RU mirror
       (`:23,105,279,327-333,409,503-504`)
-- [ ] `config/index.md:21`, `templates.md:65`, `concepts/project-layout.md:103`
+      - ⚠️ deviation: the "Scalar collision" bullet was **rewritten** with
+        `runtime.use_https` instead of deleted (EN + RU). It documents
+        scalar layer precedence, which is not covered by the neighbouring
+        "Lists replace, maps merge" bullet; only its `state` example was stale.
+- [x] `config/index.md:21`, `templates.md:65`, `concepts/project-layout.md:103`
       + RU mirrors: remove `state` from the root-key lists
-- [ ] `CHANGELOG.md`: add `### Removed` under `[Unreleased]` with the
+- [x] `CHANGELOG.md`: add `### Removed` under `[Unreleased]` with the
       `state:` entry (hard load error, no replacement; free-form values belong
       in `vars:`)
-- [ ] `make gen-docs-manifest`, then copy the new hashes for
+- [x] `make gen-docs-manifest`, then copy the new hashes for
       `reference/config/workspace.md`, `reference/config/index.md`,
       `reference/templates.md`, `reference/concepts/project-layout.md` into
       the `> Translated from:` header of each RU mirror; `make embedded-docs`
-- [ ] `make test` for `./internal/core/docs/...` and
-      `./internal/core/workflow/scaffold/...`
-- [ ] commit: `refactor(config)!: drop the state: root key`
+- [x] `make test` for `./internal/core/docs/...` and
+      `./internal/core/workflow/scaffold/...` (ran the full `make test` — green)
+- [x] commit: `refactor(config)!: drop the state: root key`
 
 ### Task 3: Remove the `ui:` block from the loader, validator and browser consumers
 

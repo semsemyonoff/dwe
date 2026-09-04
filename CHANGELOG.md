@@ -310,4 +310,14 @@ generated from commit subjects and stay on the
   `render ai`, which walks every service and honours each `render.ai.enabled`.
   Rendering on deploy stays opt-in; nothing renders automatically.
 
+### Removed
+
+- **Breaking:** the top-level `state:` key is gone. It was a free-form string
+  with a single consumer — one line in the bare-`dwe` summary — and the docs
+  claimed it was exported as `STATE` in `.env`, which it never was. A project
+  that still declares it in `workspace.yml`, `workspace/defaults.yml` or
+  `workspace/local.yml` now fails to load with the strict-root error naming the
+  file (`unknown root key "state" … allowed: …`). There is no replacement:
+  delete the key, and put free-form values under `vars:`, their single home.
+
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

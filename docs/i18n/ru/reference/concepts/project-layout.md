@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ c2f49aa986b9
+> Translated from: reference/concepts/project-layout.md @ a66fc3498eb8
 
 # Раскладка проекта
 
@@ -102,7 +102,7 @@ project:
 
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (слой merge 2) | Автор вручную | да |
+| `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (слой merge 2) | Автор вручную | да |
 | `workspace/local.yml` | Переопределения на разработчика поверх `defaults.yml`: порты, флаги enabled, креды, ответы мастера | CLI (слой merge 3) | Автор вручную + setup wizard + `dwe services enable/disable` | нет |
 | `workspace/services/<name>/` | Одна папка на сервис. Имя папки — это ID сервиса, поля `name:` нет. | Загрузчик сервисов CLI | Автор вручную | да (кроме оверрайдов `local.yml`) |
 | `workspace/commands/` | Декларативные пользовательские команды, доступные как `dwe <name>` | Реестр команд CLI | Автор вручную | да |

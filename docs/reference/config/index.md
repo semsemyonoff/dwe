@@ -18,7 +18,7 @@ Overview of all configuration files in the DWE system.
 |------|---------|--------|---------|
 | `workspace.yml` | yes | layer 1 | Project identity, service structure, and the `secrets:` recipient |
 | `workspace/defaults.yml` | yes | layer 2 | Versioned defaults: runtime, exports, service enabled toggles |
-| `workspace/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, service enabled toggles |
+| `workspace/local.yml` | no (gitignored) | layer 3 | Per-user overrides: service enabled toggles, personal vars |
 | `workspace/services/<name>/service.yml` | yes | standalone | Per-service declaration (dirs, cli, configs, ports) |
 | `workspace/deploy.yml` | yes | standalone | Orchestrator deploy pipeline (phases + steps) |
 | `workspace/services/<name>/deploy.yml` | yes | standalone | Per-service deploy pipelines |

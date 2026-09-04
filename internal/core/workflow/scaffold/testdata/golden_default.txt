@@ -224,8 +224,6 @@ services:
 #   spx:
 #     path: ""
 
-# state: ""
-
 # Declarative .env export rules. Each rule maps a dot-path in the merged config
 # to an environment variable. See `dwe docs show config/workspace`.
 #

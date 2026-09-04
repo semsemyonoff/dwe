@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ 802db2a005da
+> Translated from: reference/config/index.md @ 2362b93f32e4
 
 # Справочник конфигурации
 
@@ -20,7 +20,7 @@
 |------|-----------|-----------|------------|
 | `workspace.yml` | да | слой 1 | Идентификация проекта, структура сервисов и recipient блока `secrets:` |
 | `workspace/defaults.yml` | да | слой 2 | Версионированные значения по умолчанию: runtime, экспорты, переключатели enabled сервисов |
-| `workspace/local.yml` | нет (gitignored) | слой 3 | Переопределения на пользователя: состояние, переключатели enabled сервисов |
+| `workspace/local.yml` | нет (gitignored) | слой 3 | Переопределения на пользователя: переключатели enabled сервисов, личные vars |
 | `workspace/services/<name>/service.yml` | да | отдельный | Декларация сервиса (dirs, cli, configs, порты) |
 | `workspace/deploy.yml` | да | отдельный | Deploy-пайплайн оркестратора (фазы + шаги) |
 | `workspace/services/<name>/deploy.yml` | да | отдельный | Deploy-пайплайны на каждый сервис |
