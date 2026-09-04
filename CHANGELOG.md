@@ -131,9 +131,42 @@ generated from commit subjects and stay on the
   prompted** — the lookup takes the first present source with no fall-through,
   so an imported keyfile would not even be consulted; the message names the
   variable to repair, and never its value.
+- **New `dwe secrets init --replace-recipient` for a lost identity**, and a
+  refusal that stops sending you there in the first place. A second `init` used
+  to point at `dwe secrets rekey` unconditionally — but `rekey` has to read
+  every value before it can rewrite one, so with the identity gone it is a
+  command that cannot run, and the only way out was hand-editing `secrets:` out
+  of the tracked `workspace.yml`. The refusal now branches on whether the
+  project's identity loads here and says so in a new `identity` detail
+  (`available` / `missing`): with it present, `rekey` as before; without it,
+  `key import` first and `init --replace-recipient` as the recovery.
+  `--replace-recipient` mints a new key pair and commits it, leaving every
+  existing marker and `*.age` source in place and permanently unreadable — they
+  are the record of what has to be re-entered, `dwe secrets set` overwrites each
+  one as you go, and the report names every orphaned value (`old_recipient`,
+  `orphaned_markers` and `orphaned_files` in `--output json`). It refuses while
+  anything is still readable on this machine (new `secrets_identity_available`,
+  with a `readable` count and the way out), needs a confirmation naming the
+  number of values at stake, and refuses with `secrets_confirmation_required`
+  wherever it cannot ask. The confirmation runs before the project locks are
+  taken, so a prompt left open does not stall every other `dwe` command; the
+  recipient is re-read once they are held and a concurrent change refuses with
+  `secrets_recipient_changed` without writing anything.
+- **The `dwe secrets` write commands are styled like the read ones.** `init`,
+  `rekey`, `key import`, `key remove`, `set`, `encrypt` and `decrypt` now render
+  through the same field-block and colour vocabulary as `secrets status` and
+  `secrets key list`, instead of plain text. Colour degrades to none when the
+  output is not a terminal, `--output json` is unaffected, and `key export`,
+  `secrets get` and `--out -` still print their raw bytes with nothing added.
 
 ### Changed
 
+- **A failing command now prints its fix instruction in the terminal too.**
+  Every typed `dwe` error carries a hint, and until now `--output json` was the
+  only place it appeared: the error text handed to the renderer is the message
+  alone. The hint is written under the error block in the muted colour, wrapped
+  to the same width, and unstyled wherever the block itself is unstyled. JSON
+  output is byte-identical — the envelope already carried `hint`.
 - **An age identity is now read as the first `AGE-SECRET-KEY-1…` token on a
   non-comment line**, instead of the first line that is neither blank nor a `#`
   comment. Every shape that worked before still works, including a file whose

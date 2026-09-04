@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
-	"github.com/semsemyonoff/dwe/internal/shared/render"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
@@ -68,7 +68,7 @@ has imported the new identity with 'dwe secrets key import'.`,
 func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean. No
 	// preflight: re-encrypting touches no container and no stack state.
-	w := render.NewWriter(cmd.ErrOrStderr())
+	w := sharedrender.NewWriter(cmd.ErrOrStderr())
 	release, err := cmdctx.AcquireProjectLocksOrReport(flags.ProjectRoot(), w)
 	if err != nil {
 		return err
@@ -155,16 +155,14 @@ func runRekey(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		Files:        rewrittenFiles,
 	}
 	return cmdctx.WriteData(flags, cmd, data, func(d rekeyJSON) string {
-		var b strings.Builder
-		b.WriteString("re-encrypted to a new age key pair\n")
-		fmt.Fprintf(&b, "  recipient: %s (was %s)\n", d.Recipient, d.OldRecipient)
-		fmt.Fprintf(&b, "  keyfile:   %s\n", d.Keyfile)
-		fmt.Fprintf(&b, "  rewritten: %d marker(s) in %d layer file(s), %d encrypted file(s)\n\n",
-			d.Markers, len(d.Layers), len(d.Files))
-		b.WriteString("Commit the rewritten files and the new secrets.recipient.\n")
-		b.WriteString("Share the new identity with 'dwe secrets key export', then remove the old keyfile\n")
-		b.WriteString("for " + d.OldRecipient + " once everyone has imported it.")
-		return b.String()
+		return render.SecretsRekey(render.SecretsRekeyView{
+			Recipient:    d.Recipient,
+			OldRecipient: d.OldRecipient,
+			Keyfile:      d.Keyfile,
+			Markers:      d.Markers,
+			Layers:       len(d.Layers),
+			Files:        len(d.Files),
+		})
 	})
 }
 

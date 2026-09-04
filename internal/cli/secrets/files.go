@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
-	"github.com/semsemyonoff/dwe/internal/shared/render"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
@@ -136,7 +137,7 @@ func runEncrypt(cmd *cobra.Command, flags *cmdctx.RootFlags, input, out string, 
 	// The locks cover the recipient read as well as the write: a concurrent
 	// `rekey` between the two would otherwise leave a file encrypted to the
 	// retired recipient while workspace.yml already advertises the new one.
-	w := render.NewWriter(cmd.ErrOrStderr())
+	w := sharedrender.NewWriter(cmd.ErrOrStderr())
 	release, err := cmdctx.AcquireProjectLocksOrReport(root, w)
 	if err != nil {
 		return err
@@ -160,7 +161,7 @@ func runEncrypt(cmd *cobra.Command, flags *cmdctx.RootFlags, input, out string, 
 		data:   data,
 		mode:   ciphertextMode,
 		force:  force,
-		render: func(d secretFileJSON) string { return fmt.Sprintf("%s encrypted → %s", d.From, d.To) },
+		render: func(d secretFileJSON) string { return render.SecretsFileResult("encrypted", d.From, d.To, "") },
 	})
 }
 
@@ -196,14 +197,16 @@ func runDecrypt(cmd *cobra.Command, flags *cmdctx.RootFlags, input, out string, 
 		def = ""
 	}
 	return emitFile(cmd, flags, fileWrite{
-		root:   root,
-		src:    src,
-		out:    out,
-		def:    def,
-		data:   plain,
-		mode:   plaintextMode,
-		force:  force,
-		render: func(d secretFileJSON) string { return fmt.Sprintf("%s decrypted → %s (mode 0600)", d.From, d.To) },
+		root:  root,
+		src:   src,
+		out:   out,
+		def:   def,
+		data:  plain,
+		mode:  plaintextMode,
+		force: force,
+		render: func(d secretFileJSON) string {
+			return render.SecretsFileResult("decrypted", d.From, d.To, "(mode 0600)")
+		},
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -95,8 +96,14 @@ func TestInit_RefusesSecondRun(t *testing.T) {
 	if coded.Code != "secrets_already_initialized" {
 		t.Fatalf("error code = %q, want secrets_already_initialized", coded.Code)
 	}
+	if coded.Details["identity"] != identityAvailable {
+		t.Errorf("details[identity] = %v, want %q", coded.Details["identity"], identityAvailable)
+	}
 	if !strings.Contains(coded.Hint, "rekey") {
 		t.Errorf("hint = %q, want it to point at rekey", coded.Hint)
+	}
+	if strings.Contains(coded.Hint, "--replace-recipient") {
+		t.Errorf("hint = %q offers --replace-recipient while the values are still recoverable", coded.Hint)
 	}
 	after, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -107,6 +114,373 @@ func TestInit_RefusesSecondRun(t *testing.T) {
 	}
 	if _, err := secrets.KeyfilePath(recipient); err != nil {
 		t.Fatalf("keyfile path: %v", err)
+	}
+}
+
+// --- init --replace-recipient ------------------------------------------------
+
+// lostIdentityProject builds the state R12 is about: a project whose secrets
+// are committed — one marker and one *.age source — and whose identity exists
+// nowhere on this machine. Returns the orphaned recipient.
+func lostIdentityProject(t *testing.T, flags *cmdctx.RootFlags, root string) string {
+	t.Helper()
+	recipient := initProject(t, flags)
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	writeAgeFile(t, root, "app/creds.age", recipient, "hello")
+
+	keyfile, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	if err := os.Remove(keyfile); err != nil {
+		t.Fatalf("removing the keyfile: %v", err)
+	}
+	return recipient
+}
+
+// TestInit_RefusalNamesReplaceWhenIdentityLost pins R12's first half: with the
+// identity gone, `rekey` cannot run at all — it has to read every value before
+// it can rewrite one — so the refusal must name the recovery path instead of
+// sending the developer into that dead end.
+func TestInit_RefusalNamesReplaceWhenIdentityLost(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := lostIdentityProject(t, flags, root)
+
+	_, _, err := runSecrets(t, flags, "init")
+	if err == nil {
+		t.Fatal("init succeeded on an already-initialized project")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_already_initialized" {
+		t.Fatalf("error code = %q, want secrets_already_initialized", coded.Code)
+	}
+	if coded.Details["identity"] != identityMissing {
+		t.Errorf("details[identity] = %v, want %q", coded.Details["identity"], identityMissing)
+	}
+	if !strings.Contains(coded.Hint, "--replace-recipient") {
+		t.Errorf("hint = %q, want it to name init --replace-recipient", coded.Hint)
+	}
+	if !strings.Contains(coded.Hint, "key import") {
+		t.Errorf("hint = %q, want it to offer key import first", coded.Hint)
+	}
+	if !strings.Contains(coded.Hint, recipient) {
+		t.Errorf("hint = %q, want it to name the orphaned recipient", coded.Hint)
+	}
+}
+
+// TestInit_RefusalIgnoresAForeignEnvKey pins that the `identity` verdict is
+// about this machine, not about the first identity SOURCE: LoadIdentity is
+// first-present-source-wins with no fall-through, so a DWE_AGE_KEY exported for
+// another project used to make a healthy project report `missing` — and be
+// offered --replace-recipient, i.e. "re-enter every value from its plaintext",
+// with its own keyfile sitting right there.
+func TestInit_RefusalIgnoresAForeignEnvKey(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	foreign, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	t.Setenv(secrets.EnvKey, foreign.Export())
+
+	_, _, err = runSecrets(t, flags, "init")
+	if err == nil {
+		t.Fatal("init succeeded on an already-initialized project")
+	}
+	coded := codedError(t, err)
+	if coded.Details["identity"] != identityAvailable {
+		t.Errorf("details[identity] = %v, want %q — the project's keyfile is installed",
+			coded.Details["identity"], identityAvailable)
+	}
+	if strings.Contains(coded.Hint, "--replace-recipient") {
+		t.Errorf("hint = %q offers the destructive recovery to a machine that holds the key", coded.Hint)
+	}
+}
+
+// TestInit_ReplaceRecipientRefusesWhileReadable pins the guard: with the
+// identity present the values are not lost, and re-encrypting them is `rekey`'s
+// job — so the destructive flag must refuse rather than orphan them. The
+// refusal names a way out, because a guard that dead-ends is the bug R12 is
+// about in the first place.
+func TestInit_ReplaceRecipientRefusesWhileReadable(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	before, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading workspace.yml: %v", err)
+	}
+
+	_, _, err = runSecrets(t, flags, "init", "--replace-recipient", "--yes")
+	if err == nil {
+		t.Fatal("--replace-recipient orphaned a value this machine can still read")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_identity_available" {
+		t.Fatalf("error code = %q, want secrets_identity_available", coded.Code)
+	}
+	if coded.Details["readable"] != 1 {
+		t.Errorf("details[readable] = %v, want 1", coded.Details["readable"])
+	}
+	if !strings.Contains(coded.Hint, "rekey") || !strings.Contains(coded.Hint, "key remove") {
+		t.Errorf("hint = %q, want both the rekey fix and the way out of the guard", coded.Hint)
+	}
+	after, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("re-reading workspace.yml: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("workspace.yml changed on a refused replacement:\n%s", after)
+	}
+}
+
+// TestInit_ReplaceRecipientNeedsConfirmation pins that a mode with no prompt
+// refuses instead of silently orphaning the tree.
+func TestInit_ReplaceRecipientNeedsConfirmation(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	lostIdentityProject(t, flags, root)
+	forbidConfirm(t)
+	stubStdinTTY(t, false)
+
+	_, _, err := runSecrets(t, flags, "init", "--replace-recipient")
+	if err == nil {
+		t.Fatal("--replace-recipient ran unconfirmed in a non-interactive mode")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_confirmation_required" {
+		t.Fatalf("error code = %q, want secrets_confirmation_required", coded.Code)
+	}
+	if coded.Details["orphaned"] != 2 {
+		t.Errorf("details[orphaned] = %v, want 2 (one marker, one .age source)", coded.Details["orphaned"])
+	}
+	if names := keyfileNames(t); len(names) != 0 {
+		t.Errorf("keys dir = %v, want nothing minted before the confirmation", names)
+	}
+}
+
+// TestInit_ReplaceRecipientDeclined pins that a declined confirmation is a
+// finished command, not a failure — and that it wrote nothing.
+func TestInit_ReplaceRecipientDeclined(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := lostIdentityProject(t, flags, root)
+	stubStdinTTY(t, true)
+	stubRunConfirm(t, func(string, string, string) (bool, error) { return false, nil })
+
+	before, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading workspace.yml: %v", err)
+	}
+	if _, _, err := runSecrets(t, flags, "init", "--replace-recipient"); err != nil {
+		t.Fatalf("a declined replacement returned an error: %v", err)
+	}
+	after, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("re-reading workspace.yml: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("workspace.yml changed on a declined replacement:\n%s", after)
+	}
+	if got := currentRecipient(flags); got != recipient {
+		t.Errorf("recipient = %q, want the original %q", got, recipient)
+	}
+	if names := keyfileNames(t); len(names) != 0 {
+		t.Errorf("keys dir = %v, want nothing minted", names)
+	}
+}
+
+// TestInit_ReplaceRecipientConfirmsWithoutHoldingTheLocks pins the ordering
+// rule `set` states and `key remove` follows: a confirmation can sit open for as
+// long as the developer needs, and holding deploy.lock + snapshot.lock meanwhile
+// stalls every other dwe command in the project until someone answers.
+func TestInit_ReplaceRecipientConfirmsWithoutHoldingTheLocks(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	lostIdentityProject(t, flags, root)
+	stubStdinTTY(t, true)
+
+	locksWereFree := false
+	stubRunConfirm(t, func(string, string, string) (bool, error) {
+		release, lerr := lock.AcquireProjectLocks(root)
+		if lerr == nil {
+			locksWereFree = true
+			release()
+		}
+		return true, nil
+	})
+
+	if _, _, err := runSecrets(t, flags, "init", "--replace-recipient"); err != nil {
+		t.Fatalf("secrets init --replace-recipient: %v", err)
+	}
+	if !locksWereFree {
+		t.Error("the project locks were held while the confirmation was open")
+	}
+}
+
+// TestInit_ReplaceRecipientRefusesAChangedRecipient pins the other half of
+// moving the locks after the prompt: the recipient decided the whole branch, so
+// it is re-read under the lock rather than trusted. The confirmation callback
+// stands in for the concurrent `rekey` that would otherwise have its brand-new
+// key pair overwritten by a decision taken before it ran.
+func TestInit_ReplaceRecipientRefusesAChangedRecipient(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	lostIdentityProject(t, flags, root)
+	stubStdinTTY(t, true)
+
+	other, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	stubRunConfirm(t, func(string, string, string) (bool, error) {
+		if werr := writeRecipient(cfgPath, other.Recipient()); werr != nil {
+			t.Fatalf("swapping the recipient mid-confirmation: %v", werr)
+		}
+		return true, nil
+	})
+
+	_, _, err = runSecrets(t, flags, "init", "--replace-recipient")
+	if err == nil {
+		t.Fatal("the replacement went ahead on a recipient that changed under it")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_recipient_changed" {
+		t.Errorf("error code = %q, want secrets_recipient_changed", coded.Code)
+	}
+	if got := currentRecipient(flags); got != other.Recipient() {
+		t.Errorf("recipient = %q, want the concurrently written %q", got, other.Recipient())
+	}
+	if names := keyfileNames(t); len(names) != 0 {
+		t.Errorf("keys dir = %v, want nothing minted", names)
+	}
+}
+
+// TestInit_ReplaceRecipient pins the whole recovery: a new key pair is minted
+// and committed, the orphaned values are left in place — they are the only
+// record of WHICH secrets have to be re-entered — and the report names each one.
+func TestInit_ReplaceRecipient(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	old := lostIdentityProject(t, flags, root)
+
+	defaultsPath := filepath.Join(root, "workspace", "defaults.yml")
+	beforeDefaults, err := os.ReadFile(defaultsPath)
+	if err != nil {
+		t.Fatalf("reading defaults.yml: %v", err)
+	}
+
+	out, _, err := runSecrets(t, flags, "init", "--replace-recipient", "--yes")
+	if err != nil {
+		t.Fatalf("secrets init --replace-recipient: %v", err)
+	}
+
+	recipient := currentRecipient(flags)
+	if recipient == old || recipient == "" {
+		t.Fatalf("recipient = %q, want a new one (was %q)", recipient, old)
+	}
+	if err := secrets.ParseRecipient(recipient); err != nil {
+		t.Errorf("recipient %q does not parse: %v", recipient, err)
+	}
+	if _, _, lerr := secrets.LoadIdentity(recipient); lerr != nil {
+		t.Errorf("the new identity does not load: %v", lerr)
+	}
+
+	// The orphans stay byte-identical: `dwe secrets set` overwrites each marker
+	// in place as it is re-entered, and until then they ARE the to-do list.
+	afterDefaults, err := os.ReadFile(defaultsPath)
+	if err != nil {
+		t.Fatalf("re-reading defaults.yml: %v", err)
+	}
+	if string(beforeDefaults) != string(afterDefaults) {
+		t.Errorf("the orphaned marker was rewritten:\n%s", afterDefaults)
+	}
+
+	for _, want := range []string{old, recipient, "vars.token", "creds.age", "re-entered"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report does not mention %q\ngot:\n%s", want, out)
+		}
+	}
+	assertNoSecretLeak(t, "", out)
+}
+
+// TestInit_ReplaceRecipientJSON pins the payload the recovery hands to a script:
+// the retired recipient and both orphan inventories, which a plain `init` must
+// not carry.
+func TestInit_ReplaceRecipientJSON(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+	old := lostIdentityProject(t, flags, root)
+
+	out, errOut, err := runSecrets(t, flags, "init", "--replace-recipient", "--yes")
+	if err != nil {
+		t.Fatalf("secrets init --replace-recipient --output json: %v", err)
+	}
+	if errOut != "" {
+		t.Errorf("stderr should be empty in JSON mode, got: %q", errOut)
+	}
+	var data initJSON
+	if e := json.Unmarshal([]byte(out), &data); e != nil {
+		t.Fatalf("unmarshal init json: %v\nraw: %s", e, out)
+	}
+	if data.OldRecipient != old {
+		t.Errorf("old_recipient = %q, want %q", data.OldRecipient, old)
+	}
+	if len(data.OrphanedMarkers) != 1 || data.OrphanedMarkers[0].Path != "vars.token" {
+		t.Errorf("orphaned_markers = %+v, want the one committed marker", data.OrphanedMarkers)
+	}
+	if len(data.OrphanedFiles) != 1 {
+		t.Errorf("orphaned_files = %+v, want the one .age source", data.OrphanedFiles)
+	}
+	if strings.Contains(out, "AGE-SECRET-KEY-") {
+		t.Errorf("init JSON leaked a private key: %s", out)
+	}
+}
+
+// TestInit_ReplaceRecipientWithoutRecipient pins that the flag refuses on a
+// project that has nothing to replace, rather than quietly behaving like a
+// plain init.
+func TestInit_ReplaceRecipientWithoutRecipient(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	_, _, err := runSecrets(t, flags, "init", "--replace-recipient", "--yes")
+	if err == nil {
+		t.Fatal("--replace-recipient succeeded with no recipient to replace")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_no_recipient" {
+		t.Errorf("error code = %q, want secrets_no_recipient", coded.Code)
+	}
+	if names := keyfileNames(t); len(names) != 0 {
+		t.Errorf("keys dir = %v, want nothing minted", names)
 	}
 }
 

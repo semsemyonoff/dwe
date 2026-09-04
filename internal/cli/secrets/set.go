@@ -14,8 +14,9 @@ import (
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/core/project/varsusage"
 	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
-	"github.com/semsemyonoff/dwe/internal/shared/render"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
@@ -122,7 +123,7 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean. No
 	// preflight: writing a marker touches no container and no stack state.
-	w := render.NewWriter(cmd.ErrOrStderr())
+	w := sharedrender.NewWriter(cmd.ErrOrStderr())
 	release, err := cmdctx.AcquireProjectLocksOrReport(flags.ProjectRoot(), w)
 	if err != nil {
 		return err
@@ -165,7 +166,7 @@ func runSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, value string, hav
 
 	data := secretSetJSON{Path: path, File: relToRoot(flags.ProjectRoot(), target)}
 	return cmdctx.WriteData(flags, cmd, data, func(d secretSetJSON) string {
-		return fmt.Sprintf("%s encrypted into %s — commit it.", d.Path, d.File)
+		return render.SecretsSetResult(d.Path, d.File)
 	})
 }
 

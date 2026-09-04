@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ 206c0dd9373b
+> Translated from: reference/config/secrets.md @ 0e25da4a6b18
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -319,9 +319,60 @@ Keyfile пишется **первым**: закоммиченный recipient б
 затем упадёт, keyfile удаляется обратно, чтобы повторный запуск не упёрся в
 запрет перезаписи.
 
-Отказывается работать, если `secrets.recipient` уже выставлен — замена живой
-пары ключей — это [`rekey`](#dwe-secrets-rekey), который перешифровывает
-существующие значения вместо того, чтобы осиротить их.
+Отказывается работать, если `secrets.recipient` уже выставлен. Отказ называет
+то исправление, которое действительно работает в найденном состоянии, и сообщает
+о нём в детали `identity`:
+
+- `identity: "available"` — identity проекта есть на этой машине, значения
+  восстановимы, и замена пары ключей — это [`rekey`](#dwe-secrets-rekey),
+  который перешифровывает их вместо того, чтобы осиротить. Кроме
+  [порядка поиска](#ключи-где-живёт-identity) просматривается и директория
+  ключей, поэтому `DWE_AGE_KEY`, выставленный для другого проекта — он
+  останавливает поиск на первом источнике и до keyfile не доходит, — не
+  превращает здоровый проект в случай ниже.
+- `identity: "missing"` — ни один identity здесь не открывает проект. `rekey` в
+  этом состоянии **не может отработать в принципе**: ему надо прочитать каждое
+  значение, прежде чем переписать его. Отказ сначала предлагает
+  [`key import`](#dwe-secrets-key-export--import) (identity может быть жив на
+  другой машине), а `init --replace-recipient` — как восстановление, если нет.
+
+#### `dwe secrets init --replace-recipient`
+
+```
+dwe secrets init --replace-recipient [--yes]
+```
+
+Выход из ситуации **утраченного identity**. Команда выпускает новую пару ключей
+и коммитит её поверх старого `secrets.recipient` — и это всё, что она делает:
+каждый существующий маркер `ENC[age:…]` и каждый источник `*.age` остаются на
+месте и становятся нечитаемыми навсегда. Эти значения возвращаются только
+повторным вводом из собственных плейнтекстов.
+
+Осиротевшие значения оставлены на месте намеренно — они и есть запись о том,
+*какие* секреты надо ввести заново. `dwe secrets set <path>` перезаписывает
+каждый маркер по месту по мере работы, `dwe secrets status` — оставшийся список
+дел, и пока он не пуст, preflight-проверка `secrets.unresolved` держит
+lifecycle-команды остановленными. Отчёт, которым команда завершается, называет
+каждое осиротевшее значение, так что список уже на руках.
+
+**Команда отказывается, пока здесь хоть что-то читается** (`secrets_identity_available`,
+со счётчиком `readable`): это случай `rekey`, и эти значения ещё не потеряны.
+Чтобы всё равно их выбросить — сохраните нужное через `dwe secrets get`,
+удалите открывающие их identity через
+[`dwe secrets key remove <recipient> --force`](#dwe-secrets-key-remove) и
+запустите снова.
+
+Требуется подтверждение с числом значений на кону; `--yes` его пропускает, а
+режим, в котором спросить негде, отказывается с `secrets_confirmation_required`,
+а не осиротит дерево молча. Подтверждение выполняется **до** взятия блокировок
+проекта — открытый запрос не должен стопорить все остальные команды `dwe`, —
+поэтому `secrets.recipient` перечитывается уже под блокировкой, и значение,
+изменившееся под принятым решением, отклоняется с `secrets_recipient_changed`,
+ничего не записав. Старый keyfile, если он где-то лежит, не трогается —
+удаляет keyfile команда `key remove`.
+
+В проекте без `secrets.recipient` флаг отклоняется (`secrets_no_recipient`), а
+не ведёт себя тихо как обычный `init`.
 
 ### `dwe secrets status`
 
@@ -884,7 +935,7 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 
 | Команда | Форма |
 |---------|-------|
-| `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
+| `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` — `--replace-recipient` добавляет `old_recipient` плюс `orphaned_markers` / `orphaned_files` с теми же формами строк, что сообщает `status` |
 | `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…", "detail": "…"}]}` — у файловой строки `reason` остаётся в фиксированном словаре (`no_identity` / `wrong_identity` / `invalid_identity` / `corrupt` / `stale_key` / `unreadable`), а `detail` несёт свободный текст причины за `unreadable` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
@@ -907,7 +958,11 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 а не ошибка: сообщить «identity нет, и вот где искали» — это и есть работа
 команды.
 
-Типизированные коды ошибок включают `secrets_already_initialized`,
+Типизированные коды ошибок включают `secrets_already_initialized` (деталь
+`identity` — `available` или `missing`, какое исправление назвал отказ),
+`secrets_identity_available` (`init --replace-recipient`, когда значения ещё
+читаются здесь, со счётчиком `readable`), `secrets_recipient_changed` (recipient
+сменился, пока `init` решал, что делать, — ничего не записано),
 `secrets_no_identity`, `secrets_identity_mismatch`, `secrets_not_encrypted`,
 `secrets_path_invalid`, `secrets_file_invalid`, `secrets_value_ambiguous`,
 `secrets_value_required`, `secrets_output_exists`, `secrets_raw_stream`,

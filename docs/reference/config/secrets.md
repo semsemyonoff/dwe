@@ -315,9 +315,60 @@ identity would lock the project out of its own secrets. If the `workspace.yml`
 write then fails, the keyfile is removed again so a re-run is not blocked by
 the no-clobber guard.
 
-Refuses when `secrets.recipient` is already set — replacing a live key pair is
-[`rekey`](#dwe-secrets-rekey), which re-encrypts the existing values instead of
-orphaning them.
+Refuses when `secrets.recipient` is already set. The refusal names the fix that
+actually works in the state it found, and reports which one in the
+`identity` detail:
+
+- `identity: "available"` — an identity for the project is on this machine, so
+  the values are recoverable and replacing the key pair is
+  [`rekey`](#dwe-secrets-rekey), which re-encrypts them instead of orphaning
+  them. The keys directory is consulted as well as the
+  [lookup order](#keys-where-the-identity-lives), so a `DWE_AGE_KEY` exported
+  for another project — which stops the lookup at the first source and never
+  reaches the keyfile — does not turn a healthy project into the case below.
+- `identity: "missing"` — no identity here opens the project. `rekey` **cannot
+  run at all** in this state: it has to read every value before it can rewrite
+  one. The refusal offers [`key import`](#dwe-secrets-key-export--import) first
+  (the identity may still exist on another machine), and
+  `init --replace-recipient` as the recovery when it does not.
+
+#### `dwe secrets init --replace-recipient`
+
+```
+dwe secrets init --replace-recipient [--yes]
+```
+
+The exit from a **lost identity**. It mints a new key pair and commits it over
+the old `secrets.recipient`, and that is all it does: every existing
+`ENC[age:…]` marker and every `*.age` source stays exactly where it is and
+becomes permanently unreadable. Those values come back only by being re-entered
+from their own plaintexts.
+
+The orphans are left in place on purpose — they are the record of *which*
+secrets have to be re-entered. `dwe secrets set <path>` overwrites each marker
+in place as you work through them, `dwe secrets status` is the remaining to-do
+list, and until it is empty the `secrets.unresolved` preflight check keeps the
+lifecycle commands stopped. The report the command ends with names every
+orphaned value, so the list is in hand before you go looking for it.
+
+**It refuses while anything is still readable here** (`secrets_identity_available`,
+with a `readable` count): that is `rekey`'s case, and those values are not lost
+yet. To discard them anyway, save what you need with `dwe secrets get`, drop the
+identities that open them with
+[`dwe secrets key remove <recipient> --force`](#dwe-secrets-key-remove), and run
+it again.
+
+A confirmation naming the number of values at stake is required; `--yes` skips
+it, and a mode with no way to ask refuses with `secrets_confirmation_required`
+rather than orphaning the tree silently. The confirmation runs **before** the
+project locks are taken — a prompt sitting open must not stall every other `dwe`
+command — so `secrets.recipient` is re-read once they are held, and a value that
+changed under the decision refuses with `secrets_recipient_changed` and writes
+nothing. The old keyfile, if one is lying around, is never touched —
+`key remove` is what deletes a keyfile.
+
+On a project with no `secrets.recipient` the flag is refused
+(`secrets_no_recipient`) instead of quietly behaving like a plain `init`.
 
 ### `dwe secrets status`
 
@@ -865,7 +916,7 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 
 | Command | Shape |
 |---------|-------|
-| `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
+| `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` — `--replace-recipient` adds `old_recipient` plus `orphaned_markers` / `orphaned_files`, which carry the same row shapes `status` reports |
 | `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…", "detail": "…"}]}` — a file row's `reason` stays inside the fixed vocabulary (`no_identity` / `wrong_identity` / `invalid_identity` / `corrupt` / `stale_key` / `unreadable`); `detail` carries the free-form cause behind `unreadable` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
@@ -886,7 +937,12 @@ failure too), `reason` the stable reason word, `error` the human sentence and
 `hint` the fix. An identity load failure is **data** here, not an error —
 reporting "no identity, and here is where it looked" is the command's whole job.
 
-Typed error codes include `secrets_already_initialized`, `secrets_no_identity`,
+Typed error codes include `secrets_already_initialized` (whose `identity` detail
+is `available` or `missing` — which fix the refusal named),
+`secrets_identity_available` (`init --replace-recipient` while values are still
+readable here, with a `readable` count), `secrets_recipient_changed` (the
+recipient moved while `init` was deciding what to do — nothing was written),
+`secrets_no_identity`,
 `secrets_identity_mismatch`, `secrets_not_encrypted`, `secrets_path_invalid`,
 `secrets_file_invalid`, `secrets_value_ambiguous`, `secrets_value_required`,
 `secrets_output_exists`, `secrets_raw_stream`, `secrets_rekey_blocked`,

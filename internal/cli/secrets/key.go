@@ -193,12 +193,13 @@ func runKeyImport(cmd *cobra.Command, flags *cmdctx.RootFlags, file string) erro
 	}
 
 	return cmdctx.WriteData(flags, cmd, data, func(d keyImportJSON) string {
-		stored := fmt.Sprintf("identity for %s stored at %s", d.Recipient, d.Keyfile)
+		v := render.SecretsKeyImportView{Recipient: d.Recipient, Keyfile: d.Keyfile}
 		if d.MarkersReadable == nil || d.FilesReadable == nil {
-			return stored + "\nthe readability report could not be built: " + d.ReportError
+			v.ReportErr = d.ReportError
+		} else {
+			v.Markers, v.Files = *d.MarkersReadable, *d.FilesReadable
 		}
-		return fmt.Sprintf("%s\n%d encrypted value(s) and %d .age file(s) are now readable",
-			stored, *d.MarkersReadable, *d.FilesReadable)
+		return render.SecretsKeyImport(v)
 	})
 }
 
@@ -567,7 +568,7 @@ func runKeyRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient string,
 
 	data := keyRemoveJSON{Recipient: recipient, Keyfile: path, Removed: true}
 	return cmdctx.WriteData(flags, cmd, data, func(d keyRemoveJSON) string {
-		return "removed " + d.Keyfile
+		return render.SecretsKeyRemoved(d.Keyfile)
 	})
 }
 

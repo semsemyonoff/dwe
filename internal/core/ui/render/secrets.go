@@ -180,6 +180,164 @@ func secretsField(label, value string) string {
 		styles.TextStyle().Render(value)
 }
 
+// secretsNotes renders the closing advice of a write report: muted, one line
+// each, so the field block above stays the eye's first stop. Empty lines are
+// dropped, which lets a caller pass a conditional note unguarded.
+func secretsNotes(lines ...string) string {
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if l == "" {
+			continue
+		}
+		out = append(out, styles.MutedStyle().Render(l))
+	}
+	return strings.Join(out, "\n")
+}
+
+// SecretsOrphanRow is one encrypted value a `--replace-recipient` run left
+// unreadable. Name is what the developer feeds back to `dwe secrets set` (a
+// dot-path) or `dwe secrets encrypt` (a file), and Where is the layer file
+// holding it — empty for a `*.age` source, whose Name already IS its path.
+type SecretsOrphanRow struct {
+	Name  string
+	Where string
+}
+
+// SecretsInitView is the outcome of `dwe secrets init`. OldRecipient is set
+// only by `--replace-recipient`, and is what turns the report from "created"
+// into "replaced"; Orphans is the to-do list that run handed back.
+type SecretsInitView struct {
+	Recipient    string
+	Keyfile      string
+	OldRecipient string
+	Orphans      []SecretsOrphanRow
+}
+
+// SecretsInit renders the `dwe secrets init` report. The result carries no
+// trailing newline — the CLI's WriteData adds it (same for every renderer
+// below).
+func SecretsInit(v SecretsInitView) string {
+	head := "age key pair created"
+	fields := []string{secretsField("Recipient", v.Recipient)}
+	if v.OldRecipient != "" {
+		head = "age key pair replaced"
+		fields = append(fields, secretsField("Previous", v.OldRecipient))
+	}
+	fields = append(fields, secretsField("Keyfile", v.Keyfile))
+
+	blocks := []string{styles.StyleSubheader(head) + "\n" + strings.Join(fields, "\n")}
+	if len(v.Orphans) > 0 {
+		blocks = append(blocks, secretsOrphanBlock(v.Orphans))
+	}
+	blocks = append(blocks, secretsNotes(
+		"secrets.recipient was written to workspace.yml — commit it.",
+		"Back up the keyfile: it is the only way to read this project's secrets.",
+	))
+	return strings.Join(blocks, "\n\n")
+}
+
+// secretsOrphanBlock lists what a `--replace-recipient` run made unreadable.
+// Amber and phrased as a to-do rather than red damage: the run was asked for,
+// and every row is a value the developer re-enters from its own plaintext —
+// until they do, `secrets.unresolved` keeps the lifecycle commands stopped.
+//
+// A plain list rather than a table: the rows have no second dimension worth
+// aligning, and each Name is a token the developer copies into the next command.
+func secretsOrphanBlock(rows []SecretsOrphanRow) string {
+	var b strings.Builder
+	b.WriteString(styles.WarningStyle().Render(
+		fmt.Sprintf("%d encrypted value(s) can no longer be read and must be re-entered:", len(rows))))
+	for _, r := range rows {
+		b.WriteString("\n  " + styles.TextStyle().Render(r.Name))
+		if r.Where != "" {
+			b.WriteString(" " + styles.MutedStyle().Render("("+r.Where+")"))
+		}
+	}
+	b.WriteString("\n\n" + secretsNotes(
+		"Re-enter a marker with `dwe secrets set <path>`, a file with `dwe secrets encrypt <file>`."))
+	return b.String()
+}
+
+// SecretsRekeyView is the outcome of `dwe secrets rekey`: the retired and the
+// new recipient, where the new identity landed, and what was rewritten.
+type SecretsRekeyView struct {
+	Recipient    string
+	OldRecipient string
+	Keyfile      string
+	Markers      int
+	Layers       int
+	Files        int
+}
+
+// SecretsRekey renders the `dwe secrets rekey` report.
+func SecretsRekey(v SecretsRekeyView) string {
+	fields := strings.Join([]string{
+		secretsField("Recipient", v.Recipient),
+		secretsField("Previous", v.OldRecipient),
+		secretsField("Keyfile", v.Keyfile),
+		secretsField("Rewritten", fmt.Sprintf("%d marker(s) in %d layer file(s), %d encrypted file(s)",
+			v.Markers, v.Layers, v.Files)),
+	}, "\n")
+	return styles.StyleSubheader("re-encrypted to a new age key pair") + "\n" + fields + "\n\n" +
+		secretsNotes(
+			"Commit the rewritten files and the new secrets.recipient.",
+			"Share the new identity with `dwe secrets key export`, then remove the old keyfile",
+			"for "+v.OldRecipient+" once everyone has imported it.",
+		)
+}
+
+// SecretsKeyImportView is the outcome of `dwe secrets key import`. Markers and
+// Files count what the imported identity opened; ReportErr is set instead when
+// the readability scan could not run, which is never the import's own outcome.
+type SecretsKeyImportView struct {
+	Recipient string
+	Keyfile   string
+	Markers   int
+	Files     int
+	ReportErr string
+}
+
+// SecretsKeyImport renders the `dwe secrets key import` report. A failed scan
+// is reported amber rather than green: the key IS stored, but the line that
+// would tell the developer whether it was the right one is missing.
+func SecretsKeyImport(v SecretsKeyImportView) string {
+	head := styles.StyleSubheader("identity stored") + "\n" +
+		secretsField("Recipient", v.Recipient) + "\n" +
+		secretsField("Keyfile", v.Keyfile)
+	if v.ReportErr != "" {
+		return head + "\n\n" + styles.WarningStyle().Render(
+			"the readability report could not be built: "+v.ReportErr)
+	}
+	return head + "\n\n" + styles.SuccessStyle().Render(
+		fmt.Sprintf("%d encrypted value(s) and %d .age file(s) are now readable.", v.Markers, v.Files))
+}
+
+// SecretsSetResult reports one value encrypted into a layer file.
+func SecretsSetResult(path, file string) string {
+	return styles.AccentStyle().Render(path) +
+		styles.TextStyle().Render(" encrypted into ") +
+		styles.AccentStyle().Render(file) +
+		styles.MutedStyle().Render(" — commit it.")
+}
+
+// SecretsFileResult reports an encrypt/decrypt that landed on disk. verb is
+// "encrypted" or "decrypted" and note is the mode qualifier the decrypt path
+// adds; the two paths share one renderer so they cannot drift apart.
+func SecretsFileResult(verb, from, to, note string) string {
+	out := styles.AccentStyle().Render(from) +
+		styles.TextStyle().Render(" "+verb+" → ") +
+		styles.AccentStyle().Render(to)
+	if note != "" {
+		out += " " + styles.MutedStyle().Render(note)
+	}
+	return out
+}
+
+// SecretsKeyRemoved reports a deleted keyfile.
+func SecretsKeyRemoved(keyfile string) string {
+	return styles.TextStyle().Render("removed ") + styles.AccentStyle().Render(keyfile)
+}
+
 // secretsStateCol is the STATE column of both tables: wrappable, but
 // deliberately NOT Flex. A non-flex column holds its natural width in the fit
 // decision, which is what makes the report drop to the record layout at a width

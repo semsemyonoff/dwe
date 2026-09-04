@@ -423,15 +423,11 @@ func TestKeyImport_Prompt(t *testing.T) {
 	if gotRecipient != recipient {
 		t.Errorf("prompt asked for %q, want %q", gotRecipient, recipient)
 	}
-	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("import output = %q, want two lines", out)
+	if !strings.Contains(out, recipient) || !strings.Contains(out, keyfile) {
+		t.Errorf("import output %q should name the recipient and the keyfile", out)
 	}
-	if !strings.Contains(lines[0], recipient) || !strings.Contains(lines[0], keyfile) {
-		t.Errorf("first line %q should name the recipient and the keyfile", lines[0])
-	}
-	if lines[1] != "1 encrypted value(s) and 0 .age file(s) are now readable" {
-		t.Errorf("report line = %q", lines[1])
+	if !strings.Contains(out, "1 encrypted value(s) and 0 .age file(s) are now readable") {
+		t.Errorf("import output %q should carry the readability report", out)
 	}
 	assertNoSecretLeak(t, "", out)
 

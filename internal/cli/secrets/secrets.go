@@ -132,7 +132,13 @@ func collectInventory(flags *cmdctx.RootFlags) (inventory, error) {
 	if err != nil {
 		return inventory{}, err
 	}
-	recipient := config.RecipientFromLayers(layers)
+	return inventoryFor(flags, layers, config.RecipientFromLayers(layers))
+}
+
+// inventoryFor is collectInventory over layers the caller already holds — the
+// shape `init --replace-recipient` needs, which reads the recipient itself and
+// must not load the tree a second time between its guard and its write.
+func inventoryFor(flags *cmdctx.RootFlags, layers []config.Layer, recipient string) (inventory, error) {
 	inv, err := keygate.Inventory(flags.ProjectRoot(), layers, keygate.LoadIdentitySet(recipient))
 	if err != nil {
 		// The only failure here is the config-pack walk. It is typed for the
