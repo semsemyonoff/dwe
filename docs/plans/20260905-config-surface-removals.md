@@ -517,36 +517,36 @@ get the qualification.
 - Modify: `CHANGELOG.md`
 - Modify: `internal/core/docs/content_hashes_gen.go` (generated, git-tracked)
 
-- [ ] `commands/index.md`: replace the paragraph at `:288` (links `../ui.md`)
+- [x] `commands/index.md`: replace the paragraph at `:288` (links `../ui.md`)
       with a new `## Interactive browser` section carrying the Hotkeys table,
       Parameter form overlay, Fallback ladder and Mouse content from
       `ui.md:54-109` verbatim; drop the schema, pointer-semantics, example and
       `## Related` (`:110`) sections — fold any still-valid `Related` link into
       the page's existing `## Further reading`; add the new section to the
       page's `## Contents`; RU mirror gets the RU `ui.md` counterparts
-- [ ] delete `ui.md` EN + RU
-- [ ] `validate.md:76` + RU `:78`: the `config.formal_block_fields`
+- [x] delete `ui.md` EN + RU
+- [x] `validate.md:76` + RU `:78`: the `config.formal_block_fields`
       paragraph ends with "The `ui:` block is covered by the dedicated
       `config.ui` validator instead …" — rewrite the sentence so it only names
       the intentionally excluded free-form and per-service blocks
-- [ ] `config/index.md:121` + RU `:123`: drop the TOC entry (this also removes
+- [x] `config/index.md:121` + RU `:123`: drop the TOC entry (this also removes
       the web sidebar item); `workspace.md:104` (root list), `:276`
       ("Compact formalized blocks" row), `:506-508` (the `## Optional ui: block`
       section) + RU `:105,277,507-509`
-- [ ] `docs/internals/tui-keymap.md:287`: rewrite the sentence that cites the
+- [x] `docs/internals/tui-keymap.md:287`: rewrite the sentence that cites the
       `ui:` validator; `AGENTS.md:23`: drop "and command browser settings
       (`ui.md`)"
-- [ ] `CHANGELOG.md` `### Removed`: `ui:` block entry (hard load error, browser
+- [x] `CHANGELOG.md` `### Removed`: `ui:` block entry (hard load error, browser
       behaviour unchanged, hotkey docs now under `commands/index.md`)
-- [ ] `make gen-docs-manifest`, then copy the new hashes for
+- [x] `make gen-docs-manifest`, then copy the new hashes for
       `reference/config/commands/index.md`, `reference/config/index.md`,
       `reference/config/workspace.md`, `reference/config/validate.md` into the
       RU headers; `make embedded-docs`; confirm `content_hashes_gen.go` no
       longer lists `reference/config/ui.md`
-- [ ] `make test`; `cd web && npm run sync` must print no dangling-link
+- [x] `make test`; `cd web && npm run sync` must print no dangling-link
       warning naming `ui.md` (sidebar derives from the config index TOC);
       `npm test`
-- [ ] commit: `refactor(config)!: drop the ui: block`
+- [x] commit: `refactor(config)!: drop the ui: block`
 
 ### Task 5: Reserve `COMPOSE_PROJECT_NAME` and emit it from `envfile`
 

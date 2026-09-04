@@ -99,7 +99,7 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · exports · compose · ui · docs · services · vars · update · bridge · stop · secrets
+project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
@@ -271,7 +271,7 @@ All three layers share the same strict key set, so any block *can* appear in any
 
 | Layer | Holds | Why |
 |-------|-------|-----|
-| `workspace.yml` | Compact formalized blocks: `project`, `ui`, `update` | Small, structural, rarely changes |
+| `workspace.yml` | Compact formalized blocks: `project`, `update` | Small, structural, rarely changes |
 | `defaults.yml` | The bulky blocks: `vars`, `exports`, `services` overlay, `runtime`, `bridge.vars_writable` | Versioned team defaults; the biggest content. `bridge.vars_writable` is a team-shared security policy — keep it here, not in `local.yml` (see [the allowlist note above](#bridgevars_writable--container-write-allowlist)) |
 | `local.yml` | Personal overrides: `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
 
@@ -489,10 +489,6 @@ Commits made inside the `dev` container now use the developer's project-specific
 - **Committing `local.yml`** — it is gitignored for a reason (may contain credentials).
 - **Scalar collision** — if `defaults.yml` sets `runtime.use_https: false` and `local.yml` sets `runtime.use_https: true`, the effective value is `true`. If `local.yml` omits the key, the `defaults.yml` value wins.
 - **Lists replace, maps merge** — maps are deep-merged: redeclaring `services` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `bridge.vars_writable: ["vars.db.*"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
-
-## Optional `ui:` block
-
-`workspace.yml` may carry an optional top-level `ui:` block that configures the interactive command browser. See [`ui.md`](ui.md) for the schema, defaults, and the `*bool` omit-vs-`false` semantics. Behaviour is unchanged for projects that omit the block.
 
 ## Related commands
 

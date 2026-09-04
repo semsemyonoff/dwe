@@ -319,5 +319,16 @@ generated from commit subjects and stay on the
   `workspace/local.yml` now fails to load with the strict-root error naming the
   file (`unknown root key "state" … allowed: …`). There is no replacement:
   delete the key, and put free-form values under `vars:`, their single home.
+- **Breaking:** the top-level `ui:` block is gone. Its three command-browser
+  knobs (`ui.commands.default_expanded_depth`, `auto_collapse_empty`,
+  `show_type_badges`) had no adoption, and the dedicated `config.ui` validator
+  goes with them. A project that still declares the block in any of the three
+  layers now fails to load with the strict-root error naming the file
+  (`unknown root key "ui" … allowed: …`); delete the block. The command browser
+  itself is unchanged and runs with the former defaults — top-level groups
+  expanded, empty subtrees collapsed during fuzzy filtering, type badges on.
+  The hotkey table, parameter-form overlay, fallback ladder and mouse behaviour
+  that lived on the `ui` reference page are now documented under
+  *Interactive browser* in the commands reference.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

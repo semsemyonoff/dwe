@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ d510b2e1eca7
+> Translated from: reference/config/workspace.md @ ac0f6a26360d
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -100,7 +100,7 @@ Dot-path'ы используются:
 **Корень** смерженного трёхслойного конфига строгий. После слияния трёх слоёв DWE проверяет ключи верхнего уровня по фиксированному allowlist'у:
 
 ```text
-project · runtime · exports · compose · ui · docs · services · vars · update · bridge · stop · secrets
+project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
@@ -272,7 +272,7 @@ docs:
 
 | Слой | Содержит | Зачем |
 |-------|-------|-----|
-| `workspace.yml` | Компактные формализованные блоки: `project`, `ui`, `update` | Маленькие, структурные, редко меняются |
+| `workspace.yml` | Компактные формализованные блоки: `project`, `update` | Маленькие, структурные, редко меняются |
 | `defaults.yml` | Объёмные блоки: `vars`, `exports`, оверлей `services`, `runtime`, `bridge.vars_writable` | Версионированные командные дефолты; самый большой контент. `bridge.vars_writable` — общекомандная политика безопасности, держите её здесь, а не в `local.yml` (см. [замечание про allowlist выше](#bridgevars_writable--allowlist-контейнерной-записи)) |
 | `local.yml` | Личные переопределения: `vars.db.password`, тогглы сервисов, `compose.extra`, `update.mode` | На разработчика, gitignored |
 
@@ -490,10 +490,6 @@ services:
 - **Коммит `local.yml`** — он gitignored не просто так (может содержать креды).
 - **Коллизия скаляров** — если `defaults.yml` выставляет `runtime.use_https: false`, а `local.yml` выставляет `runtime.use_https: true`, эффективное значение — `true`. Если `local.yml` опускает ключ, выигрывает значение из `defaults.yml`.
 - **Списки заменяют, карты мерджатся** — карты deep-merge'атся: повторная декларация `services` в `local.yml` переопределяет только перечисленные ключи, остальные проваливаются из `defaults.yml`. Списки же заменяются целиком: выставление `bridge.vars_writable: ["vars.db.*"]` в `local.yml` отбрасывает каждую запись, которую имели нижние слои, поэтому включайте полный нужный список.
-
-## Опциональный блок `ui:`
-
-`workspace.yml` может нести опциональный верхнеуровневый блок `ui:`, конфигурирующий интерактивный браузер команд. См. [`ui.md`](ui.md) для схемы, дефолтов и семантики omit-vs-`false` для `*bool`. Поведение не меняется для проектов, опускающих блок.
 
 ## Связанные команды
 
