@@ -105,8 +105,9 @@ generated from commit subjects and stay on the
   raw config layers before the config is loaded, so there is no reload and no
   window in which the wizard proceeds with unresolved state). `dwe restart`
   offers **before it stops anything**, so declining leaves the stack running,
-  and declining anywhere ends the command with `secrets_no_identity` and the
-  fix instruction. Nothing changes without a terminal, with `--yes` (which only
+  and declining ends the command with the fix instruction — typed
+  `secrets_no_identity` in the `dwe deploy` menu, the same sentence untyped in
+  `dwe run` / `dwe restart` — without ever reaching preflight. Nothing changes without a terminal, with `--yes` (which only
   `dwe run` and `dwe restart` define), with
   `--output json` or under `DWE_NONINTERACTIVE=1`: the `secrets.unresolved`
   preflight wall fires exactly as before, so CI output and exit codes are

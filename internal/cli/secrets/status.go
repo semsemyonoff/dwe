@@ -3,6 +3,7 @@ package secrets
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -138,7 +139,7 @@ func identityErrorText(inv inventory) string {
 		if inv.IdentitySource == secrets.SourceEnvFile {
 			return label + ", which does not exist"
 		}
-		return fmt.Sprintf("no identity found (looked at %s, $%s, $%s)",
+		return fmt.Sprintf("%s (looked at %s, $%s, $%s)", genericNoIdentity,
 			secrets.DisplayKeyfilePath(inv.Recipient), secrets.EnvKey, secrets.EnvKeyFile)
 	default:
 		return inv.IdentityErr.Error()
@@ -212,16 +213,26 @@ func identitySourceDisplay(d statusJSON) string {
 	}
 }
 
+// genericNoIdentity opens the one identity error that describes a SEARCH
+// rather than a source: nothing was present anywhere. identityNoneDisplay
+// tests for it, so the two must stay one string.
+const genericNoIdentity = "no identity found"
+
 // identityNoneDisplay words the "no key here" header: where the lookup would
-// look, in its own precedence order. A DWE_AGE_KEY_FILE pointing at nothing is
-// the exception — it stops the lookup at the first source, so listing the other
-// two would describe a search that never happened.
+// look, in its own precedence order.
+//
+// Any error that is NOT the generic search sentence describes a specific
+// source and replaces that list — a DWE_AGE_KEY_FILE pointing at nothing (which
+// stopped the lookup at the first source, so listing the other two would
+// describe a search that never happened), or a keyfile that exists and could
+// not be read. Reporting the latter as "none" is the misdiagnosis this report
+// exists to end: the reader would go looking for a key they already have.
 func identityNoneDisplay(d statusJSON) string {
 	if d.Recipient == "" {
 		return "none"
 	}
-	if secrets.Source(d.Identity.Source) == secrets.SourceEnvFile && d.Identity.Error != "" {
-		return "none (" + d.Identity.Error + ")"
+	if e := d.Identity.Error; e != "" && !strings.HasPrefix(e, genericNoIdentity) {
+		return "none (" + e + ")"
 	}
 	return fmt.Sprintf("none (looked at %s, $%s, $%s)",
 		secrets.DisplayKeyfilePath(d.Recipient), secrets.EnvKey, secrets.EnvKeyFile)

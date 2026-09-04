@@ -405,6 +405,50 @@ func TestEnsure_DanglingKeyfileSymlinkUnusable(t *testing.T) {
 	}
 }
 
+// TestEnsure_UninspectableKeyfileUnusable pins the third shape of the same
+// refusal: the keys directory cannot be traversed, so the gate cannot tell
+// whether a keyfile is in the way. Prompting there takes a private identity and
+// then fails the O_EXCL write on the very same path.
+func TestEnsure_UninspectableKeyfileUnusable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits are not enforced")
+	}
+	isolateHome(t)
+	root := t.TempDir()
+	id := installIdentityElsewhere(t)
+
+	path, err := secrets.KeyfilePath(id.Recipient())
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("creating keys dir: %v", err)
+	}
+	if err := os.Chmod(dir, 0o000); err != nil {
+		t.Fatalf("locking keys dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	opts := Options{
+		BaseDir:     root,
+		Layers:      layersWithMarker(t, root, id.Recipient(), encrypt(t, "v", id.Recipient())),
+		Interactive: true,
+	}
+	opts.Prompt, opts.Confirm = hostileHooks(t)
+
+	imported, gerr := Ensure(t.Context(), opts)
+	if imported {
+		t.Error("Ensure reported an import over an uninspectable keys directory")
+	}
+	if !errors.Is(gerr, ErrKeyfileUnusable) {
+		t.Fatalf("err = %v, want ErrKeyfileUnusable", gerr)
+	}
+	if !strings.Contains(gerr.Error(), path) {
+		t.Errorf("error %q must name the keyfile", gerr)
+	}
+}
+
 // TestEnsure_ImportsAndReports is the happy path: confirm, type the key, and
 // the gate writes the keyfile 0600, verifies it through the real lookup and
 // reports what became readable.

@@ -99,9 +99,11 @@ func TestParseIdentity(t *testing.T) {
 		{"commented-out old key above the live one: the live key wins",
 			fmt.Sprintf("# old: %s\n%s\n", other.Export(), id.Export()), id.Recipient()},
 		// The joined paste is the one case where the only token IS inside a
-		// comment, which is what the whole-text fallback exists for.
+		// comment, which is what the whole-text fallback exists for — and a
+		// flattened keyfile puts its header, retired key included, before the
+		// live one, so the fallback must take the LAST token, not the first.
 		{"joined paste of a keyfile whose header carries an old key",
-			fmt.Sprintf("# public key: %s %s", id.Recipient(), id.Export()), id.Recipient()},
+			fmt.Sprintf("# old: %s # public key: %s %s", other.Export(), id.Recipient(), id.Export()), id.Recipient()},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

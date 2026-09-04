@@ -528,6 +528,13 @@ The counts come from the same scan `dwe secrets status` renders, and only
 values the *configured* identity opens are counted — a value left behind by an
 interrupted `rekey` is still a to-do, so it is not.
 
+If that scan cannot run at all (an unreadable `workspace/templates/config`), the
+import still **succeeds** — the keyfile is written, and `O_EXCL` would refuse a
+retry — but the second line becomes `the readability report could not be built:
+<reason>`, and JSON omits `markers_readable` / `files_readable` in favour of
+`report_error`. A zero count there would say the key opens nothing, which is not
+what happened.
+
 ### `dwe secrets key list`
 
 ```
@@ -720,8 +727,9 @@ It is still that wall. What changed is what a human meets *before* it: at an
 interactive `dwe run` / `dwe restart` / `dwe deploy` the
 [key offer](#the-offer-inside-dwe-deploy-dwe-run-and-dwe-restart) runs first, so
 by the time preflight executes the identity is there and the validator has
-nothing to report. Decline the offer, or run without a terminal, and it blocks
-exactly as described here.
+nothing to report. Run without a terminal and it blocks exactly as described
+here; *declining* the offer never reaches it at all — the command ends there
+and then, with the same fix instruction.
 
 Unresolved markers are grouped **by reason**, one diagnostic per reason listing
 the sorted paths. A keyless developer has every marker unresolved for one

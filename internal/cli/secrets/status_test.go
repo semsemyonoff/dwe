@@ -736,6 +736,20 @@ func TestIdentityDisplay(t *testing.T) {
 			}},
 			"none ($" + secrets.EnvKeyFile + " /nope.key, which does not exist)",
 		},
+		{
+			// A keyfile that IS there and cannot be read loads as
+			// ReasonNoIdentity (the loader passes the filesystem error through
+			// unwrapped). Rendering the generic "looked at …" list here would
+			// send the reader hunting for a key they already hold.
+			"unreadable keyfile",
+			statusJSON{Recipient: recipient, Identity: identityJSON{
+				Source:  string(secrets.SourceKeyfile),
+				Keyfile: "/k/age1.key",
+				Reason:  config.ReasonNoIdentity,
+				Error:   "read keyfile /k/age1.key: permission denied",
+			}},
+			"none (read keyfile /k/age1.key: permission denied)",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

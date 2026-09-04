@@ -150,7 +150,14 @@ func findSecretKey(text string) string {
 	if damagedLive {
 		return ""
 	}
-	return secretKeyRe.FindString(text)
+	// The fallback takes the LAST token, not the first. It only runs on text
+	// whose every token is commented out, i.e. a keyfile flattened onto one
+	// line — and a keyfile puts its comment header, retired keys included,
+	// ABOVE the live key, so flattening leaves the live one last.
+	if all := secretKeyRe.FindAllString(text, -1); len(all) > 0 {
+		return all[len(all)-1]
+	}
+	return ""
 }
 
 // ParseRecipient checks that text is a well-formed age recipient ("age1…").

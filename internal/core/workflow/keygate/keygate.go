@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -210,7 +211,15 @@ func keyfileUnusable(recipient string) error {
 		return nil
 	}
 	if _, err := os.Lstat(path); err != nil {
-		return nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		// The path could not be inspected at all — a locked-down keys
+		// directory. Prompting here would take a private key and then fail the
+		// O_EXCL write on the same inaccessible path, so the gate stops with
+		// what to fix instead.
+		return fmt.Errorf("%w: %s cannot be inspected (%v); fix the permissions on the keys "+
+			"directory and retry", ErrKeyfileUnusable, path, err)
 	}
 	return fmt.Errorf("%w: %s exists but does not hold a usable identity for %s; "+
 		"remove it with 'dwe secrets key remove %s' and import the right one",
