@@ -175,9 +175,14 @@ func importIdentity(opts Options, recipient string, id secrets.Identity) error {
 		out = io.Discard
 	}
 	_, _ = fmt.Fprintf(out, "identity for %s stored at %s\n", recipient, path)
+	// A scan that could not run is reported, never counted: the key IS stored,
+	// so this is not a failure, but silence here reads as "nothing to report"
+	// and a zero count would read as "your key opens nothing".
 	if inv, err := Inventory(opts.BaseDir, opts.Layers, LoadIdentitySet(recipient)); err == nil {
 		markers, files := inv.Readable()
 		_, _ = fmt.Fprintf(out, "%d encrypted value(s) and %d .age file(s) are now readable\n", markers, files)
+	} else {
+		_, _ = fmt.Fprintf(out, "the readability report could not be built: %v\n", err)
 	}
 	return nil
 }

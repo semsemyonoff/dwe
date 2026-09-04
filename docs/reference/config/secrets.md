@@ -230,7 +230,9 @@ instruction and nothing written — in the `dwe deploy` menu as the typed
 Three details worth knowing:
 
 - **`dwe restart` offers before it stops anything.** Declining leaves the stack
-  running, rather than tearing it down and then failing to bring it back.
+  running, rather than tearing it down and then failing to bring it back. This
+  is the stack-level restart; `dwe restart <service>` goes straight to
+  `docker restart` and runs neither the offer nor preflight.
 - **The `dwe deploy` offer sits at the menu's entry**, so it covers `Plan` as
   well as `Run` and the wizard — a plan built without the key would print
   commands derived from `<encrypted>`.
@@ -892,7 +894,8 @@ Typed error codes include `secrets_already_initialized`, `secrets_no_identity`,
 `secrets_write_unsupported` (a [refused shape](#subcommands) — the file is
 untouched; the hint names the path and what to change), and, for the keys
 directory, `secrets_key_in_use` (the current project's identity, without
-`--force`), `secrets_key_not_found`, `secrets_confirmation_required` (a removal
+`--force`), `secrets_key_unreadable` (a keyfile whose bytes could not be read,
+so the guard could not rule that out — also `--force`), `secrets_key_not_found`, `secrets_confirmation_required` (a removal
 with no way to ask and no `--yes`), `secrets_recipient_invalid` (a malformed
 `key remove` argument, refused before the filesystem is touched),
 `secrets_key_list_failed` and `secrets_key_remove_failed`.

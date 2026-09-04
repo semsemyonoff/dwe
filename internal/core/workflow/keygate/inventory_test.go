@@ -114,6 +114,32 @@ func TestInventory_CorruptMarkerNeedsNoKey(t *testing.T) {
 	}
 }
 
+// TestInventory_CorruptAgeFileNeedsNoKey is the marker rule for a native pack
+// source: a truncated `.age` is damage, not a key problem, and a machine with
+// NO identity must still say so — otherwise the one keyless developer who could
+// not have opened it anyway is sent looking for a key.
+func TestInventory_CorruptAgeFileNeedsNoKey(t *testing.T) {
+	isolateHome(t)
+	root := t.TempDir()
+
+	path := filepath.Join(root, "workspace", "templates", "config", "app", "creds.age")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("creating pack dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("this is not an age file"), 0o644); err != nil {
+		t.Fatalf("writing pack source: %v", err)
+	}
+
+	// No identity anywhere: the reason must still be the damage, not the key.
+	inv, err := Inventory(root, nil, LoadIdentitySet("age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p"))
+	if err != nil {
+		t.Fatalf("Inventory: %v", err)
+	}
+	if len(inv.Files) != 1 || inv.Files[0].Reason != config.ReasonCorrupt {
+		t.Errorf("files = %+v, want one corrupt row", inv.Files)
+	}
+}
+
 // TestInventory_UnwalkableTemplatesDir pins that the walk keeps its error
 // channel: an unreadable templates tree is a failure of the scan, not an empty
 // inventory that would read as "nothing encrypted here".

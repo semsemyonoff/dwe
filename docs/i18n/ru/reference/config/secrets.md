@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ fdcfc1807833
+> Translated from: reference/config/secrets.md @ 933cb482cbe1
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -235,7 +235,9 @@ at /home/dev/.config/dwe/keys/age1qyqs….key, or set DWE_AGE_KEY / DWE_AGE_KEY_
 Три детали:
 
 - **`dwe restart` предлагает до того, как что-то остановит.** Отказ оставляет
-  стек работающим, а не роняет его, чтобы потом не суметь поднять.
+  стек работающим, а не роняет его, чтобы потом не суметь поднять. Речь про
+  рестарт всего стека: `dwe restart <сервис>` идёт сразу в `docker restart` и не
+  запускает ни предложение, ни preflight.
 - **В `dwe deploy` предложение стоит на входе в меню**, поэтому покрывает и
   `Plan`, а не только `Run` и мастера: план, построенный без ключа, печатал бы
   команды, выведенные из `<encrypted>`.
@@ -913,7 +915,9 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 `key import` был отменён), `secrets_write_unsupported`
 ([отклонённая форма](#подкоманды) — файл не тронут; подсказка называет путь и
 что нужно изменить), а для директории ключей — `secrets_key_in_use` (identity
-текущего проекта, без `--force`), `secrets_key_not_found`,
+текущего проекта, без `--force`), `secrets_key_unreadable` (keyfile, байты
+которого не прочитались, — проверка не смогла это исключить; тоже `--force`),
+`secrets_key_not_found`,
 `secrets_confirmation_required` (удаление, которое негде подтвердить, без
 `--yes`), `secrets_recipient_invalid` (некорректный аргумент `key remove`,
 отклонённый до обращения к файловой системе), `secrets_key_list_failed` и

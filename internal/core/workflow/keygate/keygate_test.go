@@ -499,6 +499,46 @@ func TestEnsure_ImportsAndReports(t *testing.T) {
 	assertNoKeyLeak(t, id.Export(), report)
 }
 
+// TestEnsure_ImportsWithUnscannableSurface pins the same rule `key import`
+// follows: the identity is stored, so the import succeeded — but a scan that
+// could not run says so rather than going silent or counting zero.
+func TestEnsure_ImportsWithUnscannableSurface(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits are not enforced")
+	}
+	isolateHome(t)
+	root := t.TempDir()
+	id := installIdentityElsewhere(t)
+
+	layers := layersWithMarker(t, root, id.Recipient(), encrypt(t, "v", id.Recipient()))
+	packs := filepath.Join(root, "workspace", "templates", "config")
+	if err := os.MkdirAll(packs, 0o755); err != nil {
+		t.Fatalf("creating pack dir: %v", err)
+	}
+	if err := os.Chmod(packs, 0o000); err != nil {
+		t.Fatalf("locking pack dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(packs, 0o755) })
+
+	var out strings.Builder
+	imported, err := Ensure(t.Context(), Options{
+		BaseDir: root, Layers: layers, Interactive: true, Out: &out,
+		Confirm: func(context.Context, string) (bool, error) { return true, nil },
+		Prompt:  func(context.Context, string) (secrets.Identity, error) { return id, nil },
+	})
+	if err != nil || !imported {
+		t.Fatalf("Ensure = (%v, %v), want (true, nil)", imported, err)
+	}
+	report := out.String()
+	if !strings.Contains(report, "the readability report could not be built") {
+		t.Errorf("report %q does not mention the failed scan", report)
+	}
+	if strings.Contains(report, "are now readable") {
+		t.Errorf("report %q counted a scan that never ran", report)
+	}
+	assertNoKeyLeak(t, id.Export(), report)
+}
+
 // TestEnsure_Declined pins the binary choice: declining aborts with the fix
 // instruction and writes nothing.
 func TestEnsure_Declined(t *testing.T) {

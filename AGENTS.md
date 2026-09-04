@@ -288,7 +288,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 - **Encrypted secrets** — decryption happens ONCE in `LoadConfig`, so merged-config consumers stay crypto-unaware; `LoadConfigSanitized` is what ide/ai/git load, so a tracked output can only carry the marker.
   `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext (age is non-deterministic), and `LoadConfig` SOLELY installs `trace.RegisterRedaction`.
   `secrets init`/`set`/`rekey` use the `local` Splicer, not the node writer; `StepCommand`/`FormatAction`/`FormatCondition` redact every plan surface.
-  `keygate.Ensure` offers the missing identity on raw layers before `LoadConfig` (menu entry, `RunRun`, `RunRestart` pre-`RunStop`); json/`--yes`/non-TTY/nil hooks skip it.
+  `keygate.Ensure` offers the missing identity on raw layers pre-`LoadConfig` (menu, `RunRun`, `RunRestart` pre-`RunStop`); json/`--yes`/non-TTY/`DWE_NONINTERACTIVE`/nil hooks skip it.
   `render env`/`config` run no preflight and refuse a marker; `secrets.unresolved` is preflight's 2nd cherry-pick + `runPreWizardPreflight`.
   Only `shared/secrets/` imports `filippo.io/age`; `dwe secrets` is not in `bridgeAllowedTopLevel`, but container READS stay open.
   See § Core — Foundation (`project/config/`), § `internal/shared/secrets/` and § `internal/cli/secrets/`.

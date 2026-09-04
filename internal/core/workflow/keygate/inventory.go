@@ -195,8 +195,14 @@ func (s IdentitySet) DecryptBytes(data []byte) ([]byte, error) {
 	return nil, fmt.Errorf("%w: this file is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
 }
 
-// classifyBytes is classifyMarker for a native age file.
+// classifyBytes is classifyMarker for a native age file — including the
+// identity-free damage check first, for the same reason: a truncated pack
+// source is detectable without any key, and reporting it as `no_identity` on a
+// keyless machine sends the reader after a key that would not have opened it.
 func (s IdentitySet) classifyBytes(data []byte) (state, reason string) {
+	if err := secrets.CheckAgeFile(data); err != nil {
+		return StateNotDecryptable, config.ReasonCorrupt
+	}
 	var primaryErr error
 	if s.err == nil {
 		if _, primaryErr = secrets.DecryptBytes(data, s.primary); primaryErr == nil {

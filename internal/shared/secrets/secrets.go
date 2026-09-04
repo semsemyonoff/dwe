@@ -98,6 +98,17 @@ func CheckMarker(s string) error {
 	return nil
 }
 
+// CheckAgeFile is CheckMarker for a native `.age` file: the header is public,
+// so a damaged pack source is detectable on a machine that holds no key at all.
+// Without it a truncated `.age` reads as "no identity here", sending a keyless
+// developer after a key that would not have opened it either. Wraps ErrCorrupt.
+func CheckAgeFile(data []byte) error {
+	if !bytes.HasPrefix(data, []byte(fileHeader)) {
+		return fmt.Errorf("%w: not an age file (no %q header)", ErrCorrupt, fileHeader)
+	}
+	return nil
+}
+
 // Encrypt encrypts plain to recipient and returns the scalar marker.
 func Encrypt(plain string, recipient string) (string, error) {
 	ciphertext, err := EncryptBytes([]byte(plain), recipient)

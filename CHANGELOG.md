@@ -51,6 +51,11 @@ generated from commit subjects and stay on the
   (plus the Russian mirror), covering the model, the marker format, key
   locations, every command with its JSON shape, the render guards, where
   plaintext goes, `age` CLI interoperability and rekey recovery.
+- **A damaged `*.age` pack source now reports as `corrupt` without a key.** The
+  identity-free header check the `ENC[age:…]` markers already had now covers
+  native pack sources too, so a truncated file no longer reads as
+  `no_identity` on a machine that has no identity — which sent the one reader
+  who could not have opened it anyway looking for a key.
 - **A broken identity source now reports as `invalid_identity`** instead of
   `no_identity`, in `dwe secrets status`, `dwe validate secrets` and
   `SecretsState`. A truncated `DWE_AGE_KEY` or a keyfile that lost its key line
@@ -91,7 +96,8 @@ generated from commit subjects and stay on the
   `markers_readable` / `files_readable` in `--output json` — replaced by a
   `report_error` when the encrypted surface could not be scanned at all, since
   the import itself still succeeded and a hard zero there would read as "your
-  key opens nothing". The first output
+  key opens nothing" (the same line replaces the counts in the `dwe run` /
+  `dwe deploy` key offer). The first output
   line and the pre-existing JSON fields are unchanged, `--file` and piped
   imports behave exactly as before, and the prompt never opens without a
   terminal, under `--output json` or under `DWE_NONINTERACTIVE=1`. Cancelling
