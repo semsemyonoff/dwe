@@ -140,6 +140,15 @@ func TestParseIdentity(t *testing.T) {
 	if strings.Contains(err.Error(), truncated[len(truncated)-20:]) {
 		t.Fatalf("ParseIdentity error echoes its input: %v", err)
 	}
+
+	// The mirror image of the "live key wins" case: the live key is damaged and
+	// a retired one sits in a comment above it. Falling back to the comment
+	// would answer with somebody else's identity and get the file reported as
+	// the WRONG one, hiding the truncation that is the actual fault.
+	damaged := fmt.Sprintf("# old: %s\n%s\n", other.Export(), id.Export()[:40])
+	if _, err := ParseIdentity(damaged); !errors.Is(err, ErrInvalidIdentity) {
+		t.Fatalf("ParseIdentity(damaged live key under a commented old one) = %v, want ErrInvalidIdentity", err)
+	}
 }
 
 func TestListKeyfiles(t *testing.T) {

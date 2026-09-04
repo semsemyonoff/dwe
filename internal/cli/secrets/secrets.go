@@ -135,7 +135,12 @@ func collectInventory(flags *cmdctx.RootFlags) (inventory, error) {
 	recipient := config.RecipientFromLayers(layers)
 	inv, err := keygate.Inventory(flags.ProjectRoot(), layers, keygate.LoadIdentitySet(recipient))
 	if err != nil {
-		return inventory{}, err
+		// The only failure here is the config-pack walk. It is typed for the
+		// same reason `rekey` types it: a scan that could not finish is not a
+		// "no encrypted material" answer, and in JSON mode the code is the
+		// only thing telling those two apart.
+		return inventory{}, cmdctx.ErrWrap("secrets_scan_failed", err).
+			WithHint("check the permissions on workspace/templates/config and retry")
 	}
 	return inv, nil
 }

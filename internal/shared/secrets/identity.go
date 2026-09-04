@@ -92,7 +92,9 @@ func Keygen() (Identity, error) {
 // separator and 58 characters of the upper-case bech32 charset (which excludes
 // 1, B, I and O). Matching the token rather than a line is what lets a keyfile
 // pasted into a single-line field parse: its comment and key arrive joined.
-var secretKeyRe = regexp.MustCompile(`AGE-SECRET-KEY-1[AC-HJ-NP-Z02-9]{58}`)
+const secretKeyPrefix = "AGE-SECRET-KEY-1"
+
+var secretKeyRe = regexp.MustCompile(secretKeyPrefix + `[AC-HJ-NP-Z02-9]{58}`)
 
 // ParseIdentity reads an identity from key text.
 //
@@ -127,7 +129,13 @@ func ParseIdentity(text string) (Identity, error) {
 // identity. The fallback is what parses a keyfile pasted into a single-line
 // field, where the `# public key:` header and the key arrive joined and the
 // only token there is therefore inside a comment.
+//
+// The fallback is suppressed once a live line CLAIMS to carry a key without
+// matching the token shape (a truncated AGE-SECRET-KEY-1…): reaching past a
+// damaged live key for a commented-out old one reports the file as the wrong
+// identity, when the honest answer is that its own key does not parse.
 func findSecretKey(text string) string {
+	damagedLive := false
 	for line := range strings.SplitSeq(text, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
@@ -135,6 +143,12 @@ func findSecretKey(text string) string {
 		if token := secretKeyRe.FindString(line); token != "" {
 			return token
 		}
+		if strings.Contains(line, secretKeyPrefix) {
+			damagedLive = true
+		}
+	}
+	if damagedLive {
+		return ""
 	}
 	return secretKeyRe.FindString(text)
 }

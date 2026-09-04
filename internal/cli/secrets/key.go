@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -386,19 +387,26 @@ func keyListView(d keyListJSON, dir string) render.SecretsKeyListView {
 // directly rather than through loadRawLayers: a keyfile listing must not fail
 // over a config it only uses to add a marker to one row.
 // heldRecipient returns the recipient of the identity stored at path, or "" for
-// a file that cannot be read or holds no age identity. Neither failure is
-// surfaced: the text of both echoes file content, which here is a private key —
-// the same reason secrets.ListKeyfiles reduces them to a fixed enum.
-func heldRecipient(path string) string {
+// a file that holds no age identity. The parse failure is not surfaced: its text
+// echoes file content, which here is a private key — the same reason
+// secrets.ListKeyfiles reduces those to a fixed enum.
+//
+// known is false only when the bytes could not be READ at all, which is a
+// different answer from "no identity": the file may hold live key material this
+// process simply cannot see. A path that resolves to nothing (a dangling
+// symlink — Lstat finds it, the open does not) is not that case; there are no
+// bytes to lose, and unlinking it is exactly what `key remove` is prescribed
+// for by keygate's ErrKeyfileUnusable.
+func heldRecipient(path string) (recipient string, known bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return "", errors.Is(err, fs.ErrNotExist)
 	}
 	id, err := secrets.ParseIdentity(string(data))
 	if err != nil {
-		return ""
+		return "", true
 	}
-	return id.Recipient()
+	return id.Recipient(), true
 }
 
 func currentRecipient(flags *cmdctx.RootFlags) string {
@@ -477,7 +485,19 @@ func runKeyRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, recipient string,
 	//   - the mirror image: <other>.key holding THIS project's key (`key list`
 	//     reports it "misnamed" under the recipient it holds). A name-based
 	//     guard waved that through and deleted live key material.
-	held := heldRecipient(path)
+	//
+	// An unreadable file is the one case the guard cannot answer, and it is
+	// answered conservatively: os.Remove needs no read permission on the file
+	// itself, so waving it through would unlink key material nobody has ruled
+	// out as live — and, unlike every other refusal here, that one is final.
+	held, known := heldRecipient(path)
+	if !force && !known {
+		return cmdctx.Err("secrets_key_unreadable",
+			fmt.Sprintf("%s cannot be read, so dwe cannot tell whether it holds the identity this project uses", path)).
+			WithDetail("recipient", recipient).
+			WithDetail("keyfile", path).
+			WithHint("check the file's permissions, or pass --force to remove it unread")
+	}
 	if !force && held != "" && held == currentRecipient(flags) {
 		// `key export` reads keys/<current>.key, which is a DIFFERENT file when
 		// the key material sits under a misnamed one — naming it there would

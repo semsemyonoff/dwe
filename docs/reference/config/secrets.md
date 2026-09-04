@@ -143,7 +143,10 @@ old one resolves to the live key — the same one `age` itself would use. A late
 token is ignored, not an error: a multi-identity `DWE_AGE_KEY_FILE` is a
 documented `age` shape. When *every* token sits inside a comment — the shape a
 paste produces when it joins a keyfile's header and key onto one line — the
-whole text is scanned instead, so that paste still parses.
+whole text is scanned instead, so that paste still parses. That rescan is
+skipped when a non-comment line carries an `AGE-SECRET-KEY-1…` that is too short
+or malformed: reaching past a damaged live key for a commented-out old one would
+report the file as the *wrong* identity instead of an invalid one.
 
 ## Getting started
 
@@ -239,7 +242,8 @@ Three details worth knowing:
 ### What CI and scripts see
 
 The offer never opens when there is nobody to answer it: stdin is not a
-terminal, `--yes`, `--output json`, or `DWE_NONINTERACTIVE=1`. Each of those
+terminal, `--yes` (which only `dwe run` and `dwe restart` define — `dwe deploy`
+has no such flag), `--output json`, or `DWE_NONINTERACTIVE=1`. Each of those
 keeps the existing failure — the `secrets.unresolved` preflight wall for the
 lifecycle commands — so a pipeline's output and exit code do not change.
 `key import` is unchanged too: a piped identity is read as before, and at a
@@ -580,10 +584,16 @@ Removing the file that HOLDS the identity the current project uses is refused
 (`secrets_key_in_use`) unless `--force` is passed: those encrypted values become
 unreadable here, and unless the key was exported it exists nowhere else. The
 guard reads the file, not its name, so it covers a `misnamed` file carrying this
-project's key too. A file that opens nothing — unreadable, holding no age
-identity, or holding another project's key — is removed without `--force`; that
-is what makes the "remove it and import the right one" advice above work on a
-stale keyfile. A file that is not there is `secrets_key_not_found`.
+project's key too. A file that opens nothing — holding no age identity, holding
+another project's key, or resolving to nothing at all (a dangling symlink) — is
+removed without `--force`; that is what makes the "remove it and import the
+right one" advice above work on a stale keyfile. A file that is not there is
+`secrets_key_not_found`.
+
+A file whose bytes cannot be **read** is the one case the guard cannot answer,
+and it is refused (`secrets_key_unreadable`) until `--force`: deleting a file
+needs no read permission on it, so waving it through would unlink key material
+nobody ruled out as live.
 
 Otherwise the removal is confirmed interactively. Where it cannot ask — no
 terminal, `--output json`, `DWE_NONINTERACTIVE=1` — it is
@@ -636,7 +646,7 @@ literal in the config, and:
 | `dwe status`, `dwe docs`, `dwe validate`, `dwe prompt`, `dwe commands` | Work normally |
 | `dwe vars list` / `get` / `inspect`, the TUI browser | Show `<encrypted>` — never the ciphertext |
 | `dwe secrets status` | Reports every value and its reason; exits 0 |
-| `dwe run`, `dwe deploy`, `dwe reset`, `dwe stop`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator, naming the fix. At a terminal, `dwe run` / `dwe restart` and the `dwe deploy` menu first [offer to take the identity](#the-offer-inside-dwe-deploy-dwe-run-and-dwe-restart) |
+| `dwe run`, `dwe restart`, `dwe deploy`, `dwe reset`, `dwe stop`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator, naming the fix. At a terminal, `dwe run` / `dwe restart` and the `dwe deploy` menu first [offer to take the identity](#the-offer-inside-dwe-deploy-dwe-run-and-dwe-restart) |
 | `dwe render env`, `dwe render config` | **Fail** naming the value that would have been written |
 | `dwe render ide` / `ai` / `git` | Work — they render against a sanitized config and emit the marker |
 

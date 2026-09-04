@@ -72,10 +72,13 @@ generated from commit subjects and stay on the
   the one this project uses; the content of a file that does not parse is never
   echoed. `remove` deletes the file named by its argument, refuses the file that
   HOLDS the current project's identity without `--force` (the guard reads the
-  file, not its name), and needs `--yes` wherever it cannot ask. Both run outside a
+  file, not its name) — and, for the same reason, refuses a file whose bytes it
+  cannot read at all, since deleting one needs no read permission on it — and
+  needs `--yes` wherever it cannot ask. Both run outside a
   project (the directory is not project-scoped) and neither is reachable from a
   bridged container. New error codes: `secrets_key_in_use`,
-  `secrets_key_not_found`, `secrets_confirmation_required`,
+  `secrets_key_unreadable`, `secrets_key_not_found`,
+  `secrets_confirmation_required`,
   `secrets_recipient_invalid`, `secrets_key_list_failed`,
   `secrets_key_remove_failed`.
 - **`dwe secrets key import` asks for the identity** when it runs at a terminal
@@ -100,7 +103,8 @@ generated from commit subjects and stay on the
   window in which the wizard proceeds with unresolved state). `dwe restart`
   offers **before it stops anything**, so declining leaves the stack running,
   and declining anywhere ends the command with `secrets_no_identity` and the
-  fix instruction. Nothing changes without a terminal, with `--yes`, with
+  fix instruction. Nothing changes without a terminal, with `--yes` (which only
+  `dwe run` and `dwe restart` define), with
   `--output json` or under `DWE_NONINTERACTIVE=1`: the `secrets.unresolved`
   preflight wall fires exactly as before, so CI output and exit codes are
   untouched. `dwe deploy run`, `dwe reset` and `dwe render env` / `config`
@@ -118,7 +122,10 @@ generated from commit subjects and stay on the
   live key sits below a commented-out old one, and one that did not now does: a
   keyfile whose lines a paste joined into one (`# public key: age1…
   AGE-SECRET-KEY-1…`, previously read as a comment and skipped) parses, because
-  when every token sits inside a comment the whole text is scanned instead. A
+  when every token sits inside a comment the whole text is scanned instead —
+  unless a live line carries a damaged `AGE-SECRET-KEY-1…`, in which case the
+  fallback is suppressed so a commented-out old key cannot answer for it and
+  turn a truncation into `wrong_identity`. A
   later token is still ignored rather than an error. Text that holds no token is the new
   `ErrInvalidIdentity` — surfaced as `invalid_identity`, not `corrupt`.
 - **Without a usable identity a project still loads**, but surfaces degrade

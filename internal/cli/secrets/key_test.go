@@ -1059,6 +1059,42 @@ func TestKeyRemove_DanglingSymlink(t *testing.T) {
 	}
 }
 
+// TestKeyRemove_UnreadableNeedsForce pins the one shape the content guard
+// cannot answer. os.Remove needs no read permission on the file, so a keyfile
+// whose bytes are unreachable would otherwise be unlinked without anyone having
+// ruled out that it holds live key material — the single irreversible outcome
+// this command has. `--force` still gets through, which is what keeps keygate's
+// "remove it and import the right one" prescription usable.
+func TestKeyRemove_UnreadableNeedsForce(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits are not enforced")
+	}
+	isolateHome(t)
+	flags := &cmdctx.RootFlags{}
+	foreign := foreignIdentity(t)
+	path := writeKeyfile(t, foreign.Recipient()+".key", foreign.Export()+"\n", 0o000)
+	t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+	forbidConfirm(t)
+
+	_, _, err := runSecrets(t, flags, "key", "remove", foreign.Recipient(), "--yes")
+	if err == nil {
+		t.Fatal("an unreadable keyfile was removed without --force")
+	}
+	if coded := codedError(t, err); coded.Code != "secrets_key_unreadable" {
+		t.Errorf("code = %q, want secrets_key_unreadable", coded.Code)
+	}
+	if _, serr := os.Lstat(path); serr != nil {
+		t.Fatalf("the refused removal deleted the file anyway: %v", serr)
+	}
+
+	if _, _, ferr := runSecrets(t, flags, "key", "remove", foreign.Recipient(), "--yes", "--force"); ferr != nil {
+		t.Fatalf("secrets key remove --force over an unreadable keyfile: %v", ferr)
+	}
+	if _, serr := os.Lstat(path); !os.IsNotExist(serr) {
+		t.Errorf("the forced removal left the file behind: %v", serr)
+	}
+}
+
 // TestKeyRemove_NoConfirmationInNonInteractiveModes pins R3.2 for this command:
 // every mode that cannot ask refuses instead of deleting, and the file stays.
 func TestKeyRemove_NoConfirmationInNonInteractiveModes(t *testing.T) {
