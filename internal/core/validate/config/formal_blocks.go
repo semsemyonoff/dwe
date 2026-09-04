@@ -33,6 +33,7 @@ var formalBlockStructs = map[string]reflect.Type{
 	"update":  reflect.TypeFor[config.UpdateConfig](),
 	"bridge":  reflect.TypeFor[config.BridgeConfig](),
 	"stop":    reflect.TypeFor[config.StopConfig](),
+	"secrets": reflect.TypeFor[config.SecretsConfig](),
 }
 
 // formalBlockFields is the block → known-nested-keys index, derived once from

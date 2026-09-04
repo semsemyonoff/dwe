@@ -114,7 +114,9 @@ func TestExecCommandAction_UserInvokedPropagates(t *testing.T) {
 		{parallel: false, want: true},
 		{parallel: true, want: false},
 	} {
-		captured = runtime.RunContext{}
+		// Seed the opposite of what the row expects, so a row can never pass
+		// because the command was not dispatched at all.
+		captured = runtime.RunContext{UserInvoked: !tc.want}
 		actx := ActionContext{
 			WorkDir:     t.TempDir(),
 			Cfg:         cfg,

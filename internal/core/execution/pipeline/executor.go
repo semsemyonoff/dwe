@@ -1131,28 +1131,36 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 }
 
 // FormatCondition returns a short human-readable form of a typed condition for display.
+//
+// DISPLAY ONLY, and REDACTED: conditions are rendered at resolve time, so Cmd
+// and Expr carry substituted ${vars.*} values — secrets included. Every caller
+// prints the result (plan printers, skip reasons, the trace decision line); the
+// one non-print consumer, Recorder.OnStepSkip's reason, never persists it, so
+// journal bytes and the deployment hash are unaffected.
 func FormatCondition(c *condition.Condition) string {
 	if c == nil {
 		return ""
 	}
 	switch c.Type {
 	case condition.TypeBuiltin:
-		return "builtin " + c.Cmd
+		return trace.Redact("builtin " + c.Cmd)
 	case condition.TypeShell:
-		return "shell " + c.Cmd
+		return trace.Redact("shell " + c.Cmd)
 	case condition.TypeTemplate:
-		return "template " + c.Expr
+		return trace.Redact("template " + c.Expr)
 	default:
 		return string(c.Type)
 	}
 }
 
-// FormatAction returns a short human-readable form of a typed action for display.
+// FormatAction returns a short human-readable form of a typed action for
+// display. DISPLAY ONLY, and REDACTED, for the same reason as FormatCondition:
+// its sole caller is ResolvedStep.DisplayCheck, which feeds plan output.
 func FormatAction(a *config.Action) string {
 	if a == nil {
 		return ""
 	}
-	return a.Type + " " + a.Cmd
+	return trace.Redact(a.Type + " " + a.Cmd)
 }
 
 // FormatRequireSpec returns a human-readable form of a RequireSpec.

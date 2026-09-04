@@ -209,7 +209,7 @@ Full write-up: [`docs/reference/concepts/project-layout.md`](docs/reference/conc
 Reference documentation lives under `docs/reference/` and is also embedded in the binary. Browse it offline with `dwe docs` (interactive TUI) or `dwe docs show <topic>` (plain text).
 
 - [Concepts](docs/reference/concepts/index.md) — high-level orientation: getting started, architecture, project layout, Docker integration, Git integration, pipelines, state and locks.
-- [Configuration](docs/reference/config/index.md) — field-level reference for `workspace.yml`, services, commands, deploy/reset/lifecycle pipelines, snapshot, info, validate, setup, styles, UI, state, i18n, notifications, docker.
+- [Configuration](docs/reference/config/index.md) — field-level reference for `workspace.yml`, services, commands, vars, encrypted secrets, deploy/reset/lifecycle pipelines, snapshot, info, validate, setup, styles, UI, state, i18n, notifications, docker.
 - [Render packs](docs/reference/render/index.md) — `dwe render env / ide / ai / git / config` — manifest schema, collision policies, local overrides.
 - [Documentation subsystem](docs/reference/docs/index.md) — the `dwe docs` browser, non-interactive subcommands, translations, content-hash staleness.
 - [Templates](docs/reference/templates.md) — the shared template engine: `{{ ... }}` vs `${ ... }`, sprout registries, render context per site.

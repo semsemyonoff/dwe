@@ -214,8 +214,7 @@ func TestCreate_OverwriteWithoutYesRefuses(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected cancellation error on second create")
 	}
-	var cancelled *CreateCancelledError
-	if !errors.As(err, &cancelled) {
+	if _, ok := errors.AsType[*CreateCancelledError](err); !ok {
 		t.Errorf("err = %T %v, want *CreateCancelledError", err, err)
 	}
 }

@@ -249,8 +249,7 @@ func TestRestore_ConfigHashDivergedBlocksWhenRequired(t *testing.T) {
 		SkipConfirm: true,
 		Stderr:      &errBuf,
 	})
-	var blocked *RestoreBlockedError
-	if !errors.As(err, &blocked) {
+	if _, ok := errors.AsType[*RestoreBlockedError](err); !ok {
 		t.Fatalf("err = %v, want RestoreBlockedError", err)
 	}
 	// Current pointer must NOT have been updated by the blocked restore.
@@ -549,8 +548,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 			})
 
 			if tc.wantBlocked {
-				var sme *ServicesMismatchError
-				if !errors.As(err, &sme) {
+				if _, ok := errors.AsType[*ServicesMismatchError](err); !ok {
 					t.Fatalf("err = %v, want ServicesMismatchError", err)
 				}
 				// No side effect on workspace/local.yml.
@@ -622,8 +620,7 @@ func TestRestore_RejectedConfirmDoesNotTouchLocalYml(t *testing.T) {
 			return false, nil
 		},
 	})
-	var cancelled *RestoreCancelledError
-	if !errors.As(err, &cancelled) {
+	if _, ok := errors.AsType[*RestoreCancelledError](err); !ok {
 		t.Fatalf("err = %v, want RestoreCancelledError", err)
 	}
 	body, _ := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))

@@ -186,6 +186,8 @@ func buildVarsBrowserItems(cfg *config.DweConfig, flags *cmdctx.RootFlags) ([]cm
 // initial projection and the post-edit in-place row refresh (newVarsEditSpec).
 func buildVarBrowserItem(cfg *config.DweConfig, flags *cmdctx.RootFlags, layers []config.Layer, localPath string, inspectCache map[string]*uirender.VarInspect, path string) cmdbrowser.Item {
 	value, _ := varsusage.ResolveVar(cfg, path)
+	badge, encrypted := leafBadge(layers, cfg.SecretsState, localPath, path)
+	state := cfg.SecretsState
 	return cmdbrowser.Item{
 		// ID drives the namespace tree for DISPLAY; the `vars.` prefix is
 		// stripped here (redundant under `dwe vars`). Resolution/editing uses the
@@ -193,9 +195,9 @@ func buildVarBrowserItem(cfg *config.DweConfig, flags *cmdctx.RootFlags, layers 
 		// path is preserved where it matters.
 		ID:          uirender.DisplayVarPath(path),
 		Description: inlineBrowserValue(value),
-		Type:        layerBadge(layers, localPath, path),
+		Type:        uirender.VarLayerBadge(badge, encrypted),
 		Inspect: func(width int) string {
-			return renderVarInspectCached(flags, inspectCache, path, width)
+			return renderVarInspectCached(flags, state, inspectCache, path, width)
 		},
 	}
 }
@@ -203,7 +205,8 @@ func buildVarBrowserItem(cfg *config.DweConfig, flags *cmdctx.RootFlags, layers 
 // inlineBrowserValue renders a leaf value on a single line for the browser row
 // description: scalars verbatim, composites flattened to space-separated YAML.
 func inlineBrowserValue(value any) string {
-	rendered, err := uirender.VarValue(value)
+	masked, _ := uirender.MaskSecretValue(value)
+	rendered, err := uirender.VarValue(masked)
 	if err != nil {
 		return ""
 	}
@@ -215,10 +218,10 @@ func inlineBrowserValue(value any) string {
 // in cache, keyed by path) and re-wrapping only the width-dependent
 // VarInspectView per call. A resolution failure caches a nil entry so a broken
 // layer set is not re-read on every resize; the overlay shows a placeholder.
-func renderVarInspectCached(flags *cmdctx.RootFlags, cache map[string]*uirender.VarInspect, path string, width int) string {
+func renderVarInspectCached(flags *cmdctx.RootFlags, state config.SecretsState, cache map[string]*uirender.VarInspect, path string, width int) string {
 	inspect, ok := cache[path]
 	if !ok {
-		inspect = resolveVarInspect(flags, path)
+		inspect = resolveVarInspect(flags, state, path)
 		cache[path] = inspect // may be nil (resolution failed) — cache the miss too
 	}
 	if inspect == nil {
@@ -230,7 +233,7 @@ func renderVarInspectCached(flags *cmdctx.RootFlags, cache map[string]*uirender.
 // resolveVarInspect performs the width-independent resolution + usage scan for
 // a single var, reusing the same resolution + scan as `vars inspect`. Returns
 // nil on a layer-resolution failure.
-func resolveVarInspect(flags *cmdctx.RootFlags, path string) *uirender.VarInspect {
+func resolveVarInspect(flags *cmdctx.RootFlags, state config.SecretsState, path string) *uirender.VarInspect {
 	layered, err := config.ResolveLayeredPath(flags.ConfigPath, path)
 	if err != nil {
 		return nil
@@ -245,6 +248,7 @@ func resolveVarInspect(flags *cmdctx.RootFlags, path string) *uirender.VarInspec
 		Current:   layered.Current,
 		CurrentOK: layered.CurrentOK,
 		Origin:    originDisplay(flags, layered.Origin),
+		Secret:    secretNote(state, layered.Origin, path),
 		Usages:    scan.Usages,
 	}
 }

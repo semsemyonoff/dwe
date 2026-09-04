@@ -13,6 +13,7 @@ What a typical DWE project looks like on disk: the tracked config tree under `wo
 - [Service sources (`services/`)](#service-sources-services)
 - [Runtime-managed `.dwe/`](#runtime-managed-dwe)
 - [Tracked-by-git summary](#tracked-by-git-summary)
+- [Outside the project: `~/.config/dwe/`](#outside-the-project-configdwe)
 - [Where to go next](#where-to-go-next)
 
 ## The shape of a project
@@ -79,7 +80,7 @@ Folder names other than `workspace.yml` and `workspace/` are conventions, not re
 
 | File | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
-| `workspace.yml` | Project identity: `project.name`, `project.prefix` | CLI on every invocation | Author manually | yes |
+| `workspace.yml` | Project identity: `project.name`, `project.prefix`, and the `secrets:` recipient | CLI on every invocation | Author manually (`secrets.recipient` by `dwe secrets init` / `rekey`) | yes |
 | `.gitignore` | Hides `.dwe/`, `/services/`, `snapshots/`, `backups/`, and `workspace/local.yml` from version control | git | Author manually | yes |
 | `README.md` | Project-specific entry point (not the DWE CLI README) | humans | Author manually | yes |
 
@@ -244,6 +245,19 @@ workspace/docker.local.yml
 ```
 
 Everything else — `workspace.yml`, the rest of `workspace/` (including the `workspace/templates/config/` packs), all of `compose/` — is tracked. Authors edit the tracked tree; the CLI writes only inside the gitignored folders (with one exception: the setup wizard and `dwe services enable/disable` append to `workspace/local.yml`, which is itself gitignored).
+
+Values in the tracked tree may be **encrypted at rest** — an `ENC[age:…]` scalar in any layer file, or a whole `*.age` source under `workspace/templates/config/`. Those are committed on purpose; only the private key that opens them stays outside the repository. See [Outside the project: `~/.config/dwe/`](#outside-the-project-configdwe) and [`secrets.md`](../config/secrets.md).
+
+## Outside the project: `~/.config/dwe/`
+
+Two things live in the user's config directory rather than in the project, because they are per-machine and must never be committed:
+
+| Path | Purpose | Tracked |
+|------|---------|---------|
+| `~/.config/dwe/config` | User-level preferences (flat `key = value`, not YAML): binary overrides, language, mermaid theme — see [User config](../config/userconfig.md) | never |
+| `~/.config/dwe/keys/<recipient>.key` | The private age identity for one project, `0600`. The directory is `0700`. Written by `dwe secrets init` / `key import` / `rekey` | never |
+
+A keyfile is named after the **public recipient** it belongs to, so one machine can hold identities for any number of projects side by side. `DWE_AGE_KEY` (the identity text) and `DWE_AGE_KEY_FILE` (a path) override the keyfile lookup for CI. See [`secrets.md` → Keys](../config/secrets.md#keys-where-the-identity-lives).
 
 ## Where to go next
 

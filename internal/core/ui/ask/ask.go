@@ -29,6 +29,9 @@ const (
 	FieldMultiselect
 	// FieldConfirm is a yes/no confirmation field.
 	FieldConfirm
+	// FieldPassword is a free-text input field that echoes a mask instead of
+	// the typed characters. Behaves exactly like FieldInput otherwise.
+	FieldPassword
 )
 
 // Option represents a single choice in a select or multiselect field.
@@ -42,7 +45,7 @@ type Field struct {
 	Key         string             // field key, used in Result
 	Title       string             // prompt title
 	Description string             // additional help text
-	Kind        FieldKind          // field type (input/select/multiselect/confirm)
+	Kind        FieldKind          // field type (input/password/select/multiselect/confirm)
 	Required    bool               // if true, huh validates non-empty on submit
 	Default     string             // prefilled value (scalar); for multiselect this is the joined default
 	Defaults    []string           // pre-selected values (multiselect only)
@@ -50,6 +53,8 @@ type Field struct {
 	Validate    func(string) error // optional per-field validation; for multiselect, called per-item
 	Height      int                // select/multiselect viewport height; 0 = unset (huh default)
 	Filterable  *bool              // FieldMultiselect only (huh/v2 Select has no Filterable); nil = huh default
+	Affirmative string             // FieldConfirm only: yes-button label; "" = huh default
+	Negative    string             // FieldConfirm only: no-button label; "" = huh default
 }
 
 // Result is the form output. Values are typed: string for input/select,
@@ -257,7 +262,9 @@ func detectKinds(fields []Field) presentKinds {
 	var p presentKinds
 	for _, f := range fields {
 		switch f.Kind {
-		case FieldInput:
+		case FieldInput, FieldPassword:
+			// A password field is an input field that hides its echo: it owns
+			// the same keymap slots, so it drives the same hijacks.
 			p.input = true
 		case FieldSelect:
 			p.selectKind = true
@@ -328,13 +335,17 @@ func buildHuhField(f Field, hasQuit bool) (huh.Field, fieldBinding, error) {
 	}
 
 	switch f.Kind {
-	case FieldInput:
+	case FieldInput, FieldPassword:
 		val := f.Default
 		field := huh.NewInput().
 			Key(f.Key).
 			Title(f.Title).
 			Description(f.Description).
 			Value(&val)
+
+		if f.Kind == FieldPassword {
+			field = field.EchoMode(huh.EchoModePassword)
+		}
 
 		if hasQuit {
 			// Enable suggestions so huh.Input.KeyBinds() exposes the
@@ -457,6 +468,15 @@ func buildHuhField(f Field, hasQuit bool) (huh.Field, fieldBinding, error) {
 			Title(f.Title).
 			Description(f.Description).
 			Value(&val)
+
+		// Empty labels are left alone rather than set to "", so every existing
+		// FieldConfirm site keeps huh's own Yes/No buttons byte-identically.
+		if f.Affirmative != "" {
+			field = field.Affirmative(f.Affirmative)
+		}
+		if f.Negative != "" {
+			field = field.Negative(f.Negative)
+		}
 
 		if f.Validate != nil {
 			field = field.Validate(func(b bool) error {

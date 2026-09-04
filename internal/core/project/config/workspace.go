@@ -21,6 +21,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"gopkg.in/yaml.v3"
 )
@@ -50,6 +51,7 @@ var allowedRootKeys = []string{
 	"update",
 	"bridge",
 	"stop",
+	"secrets",
 }
 
 // allowedRootKeySet is the membership index over allowedRootKeys.
@@ -146,6 +148,18 @@ type DweConfig struct {
 	// author sets it in workspace.yml and a developer overrides in local.yml.
 	// See StopConfig and StopPortReleaseTimeout.
 	Stop *StopConfig `yaml:"stop"`
+
+	// Secrets is the formalized top-level encrypted-secrets block. It carries
+	// the project's committed age recipient (public key); the matching private
+	// identity never lives in the repository and is never carried on the
+	// config. Legal in workspace.yml only — see validateSecretsBlock.
+	Secrets *SecretsConfig `yaml:"secrets"`
+
+	// SecretsState reports what the load-time decrypt pass did: the recipient
+	// in force, where the identity came from, and which markers resolved or did
+	// not. Populated by LoadConfig; empty after LoadConfigSanitized (which does
+	// not decrypt at all). Not part of the file format.
+	SecretsState SecretsState `yaml:"-"`
 
 	// Vars is the single legal home for arbitrary, free-form project values.
 	// The root of the merged config is strict (see allowedRootKeys), but the
@@ -1625,11 +1639,42 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 // the prefix stays consistent. Use this instead of hand-wrapping; the typed
 // project_invalid_config contract (cmdctx.ErrWrap) is a separate path.
 func LoadConfigOrWrap(workspacePath string) (*DweConfig, error) {
-	cfg, err := LoadConfig(workspacePath)
+	return wrapConfigLoad(LoadConfig(workspacePath))
+}
+
+// LoadConfigSanitizedOrWrap is LoadConfigSanitized behind LoadConfigOrWrap's
+// canonical "loading config: %w" prefix. CLI sites that render tracked outputs
+// (render ide / ai / git) use this one.
+func LoadConfigSanitizedOrWrap(workspacePath string) (*DweConfig, error) {
+	return wrapConfigLoad(LoadConfigSanitized(workspacePath))
+}
+
+func wrapConfigLoad(cfg *DweConfig, err error) (*DweConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 	return cfg, nil
+}
+
+// LoadConfigSanitized assembles the config exactly as LoadConfig does but over
+// the RAW layers: no decrypt pass at all, and nothing registered with the trace
+// redactor. Every field a template can reach (Raw, Vars, Project, Runtime,
+// Services, ServiceCfg) therefore carries the ENC[age:…] marker where the real
+// config carries plaintext.
+//
+// This is what the ide / ai / git render commands and their dry-run validators
+// load, because those packs write git-TRACKED outputs: a template that reads a
+// secret emits the already-committed ciphertext, never the plaintext. The
+// config-pack renderer (gitignored hub dir) keeps the real config.
+//
+// cfg.SecretsState is empty on purpose — nothing was decrypted, so there is no
+// resolution to report.
+func LoadConfigSanitized(workspacePath string) (*DweConfig, error) {
+	layers, err := LoadRawLayers(workspacePath)
+	if err != nil {
+		return nil, err
+	}
+	return assembleConfig(workspacePath, layers, SecretsState{})
 }
 
 // LoadConfig loads the merged DweConfig by layering:
@@ -1648,17 +1693,55 @@ func LoadConfigOrWrap(workspacePath string) (*DweConfig, error) {
 //  3. Merge the raw YAML layers.
 //  4. Resolve per-service Enabled from the merged overlay.
 //  5. Inject services into Raw for dot-path resolution.
+//
+// Encrypted scalars (ENC[age:…] markers) are decrypted in memory before the
+// merge, so every consumer of the merged config — ${vars.*}, exports.env, dwe
+// vars, the deployment hash — sees plaintext and needs no crypto awareness. A
+// marker that cannot be decrypted stays literal and is reported in
+// cfg.SecretsState; the secrets.unresolved validator blocks the commands that
+// would act on it.
 func LoadConfig(workspacePath string) (*DweConfig, error) {
-	baseDir := filepath.Dir(workspacePath)
-
 	// Read each layer separately so the cross-layer overlay validator can
-	// attribute errors to a specific source file. LoadLayers is the shared
-	// loader (also used by ResolveLayeredPath for `dwe vars inspect`), so the two
-	// cannot drift on file set / optional handling / error wording.
-	configLayers, err := LoadLayers(workspacePath)
+	// attribute errors to a specific source file. LoadLayersWithSecrets is the
+	// shared loader (LoadLayers, used by ResolveLayeredPath for `dwe vars
+	// inspect`, wraps it), so the two cannot drift on file set / optional
+	// handling / error wording / decryption.
+	configLayers, state, err := LoadLayersWithSecrets(workspacePath)
 	if err != nil {
 		return nil, err
 	}
+	// Harvest the plaintexts BEFORE assembleConfig: deepMerge stores the first
+	// layer's nested maps into the merged map by reference and then mutates them
+	// in place while merging the higher layers, so afterwards a lower layer's
+	// decrypted scalar reads back as whatever shadowed it. Registering that
+	// would redact an unrelated override value everywhere and leave the secret
+	// itself unregistered.
+	redactValues := collectDecryptedValues(configLayers, state)
+	cfg, err := assembleConfig(workspacePath, configLayers, state)
+	if err != nil {
+		return nil, err
+	}
+	// Decision 10: LoadConfig is the SINGLE installer of the trace redactor.
+	// ~60 call sites load the config and the root PersistentPreRunE does not,
+	// so registering here is what makes `dwe … -v` echo *** instead of a
+	// decrypted value regardless of which command ran. LoadConfigSanitized
+	// registers nothing — it never held plaintext.
+	registerSecretRedaction(redactValues)
+	return cfg, nil
+}
+
+// registerSecretRedaction feeds every decrypted plaintext to the process-global
+// trace redactor. Values shorter than secrets.MinRedactRunes are dropped by the
+// redactor itself.
+func registerSecretRedaction(values []string) {
+	if len(values) > 0 {
+		trace.RegisterRedaction(values)
+	}
+}
+
+func assembleConfig(workspacePath string, configLayers []Layer, state SecretsState) (*DweConfig, error) {
+	baseDir := filepath.Dir(workspacePath)
+
 	type rawLayer struct {
 		path string
 		data map[string]any
@@ -1717,6 +1800,7 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
+	cfg.SecretsState = state
 
 	// Strict root + legacy-block rejection, iterated per layer so the error names
 	// the source file. Shared with ResolveLayeredPath (dwe vars inspect) via

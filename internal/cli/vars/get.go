@@ -8,10 +8,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// varGetJSON is the JSON shape for `dwe vars get --output json`.
+// varGetJSON is the JSON shape for `dwe vars get --output json`. Encrypted is
+// omitted unless the value (or, for a namespace, something inside it) is an
+// undecrypted secret shown as <encrypted>.
 type varGetJSON struct {
-	Var   string `json:"var"`
-	Value any    `json:"value"`
+	Var       string `json:"var"`
+	Value     any    `json:"value"`
+	Encrypted bool   `json:"encrypted,omitempty"`
 }
 
 func newVarsGetCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -51,12 +54,16 @@ The vars. prefix is optional: "db.host" and "vars.db.host" are equivalent.`,
 			if !ok {
 				return notFoundError(path)
 			}
+			// An undecrypted secret prints as <encrypted> rather than as its
+			// marker — a leaf directly, a namespace subtree leaf by leaf. Exit
+			// stays 0: not having the key is a state, not a failure.
+			value, encrypted := uirender.MaskSecretValue(value)
 			if _, rerr := uirender.VarValue(value); rerr != nil && flags.Output != "json" {
 				// Composite marshal failure is vanishingly unlikely for a
 				// yaml-decoded value; surface it rather than print nothing.
 				return cmdctx.ErrWrap("internal_error", rerr)
 			}
-			data := varGetJSON{Var: path, Value: value}
+			data := varGetJSON{Var: path, Value: value, Encrypted: encrypted}
 			return cmdctx.WriteData(flags, cmd, data, func(varGetJSON) string {
 				styled, _ := uirender.VarValueStyled(value)
 				return styled

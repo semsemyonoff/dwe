@@ -101,7 +101,7 @@ func probeWith(bin, workDir string, fetch bool, r runner) (Status, error) {
 
 	// 5. Fetch (if requested and upstream exists).
 	if fetch && s.HasUpstream {
-		remote := strings.SplitN(s.Upstream, "/", 2)[0]
+		remote, _, _ := strings.Cut(s.Upstream, "/")
 		fetchCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
 		defer cancel()
 		_, stderr, ferr := r.Run(fetchCtx, workDir, bin, "fetch", "--quiet", remote)

@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ 8c99c0ff9230
+> Translated from: reference/config/index.md @ 802db2a005da
 
 # Справочник конфигурации
 
@@ -18,7 +18,7 @@
 
 | Файл | Трекается | Загрузчик | Назначение |
 |------|-----------|-----------|------------|
-| `workspace.yml` | да | слой 1 | Идентификация проекта и структура сервисов |
+| `workspace.yml` | да | слой 1 | Идентификация проекта, структура сервисов и recipient блока `secrets:` |
 | `workspace/defaults.yml` | да | слой 2 | Версионированные значения по умолчанию: runtime, экспорты, переключатели enabled сервисов |
 | `workspace/local.yml` | нет (gitignored) | слой 3 | Переопределения на пользователя: состояние, переключатели enabled сервисов |
 | `workspace/services/<name>/service.yml` | да | отдельный | Декларация сервиса (dirs, cli, configs, порты) |
@@ -104,6 +104,7 @@ flowchart LR
 
 - [workspace / defaults / local](workspace.md) — трёхслойный смерженный конфиг: порядок слияния, приоритет, разрешение dot-путей, справочник полей
 - [vars](vars.md) — команда `dwe vars`: перечисление/чтение/редактирование/трассировка песочницы `vars:`, запись с сохранением комментариев, статическое сканирование использований, allowlist контейнерной записи `bridge.vars_writable`
+- [secrets](secrets.md) — зашифрованные at rest значения, закоммиченные в репозиторий: recipient блока `secrets:`, маркеры `ENC[age:…]`, источники паков `.age`, ключи и переменные окружения, подкоманды `dwe secrets`, защита рендеров и preflight
 - [services/<name>/service.yml](services/index.md) — декларации сервисов, extends, dirs, cli-конфиг
 - [deploy.yml / reset.yml](deploy/index.md) — deploy- и reset-пайплайны, шаги, билтины, file-логирование, идемпотентный деплой
 - [state.yml](state/index.md) — отслеживание состояния деплоя, таблица skip-решений, хэширование, lock-файл, восстановление после падений
@@ -124,6 +125,7 @@ flowchart LR
 
 ## Связанные команды
 
+- `dwe secrets status` — сообщает про каждое зашифрованное значение и можно ли его прочитать здесь
 - `dwe render env` — генерирует `.env` из правил экспорта смерженного конфига
 - `dwe render ide` — генерирует IDE-конфиги
 - `dwe render ai` — генерирует hub-level AGENTS.md и симлинки CLAUDE.md

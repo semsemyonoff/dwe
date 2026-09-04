@@ -151,6 +151,10 @@ func TestCompileVarSyntax_knownHeadsCompile(t *testing.T) {
 		"${vars.x}":                  `{{ resolve .Raw "vars.x" }}`,
 		"${services.app.ports.http}": `{{ resolve .Raw "services.app.ports.http" }}`,
 		"${project.name}":            `{{ resolve .Raw "project.name" }}`,
+		// secrets: is a formalized root key, so it resolves from Raw like any
+		// other — harmless (the recipient is public) but it must not survive
+		// as a literal, which would silently print "${secrets.recipient}".
+		"${secrets.recipient}": `{{ resolve .Raw "secrets.recipient" }}`,
 	}
 	for in, want := range cases {
 		if got := CompileVarSyntax(in); got != want {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/hostid"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
 // HostUID returns the UID to use for container builds.
@@ -39,7 +40,12 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 		"UID":     HostUID(),
 		"GID":     HostGID(),
 	}
+	// System-value sources, for the undecrypted-secret guard below.
+	systemSources := map[string]string{"PROJECT": "project.name"}
 	for _, name := range config.ReservedExportNames {
+		if err := checkValue(name, systemSources[name], systemValues[name]); err != nil {
+			return "", err
+		}
 		fmt.Fprintf(&b, "%s=%s\n", name, systemValues[name])
 	}
 
@@ -62,12 +68,18 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 		// falsy (false, 0) so that TOOL_FOO=false and PORT=0 are emitted correctly.
 		// For string format, an empty resolved value falls back to default.
 		value := rule.Default
+		source := "the rule default"
 		if v, ok := config.ResolvePath(cfg.Raw, rule.From); ok {
 			if rule.Format == "bool" || rule.Format == "int" || IsTruthy(v) {
 				value = FormatValue(v, rule.Format)
+				source = rule.From
 			}
 		} else if rule.Required && value == "" {
 			return "", fmt.Errorf("export %q: required path %q not found in config", rule.Name, rule.From)
+		}
+
+		if err := checkValue("exports.env["+rule.Name+"]", source, value); err != nil {
+			return "", err
 		}
 
 		if rule.Comment != "" {
@@ -77,6 +89,61 @@ func BuildContent(cfg *config.DweConfig) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+// checkValue runs every guard a value must clear before it is written to the
+// .env file as a bare `NAME=value` line.
+func checkValue(label, source, value string) error {
+	if err := checkNotMarker(label, source, value); err != nil {
+		return err
+	}
+	return checkSingleLine(label, source, value)
+}
+
+// checkSingleLine refuses a value carrying a line break.
+//
+// Values are written unquoted and unescaped, so the second and later lines of a
+// multi-line value are parsed by compose as further `.env` entries: the value
+// is silently truncated to its first line, and a line that happens to look like
+// `NAME=…` injects a variable nobody declared. Multi-line material is exactly
+// what `dwe secrets set --stdin` accepts (a PEM key, a service-account blob),
+// which makes the silent truncation likeliest on the values that can least
+// afford it.
+//
+// Refuse rather than quote: the .env dialect compose accepts is narrower than
+// the shell's, and a credential that half-survives an escaping scheme is worse
+// than one that fails loudly at render time.
+func checkSingleLine(label, source, value string) error {
+	if !strings.ContainsAny(value, "\n\r") {
+		return nil
+	}
+	if source == "" {
+		source = "the config"
+	}
+	return fmt.Errorf("%s: value at %s spans multiple lines, which the .env format cannot represent — "+
+		"deliver multi-line material through a config-pack file instead of exports.env", label, source)
+}
+
+// checkNotMarker refuses a value that is still an undecrypted secret marker.
+//
+// The .env file is the one plaintext sink the container reads, and neither
+// `dwe render env` nor the auto-regeneration sites run preflight (dwe run even
+// renders .env *before* its preflight), so the guard lives here: a missing
+// identity must never silently publish ciphertext as if it were the
+// credential.
+//
+// ContainsMarker, not IsMarker — matching the sibling guard in
+// execution/templates/config. A rule whose from: resolves to a map or a
+// sequence is formatted with %v, so an unresolved marker arrives embedded in
+// `map[password:ENC[age:…]]` and an exact-match test would wave it through.
+func checkNotMarker(label, source, value string) error {
+	if !secrets.ContainsMarker(value) {
+		return nil
+	}
+	if source == "" {
+		source = "the config"
+	}
+	return fmt.Errorf("%s: value at %s is an undecrypted secret — see 'dwe secrets status'", label, source)
 }
 
 // IsTruthy returns whether v represents a truthy config value.

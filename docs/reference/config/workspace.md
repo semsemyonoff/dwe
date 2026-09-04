@@ -11,6 +11,7 @@ The three layers of the merged DWE config.
 - [Strict root + the `vars:` sandbox](#strict-root--the-vars-sandbox)
 - [workspace.yml](#workspaceyml)
   - [Field reference](#field-reference)
+  - [The `secrets:` block](#the-secrets-block)
   - [The `update:` block](#the-update-block)
   - [The `stop:` block](#the-stop-block)
 - [Recommended file-layout convention](#recommended-file-layout-convention)
@@ -62,6 +63,8 @@ The three files share a single namespace — the same key in different layers is
 | Active state | `local.yml` |
 | Service port / host values | [`workspace/services/<name>/service.yml`](services/index.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
 | Personal credentials (`vars.db.user`, `vars.db.password`) | `local.yml` |
+| Team-shared credentials (a bot token, a service-account JSON) | `defaults.yml`, encrypted — see [`secrets.md`](secrets.md) |
+| The project's age recipient (`secrets.recipient`) | `workspace.yml` only — rejected with an error in all other layers |
 | Enabling debug / optional services | `local.yml` |
 | Per-developer Docker Compose overlay files (`compose.extra`) | `local.yml` only — rejected with an error in all other layers |
 | Wizard-generated configuration | `local.yml` (written by `dwe deploy` when answering setup questions or port conflicts) |
@@ -98,7 +101,7 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop
+project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
@@ -133,6 +136,8 @@ vars:
 `vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`.
 
 The [`dwe vars`](vars.md) command enumerates, reads, edits, and traces every value under this block — see [`vars.md`](vars.md) for the subcommands, the author/local/effective layer model, comment-preserving `local.yml` writes, the static usage scan, and the `bridge.vars_writable` container-write allowlist.
+
+A `vars.*` value may also be an **encrypted `ENC[age:…]` marker** committed to a tracked layer, decrypted in memory at load time. That is how a team-shared credential lives in git without sitting there in the open; see [`secrets.md`](secrets.md).
 
 ### `bridge.vars_writable` — container-write allowlist
 
@@ -179,6 +184,23 @@ project:
 | `project.prefix` | string | Prefix for Docker project name and container labels |
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
+
+### The `secrets:` block
+
+The optional top-level `secrets:` block declares the project's public age recipient — the key that `ENC[age:…]` markers and `*.age` config-pack sources are encrypted to.
+
+```yaml
+secrets:
+  recipient: age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `secrets.recipient` | string | The project's public age recipient (`age1…`), written by `dwe secrets init`. Commit it. |
+
+Unlike every other formalized block, `secrets:` is legal in **`workspace.yml` only**. Declaring it in `defaults.yml` or `local.yml` is a hard load error naming the file: a per-developer recipient would silently split the team into groups that cannot read each other's secrets. A `secrets:` value that is not a mapping, or a `recipient` that is not a valid `age1…`, is likewise a load error.
+
+The matching private identity is never in git — it lives in `~/.config/dwe/keys/<recipient>.key` or in `DWE_AGE_KEY` / `DWE_AGE_KEY_FILE`. Encryption needs only the recipient, so anyone with the repository can add a secret; reading one back needs the identity. See [`secrets.md`](secrets.md) for the full model and the `dwe secrets` command surface.
 
 ### The `update:` block
 
@@ -353,6 +375,10 @@ exports:
 
 These are managed by the CLI; do not redeclare them as export rules.
 
+#### Single-line values only
+
+Values are written unquoted, so a resolved value containing a line break cannot be represented: compose would parse the second and later lines as further `.env` entries, truncating the value and possibly defining variables nobody declared. `dwe render env` refuses such a value and names the rule and its source path. Deliver multi-line material — a PEM key, a service-account JSON — through a [`render config`](../render/config.md) pack file instead, which has no such constraint and which [encrypted secrets](secrets.md) support natively via `*.age` sources.
+
 ### `compose`
 
 Compose file configuration used by the Docker control plane.
@@ -483,6 +509,7 @@ Commits made inside the `dev` container now use the developer's project-specific
 
 ## Related commands
 
+- `dwe secrets status` — report every encrypted value in the layers and whether it can be read here
 - `dwe render env --out .env` — regenerate `.env` from the merged config
 - `dwe render ide` / `dwe render ai` / `dwe render git` — pack-based renderers; see [render reference](../render/index.md)
 - `dwe info` — show dashboard (uses merged config + `info.yml`)

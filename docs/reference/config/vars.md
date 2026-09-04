@@ -15,6 +15,7 @@ enumerate, read, edit, and trace those values.
   - [`dwe vars inspect`](#dwe-vars-inspect)
   - [`dwe vars set`](#dwe-vars-set)
   - [`dwe vars` (no args) — TUI browser](#dwe-vars-no-args--tui-browser)
+- [Encrypted values](#encrypted-values)
 - [Output is not redacted](#output-is-not-redacted)
 - [Comment-preserving `local.yml` writes](#comment-preserving-localyml-writes)
 - [The static usage scan](#the-static-usage-scan)
@@ -174,6 +175,57 @@ In a **non-interactive** context — no TTY, `DWE_NONINTERACTIVE=1`, or running
 inside a container — the bare command falls back to `dwe vars list`. A namespace
 argument (`dwe vars vars.db`) also lists rather than browsing.
 
+## Encrypted values
+
+A `vars.*` value in a **tracked** layer may be an encrypted `ENC[age:…]` marker
+rather than plaintext — that is how a team-shared credential lives in git. The
+config loader decrypts markers in memory, so a machine that holds the project
+identity sees ordinary plaintext everywhere in `dwe vars` and nothing below
+applies. See [`secrets.md`](secrets.md) for the full model.
+
+When a value **cannot** be decrypted here (no identity, the wrong one, or a
+damaged payload), `dwe vars` shows `<encrypted>` — never the ciphertext:
+
+- **`list`** renders `<encrypted>` for the value and appends ` (encrypted)` to
+  the layer badge. The JSON entry gains `"encrypted": true` (omitted otherwise,
+  so output for a project without secrets is byte-identical to before). The
+  JSON `layer` field stays clean (`local` / `default`) — the suffix is display,
+  `encrypted` is the machine answer.
+- **`get`** on a leaf prints `<encrypted>` and exits 0; on a **namespace** it
+  prints the subtree with every unresolved marker replaced recursively, in both
+  text and JSON.
+- **`inspect`** masks *every* per-layer field (default / local / current, text
+  and JSON) that holds an unresolved marker, and adds a `secret:` line naming
+  the identity source or the reason there is none.
+- The **TUI browser** shows the same placeholder and badge, and its edit form
+  never offers a marker as an editable-looking current value.
+
+The flag is derived from the **origin** layer, not from "any layer": a
+`defaults.yml` marker overridden by a plaintext `local.yml` value renders the
+plaintext, and a `local.yml` marker over a plaintext default renders
+`<encrypted>`.
+
+### `vars set` vs `secrets set`
+
+| | [`dwe vars set`](#dwe-vars-set) | [`dwe secrets set`](secrets.md#dwe-secrets-set) |
+|---|---|---|
+| Writes to | `workspace/local.yml` (gitignored) | `workspace/defaults.yml` or `workspace.yml` (tracked) |
+| Stored as | plaintext | `ENC[age:…]` marker |
+| Coercion | YAML scalar (`true` → bool, `42` → int) | none — always a string |
+| `vars.` prefix | optional | required |
+| Needs | nothing | the project's recipient |
+
+`vars set` keeps writing plaintext, and a `local.yml` plaintext value **wins**
+over an encrypted default. When the path you are setting shadows a marker in a
+lower layer, `set` prints one note to stderr (suppressed in JSON mode):
+
+```text
+note: vars.telegram.token is an encrypted secret in workspace/defaults.yml; this plaintext override wins locally
+```
+
+That is a legitimate thing to do — a developer pointing at their own bot token
+— but it is worth knowing you have stopped reading the shared value.
+
 ## Output is not redacted
 
 `dwe vars list`, `get`, and `inspect` print effective values **verbatim** —
@@ -188,13 +240,24 @@ the values travel, so that is the thing to watch: prefer `dwe vars get <path>`
 over a full `list` before pasting into an AI-agent session, a screenshot, or a
 demo.
 
+The one placeholder in this output is **not** masking: `<encrypted>` means the
+value could not be decrypted on this machine, so there is no plaintext to print.
+A decrypted secret prints in full like any other value.
+
 ## Comment-preserving `local.yml` writes
 
 `dwe vars set` writes `workspace/local.yml` through a `yaml.Node` round-trip:
 load the file as a node tree, patch only the targeted path, and re-serialize.
-Comments, blank lines, and key ordering are preserved; only the edited value
-node changes. Coercion is honoured at the node level — overwriting a quoted
-string with `true`/`42` emits a **bare** scalar so it reloads typed.
+Comments and key ordering are preserved; only the edited value node changes.
+Coercion is honoured at the node level — overwriting a quoted string with
+`true`/`42` emits a **bare** scalar so it reloads typed.
+
+Blank lines are **not** preserved: the document is re-encoded, and the YAML
+library keeps blank lines only inside comment blocks, so an edit may also
+re-indent the file to its own indent step. That is acceptable for `local.yml`,
+which is gitignored developer state. `dwe secrets set` / `init` / `rekey` write
+tracked layer files and therefore use a different, line-splicing writer that
+does preserve blank lines — see [`secrets.md`](secrets.md#subcommands).
 
 This writer backs **`dwe vars set`**, **`dwe services enable/disable`**, and
 the **setup wizard**, so comments in `local.yml` survive every DWE-driven edit.
@@ -244,14 +307,18 @@ stderr.
 
 | Command | Shape |
 |---------|-------|
-| `get` | `{"var": "...", "value": <any>}` |
-| `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local\|default"}]}` |
-| `inspect` | `{"var": "...", "layers": {"default": <any>, "default_set": <bool>, "local": ..., "local_set": ..., "current": ..., "current_set": ...}, "origin": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
+| `get` | `{"var": "...", "value": <any>, "encrypted": <bool>}` |
+| `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local\|default", "encrypted": <bool>}]}` |
+| `inspect` | `{"var": "...", "layers": {"default": <any>, "default_set": <bool>, "local": ..., "local_set": ..., "current": ..., "current_set": ...}, "origin": "...", "encrypted": <bool>, "secret": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
 | `set` (with value) | `{"var": "...", "value": <any>}` |
 
 The `*_set` booleans on `inspect` layers distinguish an explicit `null` value
 from an absent layer. `set` with no value in JSON mode is the
 `vars_value_required` error (no form).
+
+`encrypted` and `secret` are `omitempty`: a project with no encrypted values
+emits exactly the fields it did before — see
+[Encrypted values](#encrypted-values).
 
 ## Container behavior and `bridge.vars_writable`
 
@@ -322,5 +389,7 @@ read-only render crosses the boundary.
 - `dwe vars list [namespace]` — enumerate `vars.*` leaves
 - `dwe vars inspect <var>` — per-layer values, origin, and usages
 - `dwe vars set <var> [value]` — write a `local.yml` override (comment-preserving)
+- `dwe secrets set <vars.path> [value]` — write an **encrypted** value into a tracked layer ([`secrets.md`](secrets.md))
+- `dwe secrets status` — report every encrypted value and whether it can be read here
 - `dwe render env` / `dwe render config` — regenerate `.env` / service configs from the merged config
 - `dwe services enable` / `disable` — service toggles (comment-preserving)

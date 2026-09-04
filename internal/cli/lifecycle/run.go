@@ -51,6 +51,9 @@ Use 'dwe docker up' for a bare Docker Compose start without hooks or the update 
 				SkipPreflight: skipPreflight,
 				SkipNotify:    silent,
 				ErrOut:        cmd.ErrOrStderr(),
+				OutputJSON:    flags.Output == "json",
+				KeyPrompt:     keyPrompt(cmd),
+				KeyConfirm:    keyConfirm(cmd),
 				Translator:    flags.I18n,
 				Locale:        flags.Locale,
 				OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {

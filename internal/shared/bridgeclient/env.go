@@ -86,6 +86,13 @@ func CallingService() string {
 // EnvNestedRuntime joins for a different reason: a container that inherited
 // (or forged) the marker must not make the host-side dwe treat a bridged
 // user invocation as nested and drop its TTY.
+//
+// The two age-identity variables join for a third: DWE_AGE_KEY carries an
+// identity as text and DWE_AGE_KEY_FILE names a HOST path the forked dwe
+// reads and parses as one, so a forwarded value would let a container choose
+// which host file is opened (and see the parse outcome). The daemon drops the
+// client values and re-supplies its own from hostIdentityEnvNames, so a host
+// running with an env-only identity keeps working over the bridge.
 var strippedEnvNames = map[string]struct{}{
 	"DWE_BRIDGE_DIR":          {},
 	"DWE_HOST_WORKSPACE":      {},
@@ -93,6 +100,10 @@ var strippedEnvNames = map[string]struct{}{
 	"DWE_BRIDGE_PROJECT":      {},
 	"DWE_BRIDGE_UNREACHABLE":  {},
 	EnvNestedRuntime:          {},
+	// Names duplicated from internal/shared/secrets on purpose: this leaf must
+	// stay free of the age dependency the shim would otherwise link in.
+	"DWE_AGE_KEY":      {},
+	"DWE_AGE_KEY_FILE": {},
 }
 
 // strippedEnvPrefix removes DWE_PROJECT_ROOT and any DWE_PROJECT_ROOT* variant

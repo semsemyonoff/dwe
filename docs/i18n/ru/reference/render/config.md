@@ -1,4 +1,4 @@
-> Translated from: reference/render/config.md @ 244885828488
+> Translated from: reference/render/config.md @ cf52454e7bd0
 
 # `render config`
 
@@ -17,6 +17,7 @@
 - [Собирать, а не выпускать](#harvest-not-mint)
 - [Разрешение пакета шаблонов](#template-pack-resolution)
 - [Схема manifest](#manifest-schema)
+- [Зашифрованные источники `.age`](#зашифрованные-источники-age)
 - [Использование CLI](#cli-usage)
 - [Builtin-ы конвейера](#pipeline-builtins)
 - [Поток деплоя](#deploy-flow)
@@ -211,6 +212,55 @@ render:
 безопасностью путей — `to`, который выходит за hub-каталог или разрешается вне него через симлинк,
 отвергается.
 
+## Зашифрованные источники `.age`
+
+Источник пака, чей `from:` заканчивается на **`.age`**, — это нативный
+зашифрованный [age](https://age-encryption.org)-файл, закоммиченный в
+репозиторий. `render config` расшифровывает его identity проекта и затем
+выполняет обычный рендер `${...}` по открытому тексту:
+
+```yaml
+# workspace/templates/config/bot/manifest.yml
+render:
+  - from: google-credentials.json.age
+    to:   config/google-credentials.json
+```
+
+Создать такой файл можно командой
+[`dwe secrets encrypt`](../config/secrets.md#dwe-secrets-encrypt--decrypt);
+`dwe secrets status` сообщает, читается ли каждый источник `.age` на этой
+машине.
+
+Что важно знать:
+
+- **`to:` никогда не выводится из источника.** Автор пишет
+  `from: creds.json.age`, `to: src/creds.json` — суффикс `.age` не снимается
+  автоматически, поэтому вывод называется так, как ожидает сервис.
+- **Identity загружается один раз на рендер** и только когда в манифесте реально
+  есть запись `.age` — пак без зашифрованных источников вообще не трогает
+  `~/.config`.
+- **Выводы с источником `.age` пишутся с правами `0600`** и явно `chmod`-ятся,
+  поэтому существующая цель `0644` ужимается. Остальные выводы сохраняют `0644`.
+  Контейнер спокойно читает файл `0600`, потому что работает под тем же
+  UID/GID хоста, который `exports.env` уже публикует.
+- **Отсутствующий или не тот identity — жёсткая ошибка** с именем исходного
+  файла и подсказкой (`dwe secrets key import`). Источник `.age` при полностью
+  ненастроенном `secrets.recipient` указывает на `dwe secrets init`.
+
+### Защита от маркера
+
+Независимо от файлов `.age`, в вывод пака может попасть и **скалярный** секрет,
+подставленный через `${vars.*}`. `render config` не запускает preflight, поэтому
+соблюдает политику сам: если отрендеренный вывод всё ещё содержит маркер
+`ENC[age:…]` — то есть подстановка `${...}` разрешилась в нерасшифрованное
+значение, — рендер **падает** с именем пути `to:` записи и указанием на
+`dwe secrets status`. Шифротекст никогда не попадает в hub-директорию, где
+контейнер прочитал бы его как учётные данные.
+
+Скалярный секрет, который *расшифровался*, подставляется штатно и попадает в
+hub-директорию из gitignore с обычными правами пака `0644`. См.
+[`secrets.md` → Куда попадает открытый текст](../config/secrets.md#куда-попадает-открытый-текст).
+
 ## Использование CLI
 
 ```bash
@@ -361,5 +411,6 @@ builtin-ы `service_configs_copy` / `service_configs_check`) продолжае�
 - [deploy builtins](../config/deploy/builtins.md) — `service_configs_render`, `service_configs_render_check`, `service_generated_harvest`
 - [conditions](../config/conditions.md) — предикат `generated-missing`
 - [render index](index.md) — общая схема manifest, локальные оверрайды, разрешение пакета
+- [secrets](../config/secrets.md) — источники `.age`, маркеры `ENC[age:…]`, ключи и поверхность команды `dwe secrets`
 - [Шаблоны](../templates.md) — синтаксис Go-шаблонов и render-контексты
 - Запустите `dwe render config --help`, чтобы увидеть актуальный CLI-интерфейс

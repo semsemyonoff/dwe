@@ -27,6 +27,12 @@ Two files are read in this precedence order (lower → higher), then env vars on
 
 3. **Environment variables** override both files.
 
+The same `~/.config/dwe/` directory also holds `keys/<recipient>.key` — the
+private age identity for one project, mode `0600` in a `0700` directory,
+written by `dwe secrets init` / `key import` / `rekey` and overridable with
+`DWE_AGE_KEY` / `DWE_AGE_KEY_FILE`. It is not part of this file's schema; see
+[secrets](secrets.md#keys-where-the-identity-lives).
+
 A parser error in either file bubbles up as a warning (notifications get disabled for that run, locale and theme fall back to defaults). The operation itself is never blocked by a malformed user config.
 
 ## Syntax

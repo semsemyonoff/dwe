@@ -266,7 +266,7 @@ func (v *writesScopeValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			continue
 		}
 
-		root := strings.SplitN(q.Writes, ".", 2)[0]
+		root, _, _ := strings.Cut(q.Writes, ".")
 		for _, forbidden := range forbiddenRoots {
 			if root == forbidden {
 				diags = append(diags, v.makeError(

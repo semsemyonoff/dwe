@@ -591,6 +591,37 @@ func TestSubprocessEnv(t *testing.T) {
 	}
 }
 
+func TestSubprocessEnv_AgeIdentityIsDaemonOwned(t *testing.T) {
+	t.Setenv("PATH", "/host/usr/bin")
+	stubDaemonEnviron(t,
+		"DWE_AGE_KEY=AGE-SECRET-KEY-1HOST", // the daemon's own env-only identity
+	)
+
+	in := []string{
+		"DWE_AGE_KEY=AGE-SECRET-KEY-1CONTAINER",  // forged identity — dropped
+		"DWE_AGE_KEY_FILE=/workspace/chosen.key", // host-file steering — dropped, daemon has none
+		"DWE_BRIDGE_SERVICE=main",                // host-consumed, still forwarded
+		"TERM=xterm",
+	}
+	want := []string{
+		"DWE_BRIDGE_SERVICE=main",
+		"TERM=xterm",
+		"DWE_AGE_KEY=AGE-SECRET-KEY-1HOST",
+		"PATH=/host/usr/bin",
+		"DWE_INVOKED_FROM=container",
+		"DWE_NONINTERACTIVE=1",
+	}
+	got := subprocessEnv(in)
+	if !slices.Equal(got, want) {
+		t.Errorf("subprocessEnv = %v, want %v", got, want)
+	}
+	for _, kv := range got {
+		if strings.Contains(kv, "CONTAINER") || strings.Contains(kv, "chosen.key") {
+			t.Errorf("client-sent age identity survived: %q", kv)
+		}
+	}
+}
+
 // slashNote is the fallback note resolveCwd emits for "/": on unix it is an
 // absolute path outside the root; on Windows filepath.IsAbs("/") is false
 // (rooted but drive-relative), so the absoluteness gate fires first. Either
