@@ -39,11 +39,17 @@ type keyExportJSON struct {
 // project it opened. The two counters carry no omitempty: zero readable values
 // after a successful import is information (the surface is encrypted to
 // somebody else), not an absent field.
+//
+// They are pointers so that a scan which never ran is distinguishable from one
+// that found nothing — a hard zero there would report "your key opens nothing"
+// for an unreadable templates tree, which is the opposite of what happened.
+// ReportError carries that reason; it is never the import's own outcome.
 type keyImportJSON struct {
 	Recipient       string `json:"recipient"`
 	Keyfile         string `json:"keyfile"`
-	MarkersReadable int    `json:"markers_readable"`
-	FilesReadable   int    `json:"files_readable"`
+	MarkersReadable *int   `json:"markers_readable,omitempty"`
+	FilesReadable   *int   `json:"files_readable,omitempty"`
+	ReportError     string `json:"report_error,omitempty"`
 }
 
 func newKeyCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -175,15 +181,24 @@ func runKeyImport(cmd *cobra.Command, flags *cmdctx.RootFlags, file string) erro
 	}
 
 	data := keyImportJSON{Recipient: recipient, Keyfile: keyfile}
-	// A failed scan is not a failed import: the key is stored and usable, so the
-	// report degrades to zeroes rather than turning a success into an error.
+	// A failed scan is not a failed import: the key is stored and usable, and a
+	// non-zero exit here would describe a keyfile that IS on disk — one an
+	// O_EXCL retry then refuses to write. So the command still succeeds, but the
+	// report says it could not be built instead of counting zero.
 	if inv, ierr := keygate.Inventory(flags.ProjectRoot(), layers, keygate.LoadIdentitySet(recipient)); ierr == nil {
-		data.MarkersReadable, data.FilesReadable = inv.Readable()
+		markers, files := inv.Readable()
+		data.MarkersReadable, data.FilesReadable = &markers, &files
+	} else {
+		data.ReportError = ierr.Error()
 	}
 
 	return cmdctx.WriteData(flags, cmd, data, func(d keyImportJSON) string {
-		return fmt.Sprintf("identity for %s stored at %s\n%d encrypted value(s) and %d .age file(s) are now readable",
-			d.Recipient, d.Keyfile, d.MarkersReadable, d.FilesReadable)
+		stored := fmt.Sprintf("identity for %s stored at %s", d.Recipient, d.Keyfile)
+		if d.MarkersReadable == nil || d.FilesReadable == nil {
+			return stored + "\nthe readability report could not be built: " + d.ReportError
+		}
+		return fmt.Sprintf("%s\n%d encrypted value(s) and %d .age file(s) are now readable",
+			stored, *d.MarkersReadable, *d.FilesReadable)
 	})
 }
 

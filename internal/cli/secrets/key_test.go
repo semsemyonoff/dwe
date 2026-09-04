@@ -489,15 +489,62 @@ func TestKeyImport_ReportCounts(t *testing.T) {
 	if e := json.Unmarshal([]byte(out), &data); e != nil {
 		t.Fatalf("unmarshal import json: %v\nraw: %s", e, out)
 	}
-	want := keyImportJSON{Recipient: recipient, Keyfile: keyfile, MarkersReadable: 2, FilesReadable: 1}
-	if data != want {
-		t.Errorf("json = %+v, want %+v", data, want)
+	if data.Recipient != recipient || data.Keyfile != keyfile || data.ReportError != "" {
+		t.Errorf("json = %+v, want recipient %q at %q with no report error", data, recipient, keyfile)
 	}
-	// The counters carry no omitempty: a zero must still be a present field.
+	if data.MarkersReadable == nil || *data.MarkersReadable != 2 ||
+		data.FilesReadable == nil || *data.FilesReadable != 1 {
+		t.Errorf("readable counters = %v/%v, want 2/1", data.MarkersReadable, data.FilesReadable)
+	}
+	// A scan that ran reports its counters: a zero is a present field, and only
+	// a scan that never ran omits them.
 	for _, key := range []string{`"markers_readable"`, `"files_readable"`} {
 		if !strings.Contains(out, key) {
 			t.Errorf("json %s is missing %s", out, key)
 		}
+	}
+}
+
+// TestKeyImport_UnscannableSurface pins the honest degradation: the import
+// still succeeds — the keyfile IS on disk, and an O_EXCL retry would refuse —
+// but a scan that could not run says so instead of counting zero, which would
+// read as "your key opens nothing".
+func TestKeyImport_UnscannableSurface(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits are not enforced")
+	}
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	packs := filepath.Join(root, "workspace", "templates", "config")
+	if err := os.MkdirAll(packs, 0o755); err != nil {
+		t.Fatalf("creating pack dir: %v", err)
+	}
+	if err := os.Chmod(packs, 0o000); err != nil {
+		t.Fatalf("locking pack dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(packs, 0o755) })
+
+	exported, keyfile := secondMachine(t, recipient)
+	identityFile := filepath.Join(t.TempDir(), "identity.txt")
+	if err := os.WriteFile(identityFile, []byte(exported), 0o600); err != nil {
+		t.Fatalf("writing identity file: %v", err)
+	}
+
+	out, _, err := runSecrets(t, flags, "key", "import", "--file", identityFile)
+	if err != nil {
+		t.Fatalf("secrets key import over an unscannable pack tree: %v", err)
+	}
+	if _, serr := os.Stat(keyfile); serr != nil {
+		t.Fatalf("the identity was not stored: %v", serr)
+	}
+	if !strings.Contains(out, "the readability report could not be built") {
+		t.Errorf("output does not report the failed scan:\n%s", out)
+	}
+	if strings.Contains(out, "are now readable") {
+		t.Errorf("a scan that never ran was reported as a count:\n%s", out)
 	}
 }
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ fba4866e82a7
+> Translated from: reference/config/secrets.md @ 94d195c3c0f9
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -880,7 +880,7 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |
 | `key export` | `{"recipient": "age1…", "identity": "AGE-SECRET-KEY-1…"}` |
-| `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "markers_readable": N, "files_readable": N}` |
+| `key import` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "markers_readable": N, "files_readable": N}` — если инвентарь не удалось просканировать, вместо двух счётчиков приходит `report_error` |
 | `key list` | `{"keys": [{"recipient": "age1…", "file": "/…/age1….key", "state": "ok\|unreadable\|unparsable\|misnamed", "current": true}]}` |
 | `key remove` | `{"recipient": "age1…", "keyfile": "/…/age1….key", "removed": true}` |
 | `rekey` | `{"old_recipient": "age1…", "recipient": "age1…", "keyfile": "…", "markers": N, "layers": ["…"], "files": ["…"]}` |

@@ -88,7 +88,10 @@ generated from commit subjects and stay on the
   installed is reported **before** the form opens rather than after the key was
   typed. A successful import now ends with what the key opened: a second line
   `N encrypted value(s) and M .age file(s) are now readable`, and
-  `markers_readable` / `files_readable` in `--output json`. The first output
+  `markers_readable` / `files_readable` in `--output json` — replaced by a
+  `report_error` when the encrypted surface could not be scanned at all, since
+  the import itself still succeeded and a hard zero there would read as "your
+  key opens nothing". The first output
   line and the pre-existing JSON fields are unchanged, `--file` and piped
   imports behave exactly as before, and the prompt never opens without a
   terminal, under `--output json` or under `DWE_NONINTERACTIVE=1`. Cancelling
