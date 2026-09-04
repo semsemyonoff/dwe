@@ -41,7 +41,6 @@ var allowedRootKeys = []string{
 	"schema_version",
 	"project",
 	"runtime",
-	"state",
 	"exports",
 	"compose",
 	"ui",
@@ -117,7 +116,6 @@ func MmdcBin(cfg *DweConfig) string { return binOverride(cfg, "mmdc", "mmdc") }
 type DweConfig struct {
 	Project ProjectConfig        `yaml:"project"`
 	Runtime RuntimeConfig        `yaml:"runtime"`
-	State   string               `yaml:"state"`
 	Exports ExportsConfig        `yaml:"exports"`
 	Compose ComposeConfig        `yaml:"compose"`
 	Deploy  *ProjectDeployConfig `yaml:"-"`
@@ -2107,7 +2105,7 @@ func validateOverlayCompose(layerPath, svcName string, raw any) error {
 
 // validateLocalCompose validates the SHAPE of `raw["compose"]` in
 // workspace/local.yml. It does NOT whitelist other top-level keys: local.yml
-// legitimately carries `state:`, `runtime:`, etc. so rejecting unknown
+// legitimately carries `runtime:`, `vars:`, etc. so rejecting unknown
 // top-level keys would break existing files. Under `compose` it accepts only
 // `extra: [<string>, ...]` — `compose.base` belongs in workspace.yml and
 // must not be overridden per-developer.

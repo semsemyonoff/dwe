@@ -377,17 +377,17 @@ get the qualification.
 - Modify: `internal/core/validate/config/template_refs.go`
 - Modify: `internal/core/validate/config/template_refs_test.go`
 
-- [ ] remove `"state"` from `allowedRootKeys` (`workspace.go:44`), the
+- [x] remove `"state"` from `allowedRootKeys` (`workspace.go:44`), the
       `State string` field (`:120`) and the mention in the `validateLocalCompose`
       godoc (`:2110`)
-- [ ] `template_refs.go:25,55`: the validator's doc comment uses `${state}`
+- [x] `template_refs.go:25,55`: the validator's doc comment uses `${state}`
       as its head-only example — switch the example to `${update}` / `${host}`
       so the comment does not name a removed key
-- [ ] remove `"state"` from `tpl.KnownVarHeads` (`render_command.go:138`);
+- [x] remove `"state"` from `tpl.KnownVarHeads` (`render_command.go:138`);
       keep `TestAllowedRootKeysSubsetOfKnownVarHeads` green
-- [ ] drop the `state` line from `render.Summary` (`summary.go:19-22`) and
+- [x] drop the `state` line from `render.Summary` (`summary.go:19-22`) and
       its godoc; the summary now starts at the counts line
-- [ ] update fixtures: `workspace_test.go:104,121,281,362,3774` (`state: ""`
+- [x] update fixtures: `workspace_test.go:104,121,281,362,3774` (`state: ""`
       lines), `:321,346-348` and `:721,727-729` (layer-precedence cases —
       switch to another scalar root key such as `runtime.*` or drop the case
       if it only proved `state`), `:812-813` (`ResolvePath` — use a different
@@ -400,12 +400,12 @@ get the qualification.
       `state` → `item`; `${item}` is then filtered by `IsAllowedRootKey`, not
       the head-only rule, so keep `${vars}` and `${stop}` on the same line —
       they are what still exercise the head-only assertion)
-- [ ] add a test asserting that `state: x` in any layer fails `LoadConfig`
+- [x] add a test asserting that `state: x` in any layer fails `LoadConfig`
       with the strict-root error naming the file (table over
       `workspace.yml` / `defaults.yml` / `local.yml`)
-- [ ] update `summary_test.go` (`:30,34,43-45,147,152`) — remove the
+- [x] update `summary_test.go` (`:30,34,43-45,147,152`) — remove the
       `State: "running"` fixtures and the "label absent when empty" case
-- [ ] run `go test ./internal/core/project/config/... ./internal/shared/tpl/... ./internal/core/ui/render/... ./internal/core/validate/...` — must pass before Task 2
+- [x] run `go test ./internal/core/project/config/... ./internal/shared/tpl/... ./internal/core/ui/render/... ./internal/core/validate/...` — must pass before Task 2
 
 ### Task 2: `state:` — scaffold, docs, changelog; commit 1
 

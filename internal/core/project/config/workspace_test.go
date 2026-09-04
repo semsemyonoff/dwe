@@ -101,7 +101,6 @@ runtime:
   use_https: false
   spx:
     path: ""
-state: ""
 `
 
 // sampleDefaultsYML enables redis_insight and mailpit; disables adminer.
@@ -118,7 +117,6 @@ runtime:
   use_https: false
   spx:
     path: ""
-state: ""
 `
 
 // writeServicesDir creates per-folder service files under <baseDir>/workspace/services/
@@ -278,7 +276,6 @@ runtime:
     mailpit: mail.localhost
   spx:
     path: ""
-state: ""
 `
 
 func TestLoadDweConfig(t *testing.T) {
@@ -318,7 +315,8 @@ func TestLoadConfig_mergesDefaultsAndUser(t *testing.T) {
 services:
   adminer:
     enabled: true
-state: staging
+runtime:
+  use_https: true
 `
 	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, userYML)
 	cfg, err := LoadConfig(path)
@@ -343,8 +341,8 @@ state: staging
 	if !cfg.Services["adminer"].Enabled {
 		t.Error("services.adminer.enabled should be true (overridden by user)")
 	}
-	if cfg.State != "staging" {
-		t.Errorf("state = %q, want staging (from user)", cfg.State)
+	if !cfg.Runtime.UseHTTPS {
+		t.Error("runtime.use_https should be true (overridden by user)")
 	}
 }
 
@@ -359,7 +357,6 @@ project:
   prefix: dwe
 runtime:
   use_https: false
-state: ""
 vars:
   db:
     user: root
@@ -444,6 +441,56 @@ func TestLoadConfig_strictRoot_unknownKeyRejected(t *testing.T) {
 				t.Errorf("error = %q, want layer file %q", err, tc.wantFile)
 			}
 		})
+	}
+}
+
+// TestLoadConfig_strictRoot_removedKeysRejected pins that keys dropped from
+// allowedRootKeys fall through to the generic strict-root error, in every
+// layer, naming the file. There is no deprecation branch: the removal IS the
+// migration message.
+func TestLoadConfig_strictRoot_removedKeysRejected(t *testing.T) {
+	removed := []struct {
+		key  string
+		body string
+	}{
+		{key: "state", body: "state: staging\n"},
+	}
+	layers := []struct {
+		name     string
+		wantFile string
+	}{
+		{name: "workspace.yml", wantFile: "workspace.yml"},
+		{name: "defaults.yml", wantFile: "defaults.yml"},
+		{name: "local.yml", wantFile: "local.yml"},
+	}
+	for _, rk := range removed {
+		for _, layer := range layers {
+			t.Run(rk.key+"/"+layer.name, func(t *testing.T) {
+				ws, defaults, lc := sampleWorkspaceYML, "", ""
+				switch layer.name {
+				case "workspace.yml":
+					ws = sampleWorkspaceYML + "\n" + rk.body
+				case "defaults.yml":
+					defaults = "schema_version: \"1\"\n" + rk.body
+				case "local.yml":
+					lc = rk.body
+				}
+				path := writeFullFixture(t, ws, defaults, lc, "", noToolsYML)
+				_, err := LoadConfig(path)
+				if err == nil {
+					t.Fatalf("expected error for removed root key %q", rk.key)
+				}
+				if !strings.Contains(err.Error(), "unknown top-level key") {
+					t.Errorf("error = %q, want 'unknown top-level key'", err)
+				}
+				if !strings.Contains(err.Error(), rk.key) {
+					t.Errorf("error = %q, want the key name %q", err, rk.key)
+				}
+				if !strings.Contains(err.Error(), layer.wantFile) {
+					t.Errorf("error = %q, want layer file %q", err, layer.wantFile)
+				}
+			})
+		}
 	}
 }
 
@@ -718,14 +765,17 @@ func TestLoadConfig_noOptionalFiles(t *testing.T) {
 func TestLoadConfig_noDefaultsFile(t *testing.T) {
 	// local.yml present, defaults.yml absent. Skip tools.yml to avoid requiring
 	// a runtime block solely to satisfy tool host/port validation.
-	userYML := `state: demo`
+	userYML := `
+runtime:
+  use_https: true
+`
 	path := writeFullFixture(t, sampleWorkspaceYML, "", userYML, "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if cfg.State != "demo" {
-		t.Errorf("state = %q, want demo", cfg.State)
+	if !cfg.Runtime.UseHTTPS {
+		t.Error("runtime.use_https should be true (from local.yml)")
 	}
 }
 
@@ -809,8 +859,8 @@ func TestDeepMerge_recursiveMaps(t *testing.T) {
 // --- ResolvePath ---
 
 func TestResolvePath_topLevel(t *testing.T) {
-	m := map[string]any{"state": "staging"}
-	v, ok := ResolvePath(m, "state")
+	m := map[string]any{"docs": "staging"}
+	v, ok := ResolvePath(m, "docs")
 	if !ok || v != "staging" {
 		t.Errorf("got %v, %v", v, ok)
 	}
@@ -2341,8 +2391,8 @@ exports:
     - name: APP_PORT
       from: services.app.ports.http
       format: int
-    - name: STATE
-      from: state
+    - name: APP_NAME
+      from: project.name
 `
 	path := writeLayeredFixture(t, sampleWorkspaceYML, defaultsWithExports, "")
 	cfg, err := LoadConfig(path)
@@ -3771,7 +3821,6 @@ runtime:
   use_https: false
   spx:
     path: ""
-state: ""
 compose:
   base: compose.yaml
 `

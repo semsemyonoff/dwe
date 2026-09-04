@@ -10,18 +10,14 @@ import (
 )
 
 // Summary returns a compact project summary string.
-// It shows the project name, state, and enabled service/tool counts.
+// It shows the enabled service/tool counts.
 // When deploySummary is provided, also shows deploy status (N/M deployed).
 // The returned string contains no trailing newline on the last line.
 func Summary(cfg *config.DweConfig, deploySummary *statusview.DeploySummary) string {
 	var lines []string
 
-	// Project identity now lives in the branded header (render.BrandHeader);
-	// the summary only carries state (when set) and counts.
-	if cfg.State != "" {
-		lines = append(lines, styles.MutedStyle().Render("state")+" "+styles.DefSep+" "+cfg.State)
-	}
-
+	// Project identity lives in the branded header (render.BrandHeader);
+	// the summary only carries counts.
 	// Service and tool counts, plus deploy status if available.
 	enabledSvcs, totalSvcs := countServices(cfg)
 	enabledTools := countTools(cfg)
