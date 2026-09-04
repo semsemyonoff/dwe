@@ -37,6 +37,9 @@ func TestDocsLlmsTxtCommand_Flags(t *testing.T) {
 	require.NotNil(t, cmd.Flag("lang"))
 	require.NotNil(t, cmd.Flag("include-internals"))
 	require.NotNil(t, cmd.Flag("no-project"))
+	// The point of the rename: a local `--output` here would shadow the root's
+	// and make `-o` unresolvable, so its absence is the assertion that matters.
+	require.Nil(t, cmd.Flags().Lookup("output"))
 }
 
 func TestDocsLlmsTxtCommand_NoProject_Stdout(t *testing.T) {

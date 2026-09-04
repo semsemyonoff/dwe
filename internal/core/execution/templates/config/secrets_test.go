@@ -197,6 +197,36 @@ func TestRenderConfigs_refusesToWriteMarker(t *testing.T) {
 	}
 }
 
+func TestRenderConfigs_ageSourceRenderErrorWithholdsPlaintext(t *testing.T) {
+	root := t.TempDir()
+	id := mustKeygen(t)
+	useIdentity(t, id)
+
+	// A stray `{{` survives CompileVarSyntax and fails template.Parse, whose
+	// error embeds the whole template text — here the decrypted credential.
+	const plaintext = "{\"token\":\"top-secret-plaintext\",\"bad\":\"{{\"}\n"
+	writePack(t, root, "default", "render:\n  - from: creds.json.age\n    to: src/creds.json\n", map[string]string{
+		"creds.json.age": mustEncryptFile(t, plaintext, id.Recipient()),
+	})
+
+	cfg := cfgWithRecipient("main", "services/main", map[string]any{}, id.Recipient())
+	_, err := RenderConfigs(root, cfg, "main", generatedstore.New())
+	if err == nil {
+		t.Fatal("expected a render error for an unparseable decrypted source")
+	}
+	if strings.Contains(err.Error(), "top-secret-plaintext") {
+		t.Errorf("error %q leaks the decrypted source", err)
+	}
+	for _, want := range []string{"creds.json.age", "the source is a secret"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "services", "main", "src", "creds.json")); statErr == nil {
+		t.Error("nothing must be written when the render fails")
+	}
+}
+
 func TestRenderConfigs_plainSourceKeepsMode(t *testing.T) {
 	root := t.TempDir()
 	writePack(t, root, "default", "render:\n  - from: env.tmpl\n    to: src/.env\n", map[string]string{

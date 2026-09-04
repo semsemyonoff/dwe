@@ -21,6 +21,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -743,16 +744,27 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 	_ = reg.ApplyVisibility(cfg, workDir)
 	// Single-step execution: no --yes flag, so confirm prompts are shown.
 	// UserInvoked is what separates this from the same step inside a pipeline:
-	// the user typed this one at a terminal and childIO hands it the real
-	// os.Stdout, so a `type: command` step pointing at an interactive
-	// service_exec (a psql, a tinker) must still get a container terminal.
+	// this command calls ExecAction directly with the real os.Stdout, so a
+	// `type: command` step pointing at an interactive service_exec (a psql, a
+	// tinker) must still get a container terminal.
+	//
+	// Derived, not hardcoded true: `dwe reset step` is a plain subcommand and is
+	// therefore reachable from a `type: dwe` step or a `type: shell` snippet
+	// calling back through DWE_BIN, where the surrounding pipeline has already
+	// marked the environment. There childIO hands us the PTY fabricated for the
+	// PARENT step, so a bare "the streams are terminals" answer is exactly the
+	// false positive runio.WantContainerTTY's UserInvoked gate exists to catch.
+	// Same shape as runbyid.go: read the marker, then set it so everything this
+	// command spawns re-enters as nested.
+	userInvoked := !bridgeclient.NestedRuntime()
+	bridgeclient.MarkNestedRuntime()
 	actx := pipeline.ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
 		Reg:         reg,
 		LogWriter:   nil,
 		SkipConfirm: false,
-		UserInvoked: true,
+		UserInvoked: userInvoked,
 	}
 
 	if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {

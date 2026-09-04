@@ -51,9 +51,101 @@ generated from commit subjects and stay on the
   (plus the Russian mirror), covering the model, the marker format, key
   locations, every command with its JSON shape, the render guards, where
   plaintext goes, `age` CLI interoperability and rekey recovery.
+- **An `.age` source the scan could not read reports the stable `unreadable`
+  reason**, with the cause (a symlink refusal, an OS error) moved into a new
+  `detail` field. `reason` is a closed vocabulary a script switches on, and
+  those two rows used to carry free-form text — an absolute path included.
+- **A `DWE_AGE_KEY_FILE` holding the identity TEXT instead of a path is
+  redacted** wherever the failure is worded. Its sibling `DWE_AGE_KEY` does
+  take the text, so the mixup is easy — and every message about the failed
+  read used to print the private key, `--output json` included.
+- **A damaged `*.age` pack source now reports as `corrupt` without a key.** The
+  identity-free header check the `ENC[age:…]` markers already had now covers
+  native pack sources too, so a truncated file no longer reads as
+  `no_identity` on a machine that has no identity — which sent the one reader
+  who could not have opened it anyway looking for a key.
+- **A broken identity source now reports as `invalid_identity`** instead of
+  `no_identity`, in `dwe secrets status`, `dwe validate secrets` and
+  `SecretsState`. A truncated `DWE_AGE_KEY` or a keyfile that lost its key line
+  is a source to repair, not a key to obtain, and the validator says which
+  source it is (`$DWE_AGE_KEY is set but holds no age identity`) from fixed
+  wording — the `age` parse error is never echoed, because its text repeats the
+  input's private-key bytes.
+- **`dwe secrets status` now says what is actually wrong with the identity.**
+  The header has four shapes instead of two: the source that supplied the key,
+  `none (looked at …)`, `invalid (…)` naming the source that is set but holds
+  no key, and `wrong recipient (…)` naming both recipients. Whenever the
+  identity did not load, the report closes with the fix instruction. In
+  `--output json`, `identity.source` is now the **consulted** source on failure
+  too (it used to go empty), and `identity` gained `reason` and `hint`; every
+  string is DWE-authored, never an `age` parse error.
+- **New `dwe secrets key list` and `dwe secrets key remove <recipient>`** for
+  the machine-wide keys directory. `list` reports every `~/.config/dwe/keys/*.key`
+  with a fixed state (`ok`, `unreadable`, `unparsable`, `misnamed`) and marks
+  the one this project uses; the content of a file that does not parse is never
+  echoed. `remove` deletes the file named by its argument, refuses the file that
+  HOLDS the current project's identity without `--force` (the guard reads the
+  file, not its name) — and, for the same reason, refuses a file whose bytes it
+  cannot read at all, since deleting one needs no read permission on it — and
+  needs `--yes` wherever it cannot ask. Both run outside a
+  project (the directory is not project-scoped) and neither is reachable from a
+  bridged container. New error codes: `secrets_key_in_use`,
+  `secrets_key_unreadable`, `secrets_key_not_found`,
+  `secrets_confirmation_required`,
+  `secrets_recipient_invalid`, `secrets_key_list_failed`,
+  `secrets_key_remove_failed`.
+- **`dwe secrets key import` asks for the identity** when it runs at a terminal
+  with no `--file` and nothing piped. The field is hidden and validates in
+  place, so a key that does not parse — or one belonging to another project —
+  is corrected without losing the form, and an identity that is already
+  installed is reported **before** the form opens rather than after the key was
+  typed. A successful import now ends with what the key opened: a second line
+  `N encrypted value(s) and M .age file(s) are now readable`, and
+  `markers_readable` / `files_readable` in `--output json` — replaced by a
+  `report_error` when the encrypted surface could not be scanned at all, since
+  the import itself still succeeded and a hard zero there would read as "your
+  key opens nothing" (the same line replaces the counts in the `dwe run` /
+  `dwe deploy` key offer). The first output
+  line and the pre-existing JSON fields are unchanged, `--file` and piped
+  imports behave exactly as before, and the prompt never opens without a
+  terminal, under `--output json` or under `DWE_NONINTERACTIVE=1`. Cancelling
+  it is the new `secrets_import_cancelled`.
+- **`dwe run`, `dwe restart` and the `dwe deploy` menu now offer to take the
+  missing identity** instead of only reporting that it is missing — the
+  new-machine path no longer requires knowing `dwe secrets key import` by
+  heart. The offer appears when the project has encrypted material, no usable
+  identity and a human at a terminal; accepting opens the same hidden prompt
+  and the command **continues in the same invocation** (the gate runs on the
+  raw config layers before the config is loaded, so there is no reload and no
+  window in which the wizard proceeds with unresolved state). `dwe restart`
+  offers **before it stops anything**, so declining leaves the stack running,
+  and declining ends the command with the fix instruction — typed
+  `secrets_no_identity` in the `dwe deploy` menu, the same sentence untyped in
+  `dwe run` / `dwe restart` — without ever reaching preflight. Nothing changes without a terminal, with `--yes` (which only
+  `dwe run` and `dwe restart` define), with
+  `--output json` or under `DWE_NONINTERACTIVE=1`: the `secrets.unresolved`
+  preflight wall fires exactly as before, so CI output and exit codes are
+  untouched. `dwe deploy run`, `dwe reset` and `dwe render env` / `config`
+  keep their hard error and hint. A `DWE_AGE_KEY` / `DWE_AGE_KEY_FILE` that is
+  set but does not hold the project's identity is **reported, never
+  prompted** — the lookup takes the first present source with no fall-through,
+  so an imported keyfile would not even be consulted; the message names the
+  variable to repair, and never its value.
 
 ### Changed
 
+- **An age identity is now read as the first `AGE-SECRET-KEY-1…` token on a
+  non-comment line**, instead of the first line that is neither blank nor a `#`
+  comment. Every shape that worked before still works, including a file whose
+  live key sits below a commented-out old one, and one that did not now does: a
+  keyfile whose lines a paste joined into one (`# public key: age1…
+  AGE-SECRET-KEY-1…`, previously read as a comment and skipped) parses, because
+  when every token sits inside a comment the whole text is scanned instead —
+  unless a live line carries a damaged `AGE-SECRET-KEY-1…`, in which case the
+  fallback is suppressed so a commented-out old key cannot answer for it and
+  turn a truncation into `wrong_identity`. A
+  later token is still ignored rather than an error. Text that holds no token is the new
+  `ErrInvalidIdentity` — surfaced as `invalid_identity`, not `corrupt`.
 - **Without a usable identity a project still loads**, but surfaces degrade
   explicitly rather than silently: `dwe vars list` / `get` / `inspect` and the
   vars TUI render `<encrypted>` instead of the ciphertext (`vars list`,
@@ -118,6 +210,12 @@ generated from commit subjects and stay on the
   declared. Multi-line material — a PEM key, a service-account blob, exactly
   what `dwe secrets set --stdin` accepts — belongs in a `render config` pack
   file, not in `exports.env`.
+- **`dwe prompt` no longer paints an `ENC[age:…]` marker into the shell
+  prompt.** The prompt hot path reads a `workspace.yml` stub and never loads
+  the full config, so it cannot decrypt: an encrypted `project.name` now falls
+  back to the directory name, and an encrypted `project.prefix` or `name` falls
+  back to the display name when building the compose label filter, instead of
+  building one that matches no container and reporting the stack as stopped.
 
 
 - **Breaking:** container commands now decide three runtime defaults themselves

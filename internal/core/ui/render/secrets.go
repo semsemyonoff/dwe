@@ -26,6 +26,7 @@ type SecretsFileRow struct {
 	File   string // relative to the project root
 	State  string
 	Reason string
+	Detail string // free-form cause behind a token reason; appended to the cell
 	OK     bool
 }
 
@@ -36,8 +37,31 @@ type SecretsFileRow struct {
 type SecretsStatusView struct {
 	Recipient string
 	Identity  string
-	Markers   []SecretsMarkerRow
-	Files     []SecretsFileRow
+	// IdentityHint is the fix instruction for an identity that did not load —
+	// the same sentence the validator prints. Empty when the identity is
+	// usable, and then no trailing line is rendered at all.
+	IdentityHint string
+	Markers      []SecretsMarkerRow
+	Files        []SecretsFileRow
+}
+
+// SecretsKeyRow is one *.key file in the keys directory as `dwe secrets key
+// list` reports it. State carries the CLI's fixed vocabulary verbatim ("ok",
+// "unreadable", "unparsable", "misnamed"); OK is the only thing the renderer
+// interprets, so the states can grow without touching styling.
+type SecretsKeyRow struct {
+	Recipient string
+	File      string // file name inside the keys directory
+	State     string
+	Current   bool // the recipient this project uses
+	OK        bool
+}
+
+// SecretsKeyListView is the keys directory as a whole. Dir is display-ready:
+// resolving the home directory belongs to the CLI, not to a pure formatter.
+type SecretsKeyListView struct {
+	Dir  string
+	Keys []SecretsKeyRow
 }
 
 // secretsNoRecipient is shown in place of an unset secrets.recipient — the
@@ -82,7 +106,64 @@ func SecretsStatusAt(v SecretsStatusView, width int) string {
 				"\n"+secretsFileTable(v.Files).Render(width))
 		}
 	}
+	// The fix instruction closes the report rather than sitting next to the
+	// Identity line: it applies to every unresolved row below it, and a header
+	// that grows a second line pushes the inventory off a short screen.
+	if v.IdentityHint != "" {
+		blocks = append(blocks, styles.MutedStyle().Render(v.IdentityHint))
+	}
 	return strings.Join(blocks, "\n\n")
+}
+
+// SecretsKeyList renders the keyfile inventory at the stdout width budget.
+func SecretsKeyList(v SecretsKeyListView) string {
+	return SecretsKeyListAt(v, stdoutBudget())
+}
+
+// SecretsKeyListAt is SecretsKeyList at an explicit width budget (0 =
+// unbounded). The table degrades through the shared tableView path, and the
+// result carries no trailing newline — the CLI's WriteData adds it.
+func SecretsKeyListAt(v SecretsKeyListView, width int) string {
+	if len(v.Keys) == 0 {
+		return styles.MutedStyle().Render("No identities in " + v.Dir + ".")
+	}
+	blocks := []string{
+		secretsField("Directory", v.Dir),
+		secretsKeyTable(v.Keys).Render(width),
+	}
+	return strings.Join(blocks, "\n\n")
+}
+
+// secretsKeyTable builds the keyfile table. RECIPIENT is the record-mode title:
+// it is what `dwe secrets key remove` takes, and the file name is derived from
+// it for every well-named file.
+func secretsKeyTable(rows []SecretsKeyRow) tableView {
+	stringRows := make([][]string, len(rows))
+	ok := make([]bool, len(rows))
+	for i, r := range rows {
+		stringRows[i] = []string{r.Recipient, r.File, secretsKeyStateCell(r)}
+		ok[i] = r.OK
+	}
+	return tableView{
+		Headers: []string{"RECIPIENT", "FILE", "STATE"},
+		Rows:    stringRows,
+		Cols: []columnSpec{
+			{Role: roleTitle, Flex: true, Wrap: wrapPath},
+			{Flex: true, Wrap: wrapPath},
+			secretsStateCol,
+		},
+		Style: secretsStateStyle(ok, 2),
+	}
+}
+
+// secretsKeyStateCell marks the project's own identity inside the STATE cell.
+// A separate column would be a mostly-empty one; the qualifier belongs to the
+// state it modifies ("ok, and it is the one this project needs").
+func secretsKeyStateCell(r SecretsKeyRow) string {
+	if r.Current {
+		return r.State + " (current project)"
+	}
+	return r.State
 }
 
 // secretsField renders one "  Label   — value" header line, matching the
@@ -135,7 +216,7 @@ func secretsFileTable(rows []SecretsFileRow) tableView {
 	stringRows := make([][]string, len(rows))
 	ok := make([]bool, len(rows))
 	for i, r := range rows {
-		stringRows[i] = []string{r.File, secretsStateCell(r.State, r.Reason)}
+		stringRows[i] = []string{r.File, secretsStateCell(r.State, secretsReasonText(r.Reason, r.Detail))}
 		ok[i] = r.OK
 	}
 	return tableView{
@@ -157,6 +238,18 @@ func secretsStateCell(state, reason string) string {
 		return state
 	}
 	return state + ": " + reason
+}
+
+// secretsReasonText joins a token reason with its free-form detail, so the text
+// report keeps the cause the JSON contract moved out of `reason`.
+func secretsReasonText(reason, detail string) string {
+	if detail == "" {
+		return reason
+	}
+	if reason == "" {
+		return detail
+	}
+	return reason + " (" + detail + ")"
 }
 
 // secretsStateStyle colors the state column green when the value is readable

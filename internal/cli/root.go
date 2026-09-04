@@ -404,6 +404,11 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 		// The daemon takes everything from --project-root; cwd-based
 		// discovery must not gate it (it is spawned detached).
 		path == "dwe bridge daemon" ||
+		// Keyfile housekeeping is machine-wide, not project-scoped: the keys
+		// directory holds identities for every project on this machine, and
+		// listing or removing one must work from anywhere.
+		path == "dwe secrets key list" ||
+		path == "dwe secrets key remove" ||
 		strings.HasPrefix(path, "dwe completion") ||
 		strings.HasPrefix(path, "dwe docs")
 }

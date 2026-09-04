@@ -1,6 +1,7 @@
 package render_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -77,6 +78,13 @@ func TestMaskSecretValue(t *testing.T) {
 			if !equalValue(got, tc.want) {
 				t.Errorf("value = %#v, want %#v", got, tc.want)
 			}
+			// A marker-free composite must come back as the caller's own
+			// value, not a copy: MaskSecretValue runs on every `dwe vars`
+			// render, and copying the whole merged tree each time is the cost
+			// the "copied only when it contains a marker" contract avoids.
+			if tc.wantSameRef && !sameRef(got, tc.value) {
+				t.Errorf("value was copied although it holds no marker: %#v", got)
+			}
 		})
 	}
 }
@@ -95,6 +103,25 @@ func TestMaskSecretValueDoesNotMutate(t *testing.T) {
 	}
 	if m, _ := got.(map[string]any); m["pass"] != render.EncryptedPlaceholder {
 		t.Errorf("copy not masked: %#v", got)
+	}
+}
+
+// sameRef reports whether two values are the same composite (or the same
+// scalar). reflect.ValueOf().Pointer() is defined for maps and slices, which is
+// what the no-copy contract is about; everything else falls back to equality.
+func sameRef(a, b any) bool {
+	va, vb := reflect.ValueOf(a), reflect.ValueOf(b)
+	if !va.IsValid() || !vb.IsValid() {
+		return a == b
+	}
+	if va.Kind() != vb.Kind() {
+		return false
+	}
+	switch va.Kind() {
+	case reflect.Map, reflect.Slice:
+		return va.Pointer() == vb.Pointer()
+	default:
+		return a == b
 	}
 }
 

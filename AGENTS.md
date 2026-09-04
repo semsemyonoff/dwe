@@ -14,7 +14,7 @@ The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Te
 - **`internal/core/`** — domain logic, subclustered into `project/` (what is a DWE project), `execution/` (pipeline engine), `workflow/` (deploy / lifecycle / reset / snapshot / setup), `usercommands/` (declarative command system), `validate/` (static project validation), `docs/` (embedded docs subsystem), `ui/` (domain-aware renderers — sink layer, imported only by `cli/`), and `notify/` (desktop notifications).
 - **`internal/shared/`** — leaf infrastructure (`docker/`, `git/`, `daemon/`, `lock/`, `pathsafe/`, `envfile/`, `render/`, `liveui/`, `tpl/`, `i18n/`, `version/`, `prompt/`, `promptcache/`).
 
-**Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering, cross-cutting CLI patterns like JSON output mode and display-string localization) that are expensive to re-derive from the code.
+**Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering, cross-cutting CLI patterns) that are expensive to re-derive from the code.
 
 ## Configuration Documentation
 
@@ -32,7 +32,7 @@ For AI agent orientation, `dwe docs llms-txt` emits a compact llms.txt index (pr
 
 ### Documentation site (`web/`)
 
-`web/` holds an Astro Starlight site published to GitHub Pages (`https://semsemyonoff.github.io/dwe/`) by `.github/workflows/docs.yml` on every push to `main` that touches `docs/**` or `web/**`. It is a **build-time mirror** of `docs/reference/` + `docs/guides/` (and the `docs/i18n/ru/` mirror); `docs/internals/` and `docs/plans/` are excluded. The canonical `docs/*.md` stay byte-identical — **edit `docs/` (and the root `README.md`), never the generated tree.** `web/scripts/sync-docs.mjs` transforms `docs/` → the gitignored `web/src/content/docs/` (title-from-H1, link rewriting to base-aware slugs / GitHub blobs for internals & non-docs repo files, i18n remap), derives the sidebar from each `index.md`'s ordered TOC, and builds the per-locale root landing pages from `README.md` / `docs/i18n/ru/README.md` (images they reference are copied into the gitignored `web/public/`). Preview with `cd web && npm run dev`; `npm test` covers the transform. Dangling `.md` links in `docs/` are degraded to plain text with a build warning (not a hard failure). No Go code is involved.
+`web/` holds an Astro Starlight site published to GitHub Pages (`https://semsemyonoff.github.io/dwe/`) by `.github/workflows/docs.yml` on every push to `main` that touches `docs/**` or `web/**`. It is a **build-time mirror** of `docs/reference/` + `docs/guides/` (and the `docs/i18n/ru/` mirror); `docs/internals/` and `docs/plans/` are excluded. The canonical `docs/*.md` stay byte-identical — **edit `docs/` (and the root `README.md`), never the generated tree.** `web/scripts/sync-docs.mjs` transforms `docs/` → the gitignored `web/src/content/docs/` (title-from-H1, link rewriting to base-aware slugs / GitHub blobs for internals & non-docs repo files, i18n remap), derives the sidebar from each `index.md`'s ordered TOC, and builds the per-locale root landing pages from `README.md` / `docs/i18n/ru/README.md`. Preview with `cd web && npm run dev`; `npm test` covers the transform. Dangling `.md` links in `docs/` are degraded to plain text with a build warning (not a hard failure). No Go code is involved.
 
 ## Build, Test, and Development Commands
 
@@ -199,7 +199,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § CLI (container command policy), § Core — Bridge and § Core — User Commands.
 
 - **Container TTY** — a service command keeps a container terminal only when `RunContext.UserInvoked` is true and its own streams are terminals (or it is bridged); pipeline steps, `parallel:` sub-steps, `check:` probes and piped output all get `-T`.
-  `UserInvoked` is set in exactly ONE place — `runCommandByID`, as `!bridgeclient.NestedRuntime()` read BEFORE that same call writes the process-global `DWE_NESTED_RUNTIME` marker, which MUST stay in `bridgeclient.StripEnv` or a container-set one kills the TTY on every bridged `dwe cmd`.
+  `UserInvoked` has ONE derivation, never a literal `true` — `!bridgeclient.NestedRuntime()` read BEFORE the same call writes the process-global `DWE_NESTED_RUNTIME` marker (`runCommandByID`; `resetStepCmd` bypasses it), which MUST stay in `bridgeclient.StripEnv` or a container-set one kills the TTY on every bridged `dwe cmd`.
   Injecting `-T` also forces colour via `ColorForceEnv(rc, ttySuppressed && !detached)`; dropping the `!detached` guard bakes ANSI into the Docker logs permanently.
   See § Container TTY Contract.
 
@@ -285,10 +285,11 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   (3) `fitRows` must raise each natural width back to its `columnFloors` value before distributing the deficit — a `Max` cap can clamp a column below an unbreakable token, and skipping the raise makes `distributeDeficit` see negative headroom, *widen* the column, and overflow while still reporting `ok=true`.
   See § `internal/core/ui/render/`, § `internal/core/ui/styles/` and § `internal/core/project/stack/`.
 
-- **Encrypted secrets** — decryption happens ONCE in `LoadConfig`, so merged-config consumers stay crypto-unaware; `LoadConfigSanitized` assembles the RAW layers and is what ide/ai/git load, so a tracked output can only carry the marker.
-  `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext (age output is non-deterministic), and `LoadConfig` is the SINGLE installer of `trace.RegisterRedaction`.
-  `secrets init`/`set`/`rekey` write through the `local` Splicer, not the node writer; `StepCommand`/`FormatAction`/`FormatCondition` redact every plan surface.
-  `render env`/`config` run no preflight and refuse a marker; `secrets.unresolved` is preflight's 2nd cherry-pick, also in `runPreWizardPreflight`.
+- **Encrypted secrets** — decryption happens ONCE in `LoadConfig`, so merged-config consumers stay crypto-unaware; `LoadConfigSanitized` is what ide/ai/git load, so a tracked output can only carry the marker.
+  `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext (age is non-deterministic), and `LoadConfig` SOLELY installs `trace.RegisterRedaction`.
+  `secrets init`/`set`/`rekey` use the `local` Splicer, not the node writer; `StepCommand`/`FormatAction`/`FormatCondition` redact every plan surface.
+  `keygate.Ensure` offers the missing identity on raw layers pre-`LoadConfig` (menu, `RunRun`, `RunRestart` pre-`RunStop`); json/`--yes`/non-TTY/`DWE_NONINTERACTIVE`/nil hooks skip it.
+  `render env`/`config` run no preflight and refuse a marker; `secrets.unresolved` is preflight's 2nd cherry-pick + `runPreWizardPreflight`.
   Only `shared/secrets/` imports `filippo.io/age`; `dwe secrets` is not in `bridgeAllowedTopLevel`, but container READS stay open.
   See § Core — Foundation (`project/config/`), § `internal/shared/secrets/` and § `internal/cli/secrets/`.
 

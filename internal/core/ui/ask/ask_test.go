@@ -201,6 +201,32 @@ func TestBuildHuhFieldConfirm(t *testing.T) {
 	}
 }
 
+// TestBuildHuhFieldConfirmButtonLabels pins the optional button labels: set
+// ones reach the rendered field, and empty ones leave huh's own Yes/No alone —
+// which is what keeps every pre-existing FieldConfirm site byte-identical.
+func TestBuildHuhFieldConfirmButtonLabels(t *testing.T) {
+	custom, _, err := buildHuhField(Field{
+		Key: "import", Kind: FieldConfirm, Title: "Enter the key?",
+		Affirmative: "Enter key", Negative: "Abort",
+	}, false)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	view := custom.View()
+	if !strings.Contains(view, "Enter key") || !strings.Contains(view, "Abort") {
+		t.Errorf("view = %q, want the custom button labels", view)
+	}
+
+	plain, _, err := buildHuhField(Field{Key: "agree", Kind: FieldConfirm, Title: "Agree?"}, false)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	view = plain.View()
+	if !strings.Contains(view, "Yes") || !strings.Contains(view, "No") {
+		t.Errorf("view = %q, want huh's default Yes/No buttons", view)
+	}
+}
+
 // TestBuildHuhFieldInvalidKind tests error handling for unsupported kind.
 func TestBuildHuhFieldInvalidKind(t *testing.T) {
 	f := Field{

@@ -226,45 +226,98 @@ func TestLoadLayersWithSecrets_unresolvedReasons(t *testing.T) {
 
 // An identity that cannot be LOADED is never "the payload is damaged": that
 // reason sends the developer to `dwe secrets rekey` over what is a local key
-// problem. LoadIdentity deliberately returns a permission error unwrapped and a
-// malformed keyfile as ErrCorrupt, so the loader needs its own mapper.
+// problem. LoadIdentity deliberately returns a permission error unwrapped, so
+// the loader needs its own mapper — and a source that WAS present but holds no
+// key is invalid_identity, not no_identity: the fix is repairing that source.
 func TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt(t *testing.T) {
 	id, err := secrets.Keygen()
 	if err != nil {
 		t.Fatalf("keygen: %v", err)
 	}
 	marker := mustEncrypt(t, "plain", id.Recipient())
+	truncated := id.Export()[:len(id.Export())-10]
 
 	tests := []struct {
-		name    string
-		keyfile string
+		name       string
+		setup      func(t *testing.T)
+		wantReason string
+		wantSource secrets.Source
 	}{
-		{name: "malformed keyfile", keyfile: "not a key at all\n"},
-		{name: "empty keyfile", keyfile: ""},
+		{
+			name:       "malformed keyfile",
+			setup:      func(t *testing.T) { setEnvKeyFile(t, "not a key at all\n") },
+			wantReason: ReasonInvalidIdentity,
+			wantSource: secrets.SourceEnvFile,
+		},
+		{
+			name:       "empty keyfile",
+			setup:      func(t *testing.T) { setEnvKeyFile(t, "") },
+			wantReason: ReasonInvalidIdentity,
+			wantSource: secrets.SourceEnvFile,
+		},
+		{
+			name: "truncated DWE_AGE_KEY",
+			setup: func(t *testing.T) {
+				hideIdentity(t)
+				t.Setenv(secrets.EnvKey, truncated)
+			},
+			wantReason: ReasonInvalidIdentity,
+			wantSource: secrets.SourceEnv,
+		},
+		{
+			name: "env key file points nowhere",
+			setup: func(t *testing.T) {
+				hideIdentity(t)
+				t.Setenv(secrets.EnvKeyFile, filepath.Join(t.TempDir(), "absent.key"))
+			},
+			wantReason: ReasonNoIdentity,
+			wantSource: secrets.SourceEnvFile,
+		},
+		{
+			name:       "no identity at all",
+			setup:      hideIdentity,
+			wantReason: ReasonNoIdentity,
+			wantSource: secrets.SourceKeyfile,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			hideIdentity(t)
-			path := filepath.Join(t.TempDir(), "broken.key")
-			if err := os.WriteFile(path, []byte(tc.keyfile), 0o600); err != nil {
-				t.Fatalf("writing keyfile: %v", err)
-			}
-			t.Setenv(secrets.EnvKeyFile, path)
+			tc.setup(t)
 
 			ws := writeLayerFixture(t,
-				"secrets:\n  recipient: "+id.Recipient()+"\nvars:\n  tok: "+marker+"\n", "", "")
+				"secrets:\n  recipient: "+id.Recipient()+"\nvars:\n  tok: "+marker+"\n  tok2: "+marker+"\n", "", "")
 			_, state, err := LoadLayersWithSecrets(ws)
 			if err != nil {
 				t.Fatalf("LoadLayersWithSecrets: %v", err)
 			}
-			if len(state.Unresolved) != 1 {
-				t.Fatalf("want 1 unresolved, got %+v", state.Unresolved)
+			if len(state.Unresolved) != 2 {
+				t.Fatalf("want 2 unresolved, got %+v", state.Unresolved)
 			}
-			if got := state.Unresolved[0].Reason; got != ReasonNoIdentity {
-				t.Errorf("reason = %q, want %q", got, ReasonNoIdentity)
+			// Every marker carries the same reason: the identity failed once.
+			for _, u := range state.Unresolved {
+				if u.Reason != tc.wantReason {
+					t.Errorf("%s: reason = %q, want %q", u.Path, u.Reason, tc.wantReason)
+				}
+			}
+			// The CONSULTED source is recorded on failure too — it is what tells
+			// the reader which source to repair.
+			if state.IdentitySource != string(tc.wantSource) {
+				t.Errorf("identity source = %q, want %q", state.IdentitySource, tc.wantSource)
 			}
 		})
 	}
+}
+
+// setEnvKeyFile hides every identity source, then points DWE_AGE_KEY_FILE at a
+// keyfile holding content.
+func setEnvKeyFile(t *testing.T, content string) {
+	t.Helper()
+	hideIdentity(t)
+	path := filepath.Join(t.TempDir(), "broken.key")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing keyfile: %v", err)
+	}
+	t.Setenv(secrets.EnvKeyFile, path)
 }
 
 func TestLoadLayersWithSecrets_sequenceIndexPaths(t *testing.T) {

@@ -212,6 +212,87 @@ func TestFiles_SymlinkRefused(t *testing.T) {
 			t.Errorf("the symlink target was written through: %q (%v)", body, rerr)
 		}
 	})
+
+	// An out-of-project target skips the containment and CheckNoSymlinks pass
+	// entirely, so the Lstat arm is the ONLY guard left — `--out /tmp/scratch`
+	// pointing at ~/.ssh/authorized_keys is exactly the case it exists for.
+	t.Run("output outside the project", func(t *testing.T) {
+		outside := t.TempDir()
+		outsideVictim := filepath.Join(outside, "victim.txt")
+		if err := os.WriteFile(outsideVictim, []byte("do not touch"), 0o644); err != nil {
+			t.Fatalf("write victim: %v", err)
+		}
+		scratch := filepath.Join(outside, "scratch.age")
+		if err := os.Symlink(outsideVictim, scratch); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+
+		_, _, err := runSecrets(t, flags, "encrypt", real, "--out", scratch, "--force")
+		if err == nil {
+			t.Fatal("encrypt wrote through a symlink outside the project")
+		}
+		if code := codedError(t, err).Code; code != "secrets_path_invalid" {
+			t.Errorf("error code = %q, want secrets_path_invalid", code)
+		}
+		if body, rerr := os.ReadFile(outsideVictim); rerr != nil || string(body) != "do not touch" {
+			t.Errorf("the symlink target was written through: %q (%v)", body, rerr)
+		}
+	})
+
+	// The sibling arm: a non-regular target (here a directory) is refused
+	// rather than handed to WriteFile, which would fail with a bare EISDIR.
+	t.Run("output is not a regular file", func(t *testing.T) {
+		_, _, err := runSecrets(t, flags, "encrypt", real, "--out", t.TempDir(), "--force")
+		if err == nil {
+			t.Fatal("encrypt accepted a non-regular output path")
+		}
+		if code := codedError(t, err).Code; code != "secrets_path_invalid" {
+			t.Errorf("error code = %q, want secrets_path_invalid", code)
+		}
+	})
+}
+
+// TestFiles_MissingInput pins the named refusal for the commonest user error, a
+// mistyped filename: it must not arrive as a bare os.ReadFile message.
+func TestFiles_MissingInput(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	missing := filepath.Join(root, "nope.json")
+	_, _, err := runSecrets(t, flags, "encrypt", missing)
+	if err == nil {
+		t.Fatal("encrypt accepted a missing input")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_input_missing" {
+		t.Errorf("error code = %q, want secrets_input_missing", coded.Code)
+	}
+	if coded.Details["path"] != missing {
+		t.Errorf("details.path = %v, want %q", coded.Details["path"], missing)
+	}
+}
+
+// TestFiles_OutputIsInput pins the guard that keeps `decrypt x.age --out x.age
+// --force` from destroying the only copy of the ciphertext.
+func TestFiles_OutputIsInput(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	initProject(t, flags)
+
+	src := writePlainFile(t, root, "creds.json", "hello")
+	_, _, err := runSecrets(t, flags, "encrypt", src, "--out", src, "--force")
+	if err == nil {
+		t.Fatal("encrypt overwrote its own input")
+	}
+	if code := codedError(t, err).Code; code != "secrets_output_invalid" {
+		t.Errorf("error code = %q, want secrets_output_invalid", code)
+	}
+	if body, rerr := os.ReadFile(src); rerr != nil || string(body) != "hello" {
+		t.Errorf("the input was overwritten: %q (%v)", body, rerr)
+	}
 }
 
 // TestDecrypt_NeedsOutForNonAgeInput pins that the default output name is only

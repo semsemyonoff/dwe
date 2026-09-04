@@ -20,6 +20,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
@@ -1860,7 +1861,44 @@ func TestResetRunFlags_ClearGeneratedExists(t *testing.T) {
 // The check: is a postcondition probe and must NOT, even though the body just
 // did. execCommandAction does not derive either value; without this test both
 // lines can be deleted with the suite still green.
+//
+// Nested is the other half: `dwe reset step` is reachable from a `type: dwe`
+// step or a DWE_BIN callback, where the surrounding pipeline has already marked
+// the environment and the "real os.Stdout" premise above is false — it is the
+// PTY childIO fabricated for the parent step. The marker must win there.
 func TestResetStepCmd_UserInvoked(t *testing.T) {
+	// runResetStepUserInvoked's own MarkNestedRuntime is process-global and
+	// never cleared, so both cases pin the marker with t.Setenv — which also
+	// keeps this test from poisoning the ~30 siblings that run steps.
+	t.Run("top level", func(t *testing.T) {
+		t.Setenv(bridgeclient.EnvNestedRuntime, "")
+		got := runResetStepUserInvoked(t)
+		want := map[string]bool{"noop.body": true, "noop.check": false}
+		assertUserInvoked(t, got, want)
+	})
+	t.Run("nested", func(t *testing.T) {
+		t.Setenv(bridgeclient.EnvNestedRuntime, "1")
+		got := runResetStepUserInvoked(t)
+		want := map[string]bool{"noop.body": false, "noop.check": false}
+		assertUserInvoked(t, got, want)
+	})
+}
+
+func assertUserInvoked(t *testing.T, got, want map[string]bool) {
+	t.Helper()
+	for id, wantInvoked := range want {
+		invoked, ran := got[id]
+		if !ran {
+			t.Fatalf("%s never ran (captured: %+v)", id, got)
+		}
+		if invoked != wantInvoked {
+			t.Errorf("%s: UserInvoked = %t, want %t", id, invoked, wantInvoked)
+		}
+	}
+}
+
+func runResetStepUserInvoked(t *testing.T) map[string]bool {
+	t.Helper()
 	dir := writeResetStepFixture(t, "",
 		"phases:\n  - name: probe\n    steps:\n      - name: act\n        type: command\n        cmd: noop.body\n"+
 			"        check:\n          type: command\n          cmd: noop.check\n",
@@ -1892,17 +1930,7 @@ func TestResetStepCmd_UserInvoked(t *testing.T) {
 	if err := resetStepCmd(cmd, flags, "probe/act", false); err != nil {
 		t.Fatalf("resetStepCmd: %v", err)
 	}
-
-	want := map[string]bool{"noop.body": true, "noop.check": false}
-	for id, wantInvoked := range want {
-		invoked, ran := got[id]
-		if !ran {
-			t.Fatalf("%s never ran (captured: %+v)", id, got)
-		}
-		if invoked != wantInvoked {
-			t.Errorf("%s: UserInvoked = %t, want %t", id, invoked, wantInvoked)
-		}
-	}
+	return got
 }
 
 // TestResetPlanAndStep_RedactDecryptedSecret pins that neither `reset plan`

@@ -374,41 +374,6 @@ func TestCollectInventory_HalfRekeyed(t *testing.T) {
 	}
 }
 
-// TestCollectAgeFiles_RefusesSymlink pins that a symlinked .age source is
-// reported rather than silently skipped or followed out of the project tree.
-func TestCollectAgeFiles_RefusesSymlink(t *testing.T) {
-	isolateHome(t)
-	cfgPath, root := writeFixture(t)
-	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
-	recipient := initProject(t, flags)
-
-	real := writeAgeFile(t, root, "app/creds.age", recipient, "hello")
-	link := filepath.Join(root, "workspace", "templates", "config", "app", "link.age")
-	if err := os.Symlink(real, link); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
-	}
-
-	inv, err := collectInventory(flags)
-	if err != nil {
-		t.Fatalf("collectInventory: %v", err)
-	}
-	if len(inv.Files) != 2 {
-		t.Fatalf("files = %+v, want 2 (the real file and the refused symlink)", inv.Files)
-	}
-	var linkRow fileRow
-	for _, f := range inv.Files {
-		if filepath.Base(f.File) == "link.age" {
-			linkRow = f
-		}
-	}
-	if linkRow.State != stateNotDecryptable || linkRow.Reason == "" {
-		t.Errorf("symlink row = %+v, want a not-decryptable row carrying a reason", linkRow)
-	}
-	if !bytes.Contains([]byte(linkRow.Reason), []byte("symlink")) {
-		t.Errorf("symlink reason = %q, want it to name the symlink", linkRow.Reason)
-	}
-}
-
 // TestCollectInventory_NoSecrets pins that a project without secrets reports an
 // empty inventory (and, by loadIdentitySet's empty-recipient short-circuit,
 // never touches the keys directory).

@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -105,7 +106,10 @@ func RegisterRedaction(values []string) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	merged := append(redactor.Values(), values...)
+	// Clone: Values() is documented immutable and NewRedactor leaves spare
+	// capacity, so appending in place would write into the backing array a
+	// live *Redactor still hands to a concurrent Redact.
+	merged := append(slices.Clone(redactor.Values()), values...)
 	redactor = secrets.NewRedactor(merged)
 }
 

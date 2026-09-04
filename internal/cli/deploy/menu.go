@@ -17,6 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/services"
 	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/secretsprompt"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
@@ -28,7 +29,9 @@ import (
 	valsetup "github.com/semsemyonoff/dwe/internal/core/validate/setup"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/setup"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/spf13/cobra"
 )
@@ -45,6 +48,7 @@ var (
 	runPreWizardPreflightFn = runPreWizardPreflight
 	runDeployRunFn          = runDeployRun
 	runDeployPlanFn         = runDeployPlan
+	keygateEnsureFn         = keygate.Ensure
 )
 
 type menuChoice string
@@ -82,6 +86,14 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	baseDir := flags.ProjectRoot()
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	setupPath := filepath.Join(baseDir, "workspace", "setup.yml")
+
+	// Offer the missing age identity BEFORE the menu's single config load, so
+	// every action below — including `plan`, which would otherwise render
+	// commands built from `<encrypted>` markers — works on decrypted values
+	// without a reload.
+	if err := ensureIdentity(cmd, flags, baseDir); err != nil {
+		return err
+	}
 
 	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
@@ -301,6 +313,48 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			return fmt.Errorf("unknown menu choice: %v", choice)
 		}
 	}
+}
+
+// ensureIdentity runs the shared age-identity gate for the whole menu session.
+//
+// The raw-layer error is deliberately dropped: nil layers make the gate skip
+// itself, and the LoadConfigOrWrap right below reports the very same file with
+// today's `loading config: …` wording. The gate must never be the surface that
+// speaks about a broken config.
+func ensureIdentity(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string) error {
+	layers, _ := config.LoadRawLayers(flags.ConfigPath)
+	in, out := cmd.InOrStdin(), cmd.OutOrStdout()
+
+	_, err := keygateEnsureFn(cmd.Context(), keygate.Options{
+		BaseDir:        baseDir,
+		Layers:         layers,
+		Interactive:    widgets.IsInteractiveFn(in),
+		OutputJSON:     flags.Output == "json",
+		NonInteractive: cmdctx.NonInteractiveEnv(),
+		Prompt: func(ctx context.Context, recipient string) (secrets.Identity, error) {
+			return secretsprompt.PromptIdentity(ctx, recipient, in, out)
+		},
+		Confirm: func(ctx context.Context, explanation string) (bool, error) {
+			return secretsprompt.ConfirmImport(ctx, explanation, in, out)
+		},
+		Out: out,
+	})
+	if err == nil {
+		return nil
+	}
+	// The three refusals are the same user-facing situation `dwe secrets`
+	// reports as secrets_no_identity: this project needs a key this machine
+	// does not usably have.
+	if errors.Is(err, keygate.ErrAborted) ||
+		errors.Is(err, keygate.ErrEnvSourceUnusable) ||
+		errors.Is(err, keygate.ErrKeyfileUnusable) {
+		coded := cmdctx.ErrWrap("secrets_no_identity", err)
+		if recipient := config.RecipientFromLayers(layers); recipient != "" {
+			coded = coded.WithDetail("recipient", recipient).WithHint(secrets.IdentityHint(recipient))
+		}
+		return coded
+	}
+	return err
 }
 
 // isEmptyLocal returns true if the local config is missing or empty.

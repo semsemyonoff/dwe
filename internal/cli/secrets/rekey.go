@@ -10,6 +10,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
@@ -195,7 +196,7 @@ type rekeyFile struct {
 // failure here aborts before the first mutation, which is what makes phase 2's
 // keyfile write the point of no return rather than a gamble.
 func planRekey(flags *cmdctx.RootFlags, layers []config.Layer, recipient string) (rekeyPlan, error) {
-	ids := loadIdentitySet(recipient)
+	ids := keygate.LoadIdentitySet(recipient)
 	root := flags.ProjectRoot()
 	plan := rekeyPlan{plain: make(map[string]string)}
 
@@ -205,7 +206,7 @@ func planRekey(flags *cmdctx.RootFlags, layers []config.Layer, recipient string)
 	for _, m := range config.CollectMarkers(layers) {
 		plan.markers++
 		if _, ok := plan.plain[m.Value]; !ok {
-			value, err := ids.decrypt(m.Value)
+			value, err := ids.Decrypt(m.Value)
 			if err != nil {
 				return rekeyPlan{}, rekeyReadError(recipient, relToRoot(root, m.Layer)+":"+m.Path, err)
 			}
@@ -218,30 +219,30 @@ func planRekey(flags *cmdctx.RootFlags, layers []config.Layer, recipient string)
 		}
 	}
 
-	files, err := collectAgeFiles(root)
+	files, err := keygate.CollectAgeFiles(root)
 	if err != nil {
 		return rekeyPlan{}, cmdctx.ErrWrap("secrets_rekey_blocked", err)
 	}
 	for _, f := range files {
-		display := relToRoot(root, f.path)
-		if f.err != nil {
-			return rekeyPlan{}, cmdctx.ErrWrap("secrets_rekey_blocked", f.err).
+		display := relToRoot(root, f.Path)
+		if f.Err != nil {
+			return rekeyPlan{}, cmdctx.ErrWrap("secrets_rekey_blocked", f.Err).
 				WithDetail("file", display).
 				WithHint("nothing was written; a rekey cannot rewrite a source it must not read")
 		}
-		data, rerr := os.ReadFile(f.path)
+		data, rerr := os.ReadFile(f.Path)
 		if rerr != nil {
 			return rekeyPlan{}, cmdctx.ErrWrap("secrets_rekey_blocked", rerr).WithDetail("file", display)
 		}
-		plain, derr := ids.decryptBytes(data)
+		plain, derr := ids.DecryptBytes(data)
 		if derr != nil {
 			return rekeyPlan{}, rekeyReadError(recipient, display, derr)
 		}
 		mode := ciphertextMode
-		if fi, serr := os.Stat(f.path); serr == nil {
+		if fi, serr := os.Stat(f.Path); serr == nil {
 			mode = fi.Mode().Perm()
 		}
-		plan.files = append(plan.files, rekeyFile{path: f.path, plain: plain, mode: mode})
+		plan.files = append(plan.files, rekeyFile{path: f.Path, plain: plain, mode: mode})
 	}
 
 	if err := dryRunSplices(plan, root, flags.ConfigPath, recipient); err != nil {

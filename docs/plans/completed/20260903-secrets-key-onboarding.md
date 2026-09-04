@@ -573,6 +573,12 @@ desktop notification).
 `secrets_identity_source_required`, `secrets_keyfile_write_failed`. All four
 new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 
+➕ Task 6 added three more, for failures the codes above would have
+mislabelled: `secrets_recipient_invalid` (a malformed `key remove` argument),
+`secrets_key_list_failed` (the keys directory could not be scanned) and
+`secrets_key_remove_failed` (the delete itself failed). Seven codes go into the
+Task 9 doc lists.
+
 ## What Goes Where
 
 - **Implementation Steps** (`[ ]`): code, tests, docs in this repo.
@@ -587,20 +593,20 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/shared/secrets/identity_test.go` (`:353` asserts `ErrCorrupt` for a garbage keyfile → becomes `ErrInvalidIdentity`)
 - Modify: `internal/core/validate/secrets/secrets.go` (`identityHint` → call), `internal/cli/secrets/key.go` (`identityError` hint → call), `internal/cli/secrets/secrets.go` (`displayKeyfilePath` at `:461` → call)
 
-- [ ] add `ErrInvalidIdentity`; `ParseIdentity` extracts the FIRST
+- [x] add `ErrInvalidIdentity`; `ParseIdentity` extracts the FIRST
       `AGE-SECRET-KEY-1…` token anywhere in the text (regexp, bech32 charset,
       fixed length), later tokens ignored; returns `ErrInvalidIdentity` with
       DWE-authored text on no token / age parse failure (the age error is
       wrapped for `errors.Is` chains only if its text is provably free of
       input bytes — otherwise dropped); delete `firstKeyLine`
-- [ ] extract `secrets.IdentityHint(recipient)` and
+- [x] extract `secrets.IdentityHint(recipient)` and
       `secrets.DisplayKeyfilePath(recipient)` from the unexported copies
       (`validate/secrets/secrets.go:240`, `cli/secrets/key.go:189`,
       `cli/secrets/secrets.go:461`); all call sites become calls, wording
       unchanged
-- [ ] add `ListKeyfiles() ([]KeyfileInfo, error)` (sorted, `State` enum
+- [x] add `ListKeyfiles() ([]KeyfileInfo, error)` (sorted, `State` enum
       `ok`/`unreadable`/`unparsable`/`misnamed`, no error text, missing dir → empty)
-- [ ] tests: `TestParseIdentity` table gains joined-line paste
+- [x] tests: `TestParseIdentity` table gains joined-line paste
       (`# public key: age1… AGE-SECRET-KEY-1…`), CRLF, surrounding whitespace,
       a multi-identity keyfile (first wins), a commented-out old key above the
       live one (first token wins — document this as the accepted change from
@@ -608,7 +614,7 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       `ErrCorrupt`) whose error text does not contain the last 20 characters
       of the input; `TestListKeyfiles` (ok + unreadable + unparsable rows,
       missing dir; a misnamed file → `KeyfileMisnamed` with the parsed recipient; the unparsable file's content appears nowhere in the result)
-- [ ] run `go test ./internal/shared/secrets/... ./internal/cli/secrets/... ./internal/core/validate/...` — must pass before task 2
+- [x] run `go test ./internal/shared/secrets/... ./internal/cli/secrets/... ./internal/core/validate/...` — must pass before task 2
 
 ### Task 2: `invalid_identity` reason in config and the validator phrase
 
@@ -619,13 +625,17 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/core/validate/secrets/secrets.go`, `secrets_test.go`
 - Modify: `docs/internals/packages.md` (the `:287` mirror sentence)
 
-- [ ] add `ReasonInvalidIdentity`; map `ErrInvalidIdentity` in
+- [x] add `ReasonInvalidIdentity`; map `ErrInvalidIdentity` in
       `identityReason` (fix its doc comment) AND in the CLI mirror
       `identitySet.reason()`; leave `unresolvedReason` alone
-- [ ] `reasonPhrase` gains the invalid phrase with fixed wording per source
+- [x] `reasonPhrase` gains the invalid phrase with fixed wording per source
       (`$DWE_AGE_KEY is set but holds no age identity` — no parse error text);
       `unresolvedMarkerDiags` groups it like the other reasons
-- [ ] tests: a layer load with a truncated `DWE_AGE_KEY` yields
+      (➕ `reasonPhrase` took a third `source` argument; since
+      `SecretsState.IdentitySource` is empty on a failed load until Task 5,
+      `invalidIdentityPhrase` re-derives the source from the environment along
+      `LoadIdentity`'s own precedence and honours a recorded source when present)
+- [x] tests: a layer load with a truncated `DWE_AGE_KEY` yields
       `invalid_identity` on every marker (not `corrupt`) —
       `TestLoadLayersWithSecrets_identityFailureIsNeverCorrupt`
       (`config/secrets_test.go:227`) currently expects `no_identity` for a
@@ -637,7 +647,11 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       which does not contain the env value; `vars inspect` on the same
       project shows `unresolved (invalid_identity)` via the existing
       `default:` fallback (`cli/vars/secrets.go:51`) — pinned, no new wording
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/validate/... ./internal/cli/secrets/...` — must pass before task 3
+- [x] run `go test ./internal/core/project/config/... ./internal/core/validate/... ./internal/cli/secrets/...` — must pass before task 3
+      (plus full `make test` + `make lint`; ➕ the reason enum is a documented
+      user-facing contract, so the new row also landed in
+      `docs/reference/config/secrets.md`, its ru mirror, `skills/dwe/SKILL.md`
+      and `CHANGELOG.md` — Task 9 keeps the onboarding prose)
 
 ### Task 3: `keygate` (decision + scan) and `secretsprompt` (form) packages
 
@@ -651,35 +665,48 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/secrets/secrets.go`, `status.go`, `get.go`, `files.go`, `rekey.go` (consume the moved inventory; delete the local copies)
 - Modify: `internal/cli/secrets/status_test.go`, `secrets_test.go`, `rekey_test.go` (`:52` calls `collectAgeFiles` directly; the symlink inventory test at `secrets_test.go:292` MOVES to `inventory_test.go` rather than being duplicated)
 
-- [ ] move `identitySet` → `keygate.IdentitySet` (+ `LoadIdentitySet`) with
+- [x] move `identitySet` → `keygate.IdentitySet` (+ `LoadIdentitySet`) with
       its methods `decrypt`, `decryptBytes`, `reason()`, plus
       `classifyMarker`/`classifyBytes`, `collectAgeFiles`/`inspectAgeFile`,
       `markerRow`/`fileRow`, `configPackKind`, `reasonStaleKey`, `relToRoot`
       and the state/reason constants; `cli/secrets` (incl. `get.go:61`,
       `files.go:188`) becomes a consumer — **no behaviour change**,
       `secrets status` JSON and goldens byte-identical
-- [ ] implement `HasEncryptedSurface` (markers via `config.CollectMarkers`,
+      (➕ `cli/secrets` keeps its local vocabulary through type aliases
+      (`markerRow`/`fileRow`/`inventory`) and `var relToRoot = keygate.RelToRoot`,
+      so the ~15 unrelated call sites in `init/set/rekey/files` stayed untouched;
+      `collectInventory` is now a four-line wrapper)
+- [x] implement `HasEncryptedSurface` (markers via `config.CollectMarkers`,
       `.age` via the moved walker with an early `return true`, walk error →
       false) and `NonInteractiveEnv()` (pinned equal to `cmdctx`'s set from
       `cmdctx`'s own test file, never from `keygate`'s)
-- [ ] implement `secretsprompt.PromptIdentity` (one `FieldPassword`, title
+- [x] implement `secretsprompt.PromptIdentity` (one `FieldPassword`, title
       `dwe secrets › key import`, description naming the recipient,
       `Validate` = `ParseIdentity` + recipient match with both age1… values
       in the mismatch text; the private key never appears in any error) and
       `secretsprompt.ConfirmImport` (`ask.FieldConfirm`, `Enter key`/`Abort`,
       streams from the caller); no `core/ui` import in `keygate`
-- [ ] implement `Ensure` in the 8-step order given in Technical Details,
+- [x] implement `Ensure` in the 8-step order given in Technical Details,
       with `ErrAborted`, `ErrEnvSourceUnusable`, `ErrKeyfileUnusable`;
       `ValidateLayerRoots` guard; project locks around the keyfile write;
       post-write `LoadIdentity` verification; success report uses the
       re-run inventory; no trace/log of the submitted text
-- [ ] tests (prompt, in `secretsprompt`): stubbed `runAsk` returns a
+      (➕ `ErrCancelled` is NOT matched by name: `keygate` must stay free of
+      `core/ui`, and a sentinel duplicated into a third package would be worse
+      than the alternative — **any** `Prompt`/`Confirm` error becomes
+      `ErrAborted`, whose message is DWE-authored and drops the cause, since
+      the only two causes are a cancel (adds nothing) and a form failure
+      (the one error whose text travelled next to the typed key).
+      ➕ `Result.Readable()` carries the two report counters, and the
+      confirmation sentence is the exported `keygate.Explanation(recipient)`,
+      so the wording is pinned in one place)
+- [x] tests (prompt, in `secretsprompt`): stubbed `runAsk` returns a
       matching identity → returned; the form-level `Validate` func
       (exercised directly) yields the two-recipient message for a foreign
       key and the fixed parse message for garbage; `ErrCancelled`
       propagates; no error text contains the last 20 characters of the typed
       input; `ConfirmImport` honours the passed streams
-- [ ] tests (gate): table over {nil layers, layers failing
+- [x] tests (gate): table over {nil layers, layers failing
       `ValidateLayerRoots` (a `secrets:` block in `defaults.yml`), no
       recipient, malformed recipient, recipient+no markers+no files, usable
       keyfile, usable env, `Interactive=false`, `Yes`, `OutputJSON`,
@@ -694,10 +721,10 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       `HasEncryptedSurface` never calls `secrets.Decrypt` (a marker with
       garbage ciphertext still yields true, no error); `Inventory` keeps its
       error on an unwalkable templates dir
-- [ ] tests (inventory): the moved `cli/secrets` cases keep passing; add a
+- [x] tests (inventory): the moved `cli/secrets` cases keep passing; add a
       direct `Inventory` test with one marker + one `.age` file + one
       symlinked `.age` (reported, not skipped)
-- [ ] run `go test ./internal/core/workflow/keygate/... ./internal/cli/secrets/...` — must pass before task 4
+- [x] run `go test ./internal/core/workflow/keygate/... ./internal/cli/secrets/...` — must pass before task 4
 
 ### Task 4: Interactive `secrets key import` with the readability report
 
@@ -706,17 +733,28 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/secrets/key_test.go`
 - Modify: `docs/reference/config/secrets.md` (subcommand section only; the new-machine section is Task 9)
 
-- [ ] `readIdentityText`: `--file` → non-TTY stdin → `promptIdentityFn` (default `secretsprompt.PromptIdentity`);
+- [x] `readIdentityText`: `--file` → non-TTY stdin → `promptIdentityFn` (default `secretsprompt.PromptIdentity`);
       keep `secrets_identity_source_required` for `--output json` at a TTY and
       `DWE_NONINTERACTIVE`; add a keyfile-exists pre-check ONLY on the
       interactive branch (`--file`/stdin keep parse → recipient check →
       `O_EXCL` write; `TestKeyImport_RejectsMismatch` stays green unchanged);
       update the command's `Long`/examples (`pbpaste |` stays the first example)
-- [ ] after `WriteKeyfile`, run `keygate.Inventory` with the new identity;
+      (➕ the branch point moved UP into a new `resolveIdentity`, because the
+      prompt yields a `secrets.Identity` and not text: `readIdentityText` now
+      only serves `--file`/piped stdin, `promptIdentity` owns the JSON /
+      `DWE_NONINTERACTIVE` refusal, the keyfile pre-check and the
+      `ErrCancelled` mapping, and the recipient check is the shared
+      `identityMismatchError` so all three branches produce one wording)
+- [x] after `WriteKeyfile`, run `keygate.Inventory` with the new identity;
       `keyImportJSON` gains `markers_readable`, `files_readable`; text output
       becomes two lines (`identity for … stored at …` + `N encrypted value(s)
       and M .age file(s) are now readable`)
-- [ ] tests: `TestKeyImport_FromStdin` / `_FromFile` keep their existing
+      (➕ `runKeyImport` loads the raw layers ONCE — `requireRecipient` →
+      `loadRawLayers` + `recipientOrErr` — and reuses them for the report, so
+      the counters describe the same tree the recipient check ran against; an
+      inventory error degrades to zero counters rather than failing a command
+      whose keyfile is already written)
+- [x] tests: `TestKeyImport_FromStdin` / `_FromFile` keep their existing
       assertions on the first line and JSON fields; new `TestKeyImport_Prompt`
       (IsInteractiveFn=true + `promptIdentityFn` stub → keyfile 0600 +
       counts); `TestKeyImport_PromptCancelled` → `secrets_import_cancelled`,
@@ -726,7 +764,16 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       (interactive branch only; `TestKeyImport_RejectsMismatch` unchanged);
       `TestKeyImport_ReportCounts` on a fixture with 2 markers + 1 `.age`;
       leak assertions on error envelopes in JSON mode
-- [ ] run `go test ./internal/cli/secrets/...` — must pass before task 5
+      (➕ the leak assertion lives on `TestKeyImport_PromptRejectsForeignIdentity`
+      and covers message + hint + every detail + the real
+      `cmdctx.WriteError` envelope bytes, via a new `jsonErrorEnvelope` helper;
+      the case itself runs in text mode, since `--output json` refuses the
+      prompt before it can be reached)
+- [x] run `go test ./internal/cli/secrets/...` — must pass before task 5
+      (plus full `make test` + `make lint`; ➕ the ru mirror
+      `docs/i18n/ru/reference/config/secrets.md` was updated in the same
+      commit — the `key import` section, the JSON row and the error-code list
+      would otherwise describe a command that no longer exists)
 
 ### Task 5: `secrets status` — honest identity header and fix hint
 
@@ -737,26 +784,61 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/core/ui/render/secrets.go`, `secrets_test.go`
 - Modify/Create: `internal/core/ui/render/testdata/secrets_status*.golden`
 
-- [ ] `LoadIdentity` returns the consulted `Source` with every error
+- [x] `LoadIdentity` returns the consulted `Source` with every error
       (`SourceEnv`, `SourceEnvFile`, `SourceKeyfile`; `SourceNone` only for
       an empty recipient); `finishLoad` threads it; doc comment states the
       contract; `layers.go:128` records it in `SecretsState.IdentitySource`
       on failure too (`config/secrets_test.go:382` — no-secrets project keeps
       an empty source — still holds because the lookup is skipped)
-- [ ] `identityJSON` gains `Reason`, `Hint`; `identityPayload` fills the
+      (➕ a recipient mismatch is now the typed `secrets.WrongIdentityError`
+      (`Source`/`Have`/`Want`, unwraps to `ErrWrongIdentity`, message
+      unchanged): the header must name both recipients, and re-parsing them
+      out of a sentence would be the one place a display surface could drift
+      from the loader. ➕ `secrets.SourceLabel(src, recipient)` is the single
+      place a source is NAMED for display — locations only, never content)
+- [x] `identityJSON` gains `Reason`, `Hint`; `identityPayload` fills the
       consulted source + reason on failure; `identityDisplay` renders the
       four variants from the table in Technical Details (same commit as the
       `LoadIdentity` change — never a green `keyfile (…)` header for a failed
       lookup)
-- [ ] `render.SecretsStatusView` gains `IdentityHint`; text appends the hint
+      (➕ `identityDisplay` switches on `Reason` FIRST and puts
+      `identityJSON.Error` verbatim inside the parentheses, so the text header
+      and the JSON payload cannot word the same failure differently; the
+      parenthetical therefore reads `wrong recipient (keyfile <path> holds the
+      identity for age1…, but the project uses age1…)` rather than the plan's
+      shorter draft. ➕ `identityErrorText` composes that sentence from fixed
+      per-source wording; its ONE pass-through is a bare filesystem error
+      (permission, missing home), which carries a path and an OS message but
+      never file content — swallowing it would report a permissions problem as
+      "no key on this machine". ➕ a set `DWE_AGE_KEY_FILE` pointing at nothing
+      renders `none ($DWE_AGE_KEY_FILE <path>, which does not exist)`: the
+      lookup stopped at the first source, so the generic "looked at …" list
+      would describe a search that never happened. ➕ `keygate.IdentityReason`
+      extracted so `Result.IdentityReason()` and `IdentitySet.Reason()` share
+      one mapper)
+- [x] `render.SecretsStatusView` gains `IdentityHint`; text appends the hint
       line when set (R6); `secretsNoneNote` path unchanged
-- [ ] tests: `TestIdentityDisplay` covers all four variants;
+      (➕ the hint CLOSES the report rather than sitting under the Identity
+      line: it applies to every unresolved row below it, and a two-line header
+      pushes the inventory off a short screen)
+- [x] tests: `TestIdentityDisplay` covers all four variants;
       `TestStatus_JSON_*` assert `identity.reason`/`identity.hint` for keyless,
       invalid env, wrong keyfile; `TestStatus_ExitsZeroWithUnresolvedSecrets`
       still exit 0 and now contains the hint; render goldens regenerated +
       two new; `TestStatus_NeverPrintsKeyMaterial` extended with a truncated
       `DWE_AGE_KEY` whose *content* must not be echoed either
-- [ ] run `go test ./internal/cli/secrets/... ./internal/core/ui/render/...` — must pass before task 6
+      (➕ the truncated-key leak case is its own test,
+      `TestStatus_NeverEchoesABrokenIdentitySource`, because it needs a
+      different fixture (no keyfile, poisoned env) than the plaintext leak
+      test; ➕ `TestLoadIdentityReportsConsultedSourceOnFailure` +
+      `TestSourceLabel` pin the leaf contract, and the config table test now
+      pins `IdentitySource` per failure mode)
+- [x] run `go test ./internal/cli/secrets/... ./internal/core/ui/render/...` — must pass before task 6
+      (plus full `make test` + `make lint`; ➕ the identity header, the hint
+      line and the two new JSON fields are a user-facing contract, so
+      `docs/reference/config/secrets.md`, its ru mirror and `CHANGELOG.md`
+      landed in the same commit — Task 9 keeps the onboarding prose;
+      `docs/internals/packages.md` gained the consulted-source sentence)
 
 ### Task 6: `secrets key list` and `secrets key remove`
 
@@ -766,37 +848,67 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/root.go` (`allowedWithoutProject`), `root_test.go` (or wherever the allowlist is pinned)
 - Modify: `internal/cli/bridgepolicy_test.go` (pin `secrets key list/remove` blocked)
 
-- [ ] `key list`: `secrets.ListKeyfiles` → rows with `current` computed from
+- [x] `key list`: `secrets.ListKeyfiles` → rows with `current` computed from
       the resolved project's recipient when a project is present (use
       `flags.ConfigPath != ""` / the raw layers; tolerate no project);
       `render.SecretsKeyList` + its `SecretsKeyListAt(width)` sibling (the
       responsive-tables contract; `SecretsStatus`/`SecretsStatusAt` is the
       precedent in the same file); JSON `{"keys":[…]}` with `[]` never
       `null`; empty → `No identities in <dir>.`
-- [ ] `key remove <recipient> [--force] [-y]` per Technical Details;
+      (➕ the `current` flag renders INSIDE the STATE cell as
+      `ok (current project)` rather than as a fifth state value: a row has both
+      a state and a project relation, and a fourth column would be empty on
+      every machine-wide key. ➕ the FILE column carries the file NAME, with the
+      directory as a `secretsField("Directory", …)` header line — repeating the
+      same absolute prefix on every row would be the widest cell in the table;
+      JSON `file` stays the absolute path. ➕ `currentRecipient` calls
+      `config.LoadRawLayers` directly, NOT the package's `loadRawLayers`
+      wrapper: a listing must not fail over `ValidateLayerRoots` on a config it
+      only consults to mark one row)
+- [x] `key remove <recipient> [--force] [-y]` per Technical Details;
       confirmation via `widgets.RunConfirm` (seam `var runConfirm`); project
       locks around the delete when a project is resolved; JSON DTO
       `{recipient, keyfile, removed}`
-- [ ] add both to `allowedWithoutProject`
-- [ ] tests: list with five files (current, foreign, unreadable, unparsable,
+      (➕ three error codes beyond the four the plan named:
+      `secrets_recipient_invalid` (a malformed argument, refused before it
+      reaches the filesystem), `secrets_key_list_failed` and
+      `secrets_key_remove_failed`. Each names a distinct failure the reused
+      codes would have mislabelled; all three join the Task 9 doc lists)
+- [x] add both to `allowedWithoutProject`
+- [x] tests: list with five files (current, foreign, unreadable, unparsable,
       misnamed) inside and outside a project, text golden + JSON, the
       unparsable file's content absent from both; remove: happy path text +
       JSON, missing file, current recipient refused without `--force`,
       allowed with it, non-interactive without `--yes` → typed envelope and
       file still present, confirm-decline → no-op, misnamed file never
       targeted; optional bridge-policy rows
-- [ ] run `go test ./internal/cli/...` — must pass before task 7
+      (➕ the bridge-policy rows landed; ➕ `TestAllowedWithoutProject_KeyHousekeeping`
+      in `internal/cli/root_test.go` pins the allowlist positively AND
+      negatively — `key import`/`key export`/`status` must still require a
+      project; ➕ a malformed-recipient case and an interactive-accept case
+      were added alongside the listed ones)
+- [x] run `go test ./internal/cli/...` — must pass before task 7
+      (plus full `make test` + `make lint`; ➕ two new subcommands and their
+      error codes are user-facing, so a `CHANGELOG.md` entry landed in the same
+      commit — Task 9 keeps the reference prose)
 
 ### Task 7: Gate the `dwe deploy` menu
 
 **Files:**
 - Modify: `internal/cli/deploy/menu.go`, `menu_test.go`
 
-- [ ] add `var keygateEnsureFn = keygate.Ensure`; call it after the TTY gate
+- [x] add `var keygateEnsureFn = keygate.Ensure`; call it after the TTY gate
       and before `LoadConfigOrWrap` with the closures over the cobra streams,
       mapping `ErrAborted` / `ErrEnvSourceUnusable` / `ErrKeyfileUnusable`
       to the typed `secrets_no_identity` error with `secrets.IdentityHint`
-- [ ] tests: interactive + unresolved → stub called with the right
+      (➕ the call lives in a small `ensureIdentity(cmd, flags, baseDir)`
+      helper rather than inline: `runDeployMenu` is already 230 lines and the
+      two closures plus the three-sentinel mapping would bury the menu's own
+      entry sequence. ➕ the recipient detail and the hint are attached only
+      when `config.RecipientFromLayers` actually yields one — the three
+      sentinels can in principle arrive without a recipient, and
+      `IdentityHint("")` would print a path with an empty stem)
+- [x] tests: interactive + unresolved → stub called with the right
       `Options` (`Interactive`, `OutputJSON`, `NonInteractive`, non-nil
       hooks) and, on `imported=true`, the menu proceeds to
       `runPreWizardPreflightFn` with a cfg that has no unresolved markers
@@ -808,7 +920,15 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       `menuPlan` path is gated too (documented); `--output json` /
       `DWE_NONINTERACTIVE` → `Options` carry the flags;
       `TestRunPreWizardPreflight_SecretsUnresolvedBlocks` untouched
-- [ ] run `go test ./internal/cli/deploy/...` — must pass before task 8
+      (➕ the refusal test runs all THREE sentinels through the same table,
+      not just `ErrAborted` — the mapping is one `errors.Is` chain and a
+      single-sentinel test would leave two arms unpinned; it also asserts the
+      absence of key material in the envelope. ➕ the "byte-identical" pin
+      compares the REAL `keygate.Ensure` against the stub on the same project
+      dir, which is stronger than a captured-before snapshot: it proves the
+      shipped gate is silent, not just that the seam can be)
+- [x] run `go test ./internal/cli/deploy/...` — must pass before task 8
+      (plus full `make test` + `make lint`)
 
 ### Task 8: Gate `RunRun` (`dwe run`, `dwe restart`)
 
@@ -817,18 +937,25 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `internal/cli/lifecycle/run.go`, `restart.go` (`RunContext.OutputJSON`, `KeyPrompt`, `KeyConfirm`), `run_test.go`, `restart_test.go`
 - Modify: `internal/cli/service/service_plan_test.go` (no-prompt pin for the toggle executor)
 
-- [ ] `RunContext` gains `OutputJSON`, `KeyPrompt`, `KeyConfirm`;
+- [x] `RunContext` gains `OutputJSON`, `KeyPrompt`, `KeyConfirm`;
       `var KeygateEnsureFunc = keygate.Ensure`; `RunRun` loads raw layers
       and calls it BEFORE `config.LoadConfigOrWrap`; `RunRestart` calls it
       BEFORE `RunStop` (the nested `RunRun` call short-circuits); the
       notifier `defer` treats the three gate errors like `*preflight.Error`
       (no desktop notification)
-- [ ] `cli/lifecycle/run.go` and `restart.go` fill the three new fields
+      (➕ the call lives in a package-local `ensureIdentity(ctx, workDir)`
+      helper, mirroring `cli/deploy`'s, and the three-sentinel test is the
+      exported-free `isKeygateRefusal` so the notifier `defer` reads as one
+      condition next to the preflight / lock ones)
+- [x] `cli/lifecycle/run.go` and `restart.go` fill the three new fields
       (closures over the cobra streams, `flags.Output == "json"`)
-- [ ] add `var runStopFn = RunStop` next to `PreflightFunc` (there is no
+      (➕ the two closures are built by `keyPrompt`/`keyConfirm` in a new
+      `internal/cli/lifecycle/keygate.go`: `run.go` and `restart.go` would
+      otherwise carry the same six lines twice)
+- [x] add `var runStopFn = RunStop` next to `PreflightFunc` (there is no
       stop seam today — `RunRestart` calls `RunStop` directly at :352) and
       route the restart call through it
-- [ ] tests (core): with a stub that installs `DWE_AGE_KEY` and returns
+- [x] tests (core): with a stub that installs `DWE_AGE_KEY` and returns
       `imported=true`, `.env` renders plaintext on the SAME invocation; stub
       returning `ErrAborted` → error before any `.env` write AND, on the
       restart path, before `RunStop` is reached (`runStopFn` stub fails the
@@ -836,11 +963,25 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       and `RunRun` returns today's `loading config: …` error; project
       without secrets → stub invoked, run output unchanged; `Yes: true` →
       `Options.Yes`; nil hooks → gate non-interactive
-- [ ] tests (cli): `dwe run --output json` and `dwe restart --output json`
+      (➕ the refusal test runs all THREE sentinels through one table, as in
+      Task 7; ➕ `TestRunRun_RealGateNeverPromptsWithoutHooks` runs the
+      SHIPPED gate with nil hooks and pins that the run still dies on today's
+      undecrypted-marker refusal; ➕ the no-secrets pin compares the `.env`
+      the real gate produced against the stubbed one, and
+      `TestRunRun_KeygateRefusalDoesNotNotify` pins the notifier arm)
+- [x] tests (cli): `dwe run --output json` and `dwe restart --output json`
       at a stubbed TTY → `Options.OutputJSON == true`, prompt stub fails the
       test if called; `service_plan` toggle executor reaches `RunRestart`
       with nil hooks and `Yes: true`
-- [ ] run `go test ./internal/core/workflow/lifecycle/... ./internal/cli/lifecycle/... ./internal/cli/service/...` — must pass before task 9
+      (➕ the cli tests do not stub the gate away: the seam FORWARDS to the
+      real `keygate.Ensure` with hooks that fail the test when opened, so
+      `--output json` / `--yes` / `DWE_NONINTERACTIVE` are pinned against the
+      shipped decision rather than against a silent stub. The text row is the
+      positive control — the offer DOES open, and declining refuses.
+      ➕ `TestRestartCmd_PerServiceRestartSkipsTheGate` pins that
+      `dwe restart <name>` stays the gate-free container-level path)
+- [x] run `go test ./internal/core/workflow/lifecycle/... ./internal/cli/lifecycle/... ./internal/cli/service/...` — must pass before task 9
+      (plus full `make test` + `make lint`)
 
 ### Task 9: Reference docs, skill, internals, changelog
 
@@ -851,7 +992,7 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
 - Modify: `docs/internals/packages.md`, `AGENTS.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] `secrets.md`: new section **"New developer / new machine"** (three
+- [x] `secrets.md`: new section **"New developer / new machine"** (three
       sources, lookup order, "the first present source must match the
       recipient — there is no fall-through", the interactive import walkthrough
       with the readability report, what the wizard / `dwe run` / `dwe restart`
@@ -864,12 +1005,26 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       gain `invalid_identity`; JSON section gains the new fields; error-code
       list (`:566`) gains the four new codes; ru mirror (`:220-222`, `:584`)
       updated in the same commit
-- [ ] `SKILL.md`: interactive import is a **human handoff** — the agent never
+      (➕ the error-code list gained SIX codes, not four — the three Task 6
+      additions (`secrets_recipient_invalid`, `secrets_key_list_failed`,
+      `secrets_key_remove_failed`) plus `secrets_key_in_use`,
+      `secrets_key_not_found`, `secrets_confirmation_required`;
+      `secrets_import_cancelled` was already documented by Task 4. ➕ the
+      "Validation and preflight" section also gained a paragraph placing the
+      offer BEFORE the wall, since the two would otherwise read as competing
+      descriptions of the same block. ➕ both ru mirrors' `> Translated from: …
+      @ <hash>` headers were refreshed — `TestRussianTranslationsCurrent`
+      compares them against the generated content hash of the English file)
+- [x] `SKILL.md`: interactive import is a **human handoff** — the agent never
       types a key; on `<encrypted>` run `secrets status --output json`, read
       `identity.reason`/`identity.hint`, hand off; never edit yml to "fix" a
       marker; `key list` in the READ table; the `secrets.unresolved` gate
       may now be an interactive offer when a human runs `dwe run`/`dwe deploy`
-- [ ] `packages.md`: new top-level `` - `internal/core/workflow/keygate/` ``
+      (➕ the handoff rule is stated as "never ask the user for the identity
+      text so you can type it" — the risk is not the agent running a command,
+      it is a private key passing through a transcript; ➕ `key remove` joined
+      the MUST-NOT-invoke list in the same edit)
+- [x] `packages.md`: new top-level `` - `internal/core/workflow/keygate/` ``
       and `` - `internal/core/ui/secretsprompt/` `` bullets (the `§` pointer
       test requires line-leading bullets) — contracts: runs BEFORE
       `LoadConfig` on raw layers, skips itself on any raw-load/validation
@@ -886,21 +1041,53 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
       `cli/deploy` and `workflow/lifecycle` sections name the seams
       (`keygateEnsureFn`, `KeygateEnsureFunc`, `runStopFn`) and the
       restart-before-stop order
-- [ ] `AGENTS.md` "Encrypted secrets" bullet: **net-zero byte delta** —
+      (➕ the mirror sentence had already moved to the `shared/secrets` bullet
+      (the old `:287`), so all three stale claims were rewritten there:
+      `identitySet.reason()` → `keygate.IdentityReason`, `classifyMarker` /
+      `identitySet.decrypt` → their `keygate.IdentitySet` homes. ➕ the
+      `cli/secrets` bullet also documents `key import`'s three input branches
+      and the `key list` / `key remove` refusals, which the plan had not
+      enumerated)
+- [x] `AGENTS.md` "Encrypted secrets" bullet: **net-zero byte delta** —
       tighten an existing clause to pay for one sentence on the gate
       (`wc -c AGENTS.md` ≤ 40960, line ≤ 600 runes); run
       `go test ./internal/cli/docs/ -run TestAgentsMd` in this task
-- [ ] `CHANGELOG.md` `## [Unreleased]`: interactive `key import` + report,
+      (➕ the gate sentence cost ~170 B and the bullet had only ~40 B of
+      headroom, so three of its own clauses were tightened
+      (`LoadConfigSanitized`, the redaction installer, the Splicer line) plus
+      two illustrative parentheticals elsewhere in the file — the
+      packages.md-pointer examples, which the two Critical Patterns bullets
+      right below already state, and the `web/public/` image note. Final size
+      40904 B: net **−14**, not merely zero. No `§ internal/core/workflow/keygate/`
+      pointer was added — a fourth pointer is ~40 B the budget cannot pay for,
+      and the two new bullets are reachable from the `cli/secrets` pointer)
+- [x] `CHANGELOG.md` `## [Unreleased]`: interactive `key import` + report,
       wizard / `run` / `restart` key offer, `status` identity header +
       hint, `invalid_identity` reason, `key list` / `key remove`,
       `ParseIdentity` first-token rule
-- [ ] `make build` (refreshes embedded docs), `go test ./internal/core/docs/... ./internal/cli/docs/...`
-      — must pass before task 10
+      (➕ four of the six had already landed with their own tasks; this task
+      added the interactive-import entry, the run/restart/deploy offer entry
+      and the `ParseIdentity` first-token entry (under `### Changed`, since it
+      changes how an existing input is read))
+- [x] `make build` (refreshes embedded docs), `go test ./internal/core/docs/... ./internal/cli/docs/...`
+      — must pass before task 10 (plus full `make test` + `make lint`)
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] unit level: `make test`, `make lint`
-- [ ] scratch project (`dwe init` + `secrets init` + one `set`), then
+- [x] unit level: `make test`, `make lint` — full suite green (every package
+      `ok`, exit 0), `golangci-lint run ./...` → `0 issues.`
+- [x] manual acceptance pass (skipped — not automatable): every bullet below
+      needs a human at a real TTY (a hidden `huh` field cannot be pasted into
+      from a script; forcing it through a pty would exercise the harness, not
+      the shipped path) and a pre-change binary to diff against. Left for the
+      sign-off run recorded in Post-Completion. The behaviours themselves are
+      covered by unit tests: the prompt branch and its cancel/foreign-key
+      errors in `cli/secrets/key_test.go`, the whole no-prompt matrix
+      (non-TTY / `--yes` / `--output json` / `DWE_NONINTERACTIVE` / nil hooks)
+      in `keygate`, `cli/deploy` and `workflow/lifecycle`, the three failure
+      headers in the `secrets_status*` goldens, and restart-offers-before-stop
+      in `lifecycle`.
+      scratch project (`dwe init` + `secrets init` + one `set`), then
       `HOME=$(mktemp -d)`:
   - `bin/dwe secrets key import` at a TTY → paste the WHOLE keyfile
     (comment + key + trailing newline) → report `1 encrypted value(s) and 0
@@ -927,18 +1114,49 @@ new codes join the error-code list in `secrets.md` (`:566`, ru `:584`).
     `bin/dwe deploy` print today's `loading config: …` error, no prompt
   - `bin/dwe secrets key list` inside and outside the project; `key remove`
     of the current recipient refused, `--force` works
-- [ ] project WITHOUT secrets: `bin/dwe run`, `bin/dwe deploy`, `secrets status`
+- [x] project WITHOUT secrets: `bin/dwe run`, `bin/dwe deploy`, `secrets status`
       output diffed against the pre-change binary — identical
-- [ ] real workspace `../ficbird` (annotated `defaults.yml`, one marker, one
+      (manual, skipped — not automatable: needs a Docker stack and a build of
+      the pre-change binary; the no-regression half is pinned in-repo by the
+      unchanged `secrets_status{,_empty}` goldens and by the gate's
+      `HasEncryptedSurface` early-out tests, which prove a secret-free project
+      never reaches the prompt)
+- [x] real workspace `../ficbird` (annotated `defaults.yml`, one marker, one
       `.age` source): repeat the import / status / run / deploy checks with a
       temp `HOME`; do not commit anything there
+      (manual, skipped — not automatable: an external repo outside this
+      working tree plus a live Docker deploy; this is the Post-Completion
+      sign-off run)
 
 ### Task 11: [Final] Update documentation
 
-- [ ] re-read `docs/reference/config/secrets.md` end-to-end for consistency
+- [x] re-read `docs/reference/config/secrets.md` end-to-end for consistency
       with the shipped messages (copy the exact strings from the goldens)
-- [ ] `AGENTS.md` / `packages.md` reflect any ➕ deviations recorded above
-- [ ] move this plan to `docs/plans/completed/`
+      (➕ the prompt/confirm/report/refusal strings, the four identity headers,
+      the hint sentence and the `key list` table all matched the goldens and the
+      shipped code verbatim; four passages were corrected against the code:
+      the `Abort` outcome is typed `secrets_no_identity` only in the `dwe deploy`
+      menu — `dwe run` / `dwe restart` return the same sentence untyped
+      (`lifecycle/run.go` `ensureIdentity` returns the gate error as-is); the
+      two "no prompt without a terminal" claims conflated a piped `key import`
+      (which reads stdin as before, `secrets_identity_source_required` only on
+      an EMPTY stdin) with the JSON / `DWE_NONINTERACTIVE` refusals at a TTY;
+      the `status` JSON row lacked the `reason` / `hint` fields the prose below
+      it already documented; and the empty `key list` line
+      (`No identities in <dir>.`) was undocumented. Both ru mirrors updated and
+      the `Translated from: … @ <hash>` header refreshed)
+- [x] `AGENTS.md` / `packages.md` reflect any ➕ deviations recorded above
+      (➕ `AGENTS.md` needed no change — its "Encrypted secrets" bullet already
+      carries the gate sentence at the size Task 9 paid for. `packages.md`
+      gained the two display-side deviations Task 5/6 recorded but did not
+      write down: `identityDisplay` switching on `Reason` first and sharing
+      `identityJSON.Error` verbatim with the JSON payload (plus
+      `identityErrorText`'s single filesystem-error pass-through and the
+      `$DWE_AGE_KEY_FILE`-missing wording) in the `cli/secrets` bullet, and
+      `IdentityHint` closing the report + `SecretsKeyList`/`SecretsKeyListAt`
+      with the folded `current project` cell and the empty-directory line in
+      the `ui/render` bullet)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

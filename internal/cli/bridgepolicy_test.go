@@ -74,6 +74,8 @@ func TestBridgeCommandAllowed_table(t *testing.T) {
 		{"dwe secrets get", false},
 		{"dwe secrets key export", false},
 		{"dwe secrets key import", false},
+		{"dwe secrets key list", false},
+		{"dwe secrets key remove", false},
 		{"dwe secrets rekey", false},
 
 		// The single nested exception inside an otherwise blocked subtree.

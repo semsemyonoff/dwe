@@ -6,11 +6,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -191,8 +193,8 @@ func TestStatus_JSON_DamagedFileIsCorruptNotWrongIdentity(t *testing.T) {
 
 	// decryptBytes must name the same cause, so `secrets decrypt` and rekey's
 	// read-only abort do not send the user after the recipient either.
-	ids := loadIdentitySet(recipient)
-	if _, derr := ids.decryptBytes(data[:len(data)-8]); !errors.Is(derr, secrets.ErrCorrupt) {
+	ids := keygate.LoadIdentitySet(recipient)
+	if _, derr := ids.DecryptBytes(data[:len(data)-8]); !errors.Is(derr, secrets.ErrCorrupt) {
 		t.Errorf("decryptBytes error = %v, want ErrCorrupt", derr)
 	}
 }
@@ -222,11 +224,22 @@ func TestStatus_JSON_Keyless(t *testing.T) {
 	}
 
 	got := statusOf(t, flags)
-	if got.Identity.Source != "" {
-		t.Errorf("identity source = %q, want empty with no key installed", got.Identity.Source)
+	// The CONSULTED source, not "": the lookup reached the keys directory and
+	// found nothing there, which is what the reader has to act on.
+	if got.Identity.Source != string(secrets.SourceKeyfile) {
+		t.Errorf("identity source = %q, want %q with no key installed", got.Identity.Source, secrets.SourceKeyfile)
+	}
+	if got.Identity.Reason != config.ReasonNoIdentity {
+		t.Errorf("identity reason = %q, want %q", got.Identity.Reason, config.ReasonNoIdentity)
 	}
 	if got.Identity.Error == "" {
 		t.Error("identity.error is empty with no key installed")
+	}
+	if got.Identity.Hint != secrets.IdentityHint(recipient) {
+		t.Errorf("identity hint = %q, want the shared IdentityHint text", got.Identity.Hint)
+	}
+	if want := "none (looked at " + keyfile + ", $" + secrets.EnvKey + ", $" + secrets.EnvKeyFile + ")"; identityDisplay(got) != want {
+		t.Errorf("identity header = %q, want %q", identityDisplay(got), want)
 	}
 	if len(got.Markers) != 1 || got.Markers[0].Reason != "no_identity" {
 		t.Errorf("markers = %+v, want one no_identity row", got.Markers)
@@ -235,6 +248,139 @@ func TestStatus_JSON_Keyless(t *testing.T) {
 		t.Errorf("files = %+v, want one not-decryptable no_identity row", got.Files)
 	}
 }
+
+// A truncated DWE_AGE_KEY is a broken source, not a missing one. The CLI's
+// identitySet.reason() is the mirror of config.identityReason; the two must
+// agree, so the marker and file rows say invalid_identity here too, and the
+// header names the variable instead of sending the reader after a missing key.
+func TestStatus_JSON_InvalidIdentity(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	writeAgeFile(t, root, "app/creds.age", recipient, "hello")
+
+	keyfile, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	key, err := os.ReadFile(keyfile)
+	if err != nil {
+		t.Fatalf("reading keyfile: %v", err)
+	}
+	if err := os.Remove(keyfile); err != nil {
+		t.Fatalf("removing keyfile: %v", err)
+	}
+	truncated := strings.TrimSpace(string(key))
+	truncated = truncated[:len(truncated)-10]
+	t.Setenv(secrets.EnvKey, truncated)
+
+	got := statusOf(t, flags)
+	if got.Identity.Source != string(secrets.SourceEnv) {
+		t.Errorf("identity source = %q, want %q", got.Identity.Source, secrets.SourceEnv)
+	}
+	if got.Identity.Reason != config.ReasonInvalidIdentity {
+		t.Errorf("identity reason = %q, want %q", got.Identity.Reason, config.ReasonInvalidIdentity)
+	}
+	if want := "invalid ($" + secrets.EnvKey + " is set but holds no age identity)"; identityDisplay(got) != want {
+		t.Errorf("identity header = %q, want %q", identityDisplay(got), want)
+	}
+	if got.Identity.Hint != secrets.IdentityHint(recipient) {
+		t.Errorf("identity hint = %q, want the shared IdentityHint text", got.Identity.Hint)
+	}
+	if len(got.Markers) != 1 || got.Markers[0].Reason != config.ReasonInvalidIdentity {
+		t.Errorf("markers = %+v, want one invalid_identity row", got.Markers)
+	}
+	if len(got.Files) != 1 || got.Files[0].State != stateNotDecryptable || got.Files[0].Reason != config.ReasonInvalidIdentity {
+		t.Errorf("files = %+v, want one not-decryptable invalid_identity row", got.Files)
+	}
+	// The set-but-broken key must not be echoed anywhere in the payload.
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(raw), truncated[len(truncated)-20:]) {
+		t.Error("status JSON echoes the broken key text")
+	}
+	// The literal token name may appear in DWE-authored wording ("no
+	// AGE-SECRET-KEY-1… key found"); a real key never can — one is 74 runes.
+	if secretKeyRe.MatchString(string(raw)) {
+		t.Error("status JSON contains key material")
+	}
+}
+
+// TestStatus_JSON_WrongIdentityKeyfile pins the fourth identity variant: the
+// keyfile parses but belongs to somebody else. Reporting that as "none" is what
+// sent a reader looking for a key they already have.
+func TestStatus_JSON_WrongIdentityKeyfile(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+
+	// Overwrite the project's keyfile with a foreign identity: the lookup finds
+	// a readable key at the canonical path that opens nothing here.
+	foreign, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	keyfile, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	if err := os.WriteFile(keyfile, []byte(foreign.Export()+"\n"), 0o600); err != nil {
+		t.Fatalf("writing foreign keyfile: %v", err)
+	}
+
+	got := statusOf(t, flags)
+	if got.Identity.Source != string(secrets.SourceKeyfile) {
+		t.Errorf("identity source = %q, want %q", got.Identity.Source, secrets.SourceKeyfile)
+	}
+	if got.Identity.Reason != config.ReasonWrongIdentity {
+		t.Errorf("identity reason = %q, want %q", got.Identity.Reason, config.ReasonWrongIdentity)
+	}
+	header := identityDisplay(got)
+	for _, want := range []string{"wrong recipient", keyfile, foreign.Recipient(), recipient} {
+		if !strings.Contains(header, want) {
+			t.Errorf("identity header %q is missing %q", header, want)
+		}
+	}
+	if got.Identity.Hint != secrets.IdentityHint(recipient) {
+		t.Errorf("identity hint = %q, want the shared IdentityHint text", got.Identity.Hint)
+	}
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if secretKeyRe.MatchString(string(raw)) {
+		t.Error("status JSON contains key material")
+	}
+	if key := foreign.Export(); strings.Contains(string(raw), key[len(key)-20:]) {
+		t.Error("status JSON echoes the foreign private key")
+	}
+}
+
+// secretKeyRe matches a whole age private key, so a leak assertion can tell one
+// apart from the DWE-authored wording that merely names the token.
+var secretKeyRe = regexp.MustCompile(`AGE-SECRET-KEY-1[AC-HJ-NP-Z02-9]{58}`)
 
 // TestStatus_JSON_HalfRekeyed pins decision 11's recovery property end to end:
 // after an interrupted rekey both recipients' values still report as readable,
@@ -457,6 +603,60 @@ func TestStatus_NeverPrintsKeyMaterial(t *testing.T) {
 	}
 }
 
+// TestStatus_NeverEchoesABrokenIdentitySource is the invalid-source twin: the
+// header now describes $DWE_AGE_KEY, and the content of that variable is
+// exactly what an interpolated age parse error would spill.
+func TestStatus_NeverEchoesABrokenIdentitySource(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	keyfile, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	key, err := os.ReadFile(keyfile)
+	if err != nil {
+		t.Fatalf("reading keyfile: %v", err)
+	}
+	if err := os.Remove(keyfile); err != nil {
+		t.Fatalf("removing keyfile: %v", err)
+	}
+	truncated := strings.TrimSpace(string(key))
+	truncated = truncated[:len(truncated)-10]
+	t.Setenv(secrets.EnvKey, truncated)
+
+	text, textErr, err := runSecrets(t, flags, "status")
+	if err != nil {
+		t.Fatalf("secrets status: %v", err)
+	}
+	jsonFlags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+	raw, rawErr, err := runSecrets(t, jsonFlags, "status")
+	if err != nil {
+		t.Fatalf("secrets status --output json: %v", err)
+	}
+
+	all := text + textErr + raw + rawErr
+	if !strings.Contains(all, "$"+secrets.EnvKey) {
+		t.Errorf("status does not name the broken source:\n%s", all)
+	}
+	if strings.Contains(all, truncated[len(truncated)-20:]) {
+		t.Errorf("status output echoes the broken key text:\n%s", all)
+	}
+	if secretKeyRe.MatchString(all) {
+		t.Errorf("status output contains key material:\n%s", all)
+	}
+}
+
 // TestStatus_ExitsZeroWithUnresolvedSecrets pins that status is a report, not a
 // gate: it is the command a blocked developer runs, so it must not itself fail.
 func TestStatus_ExitsZeroWithUnresolvedSecrets(t *testing.T) {
@@ -488,6 +688,11 @@ func TestStatus_ExitsZeroWithUnresolvedSecrets(t *testing.T) {
 	if !strings.Contains(stdout, "no_identity") {
 		t.Errorf("output does not name the reason:\n%s", stdout)
 	}
+	// The report closes with the fix, so the blocked developer does not have to
+	// run a second command to learn what to do.
+	if !strings.Contains(stdout, secrets.IdentityHint(recipient)) {
+		t.Errorf("output does not carry the identity hint:\n%s", stdout)
+	}
 }
 
 // TestIdentityDisplay names each source. The env cases cannot be reached
@@ -504,6 +709,47 @@ func TestIdentityDisplay(t *testing.T) {
 		{"keyfile", statusJSON{Recipient: recipient, Identity: identityJSON{Source: string(secrets.SourceKeyfile), Keyfile: "/k/age1.key"}}, "keyfile (/k/age1.key)"},
 		{"keyfile without path", statusJSON{Recipient: recipient, Identity: identityJSON{Source: string(secrets.SourceKeyfile)}}, "keyfile"},
 		{"no recipient", statusJSON{}, "none"},
+		{
+			"invalid env",
+			statusJSON{Recipient: recipient, Identity: identityJSON{
+				Source: string(secrets.SourceEnv),
+				Reason: config.ReasonInvalidIdentity,
+				Error:  "$" + secrets.EnvKey + " is set but holds no age identity",
+			}},
+			"invalid ($" + secrets.EnvKey + " is set but holds no age identity)",
+		},
+		{
+			"wrong recipient",
+			statusJSON{Recipient: recipient, Identity: identityJSON{
+				Source: string(secrets.SourceKeyfile),
+				Reason: config.ReasonWrongIdentity,
+				Error:  "keyfile /k/age1.key holds the identity for age1other, but the project uses " + recipient,
+			}},
+			"wrong recipient (keyfile /k/age1.key holds the identity for age1other, but the project uses " + recipient + ")",
+		},
+		{
+			"missing key file source",
+			statusJSON{Recipient: recipient, Identity: identityJSON{
+				Source: string(secrets.SourceEnvFile),
+				Reason: config.ReasonNoIdentity,
+				Error:  "$" + secrets.EnvKeyFile + " /nope.key, which does not exist",
+			}},
+			"none ($" + secrets.EnvKeyFile + " /nope.key, which does not exist)",
+		},
+		{
+			// A keyfile that IS there and cannot be read loads as
+			// ReasonNoIdentity (the loader passes the filesystem error through
+			// unwrapped). Rendering the generic "looked at …" list here would
+			// send the reader hunting for a key they already hold.
+			"unreadable keyfile",
+			statusJSON{Recipient: recipient, Identity: identityJSON{
+				Source:  string(secrets.SourceKeyfile),
+				Keyfile: "/k/age1.key",
+				Reason:  config.ReasonNoIdentity,
+				Error:   "read keyfile /k/age1.key: permission denied",
+			}},
+			"none (read keyfile /k/age1.key: permission denied)",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
