@@ -213,7 +213,10 @@ func envSourceUnusable(recipient string) error {
 func keyfileUnusable(recipient string) error {
 	path, err := secrets.KeyfilePath(recipient)
 	if err != nil {
-		return nil
+		// No home directory, no keyfile path — WriteKeyfile would fail on the
+		// same resolution after the form collected a private identity.
+		return fmt.Errorf("%w: the keyfile path for %s cannot be resolved (%v)",
+			ErrKeyfileUnusable, recipient, err)
 	}
 	if _, err := os.Lstat(path); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

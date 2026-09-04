@@ -26,6 +26,7 @@ type SecretsFileRow struct {
 	File   string // relative to the project root
 	State  string
 	Reason string
+	Detail string // free-form cause behind a token reason; appended to the cell
 	OK     bool
 }
 
@@ -215,7 +216,7 @@ func secretsFileTable(rows []SecretsFileRow) tableView {
 	stringRows := make([][]string, len(rows))
 	ok := make([]bool, len(rows))
 	for i, r := range rows {
-		stringRows[i] = []string{r.File, secretsStateCell(r.State, r.Reason)}
+		stringRows[i] = []string{r.File, secretsStateCell(r.State, secretsReasonText(r.Reason, r.Detail))}
 		ok[i] = r.OK
 	}
 	return tableView{
@@ -237,6 +238,18 @@ func secretsStateCell(state, reason string) string {
 		return state
 	}
 	return state + ": " + reason
+}
+
+// secretsReasonText joins a token reason with its free-form detail, so the text
+// report keeps the cause the JSON contract moved out of `reason`.
+func secretsReasonText(reason, detail string) string {
+	if detail == "" {
+		return reason
+	}
+	if reason == "" {
+		return detail
+	}
+	return reason + " (" + detail + ")"
 }
 
 // secretsStateStyle colors the state column green when the value is readable

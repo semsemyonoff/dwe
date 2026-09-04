@@ -168,7 +168,7 @@ func statusView(d statusJSON) render.SecretsStatusView {
 	}
 	for i, f := range d.Files {
 		v.Files[i] = render.SecretsFileRow{
-			File: f.File, State: f.State, Reason: f.Reason,
+			File: f.File, State: f.State, Reason: f.Reason, Detail: f.Detail,
 			OK: f.State == stateDecryptable && f.Reason == "",
 		}
 	}

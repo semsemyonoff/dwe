@@ -447,6 +447,32 @@ func TestLoadIdentityMissingSources(t *testing.T) {
 		}
 	})
 
+	// DWE_AGE_KEY takes the identity TEXT and DWE_AGE_KEY_FILE takes a PATH, so
+	// pasting the key into the wrong one of the pair is the plausible mixup — and
+	// every message about the failed read would then carry the private key onto
+	// the screen and into `dwe secrets status --output json`.
+	t.Run("a key pasted into the env FILE variable is never echoed", func(t *testing.T) {
+		isolateHome(t)
+		id := testIdentity(t)
+		t.Setenv(EnvKeyFile, id.Export())
+
+		_, src, err := LoadIdentity(id.Recipient())
+		if err == nil {
+			t.Fatal("LoadIdentity accepted key text as a path")
+		}
+		if src != SourceEnvFile {
+			t.Errorf("source = %q, want %q", src, SourceEnvFile)
+		}
+		for _, text := range []string{err.Error(), SourceLabel(src, id.Recipient()), DisplayEnvPath(id.Export())} {
+			if strings.Contains(text, "AGE-SECRET-KEY-") {
+				t.Fatalf("the private key reached a display surface: %q", text)
+			}
+		}
+		if !strings.Contains(SourceLabel(src, id.Recipient()), RedactedEnvPath) {
+			t.Errorf("SourceLabel = %q, want the redaction marker", SourceLabel(src, id.Recipient()))
+		}
+	})
+
 	t.Run("unreadable keyfile is not hidden", func(t *testing.T) {
 		if os.Geteuid() == 0 {
 			t.Skip("running as root: permission bits are not enforced")

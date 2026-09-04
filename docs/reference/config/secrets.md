@@ -866,7 +866,7 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 | Command | Shape |
 |---------|-------|
 | `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
-| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…"}]}` |
+| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…", "detail": "…"}]}` — a file row's `reason` stays inside the fixed vocabulary (`no_identity` / `wrong_identity` / `invalid_identity` / `corrupt` / `stale_key` / `unreadable`); `detail` carries the free-form cause behind `unreadable` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |

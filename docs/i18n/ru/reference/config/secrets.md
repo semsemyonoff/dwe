@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ 933cb482cbe1
+> Translated from: reference/config/secrets.md @ 206c0dd9373b
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -885,7 +885,7 @@ Keyfile — обычный age-файл identity, поэтому `age`, `age-key
 | Команда | Форма |
 |---------|-------|
 | `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` |
-| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…"}]}` |
+| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…", "detail": "…"}]}` — у файловой строки `reason` остаётся в фиксированном словаре (`no_identity` / `wrong_identity` / `invalid_identity` / `corrupt` / `stale_key` / `unreadable`), а `detail` несёт свободный текст причины за `unreadable` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |

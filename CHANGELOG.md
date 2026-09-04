@@ -51,6 +51,14 @@ generated from commit subjects and stay on the
   (plus the Russian mirror), covering the model, the marker format, key
   locations, every command with its JSON shape, the render guards, where
   plaintext goes, `age` CLI interoperability and rekey recovery.
+- **An `.age` source the scan could not read reports the stable `unreadable`
+  reason**, with the cause (a symlink refusal, an OS error) moved into a new
+  `detail` field. `reason` is a closed vocabulary a script switches on, and
+  those two rows used to carry free-form text — an absolute path included.
+- **A `DWE_AGE_KEY_FILE` holding the identity TEXT instead of a path is
+  redacted** wherever the failure is worded. Its sibling `DWE_AGE_KEY` does
+  take the text, so the mixup is easy — and every message about the failed
+  read used to print the private key, `--output json` included.
 - **A damaged `*.age` pack source now reports as `corrupt` without a key.** The
   identity-free header check the `ENC[age:…]` markers already had now covers
   native pack sources too, so a truncated file no longer reads as

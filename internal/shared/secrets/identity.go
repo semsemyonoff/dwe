@@ -160,6 +160,33 @@ func findSecretKey(text string) string {
 	return ""
 }
 
+// RedactedEnvPath replaces a DWE_AGE_KEY_FILE value that is not a path at all.
+const RedactedEnvPath = "<redacted: the value looks like a private key, not a path>"
+
+// DisplayEnvPath is the DWE_AGE_KEY_FILE value as a message may print it.
+//
+// The variable takes a PATH, and a developer who pastes the identity TEXT into
+// it instead gets a read failure — whose every wording would then carry the
+// private key onto the screen, into `--output json` and into a pasted bug
+// report. The mixup is the plausible one (its sibling DWE_AGE_KEY does take the
+// text), so the value is checked rather than trusted.
+func DisplayEnvPath(path string) string {
+	if strings.Contains(path, secretKeyPrefix) {
+		return RedactedEnvPath
+	}
+	return path
+}
+
+// pathErrCause strips the *fs.PathError wrapper os.ReadFile returns, keeping the
+// sentinel (fs.ErrPermission and friends) matchable while dropping the path the
+// caller may have chosen to redact.
+func pathErrCause(err error) error {
+	if pe, ok := errors.AsType[*fs.PathError](err); ok {
+		return pe.Err
+	}
+	return err
+}
+
 // ParseRecipient checks that text is a well-formed age recipient ("age1…").
 func ParseRecipient(text string) error {
 	if text == "" {
@@ -198,11 +225,13 @@ func LoadIdentity(recipient string) (Identity, Source, error) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				return Identity{}, SourceEnvFile, fmt.Errorf("%w: %s points at %s, which does not exist", ErrNoIdentity, EnvKeyFile, path)
+				return Identity{}, SourceEnvFile, fmt.Errorf("%w: %s points at %s, which does not exist", ErrNoIdentity, EnvKeyFile, DisplayEnvPath(path))
 			}
-			return Identity{}, SourceEnvFile, fmt.Errorf("read %s (%s): %w", path, EnvKeyFile, err)
+			// The *fs.PathError is unwrapped to its cause on purpose: its own
+			// text repeats the path, which DisplayEnvPath may have redacted.
+			return Identity{}, SourceEnvFile, fmt.Errorf("read %s (%s): %w", DisplayEnvPath(path), EnvKeyFile, pathErrCause(err))
 		}
-		return finishLoad(string(data), recipient, SourceEnvFile, EnvKeyFile+" "+path)
+		return finishLoad(string(data), recipient, SourceEnvFile, EnvKeyFile+" "+DisplayEnvPath(path))
 	}
 
 	path, err := KeyfilePath(recipient)
@@ -261,7 +290,7 @@ func SourceLabel(src Source, recipient string) string {
 		return "$" + EnvKey
 	case SourceEnvFile:
 		if path := os.Getenv(EnvKeyFile); path != "" {
-			return "$" + EnvKeyFile + " " + path
+			return "$" + EnvKeyFile + " " + DisplayEnvPath(path)
 		}
 		return "$" + EnvKeyFile
 	case SourceKeyfile:

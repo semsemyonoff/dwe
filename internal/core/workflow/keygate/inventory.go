@@ -33,6 +33,15 @@ const (
 // exactly the recovery scenario `rekey`'s resume hint sends the user here for.
 const ReasonStaleKey = "stale_key"
 
+// ReasonUnreadable is the token for an .age source the scan could not read at
+// all — a path-discipline refusal (symlink, non-regular file) or an I/O error.
+//
+// The cause travels in FileRow.Detail, never in Reason: `reason` is a closed
+// vocabulary a consumer switches on, and putting an OS message (which carries
+// an absolute path) there made exactly the rows a report must classify
+// unclassifiable.
+const ReasonUnreadable = "unreadable"
+
 // configPackKind is the only template-pack kind that may carry .age sources:
 // ide/ai/git pack outputs are git-tracked and render against a sanitized
 // config, so an encrypted source there would have nowhere safe to land.
@@ -241,6 +250,9 @@ type FileRow struct {
 	File   string `json:"file"` // relative to the project root
 	State  string `json:"state"`
 	Reason string `json:"reason,omitempty"`
+	// Detail is the free-form cause behind ReasonUnreadable (an OS message or a
+	// path-discipline refusal). It is display text, never a token to switch on.
+	Detail string `json:"detail,omitempty"`
 }
 
 // Result is the whole encrypted surface of a project: the identity this machine
@@ -307,11 +319,11 @@ func Inventory(baseDir string, layers []config.Layer, ids IdentitySet) (Result, 
 		row := FileRow{File: RelToRoot(baseDir, f.Path), State: StateNotDecryptable}
 		switch {
 		case f.Err != nil:
-			row.Reason = f.Err.Error()
+			row.Reason, row.Detail = ReasonUnreadable, f.Err.Error()
 		default:
 			data, rerr := os.ReadFile(f.Path)
 			if rerr != nil {
-				row.Reason = rerr.Error()
+				row.Reason, row.Detail = ReasonUnreadable, rerr.Error()
 				break
 			}
 			row.State, row.Reason = ids.classifyBytes(data)

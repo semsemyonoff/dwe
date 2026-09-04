@@ -51,8 +51,12 @@ func TestInventory_MarkersFilesAndSymlink(t *testing.T) {
 			linkRow = f
 		}
 	}
-	if linkRow.State != StateNotDecryptable || !strings.Contains(linkRow.Reason, "symlink") {
-		t.Errorf("symlink row = %+v, want a not-decryptable row naming the symlink", linkRow)
+	// The reason is the closed-vocabulary token; the refusal itself — which
+	// carries an absolute path — travels in Detail, so a consumer switching on
+	// `reason` is never handed free-form text.
+	if linkRow.State != StateNotDecryptable || linkRow.Reason != ReasonUnreadable ||
+		!strings.Contains(linkRow.Detail, "symlink") {
+		t.Errorf("symlink row = %+v, want a not-decryptable/unreadable row detailing the symlink", linkRow)
 	}
 
 	// The report's two counters: the symlink is not readable, so it is not counted.
