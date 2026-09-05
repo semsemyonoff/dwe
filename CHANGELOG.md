@@ -437,5 +437,16 @@ generated from commit subjects and stay on the
   empty key is now treated the way a missing one already was: the `default:`
   applies, and a `required:` param fails with its own message. The same fix
   covers a `context.<name>` whose `env:` variable was exported as `<nil>`.
+- **A `${context.<name>}` that does not resolve now renders empty instead of the
+  literal `<no value>`.** A declared, non-`required:` context whose `from:` path
+  is a typo resolved to nil, and `text/template` spells a nil interface as
+  `<no value>` — so `docker exec ${context.container}` ran against a container
+  by that name. The template resolver now treats a present-but-nil value the
+  way it already treated a missing key, which is also what `dwe validate`
+  promises when it warns about an unresolvable `context.<name>.from`.
+- **An empty or all-comment `workspace/snapshot.yml` / `workspace/validate.yml`
+  no longer fails with the bare message `EOF`.** Both loaders reject an empty
+  document (unlike the pipeline files, which fall back to the built-in default),
+  and the error again names the file it came from.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

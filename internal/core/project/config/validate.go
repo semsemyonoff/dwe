@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -196,7 +198,13 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 	}
 
 	var raw rawValidateConfig
+	// yamlstrict names the file itself, so no "parse %s:" prefix on that error;
+	// io.EOF (an empty or all-comment file) passes through bare and keeps its
+	// old wrap, or the user sees the three letters "EOF" and nothing else.
 	if err := yamlstrict.Decode(data, &raw, path); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, nil, fmt.Errorf("parse %s: %w", path, err)
+		}
 		return nil, nil, err
 	}
 

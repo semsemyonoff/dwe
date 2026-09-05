@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -147,7 +148,13 @@ func LoadSnapshotConfig(path string) (*SnapshotConfig, error) {
 
 	var cfg SnapshotConfig
 	if len(bytes.TrimSpace(data)) > 0 {
+		// yamlstrict names the file itself, so no "parse %s:" prefix on that
+		// error; io.EOF (an all-comment file) passes through bare and keeps its
+		// old wrap, or the user sees the three letters "EOF" and nothing else.
 		if err := yamlstrict.Decode(data, &cfg, path); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, fmt.Errorf("parse %s: %w", path, err)
+			}
 			return nil, err
 		}
 	}

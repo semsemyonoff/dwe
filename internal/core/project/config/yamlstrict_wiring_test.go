@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -175,5 +177,54 @@ func TestLoadServiceFolderUnknownFieldMessage(t *testing.T) {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q does not contain %q", msg, want)
 		}
+	}
+}
+
+// TestNonTolerantLoadersNameTheFileOnEOF pins the io.EOF branch of the two
+// migrated loaders that do NOT read an all-comment file as "absent". yamlstrict
+// passes io.EOF through untouched so the four pipeline loaders can fall back to
+// the built-in default; these two must re-wrap it, or `dwe snapshot list` and
+// `dwe validate` degrade to the bare three-letter message "EOF".
+func TestNonTolerantLoadersNameTheFileOnEOF(t *testing.T) {
+	cases := []struct {
+		name string
+		file string
+		body string
+		load func(string) error
+	}{
+		{
+			name: "snapshot.yml all comments",
+			file: "snapshot.yml",
+			body: "# nothing here yet\n# dir: ./snapshots\n",
+			load: func(p string) error { _, err := LoadSnapshotConfig(p); return err },
+		},
+		{
+			name: "validate.yml all comments",
+			file: "validate.yml",
+			body: "# nothing here yet\n# checks:\n",
+			load: func(p string) error { _, _, err := LoadValidateConfig(p); return err },
+		},
+		{
+			name: "validate.yml empty",
+			file: "validate.yml",
+			body: "",
+			load: func(p string) error { _, _, err := LoadValidateConfig(p); return err },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := writeTempYAML(t, tc.file, tc.body)
+			err := tc.load(p)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("expected io.EOF, got %v", err)
+			}
+			if !strings.Contains(err.Error(), p) {
+				t.Fatalf("error %q does not name the file %q", err.Error(), p)
+			}
+		})
 	}
 }

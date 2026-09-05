@@ -470,12 +470,16 @@ func resolveRaw(raw map[string]any, dotPath string) any {
 }
 
 // resolveMap resolves a key in a flat string→any map.
-// Returns "" when the key is not found.
+// Returns "" when the key is not found, and also when the key is present but
+// holds nil: resolve.Context stores nil for a declared, non-required context
+// whose from: does not resolve, and text/template spells a nil interface as the
+// literal "<no value>" — handing the command four words nobody wrote. Same rule
+// as resolveRaw, and as envString on the env: export side.
 func resolveMap(m map[string]any, key string) any {
 	if m == nil {
 		return ""
 	}
-	if v, ok := m[key]; ok {
+	if v, ok := m[key]; ok && v != nil {
 		return v
 	}
 	return ""
