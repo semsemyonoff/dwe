@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/envfile"
+
+	"github.com/spf13/cobra"
 )
 
 // makeEnvCfg builds a DweConfig with the given export rules and raw map.
@@ -254,7 +257,7 @@ func TestRunRenderEnv_ToFile(t *testing.T) {
 	}
 
 	out := filepath.Join(dir, ".env")
-	if err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+	if err := runRenderEnv(newTestEnvCmd(), &cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
 		t.Fatalf("runRenderEnv: %v", err)
 	}
 
@@ -290,7 +293,7 @@ func TestRunRenderEnv_ComposeProjectNameFromDockerYML(t *testing.T) {
 	}
 
 	out := filepath.Join(dir, ".env")
-	if err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+	if err := runRenderEnv(newTestEnvCmd(), &cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
 		t.Fatalf("runRenderEnv: %v", err)
 	}
 
@@ -306,11 +309,154 @@ func TestRunRenderEnv_ComposeProjectNameFromDockerYML(t *testing.T) {
 // TestRunRenderEnv_InvalidConfig verifies that a config-load failure is
 // surfaced as an error (not silently dropped).
 func TestRunRenderEnv_InvalidConfig(t *testing.T) {
-	err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"}, "/tmp/whatever.env")
+	err := runRenderEnv(newTestEnvCmd(), &cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"}, "/tmp/whatever.env")
 	if err == nil {
 		t.Fatal("expected error for missing config, got nil")
 	}
 	if !strings.Contains(err.Error(), "loading config") {
 		t.Errorf("err = %v, want one wrapping 'loading config'", err)
+	}
+}
+
+// newTestEnvCmd returns a cobra command whose streams are captured, so a test
+// can assert on what `dwe render env` writes where. The warning path exists
+// only because the command threads its own streams — a bare fmt.Print would be
+// invisible here.
+func newTestEnvCmd() *cobra.Command { cmd, _, _ := newCapturingEnvCmd(); return cmd }
+
+func newCapturingEnvCmd() (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
+	var out, errBuf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	return cmd, &out, &errBuf
+}
+
+// writeUnresolvedExportProject lays down a project whose exports.env has one
+// resolving rule and one whose from: is a typo.
+func writeUnresolvedExportProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	yml := `schema_version: "2"
+project:
+  name: testproject
+  prefix: dwe
+vars:
+  here: yes
+exports:
+  env:
+    - name: OK_VAR
+      from: vars.here
+    - name: MISSING_VAR
+      from: vars.typo
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestRunRenderEnv_WarnsOnUnresolvedRule pins the split: the warning goes to
+// stderr and the content to stdout, so `dwe render env > .env` stays byte-
+// identical to BuildContent while the user still sees why MISSING_VAR is empty.
+func TestRunRenderEnv_WarnsOnUnresolvedRule(t *testing.T) {
+	dir := writeUnresolvedExportProject(t)
+	cfgPath := filepath.Join(dir, "workspace.yml")
+
+	cmd, out, errBuf := newCapturingEnvCmd()
+	if err := runRenderEnv(cmd, &cmdctx.RootFlags{ConfigPath: cfgPath}, ""); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+
+	wantWarn := `warning: exports.env[MISSING_VAR]: from "vars.typo" does not resolve — rendered empty` + "\n"
+	if errBuf.String() != wantWarn {
+		t.Errorf("stderr = %q, want %q", errBuf.String(), wantWarn)
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	want, err := envfile.BuildContent(cfg, dir)
+	if err != nil {
+		t.Fatalf("BuildContent: %v", err)
+	}
+	if out.String() != want {
+		t.Errorf("stdout = %q, want it byte-identical to BuildContent %q", out.String(), want)
+	}
+	if !strings.Contains(out.String(), "MISSING_VAR=\n") {
+		t.Errorf("expected a bare MISSING_VAR= line, got:\n%s", out.String())
+	}
+}
+
+// TestRunRenderEnv_WarnsOnUnresolvedRuleToFile: the warning is about the
+// content, not the sink, so --out gets it too.
+func TestRunRenderEnv_WarnsOnUnresolvedRuleToFile(t *testing.T) {
+	dir := writeUnresolvedExportProject(t)
+	cmd, out, errBuf := newCapturingEnvCmd()
+
+	target := filepath.Join(dir, ".env")
+	if err := runRenderEnv(cmd, &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}, target); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "exports.env[MISSING_VAR]") {
+		t.Errorf("stderr = %q, want the MISSING_VAR warning", errBuf.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout = %q, want empty on the --out path", out.String())
+	}
+	body, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if !strings.Contains(string(body), "MISSING_VAR=\n") {
+		t.Errorf("expected MISSING_VAR= in the written file, got:\n%s", body)
+	}
+}
+
+// TestRunRenderEnv_NoWarningInJSONMode holds the output-mode contract: JSON
+// consumers get no stray text on either stream.
+func TestRunRenderEnv_NoWarningInJSONMode(t *testing.T) {
+	dir := writeUnresolvedExportProject(t)
+	cmd, _, errBuf := newCapturingEnvCmd()
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+	if err := runRenderEnv(cmd, flags, ""); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("stderr = %q, want empty under --output json", errBuf.String())
+	}
+}
+
+// TestRunRenderEnv_SilentWhenEverythingResolves guards against a warning that
+// fires on a healthy project.
+func TestRunRenderEnv_SilentWhenEverythingResolves(t *testing.T) {
+	dir := t.TempDir()
+	yml := `schema_version: "2"
+project:
+  name: testproject
+  prefix: dwe
+vars:
+  here: yes
+exports:
+  env:
+    - name: OK_VAR
+      from: vars.here
+    - name: WITH_DEFAULT
+      from: vars.typo
+      default: fallback
+`
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, _, errBuf := newCapturingEnvCmd()
+	if err := runRenderEnv(cmd, &cmdctx.RootFlags{ConfigPath: cfgPath}, ""); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", errBuf.String())
 	}
 }

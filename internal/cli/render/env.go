@@ -26,7 +26,7 @@ Output goes to stdout by default; use --out to write directly to a file.`,
   dwe render env --out .env`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRenderEnv(flags, outputPath)
+			return runRenderEnv(cmd, flags, outputPath)
 		},
 		SilenceUsage: true,
 	}
@@ -34,19 +34,40 @@ Output goes to stdout by default; use --out to write directly to a file.`,
 	return cmd
 }
 
-func runRenderEnv(flags *cmdctx.RootFlags, outputPath string) error {
+func runRenderEnv(cmd *cobra.Command, flags *cmdctx.RootFlags, outputPath string) error {
 	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
 		return err
 	}
+
+	warnUnresolvedExports(cmd, flags, cfg)
 
 	if outputPath == "" {
 		content, err := envfile.BuildContent(cfg, flags.ProjectRoot())
 		if err != nil {
 			return err
 		}
-		fmt.Print(content)
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), content)
 		return nil
 	}
 	return envfile.Write(cfg, flags.ProjectRoot(), outputPath)
+}
+
+// warnUnresolvedExports reports, on stderr, every export rule this render emits
+// as an empty assignment because its from: does not resolve.
+//
+// It runs before the content is written so the warning is on screen at the
+// moment the user reads the `NAME=` line it explains — the whole point, since
+// an empty value is otherwise indistinguishable from one the config really
+// declares as empty. stderr keeps `dwe render env > .env` byte-identical, and
+// JSON mode stays silent per the output-mode contract.
+func warnUnresolvedExports(cmd *cobra.Command, flags *cmdctx.RootFlags, cfg *config.DweConfig) {
+	if flags.Output == "json" {
+		return
+	}
+	for _, rule := range envfile.UnresolvedRules(cfg) {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"warning: exports.env[%s]: from %q does not resolve — rendered empty\n",
+			rule.Name, rule.From)
+	}
 }

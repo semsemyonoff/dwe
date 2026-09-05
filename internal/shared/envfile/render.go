@@ -123,6 +123,51 @@ func BuildContent(cfg *config.DweConfig, baseDir string) (string, error) {
 	return b.String(), nil
 }
 
+// UnresolvedRule names an exports.env rule that BuildContent renders as an
+// empty assignment because its from: dot-path does not resolve.
+type UnresolvedRule struct {
+	Name string
+	From string
+}
+
+// UnresolvedRules returns the exports.env rules BuildContent will render as
+// `NAME=` (empty): the when: gate passes, from: does not resolve in the merged
+// config, and neither a default: nor required: covers the miss.
+//
+// The other two shapes are deliberately not reported: with a default: the
+// rendered value is the author's own fallback, and required: makes BuildContent
+// fail loudly instead of writing an empty line. `dwe validate` reports all three
+// (config.exports) — this function backs the render-time warning, which speaks
+// only to the value the user is looking at right now.
+//
+// Pure: it resolves paths and never writes.
+func UnresolvedRules(cfg *config.DweConfig) []UnresolvedRule {
+	if cfg == nil {
+		return nil
+	}
+	var out []UnresolvedRule
+	for _, rule := range cfg.Exports.Env {
+		// Mirror BuildContent's own skips, in the same order, so the warning
+		// cannot name a rule the renderer never reaches.
+		if config.IsReservedExportName(rule.Name) {
+			continue
+		}
+		if rule.When != "" {
+			v, _ := config.ResolvePath(cfg.Raw, rule.When)
+			if !IsTruthy(v) {
+				continue
+			}
+		}
+		if rule.Default != "" || rule.Required {
+			continue
+		}
+		if _, ok := config.ResolvePath(cfg.Raw, rule.From); !ok {
+			out = append(out, UnresolvedRule{Name: rule.Name, From: rule.From})
+		}
+	}
+	return out
+}
+
 // checkValue runs every guard a value must clear before it is written to the
 // .env file as a bare `NAME=value` line.
 func checkValue(label, source, value string) error {

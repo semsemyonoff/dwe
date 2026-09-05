@@ -629,14 +629,14 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `docs/internals/packages.md` (§ Core — Validation, § `envfile`)
 - Modify: `CHANGELOG.md`
 
-- [ ] `envfile.UnresolvedRules(cfg) []UnresolvedRule` — same skip rules as `BuildContent` (reserved names, `When` falsy), then `Default == "" && !Required && !found`
-- [ ] `runRenderEnv(cmd, flags, outputPath)`: take the `*cobra.Command`, write content via `cmd.OutOrStdout()` (replacing the bare `fmt.Print`), and before rendering print each unresolved rule as `warning: exports.env[NAME]: from "…" does not resolve — rendered empty` to `cmd.ErrOrStderr()`, gated by `flags.Output != "json"`; both the stdout and `--out` paths
-- [ ] tests (`envfile`): resolving rule, missing with default, required, `when` falsy, format bool/int with missing path — only the empty-render case is returned
-- [ ] tests (`cli/render`, new — `env_test.go` currently covers only `BuildContent`): build the cobra command against a temp project with `cmd.SetOut` / `cmd.SetErr` buffers; warning lands on the err buffer and the out buffer is byte-identical to `BuildContent`; no warning under `--output json`
-- [ ] `env.md` EN + RU: "Evaluation order" / "Value resolution" gains the warning; `validate.md` EN + RU: `config.exports` paragraph next to `config.template_refs` (`:78`), `commands` paragraph mentions the three dot-path fields
-- [ ] `packages.md`: one sentence each in § Core — Validation (`config.exports`, commands dot-path checks) and the `envfile` entry (`UnresolvedRules` is pure; the CLI is the writer)
-- [ ] `CHANGELOG.md` `### Added`: `dwe validate` warns on an `exports.env` / `params` / `context` dot-path that does not resolve; `dwe render env` warns on stderr for a rule rendered empty
-- [ ] `make build`, `make test` — must pass; commit 3: `feat(validate): warn on unresolvable from:/default_from: dot-paths`
+- [x] `envfile.UnresolvedRules(cfg) []UnresolvedRule` — same skip rules as `BuildContent` (reserved names, `When` falsy), then `Default == "" && !Required && !found`
+- [x] `runRenderEnv(cmd, flags, outputPath)`: take the `*cobra.Command`, write content via `cmd.OutOrStdout()` (replacing the bare `fmt.Print`), and before rendering print each unresolved rule as `warning: exports.env[NAME]: from "…" does not resolve — rendered empty` to `cmd.ErrOrStderr()`, gated by `flags.Output != "json"`; both the stdout and `--out` paths
+- [x] tests (`envfile`): resolving rule, missing with default, required, `when` falsy, format bool/int with missing path — only the empty-render case is returned
+- [x] tests (`cli/render`, new — `env_test.go` currently covers only `BuildContent`): build the cobra command against a temp project with `cmd.SetOut` / `cmd.SetErr` buffers; warning lands on the err buffer and the out buffer is byte-identical to `BuildContent`; no warning under `--output json`
+- [x] `env.md` EN + RU: "Evaluation order" / "Value resolution" gains the warning; `validate.md` EN + RU: `config.exports` paragraph next to `config.template_refs` (`:78`), `commands` paragraph mentions the three dot-path fields
+- [x] `packages.md`: one sentence each in § Core — Validation (`config.exports`, commands dot-path checks) and the `envfile` entry (`UnresolvedRules` is pure; the CLI is the writer)
+- [x] `CHANGELOG.md` `### Added`: `dwe validate` warns on an `exports.env` / `params` / `context` dot-path that does not resolve; `dwe render env` warns on stderr for a rule rendered empty
+- [x] `make build`, `make test` — must pass; commit 3: `feat(validate): warn on unresolvable from:/default_from: dot-paths`
 
 ### Task 9: `internal/shared/yamlstrict` package
 

@@ -183,6 +183,22 @@ generated from commit subjects and stay on the
   created under the old name. Either set `project_name` in `workspace/docker.yml`
   to that old value and redeploy once, or write `name: ${COMPOSE_PROJECT_NAME}`
   in the compose file, which now resolves from `.env`.
+- **A dot-path that does not resolve is now reported instead of silently
+  rendering empty.** `dwe validate` warns on an `exports.env` rule whose `from:`
+  or `when:` path is not in the merged config (`config.exports`), and on a
+  command's `params.<name>.default_from`, `params.<name>.options.from` or
+  `context.<name>.from` (`commands` domain). Until now `from: vars.db.passwrod`
+  passed every check and `dwe render env` wrote `DB_PASSWORD=`, an empty value
+  that reached every container as if it had been declared that way. The hint
+  names the consequence for the rule at hand — the variable renders empty, the
+  `default:` is always used, or the render fails on a `required:` rule. These
+  are warnings, not errors: `from:` with a `default:` is a legitimate optional
+  path, and a path may live in a `local.yml` that is not on this machine.
+- **`dwe render env` warns about each variable it renders empty**, on stderr,
+  at the moment the empty value is produced:
+  `warning: exports.env[DB_PASSWORD]: from "vars.db.passwrod" does not resolve —
+  rendered empty`. stdout is untouched, so `dwe render env > .env` is
+  byte-identical to before, and `--output json` prints no warning.
 
 ### Changed
 
