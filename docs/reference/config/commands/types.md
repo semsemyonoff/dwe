@@ -88,6 +88,8 @@ hub.chown-src-host:
       chown -R www-data:www-data /workspace/src
 ```
 
+`COMPOSE_PROJECT_NAME` here is the same value, from the same resolver, that `dwe render env` writes into `.env` as a [reserved system variable](../../render/env.md#system-variables) — a shell command sees one project name whether it reads the exported variable or lets compose pick the `.env` line up on its own.
+
 `COMPOSE_FILE` is omitted when no overlay files are configured; `COMPOSE_PROJECT_NAME` is omitted when no project name is set. Entries already declared in the command's `env:` block are kept but the contract entry wins when keys collide — Go's `os/exec` uses the last entry for duplicate keys, and the contract is appended after `env:`.
 
 ## Type: dwe

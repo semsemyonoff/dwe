@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ 3ba6ecad1ead
+> Translated from: guides/author-project-commands.md @ 9769294619a1
 
 # Авторство проектных команд
 
@@ -85,7 +85,7 @@ commands:
       "$DWE_BIN" shell app -c "php artisan cache:warm"
 ```
 
-`COMPOSE_PROJECT_NAME` и `COMPOSE_FILE` позволяют вызовам `docker compose ...` внутри `cmd:` подхватывать оверлеи DWE без флагов `-p` / `-f`.
+`COMPOSE_PROJECT_NAME` и `COMPOSE_FILE` позволяют вызовам `docker compose ...` внутри `cmd:` подхватывать оверлеи DWE без флагов `-p` / `-f`. `COMPOSE_PROJECT_NAME` — то же значение, которое DWE пишет в сгенерированный `.env` как [зарезервированную системную переменную](../reference/render/env.md#system-variables): один резолвер, два способа доставки.
 
 ## `type: service_exec` — запуск внутри контейнера
 

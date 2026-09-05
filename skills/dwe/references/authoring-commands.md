@@ -71,7 +71,9 @@ chown-src:
   argv: [sh, -c, "chown -R www-data:www-data ."]
 ```
 
-**`shell`** — host `sh -c` glue (inherits `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE`):
+**`shell`** — host `sh -c` glue (inherits `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE`;
+`COMPOSE_PROJECT_NAME` is the same value the generated `.env` carries as a reserved system
+variable):
 
 ```yaml
 auth-json:

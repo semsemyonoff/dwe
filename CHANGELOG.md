@@ -158,6 +158,31 @@ generated from commit subjects and stay on the
   `secrets key list`, instead of plain text. Colour degrades to none when the
   output is not a terminal, `--output json` is unaffected, and `key export`,
   `secrets get` and `--out -` still print their raw bytes with nothing added.
+- **`COMPOSE_PROJECT_NAME` is now the fourth reserved `.env` system variable.**
+  The generated `.env` ends its system block with
+  `COMPOSE_PROJECT_NAME=<name>`, where `<name>` is the compose project name
+  `dwe` passes as `-p`: `project_name` from `workspace/docker.yml` (or
+  `docker.local.yml`), otherwise `<project.prefix>-<project.name>`, always
+  lowercased. It can differ from `PROJECT`, which stays the verbatim
+  `project.name`, and it is the same value the `type: shell` command contract
+  already exported. The line is omitted when the name resolves empty (`dwe`
+  omits `-p` in that case too), and a broken `${...}` in `project_name` fails
+  the render instead of writing a guessed name. Scripts and Makefiles that
+  rebuilt the compose name from `PROJECT` by hand can read the variable
+  instead; it is regenerated on every `dwe run` and `dwe render env`, so no
+  forced redeploy is needed.
+  Two consequences. A project whose `exports.env` already declares a rule named
+  `COMPOSE_PROJECT_NAME` now fails to load for **every** command with
+  `exports.env[N]: "COMPOSE_PROJECT_NAME" is a reserved system variable …` —
+  delete the rule, the built-in line carries the same value. And because `.env`
+  sits in the compose project directory, a raw `docker compose` run from the
+  project root — and a pipeline `type: shell` step that calls compose itself —
+  now scopes to dwe's project name, above any top-level `name:` in the compose
+  file; a compose file declaring a divergent `name:` (what `dwe validate`
+  reports as `config.compose_project_name`) loses sight of the resources it
+  created under the old name. Either set `project_name` in `workspace/docker.yml`
+  to that old value and redeploy once, or write `name: ${COMPOSE_PROJECT_NAME}`
+  in the compose file, which now resolves from `.env`.
 
 ### Changed
 

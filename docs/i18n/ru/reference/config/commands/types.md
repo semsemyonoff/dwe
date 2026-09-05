@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ 484ce6db2049
+> Translated from: reference/config/commands/types.md @ e23429b1704b
 
 # Типы команд
 
@@ -89,6 +89,8 @@ hub.chown-src-host:
     "$DWE_BIN" docker exec -u root app-main -- \
       chown -R www-data:www-data /workspace/src
 ```
+
+`COMPOSE_PROJECT_NAME` здесь — то же значение и от того же резолвера, что `dwe render env` пишет в `.env` как [зарезервированную системную переменную](../../render/env.md#system-variables): shell-команда видит одно имя проекта независимо от того, читает ли она экспортированную переменную или даёт compose самому подхватить строку из `.env`.
 
 `COMPOSE_FILE` опускается, если файлы оверлеев не настроены; `COMPOSE_PROJECT_NAME` опускается, если имя проекта не задано. Записи, уже объявленные в блоке `env:` команды, сохраняются, но запись из контракта побеждает при коллизии ключей — `os/exec` Go использует последнюю запись для дубликатов ключей, а контракт дописывается после `env:`.
 

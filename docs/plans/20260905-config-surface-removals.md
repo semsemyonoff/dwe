@@ -675,7 +675,7 @@ get the qualification.
 - Modify: `CHANGELOG.md`
 - Modify: `internal/core/docs/content_hashes_gen.go` (generated, git-tracked)
 
-- [ ] `render/env.md`: mermaid node (`:26`), "Three variables are always
+- [x] `render/env.md`: mermaid node (`:26`), "Three variables are always
       emitted" → four, emitted whenever they resolve, with a new table row
       (`:41-49`), reword the `PROJECT` row so it no longer claims
       to be the compose project name (`:45`), the reserved-names sentence
@@ -684,7 +684,7 @@ get the qualification.
       (`:290`); add a short "differs from `PROJECT`" note (lowercased,
       `docker.yml` precedence, omitted when empty, same value as the
       `type: shell` contract); RU mirror (`:28,43-51,173,190-194,267-271,292`)
-- [ ] `config/workspace.md:366-376` ("Implicit system variables": four rows) +
+- [x] `config/workspace.md:366-376` ("Implicit system variables": four rows) +
       RU `:373-375`; `config/docker.md:80-95` + RU `:82-95`: state that
       `project_name` is also written to `.env` as `COMPOSE_PROJECT_NAME`, and
       that a raw `docker compose` from the project root (and a pipeline
@@ -695,31 +695,41 @@ get the qualification.
       `config/secrets.md:733` + RU `:745` ("three system variables" → four);
       `docs/commands.md:182` + RU `:184` (llms-txt section list);
       `guides/start-a-new-project.md:122` + RU `:124`
-- [ ] `commands/types.md:77,91` and `guides/author-project-commands.md:73,86`
+      - ⚠️ deviation: `config/secrets.md` no longer carries a "three system
+        variables" count — the sentence reads "the system variables (including
+        `PROJECT`…)". It was rewritten to name both `PROJECT` and
+        `COMPOSE_PROJECT_NAME` explicitly instead of correcting a count that
+        is not there (EN `:732`, RU `:744`).
+- [x] `commands/types.md:77,91` and `guides/author-project-commands.md:73,86`
       (+ RU): cross-reference — the shell contract's `COMPOSE_PROJECT_NAME` and
       the `.env` line are the same value from the same resolver
-- [ ] `docs/internals/packages.md`: update the `envfile` / reserved-exports
+- [x] `docs/internals/packages.md`: update the `envfile` / reserved-exports
       description and add the `SourceDotEnv` note (the variable now lands in
       the `dwe` process env at both call sites — `dwe run`'s
       `renderAndSourceDotEnv` and `dwe deploy run`'s implicit-step post hook;
       harmless because `-p` is always passed and the shell contract's copy
       wins on dedupe)
-- [ ] `skills/dwe/SKILL.md:75-77`, `references/populate-init-repo.md:71`,
+      - ⚠️ `packages.md` had no `SourceDotEnv` description to sit beside, so
+        the note went into the `internal/shared/envfile/` bullet (`:298`)
+        together with the new signatures and the three value rules.
+- [x] `skills/dwe/SKILL.md:75-77`, `references/populate-init-repo.md:71`,
       `references/authoring-commands.md:74`: four reserved names; note the
       `.env` line beside the shell-contract mention
-- [ ] `CHANGELOG.md` `### Added`: `COMPOSE_PROJECT_NAME` entry including the
+- [x] `CHANGELOG.md` `### Added`: `COMPOSE_PROJECT_NAME` entry including the
       collision consequence (a project with its own export rule of that name
       fails to load; delete the rule) and the raw-compose scope change (a
       compose file with a divergent top-level `name:` is now overridden from
       `.env`)
-- [ ] `make gen-docs-manifest`, then copy the new hashes into the RU headers
+- [x] `make gen-docs-manifest`, then copy the new hashes into the RU headers
       of every page edited in this task (`reference/render/env.md`,
       `reference/config/{workspace,docker,validate,secrets}.md`,
       `reference/docs/commands.md`, `reference/config/commands/types.md`,
       `guides/{start-a-new-project,author-project-commands}.md`);
       `make embedded-docs`
-- [ ] `make test` for `./internal/core/docs/...` and `./internal/cli/docs/...`
-- [ ] commit: `feat(env)!: export COMPOSE_PROJECT_NAME as a reserved .env variable`
+- [x] `make test` for `./internal/core/docs/...` and `./internal/cli/docs/...`
+      (ran the full `make test` — green; `cd web && npm run sync` prints no
+      dangling-link warning for the new cross-references)
+- [x] commit: `feat(env)!: export COMPOSE_PROJECT_NAME as a reserved .env variable`
 
 ### Task 8: Drop the Windows build stubs
 

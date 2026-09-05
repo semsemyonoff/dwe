@@ -73,8 +73,10 @@ pass validation either way, and are the ones a fresh project gets wrong.
   gets the service/workdir/user/env the command carries.
 - **A port declared in `service.yml` is display-only** until an `exports.env` rule surfaces it
   (`{name: APP_PORT, from: services.<name>.ports.http}`) and compose interpolates that var.
-  `PROJECT`, `UID` and `GID` are injected into `.env` automatically and must **not** be
-  redeclared as export rules.
+  `PROJECT`, `UID`, `GID` and `COMPOSE_PROJECT_NAME` are injected into `.env` automatically
+  and must **not** be redeclared as export rules. `COMPOSE_PROJECT_NAME` is the lowercased
+  compose project name (`docker.yml` `project_name`, else `<prefix>-<name>`) — the same value
+  the `type: shell` contract exports; set it through `docker.yml`, never an export rule.
 
 ## Output conventions
 

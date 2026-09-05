@@ -355,15 +355,16 @@ exports:
 
 #### Implicit system variables
 
-`dwe render env` always emits three variables before any rule runs, regardless of `exports.env`:
+`dwe render env` emits four variables before any rule runs, regardless of `exports.env`:
 
 | Variable | Source | Notes |
 |----------|--------|-------|
-| `PROJECT` | `project.name` | Used by Docker labels and Make targets |
+| `PROJECT` | `project.name` | The name verbatim, including uppercase. Used by Make targets |
 | `UID` | host UID | Hard-coded to `1000` on macOS, real UID on Linux/WSL — keeps container builds deterministic across hosts |
 | `GID` | host GID | Same logic as `UID` |
+| `COMPOSE_PROJECT_NAME` | the compose project name `dwe` passes as `-p` | `project_name` from [`docker.yml`](docker.md#project_name) / `docker.local.yml`, else `<project.prefix>-<project.name>`, always lowercased. Omitted when it resolves empty; a resolution error fails the render |
 
-These are managed by the CLI; do not redeclare them as export rules.
+The first three are always present; `COMPOSE_PROJECT_NAME` is emitted whenever the name resolves to a non-empty value. All four are managed by the CLI; do not redeclare them as export rules — a rule using one of these names is a hard config-load error.
 
 #### Single-line values only
 
