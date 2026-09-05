@@ -1973,7 +1973,9 @@ func assembleConfig(workspacePath string, configLayers []Layer, state SecretsSta
 	if deployCfg, err := LoadProjectDeployConfig(deployPath); err == nil {
 		cfg.Deploy = deployCfg
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", deployPath, err)
+		// No file prefix here: os.ReadFile errors and yamlstrict.Decode errors
+		// both already name the file, so wrapping would print it twice.
+		return nil, err
 	}
 	// Ensure cfg.Deploy is always non-nil (empty by default if deploy.yml is absent)
 	if cfg.Deploy == nil {
