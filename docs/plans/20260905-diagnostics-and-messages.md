@@ -659,12 +659,12 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `internal/core/project/config/workspace_test.go`, `snapshot_test.go`, `validate_test.go`
 - Modify: `internal/core/validate/config/validate_yml_test.go`
 
-- [ ] `checkKnownFields`: `fmt.Errorf("line %d: field %s not found in type %s", value.Content[i].Line, key, typeName)`
-- [ ] replace the decoder triple at `workspace.go:2376` (service.yml — keep the `loading service %q definition:` context as an outer wrap), `:3103`, `:3158`, `:3183`, `:3208`, `snapshot.go:152`, `validate.go:200` with `yamlstrict.Decode(data, &cfg, path)`; drop the now-redundant `parse %s:` on that error, keep it on shape-validation errors
-- [ ] confirm the four pipeline loaders' `errors.Is(err, io.EOF)` branch still fires (task 3's state tests cover it)
-- [ ] add the drift test: `deployStepKnownFields` == `yamlstrict.AllowedFields(reflect.TypeFor[DeployStep]())` and `parallelGroupKnownFields` == the `ParallelGroup` set (sorted, exact)
-- [ ] update tests that pin the old text (`validate_yml_test.go:65-69`; grep `not found in type` and `parse workspace/` across `*_test.go` in these packages); add one unknown-field assertion per migrated loader checking file + field + an allowed entry
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/validate/...` — must pass before task 11
+- [x] `checkKnownFields`: `fmt.Errorf("line %d: field %s not found in type %s", value.Content[i].Line, key, typeName)`
+- [x] replace the decoder triple at `workspace.go:2376` (service.yml — keep the `loading service %q definition:` context as an outer wrap; the file passed to `yamlstrict` is the derived project-relative `workspace/services/<name>/service.yml`), `:3103`, `:3158`, `:3183`, `:3208`, `snapshot.go:152`, `validate.go:200` with `yamlstrict.Decode(data, &cfg, path)`; drop the now-redundant `parse %s:` on that error, keep it on shape-validation errors
+- [x] confirm the four pipeline loaders' `errors.Is(err, io.EOF)` branch still fires (task 3's state tests cover it)
+- [x] add the drift test: `deployStepKnownFields` == `yamlstrict.AllowedFields(reflect.TypeFor[DeployStep]())` and `parallelGroupKnownFields` == the `ParallelGroup` set (sorted, exact)
+- [x] update tests that pin the old text (`validate_yml_test.go:65-69`; grep `not found in type` and `parse workspace/` across `*_test.go` in these packages); add one unknown-field assertion per migrated loader checking file + field + an allowed entry — new `internal/core/project/config/yamlstrict_wiring_test.go`. ⚠️ `service.yml`'s strict pass is only reachable through a **nested** unknown (the lenient first pass rejects top-level ones with its own message), and `ServiceCLIConfig` has a custom `UnmarshalYAML` that bypasses `KnownFields`, so the assertion uses `info.schemee`
+- [x] run `go test ./internal/core/project/config/... ./internal/core/validate/...` — must pass before task 11
 
 ### Task 11: Migrate the remaining strict loaders
 

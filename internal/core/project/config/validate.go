@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/semsemyonoff/dwe/internal/core/validate/diag"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 // ValidateConfigFileName is the filename of the project-level validate.yml,
@@ -196,10 +196,8 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 	}
 
 	var raw rawValidateConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&raw); err != nil {
-		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := yamlstrict.Decode(data, &raw, path); err != nil {
+		return nil, nil, err
 	}
 
 	// Walk the document to capture per-entry source line numbers.

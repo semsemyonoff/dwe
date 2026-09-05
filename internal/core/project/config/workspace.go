@@ -2,7 +2,6 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +21,7 @@ import (
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 
 	"gopkg.in/yaml.v3"
 )
@@ -517,9 +517,10 @@ var deployStepLeafOnlyFields = []string{
 // in allowed. It compensates for yaml.v3 bypassing KnownFields(true) inside
 // custom UnmarshalYAML implementations. mappingDesc names the mapping in the
 // wrong-kind error ("<mappingDesc> must be a mapping, got kind N"); typeName is
-// the Go type named in the unknown-field error ("field X not found in type
-// <typeName>"). The returned map records which allowed keys were seen so callers
-// can run follow-up cross-field checks.
+// the Go type named in the unknown-field error ("line N: field X not found in
+// type <typeName>" — the same shape yaml.v3 itself emits, so yamlstrict.Decode
+// rewrites both through one code path). The returned map records which allowed
+// keys were seen so callers can run follow-up cross-field checks.
 func checkKnownFields(value *yaml.Node, mappingDesc, typeName string, allowed map[string]bool) (map[string]bool, error) {
 	if value.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("%s must be a mapping, got kind %d", mappingDesc, value.Kind)
@@ -528,7 +529,7 @@ func checkKnownFields(value *yaml.Node, mappingDesc, typeName string, allowed ma
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i].Value
 		if !allowed[key] {
-			return nil, fmt.Errorf("field %s not found in type %s", key, typeName)
+			return nil, fmt.Errorf("line %d: field %s not found in type %s", value.Content[i].Line, key, typeName)
 		}
 		seen[key] = true
 	}
@@ -2372,10 +2373,9 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 
 	// Second pass: strict typed decode.
 	var svc ServiceConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&svc); err != nil {
-		return nil, fmt.Errorf("loading service %q definition: parse: %w", name, err)
+	relFile := filepath.ToSlash(filepath.Join("workspace", "services", name, "service.yml"))
+	if err := yamlstrict.Decode(data, &svc, relFile); err != nil {
+		return nil, fmt.Errorf("loading service %q definition: %w", name, err)
 	}
 
 	// Post-decode validation for fields whose allowed-values contract isn't
@@ -3125,15 +3125,13 @@ func LoadLifecycleConfigWithState(path string) (*LifecycleConfig, PipelineFileSt
 	}
 	var cfg LifecycleConfig
 	state := PipelineStateAuthored
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil {
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil {
 		if !errors.Is(err, io.EOF) {
-			return nil, PipelineStateAuthored, fmt.Errorf("parse %s: %w", path, err)
+			return nil, PipelineStateAuthored, err
 		}
 		state = PipelineStateDefaultFallback
 	}
@@ -3184,15 +3182,13 @@ func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeploy
 	}
 	var cfg ProjectDeployConfig
 	state := PipelineStateAuthored
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil {
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil {
 		if !errors.Is(err, io.EOF) {
-			return nil, PipelineStateAuthored, fmt.Errorf("parse %s: %w", path, err)
+			return nil, PipelineStateAuthored, err
 		}
 		state = PipelineStateDefaultFallback
 	}
@@ -3212,14 +3208,12 @@ func loadServiceDeployConfigDecode(path string, defaultLog bool) (*ServiceDeploy
 		return nil, err
 	}
 	var cfg ServiceDeployConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
 	}
 	if err := validatePhaseSteps(cfg.Phases, false); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -3238,15 +3232,13 @@ func loadDeployConfigDecode(path string, allowDeployServices bool, defaultLog bo
 	}
 	var cfg DeployConfig
 	state := PipelineStateAuthored
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil {
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil {
 		if !errors.Is(err, io.EOF) {
-			return nil, PipelineStateAuthored, fmt.Errorf("parse %s: %w", path, err)
+			return nil, PipelineStateAuthored, err
 		}
 		state = PipelineStateDefaultFallback
 	}

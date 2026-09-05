@@ -8,9 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 // SnapshotConfigFileName is the filename of the project-level snapshot.yml,
@@ -148,10 +147,8 @@ func LoadSnapshotConfig(path string) (*SnapshotConfig, error) {
 
 	var cfg SnapshotConfig
 	if len(bytes.TrimSpace(data)) > 0 {
-		dec := yaml.NewDecoder(bytes.NewReader(data))
-		dec.KnownFields(true)
-		if err := dec.Decode(&cfg); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+		if err := yamlstrict.Decode(data, &cfg, path); err != nil {
+			return nil, err
 		}
 	}
 
