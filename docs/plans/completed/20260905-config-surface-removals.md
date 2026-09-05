@@ -883,14 +883,39 @@ get the qualification.
 
 ### Task 11: [Final] Update documentation and file the plan
 
-- [ ] `AGENTS.md` Critical Patterns: no new pattern is needed; confirm the
+- [x] `AGENTS.md` Critical Patterns: no new pattern is needed; confirm the
       `Encrypted secrets` and `Compose project name` bullets still read
       correctly with four reserved names and the envfile signature change
-- [ ] `docs/internals/packages.md`: final read-through of the four edited
+      - both verified, no edit needed. `Compose project name` names
+        `config.ResolveComposeProjectName(baseDir, cfg)` and
+        `config.ComposeProjectName(dockerCfg, cfg)` (both still exist,
+        `docker.go:261,291`) and calls `shared/prompt.readComposeProjectName`
+        (`prompt.go:677`) the one deliberate exception — `envfile` is now a
+        *conforming* resolver call site, not a new exception, so the bullet's
+        rule is unchanged. `Encrypted secrets` never enumerated the reserved
+        names; its "`render env`/`config` run no preflight and refuse a marker"
+        claim still holds and is now enforced on the fourth value too
+        (`checkValue` guards `COMPOSE_PROJECT_NAME`, `render.go:71`).
+- [x] `docs/internals/packages.md`: final read-through of the four edited
       sections for stale line references
-- [ ] the "Upgrade notes" section below is complete in EN + RU and ready to
+      - ➕ one stale ref found and fixed: the `shared/lock` bullet cited the
+        inode-race invariant at `lock.go:120-125`; the comment sits at
+        `lock.go:101-106` (it was already off before the build-tag removal
+        shifted the file by two lines). Every other `*.go:N` ref in the edited
+        sections re-verified; the `validate/bridge` `path.IsAbs`, mermaid,
+        bridge, bridgeproto and `envfile` bullets carry no Windows claim and no
+        reference to a deleted stub file (grep over `docs/`, `AGENTS.md`,
+        `skills/` for `exec_windows.go` / `spawn_windows.go` /
+        `mmdc_windows.go` / `lock_other.go` hits only historical plan files).
+- [x] the "Upgrade notes" section below is complete in EN + RU and ready to
       paste into the upgrade guide when that page is written
-- [ ] move this plan to `docs/plans/completed/`
+      - ➕ the quoted strict-root error was wrong in both languages
+        (`unknown root key "state" … allowed: …`). Replaced with the message the
+        loader actually emits (`layers.go:386`), which names the file, the key,
+        the `vars:` remedy and the allowed list. The
+        `exports.env[N]: … reserved system variable` quote was checked against
+        `workspace.go:1898` and is verbatim.
+- [x] move this plan to `docs/plans/completed/`
 
 ## Upgrade notes (ready to paste into the upgrade guide)
 
@@ -902,7 +927,8 @@ them verbatim.
 **`state:` removed.** The top-level `state:` key is no longer accepted in
 `workspace.yml`, `workspace/defaults.yml` or `workspace/local.yml`; a project
 that still declares it fails to load with
-`unknown root key "state" … allowed: …` naming the file. It had no effect
+`<file>: unknown top-level key "state" — move custom values under "vars:" (e.g. vars.state.*); allowed top-level keys: …`
+naming the offending layer file. It had no effect
 beyond one line in the bare-`dwe` summary and was never exported to `.env`.
 Delete the key; a free-form value belongs under `vars:`.
 
@@ -947,8 +973,9 @@ project locks.
 
 **Ключ `state:` удалён.** Корневой ключ `state:` больше не принимается в
 `workspace.yml`, `workspace/defaults.yml` и `workspace/local.yml`; проект, где
-он остался, не загружается с ошибкой `unknown root key "state" … allowed: …`
-с именем файла. Он влиял только на одну строку сводки `dwe` без аргументов и
+он остался, не загружается с ошибкой
+`<file>: unknown top-level key "state" — move custom values under "vars:" (e.g. vars.state.*); allowed top-level keys: …`
+с именем проблемного файла слоя. Он влиял только на одну строку сводки `dwe` без аргументов и
 никогда не экспортировался в `.env`. Удалите ключ; произвольное значение
 живёт в `vars:`.
 
