@@ -1,4 +1,4 @@
-> Translated from: reference/config/snapshot.md @ 88cc74517ef4
+> Translated from: reference/config/snapshot.md @ 251f1efe3f1d
 
 # snapshot.yml
 
@@ -87,7 +87,7 @@ dwe snapshot rollback                       # быстро: восстанови
 | `restore` | workflow | — | Workflow восстановления. |
 | `remove` | workflow | — | Workflow очистки, запускаемый `dwe snapshot remove` до удаления директории. |
 
-Загрузчик использует строгое декодирование (`KnownFields(true)`): неизвестные ключи верхнего уровня — хард-ошибки.
+Загрузчик использует строгое декодирование (`KnownFields(true)`): неизвестные ключи — хард-ошибки вида `workspace/snapshot.yml:<строка>: unknown field "<ключ>" — allowed here: …` (см. [Ошибки о неизвестных полях](workspace.md#ошибки-о-неизвестных-полях)).
 
 ## Workflow-блоки: `create` / `restore` / `remove`
 

@@ -224,6 +224,17 @@ generated from commit subjects and stay on the
   misleading — the inert `deploy.yml` that `dwe init` scaffolds runs the
   built-in pipeline, not the one in the file. An absent `reset.yml` stays
   silent as before, since the scaffold never ships one.
+- **An unknown field in a config file now names the file, the line, the key and
+  the fields that are allowed there.** Every strictly decoded file — the
+  pipelines, `service.yml`, `snapshot.yml`, `validate.yml`, command files,
+  template-pack manifests, test scenarios, `setup.yml` and translation bundles
+  — used to surface the underlying YAML library's `field defaults not found in
+  type config.DeployConfig`, a Go type name nothing in the docs mentions. It
+  now reads `workspace/deploy.yml:12: unknown field "defaults" — allowed here:
+  fail_fast, log, phases`, followed once by a hint that a field you did not
+  invent may come from a newer `dwe`. The unknown top-level key error carries
+  the same hint next to its existing `vars:` advice. A script grepping for the
+  old `not found in type` text needs updating.
 - **Documentation fix: predicate builtins are `check:`-only.**
   `docs/reference/config/deploy/builtins.md` claimed the builtins on that page
   can be used in a `when:` guard. They cannot — `when: {type: builtin}`

@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 715c63728e8e
+> Translated from: reference/config/workspace.md @ 48f7ba4797ce
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -11,6 +11,7 @@
 - [Разрешение dot-path](#разрешение-dot-path)
   - [Откуда берутся поля сервисов](#откуда-берутся-поля-сервисов)
 - [Строгий корень + песочница `vars:`](#строгий-корень--песочница-vars)
+  - [Ошибки о неизвестных полях](#ошибки-о-неизвестных-полях)
 - [workspace.yml](#workspaceyml)
   - [Справочник полей](#справочник-полей)
   - [Блок `secrets:`](#блок-secrets)
@@ -106,10 +107,21 @@ project · runtime · exports · compose · docs · services · vars · update �
 (`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
 
 ```text
-workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
 ```
 
 Так опечатки в формализованных ключах (`runtim:`, `exprots:`) падают громко, а не проглатываются молча, и схему можно ужесточать, не конфликтуя со специфичными для проекта значениями. Та же ошибка выводится как error-диагностика `dwe validate`.
+
+### Ошибки о неизвестных полях
+
+То же самое действует и *внутри* файла. Каждый строго декодируемый конфиг — пайплайны (`deploy.yml`, `lifecycle.yml`, `reset.yml`), `service.yml`, `snapshot.yml`, `validate.yml`, файлы команд, манифесты template-паков, сценарии тестов, `setup.yml` и бандлы переводов — сообщает о неизвестном ключе с файлом, строкой, ключом и набором полей, которые допустимы в этом месте:
+
+```text
+workspace/deploy.yml:12: unknown field "defaults" — allowed here: fail_fast, log, phases
+(a field you did not invent may come from a newer dwe version — check `dwe version`)
+```
+
+Несколько неизвестных полей в одном файле перечисляются по строке на каждое, подсказка печатается один раз в конце.
 
 ### `vars:` — дом для свободных значений
 

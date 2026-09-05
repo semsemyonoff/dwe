@@ -78,8 +78,8 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Foundation (`project/config/`).
 
 - **YAML loader strictness** — pipeline / command-file / manifest / scenario / service-folder loaders are strict `KnownFields(true)`; info, styles, docker, local.yml and topology are lenient. Match the surface you join, or you swallow the typo strictness exists to catch, or hard-fail a file authors treat as free-form.
-  Exactly four strict *pipeline* loaders also tolerate `io.EOF` so an all-comment file reads as absent and the built-in default survives — that is what makes `dwe init`'s inert scaffold overrides load; mirror it in any new strict pipeline loader.
-  See § Core — Foundation (`project/config/`).
+  Every strict decode goes through `yamlstrict.Decode` (file, line, key, allowed set); the four pipeline loaders' `io.EOF` tolerance (all-comment file ⇒ built-in default) surfaces as `PipelineFileState`.
+  See § Core — Foundation (`project/config/`) and § `internal/shared/yamlstrict/`.
 
 - **Strict root + `vars:` sandbox + top-level `update:`** — `LoadConfig` rejects any top-level key outside `allowedRootKeys`, per layer so the error names the file; a new formalized top-level field MUST be added there or every project declaring it fails to load.
   Arbitrary free-form values have exactly one home, `vars:`; self-update is the top-level `update: {mode: on|off}`, which **replaced** `lifecycle.yml`'s `run.update`.
