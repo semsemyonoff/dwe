@@ -54,7 +54,7 @@ An unknown `${...}` head (`${HOME}`, a typo) is left literal, never blanked. Ful
 
 ## Reserved env names
 
-`dwe render env` always emits these itself, before any `exports.env` rule: `PROJECT`, `UID`, `GID`. They are available in `compose.yaml` without being declared, and an `exports.env` rule may not redeclare them.
+`dwe render env` emits these itself, before any `exports.env` rule: `PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME`. They are available in `compose.yaml` without being declared, and an `exports.env` rule may not redeclare them.
 
 ## Documentation
 

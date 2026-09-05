@@ -34,7 +34,7 @@ func TestBuildContent_refusesMarkerInExportedValue(t *testing.T) {
 		"vars": map[string]any{"telegram": map[string]any{"token": marker}},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err == nil {
 		t.Fatalf("expected an error, got output:\n%s", out)
 	}
@@ -49,7 +49,7 @@ func TestBuildContent_refusesMarkerInProjectName(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
 	cfg.Project.Name = testMarker(t, "encrypted-name")
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err == nil {
 		t.Fatalf("expected an error, got output:\n%s", out)
 	}
@@ -68,7 +68,7 @@ func TestBuildContent_decryptedValueRendersNormally(t *testing.T) {
 		"vars": map[string]any{"telegram": map[string]any{"token": "s3cr3t-value"}},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("BuildContent: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestWrite_tightensPreExistingMode(t *testing.T) {
 		t.Fatalf("write stale .env: %v", err)
 	}
 
-	if err := Write(makeEnvCfg(nil, map[string]any{}), outputPath); err != nil {
+	if err := Write(makeEnvCfg(nil, map[string]any{}), dir, outputPath); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestBuildContent_refusesMarkerInsideCompositeValue(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := makeEnvCfg([]config.ExportRule{{Name: "DB", From: "vars.db"}}, raw)
-			out, err := BuildContent(cfg)
+			out, err := BuildContent(cfg, "")
 			if err == nil {
 				t.Fatalf("expected an error, got output:\n%s", out)
 			}
@@ -141,7 +141,7 @@ func TestBuildContent_refusesMultiLineValue(t *testing.T) {
 				"vars": map[string]any{"ssh": map[string]any{"key": value}},
 			})
 
-			out, err := BuildContent(cfg)
+			out, err := BuildContent(cfg, "")
 			if err == nil {
 				t.Fatalf("expected an error, got output:\n%s", out)
 			}
@@ -163,7 +163,7 @@ func TestBuildContent_refusesMultiLineProjectName(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
 	cfg.Project.Name = "demo\nUID=0"
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err == nil {
 		t.Fatalf("expected an error, got output:\n%s", out)
 	}

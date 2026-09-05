@@ -325,7 +325,7 @@ func writeReservedEnvSection(b *strings.Builder, names []string) {
 		return
 	}
 	writeHeading(b, "Reserved env names")
-	writeParagraph(b, "`dwe render env` always emits these itself, before any `exports.env` rule: `"+
+	writeParagraph(b, "`dwe render env` emits these itself, before any `exports.env` rule: `"+
 		strings.Join(names, "`, `")+"`. "+
 		"They are available in `compose.yaml` without being declared, and an `exports.env` rule may not redeclare them.")
 }

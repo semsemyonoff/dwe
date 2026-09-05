@@ -14,7 +14,7 @@ func TestWrite_createsFile(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
 	outputPath := filepath.Join(dir, ".env")
 
-	if err := Write(cfg, outputPath); err != nil {
+	if err := Write(cfg, dir, outputPath); err != nil {
 		t.Fatalf("Write returned error: %v", err)
 	}
 
@@ -32,7 +32,7 @@ func TestWrite_createsParentDirs(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
 	outputPath := filepath.Join(dir, "sub", "dir", ".env")
 
-	if err := Write(cfg, outputPath); err != nil {
+	if err := Write(cfg, dir, outputPath); err != nil {
 		t.Fatalf("Write returned error: %v", err)
 	}
 
@@ -78,13 +78,13 @@ func TestWrite_withExportRules(t *testing.T) {
 	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp", Prefix: "dwe"},
 		Exports: config.ExportsConfig{Env: []config.ExportRule{
-			{Name: "APP_ENV", From: "state"},
+			{Name: "APP_ENV", From: "env"},
 		}},
-		Raw: map[string]any{"state": "production"},
+		Raw: map[string]any{"env": "production"},
 	}
 	outputPath := filepath.Join(dir, ".env")
 
-	if err := Write(cfg, outputPath); err != nil {
+	if err := Write(cfg, dir, outputPath); err != nil {
 		t.Fatalf("Write returned error: %v", err)
 	}
 

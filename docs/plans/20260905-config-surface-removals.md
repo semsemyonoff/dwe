@@ -598,7 +598,7 @@ get the qualification.
 - Modify: `internal/core/docs/llmstxt/generator_test.go`
 - Modify: `internal/core/docs/llmstxt/testdata/llms_txt_briefing.golden`
 
-- [ ] `compose_name_test.go` (table-driven, temp dirs): (a) no `docker.yml` →
+- [x] `compose_name_test.go` (table-driven, temp dirs): (a) no `docker.yml` →
       `COMPOSE_PROJECT_NAME=<prefix>-<name>` lowercased, last in the system
       block; (b) uppercase `project.name` → lowercase value while `PROJECT=`
       keeps the original case; (c) `workspace/docker.yml` `project_name` wins
@@ -610,27 +610,50 @@ get the qualification.
       (f) a `project_name` with an unresolvable `${…}` template → `BuildContent`
       returns an error mentioning `compose project name`; (g) `Regenerate` on a
       temp project writes the line
-- [ ] `render_test.go:33-59` (`silentlyDropsReservedRules`): switch from
+      - ➕ added a seventh case (prefix-only project → `dwe-`, non-empty and
+        emitted) so the boundary of (e) is pinned on both sides, plus
+        `TestBuildContent_composeProjectNameIsLastSystemVariable`, which pins
+        the whole assignment order `PROJECT, UID, GID, COMPOSE_PROJECT_NAME`
+        ahead of the user rules. `countAssignments` lives here and is what
+        `render_test.go` now uses.
+- [x] `render_test.go:33-59` (`silentlyDropsReservedRules`): switch from
       `strings.Count(out, name+"=")` to counting lines with
       `strings.HasPrefix(line, name+"=")`; fix every other `BuildContent`/`Write`
       call for the new signature (`render_test.go`, `write_test.go:25,71`,
       `secrets_test.go`, `cli/render/env_test.go` ×10 + `:260`) — the marker
       and multi-line guards in `secrets_test.go` must still exercise
       `PROJECT`
-- [ ] `workspace_test.go:2365-2400`: no edit — both
+      - ➕ the same pass renamed the `state` fixture key to `env` in the
+        `From:`/`Raw` pairs of `render_test.go`, `write_test.go` and
+        `cli/render/env_test.go` — `state` is a removed root key after Task 1
+        and reads as one, even though these Raw maps are literals
+      - the reserved rules table gained a `COMPOSE_PROJECT_NAME` rule so the
+        defense-in-depth drop is exercised on the new name too
+      - the `""` baseDir the render tests pass skips the `docker.yml` read
+        entirely (`ResolveComposeProjectName`'s documented short-circuit), so
+        no render test needs a project tree; noted on both `makeEnvCfg` godocs
+- [x] `workspace_test.go:2365-2400`: no edit — both
       `TestLoadConfig_reservedExportNameRejected` and `TestIsReservedExportName`
       range over `ReservedExportNames`, so the fourth name is covered
       automatically; just confirm they pass and that `"PROJECT_NAME"` stays in
-      the negative list
-- [ ] `defaults.yml.tmpl:36`: extend the comment to
+      the negative list — confirmed (`workspace_test.go:2419,2443`,
+      `"PROJECT_NAME"` still in the negative list at `:2449`)
+- [x] `defaults.yml.tmpl:36`: extend the comment to
       `# PROJECT, UID, GID and COMPOSE_PROJECT_NAME are injected automatically and must not be redeclared.`
       (pinned by `templates_content_test.go:345-352`); regenerate
-      `golden_default.txt`
-- [ ] `llmstxt/generator_test.go:155`: add the fourth name; regenerate
+      `golden_default.txt` — the diff is that one line
+- [x] `llmstxt/generator_test.go:155`: add the fourth name; regenerate
       `llms_txt_briefing.golden` and confirm
       `TestDocsLlmsTxtCommand_SizeBudget` (`internal/cli/docs/llmstxt_test.go:173`,
       12 KB cap) still passes
-- [ ] run `make test` for `./internal/shared/envfile/... ./internal/cli/render/... ./internal/cli/service/... ./internal/core/project/config/... ./internal/core/workflow/... ./internal/core/docs/...` — must pass before Task 7
+      - ➕ `llmstxt/generator.go:328` said `dwe render env` **always** emits the
+        reserved names; the omit-when-empty rule makes that false for the
+        fourth, so the word is dropped (the same qualification Task 7 applies
+        to `render/env.md` and the `ReservedExportNames` godoc). Net −7 bytes,
+        so the size budget moves the right way
+- [x] run `make test` for `./internal/shared/envfile/... ./internal/cli/render/... ./internal/cli/service/... ./internal/core/project/config/... ./internal/core/workflow/... ./internal/core/docs/...` — must pass before Task 7
+      (ran the full `make test` and `make lint` — both green; `go build ./...`
+      and `go vet ./internal/...` clean, closing the Task 5 gate)
 
 ### Task 7: `COMPOSE_PROJECT_NAME` — docs, skills, internals; commit 3
 
