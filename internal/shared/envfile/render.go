@@ -161,6 +161,13 @@ func UnresolvedRules(cfg *config.DweConfig) []UnresolvedRule {
 		if rule.Default != "" || rule.Required {
 			continue
 		}
+		// A rule with no from: at all renders `NAME=` by design, not by
+		// accident — ResolvePath reports an empty path as not-found, so without
+		// this guard the warning would quote `from ""` at an author who never
+		// wrote one. config.exports skips the same shape.
+		if rule.From == "" {
+			continue
+		}
 		if _, ok := config.ResolvePath(cfg.Raw, rule.From); !ok {
 			out = append(out, UnresolvedRule{Name: rule.Name, From: rule.From})
 		}

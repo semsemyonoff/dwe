@@ -942,16 +942,23 @@ func TestResetValidator_NoFileIsSilent(t *testing.T) {
 func TestResetValidator_FileExistsStillReportsOK(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "reset.yml"), []byte(`phases: []
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "reset.yml"), []byte(`phases:
+  - name: wipe
+    steps:
+      - type: shell
+        cmd: "true"
 `), 0o644))
 	diags := (&resetValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityOK, "")
 }
 
-// TestPipelineValidators_ThreeStates pins the absent / all-comment / authored
-// matrix for the three pipeline files. The all-comment case is the load-bearing
-// one: `dwe init` scaffolds an inert deploy.yml, and reporting OK for it would
-// claim the user's pipeline is in force while the built-in default is what runs.
+// TestPipelineValidators_ThreeStates pins the absent / all-comment /
+// parses-but-inert / authored matrix for the three pipeline files. The two
+// inactive states are the load-bearing ones: `dwe init` scaffolds an inert
+// deploy.yml, and a file that parses without reaching the engine (no phases, a
+// missing lifecycle section) is defaulted just the same — reporting OK for
+// either would claim the user's pipeline is in force while the built-in default
+// is what runs.
 func TestPipelineValidators_ThreeStates(t *testing.T) {
 	t.Parallel()
 
@@ -974,6 +981,9 @@ func TestPipelineValidators_ThreeStates(t *testing.T) {
 	}
 
 	const allComment = "# nothing active here\n#phases: []\n"
+	const onePhase = "phases:\n  - name: build\n    steps:\n      - type: shell\n        cmd: \"true\"\n"
+	const runSection = "run:\n  phases:\n    - name: build\n      steps:\n        - type: shell\n          cmd: \"true\"\n"
+	const stopSection = "stop:\n  phases:\n    - name: teardown\n      steps:\n        - type: shell\n          cmd: \"true\"\n"
 
 	tests := []struct {
 		name    string
@@ -1004,9 +1014,27 @@ func TestPipelineValidators_ThreeStates(t *testing.T) {
 			wantMsg: "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
 		},
 		{
-			name:    "deploy authored",
+			// EnsureDeployConfig defaults on len(Phases) == 0, so an explicitly
+			// empty phase list is as inert as an all-comment file.
+			name:    "deploy empty phase list",
 			file:    "deploy.yml",
 			body:    "phases: []\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml declares no phases — built-in default pipeline is active",
+		},
+		{
+			// The shape io.EOF cannot see: the file parses, carries a real key,
+			// and still runs the built-in default.
+			name:    "deploy parses without phases",
+			file:    "deploy.yml",
+			body:    "log: false\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml declares no phases — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy authored",
+			file:    "deploy.yml",
+			body:    onePhase,
 			wantSev: validate.SeverityOK,
 		},
 		{
@@ -1023,9 +1051,25 @@ func TestPipelineValidators_ThreeStates(t *testing.T) {
 			wantMsg: "lifecycle.yml has no active content (all comments or empty) — built-in default pipeline is active",
 		},
 		{
+			// run: and stop: default independently, so a file declaring only
+			// one of them still runs the built-in default for the other.
+			name:    "lifecycle without stop section",
+			file:    "lifecycle.yml",
+			body:    runSection,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "lifecycle.yml declares no stop: section — built-in default stop pipeline is active",
+		},
+		{
+			name:    "lifecycle without run section",
+			file:    "lifecycle.yml",
+			body:    stopSection,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "lifecycle.yml declares no run: section — built-in default run pipeline is active",
+		},
+		{
 			name:    "lifecycle authored",
 			file:    "lifecycle.yml",
-			body:    "run:\n  phases: []\n",
+			body:    runSection + stopSection,
 			wantSev: validate.SeverityOK,
 		},
 		{
@@ -1041,9 +1085,16 @@ func TestPipelineValidators_ThreeStates(t *testing.T) {
 			wantMsg: "reset.yml has no active content (all comments or empty) — built-in default pipeline is active",
 		},
 		{
+			name:    "reset parses without phases",
+			file:    "reset.yml",
+			body:    "log: true\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "reset.yml declares no phases — built-in default pipeline is active",
+		},
+		{
 			name:    "reset authored",
 			file:    "reset.yml",
-			body:    "phases: []\n",
+			body:    onePhase,
 			wantSev: validate.SeverityOK,
 		},
 	}
@@ -1063,6 +1114,51 @@ func TestPipelineValidators_ThreeStates(t *testing.T) {
 						"an inactive pipeline file must not report OK: %+v", d)
 				}
 			}
+		})
+	}
+}
+
+// TestPipelineValidators_UnparseableFile pins the fourth state the *WithState
+// signature change left untested: a file that fails to decode is an error, not
+// an info row claiming the built-in default is quietly in force.
+func TestPipelineValidators_UnparseableFile(t *testing.T) {
+	t.Parallel()
+
+	// An unknown top-level key: strictly decoded, so every pipeline loader
+	// rejects it with the yamlstrict message.
+	const bad = "defaults:\n  nope: 1\n"
+
+	tests := []struct {
+		name   string
+		file   string
+		target string
+		run    func(validate.Context) []validate.Diagnostic
+	}{
+		{"deploy", "deploy.yml", "config.deploy", (&deployValidator{}).Run},
+		{"lifecycle", "lifecycle.yml", "config.lifecycle", (&lifecycleValidator{}).Run},
+		{"reset", "reset.yml", "config.reset", (&resetValidator{}).Run},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+			require.NoError(t, os.WriteFile(
+				filepath.Join(root, "workspace", tt.file), []byte(bad), 0o644))
+
+			diags := tt.run(validate.Context{ProjectRoot: root})
+
+			var found bool
+			for _, d := range diags {
+				require.NotEqual(t, validate.SeverityOK, d.Severity,
+					"an unparseable pipeline file must not report OK: %+v", d)
+				if d.Severity == validate.SeverityError && d.Target == tt.target {
+					require.Contains(t, d.Message, `unknown field "defaults"`)
+					found = true
+				}
+			}
+			require.True(t, found, "expected a decode error diagnostic; got %+v", diags)
 		})
 	}
 }

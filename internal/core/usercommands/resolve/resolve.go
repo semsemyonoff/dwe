@@ -17,8 +17,8 @@ import (
 // For each declared parameter:
 //  1. Use the value from provided (caller-supplied) if present and non-empty.
 //  2. Fall back to ParamDef.DefaultFrom (dot-path into cfg.Raw); a missing
-//     path or an empty resolved value is treated as not-found and continues
-//     to the next step.
+//     path, a nil value, or an empty resolved value is treated as not-found
+//     and continues to the next step.
 //  3. Fall back to ParamDef.Default (literal string).
 //  4. If Required and still no value, return an error.
 //
@@ -29,7 +29,9 @@ func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *con
 		raw, ok := provided[name]
 		if !ok || raw == "" {
 			if def.DefaultFrom != "" && cfg != nil {
-				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found {
+				// A YAML null is "found" but has no value: %v would render it
+				// as the literal "<nil>", which then reaches the command line.
+				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found && v != nil {
 					s := fmt.Sprintf("%v", v)
 					if s != "" {
 						raw = s
@@ -71,8 +73,8 @@ func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *con
 //
 // For each declared parameter:
 //  1. Use provided[name] (treated as missing when empty — matches Params semantics).
-//  2. Fall back to DefaultFrom (dot-path into cfg.Raw); a missing path or empty
-//     resolved value falls through.
+//  2. Fall back to DefaultFrom (dot-path into cfg.Raw); a missing path, a nil
+//     value, or an empty resolved value falls through.
 //  3. Fall back to Default (literal string).
 //
 // Required-checks, type coercion, and pattern validation are intentionally
@@ -84,8 +86,10 @@ func ParamDefaults(defs map[string]model.ParamDef, provided map[string]string, c
 	for name, def := range defs {
 		raw, ok := provided[name]
 		if !ok || raw == "" {
+			// Same nil guard as Params: a null default_from must not prefill
+			// the form with the string "<nil>".
 			if def.DefaultFrom != "" && cfg != nil {
-				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found {
+				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found && v != nil {
 					s := fmt.Sprintf("%v", v)
 					if s != "" {
 						raw = s
@@ -153,6 +157,17 @@ func Context(defs map[string]model.ContextDef, cfg *config.DweConfig) (map[strin
 	return result, nil
 }
 
+// envString renders a resolved value for an environment variable. A nil value
+// — an unresolved non-required context, or a dot-path landing on a YAML null —
+// becomes the empty string: %v would spell it "<nil>" and hand the command a
+// four-character value nobody wrote.
+func envString(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 // isEmpty returns true for nil or empty string.
 func isEmpty(v any) bool {
 	if v == nil {
@@ -184,7 +199,7 @@ func BuildEnv(cmd *model.CommandDef, params map[string]any, ctx map[string]any, 
 			if existing, exists := sources[def.Env]; exists {
 				return nil, fmt.Errorf("env conflict: %q declared by %s and context.%s", def.Env, existing, name)
 			}
-			env[def.Env] = fmt.Sprintf("%v", v)
+			env[def.Env] = envString(v)
 			sources[def.Env] = "context." + name
 		}
 	}
@@ -197,7 +212,7 @@ func BuildEnv(cmd *model.CommandDef, params map[string]any, ctx map[string]any, 
 			if existing, exists := sources[def.Env]; exists {
 				return nil, fmt.Errorf("env conflict: %q declared by %s and params.%s", def.Env, existing, name)
 			}
-			env[def.Env] = fmt.Sprintf("%v", v)
+			env[def.Env] = envString(v)
 			sources[def.Env] = "params." + name
 		}
 	}

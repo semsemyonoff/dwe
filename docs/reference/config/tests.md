@@ -277,7 +277,7 @@ Lists every scenario under `workspace/tests/*.yml` with its `description:`, verb
         "external_images": ["postgres:16", "redis:7"],
         "max_start_period_seconds": 30,
         "shared_volumes": 1,
-        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache"}],
+        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache", "shared": true}],
         "host_steps": 2
       }
     }

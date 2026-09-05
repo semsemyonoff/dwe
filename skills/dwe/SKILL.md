@@ -217,7 +217,10 @@ Each scenario carries a `cost_profile`. Two groups, judged differently:
 **Hard stops — hand the run to the user, no judgement call.** The scenario reaches
 outside its own copy, so a failure is not confined to it:
 
-- `isolation_findings` non-empty — named / `external:` volumes or networks, reused verbatim
+- `isolation_findings` non-empty **after dropping entries carrying `"shared": true`** — named /
+  `external:` volumes or networks, reused verbatim. A `"shared": true` entry is a volume the
+  project itself declares `shared: true` in `docker.yml`; it is already counted by
+  `shared_volumes` and must not stop you twice
 - `shared_volumes` > 0 — `shared: true` volumes carry the real cache/data
 - `host_steps` > 0 — steps running **project-authored code on the host**, outside the
   container sandbox (`type: shell`, the `shell` builtin, a `type: command` resolving to

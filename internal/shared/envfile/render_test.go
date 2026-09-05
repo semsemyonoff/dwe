@@ -367,6 +367,11 @@ func TestUnresolvedRules(t *testing.T) {
 		{"missing path skipped by falsy when", config.ExportRule{Name: "OFF_HOST", From: "services.off.hosts.web", When: "services.off.enabled"}, false},
 		{"missing path with truthy when", config.ExportRule{Name: "APP_HOST", From: "services.app.hosts.web", When: "services.app.enabled"}, true},
 		{"present key holding nil", config.ExportRule{Name: "EMPTY", From: "vars.empty"}, false},
+		// No from: at all renders NAME= on purpose. ResolvePath calls an empty
+		// path not-found, so without the guard this would warn `from ""` at an
+		// author who never wrote one — and config.exports stays silent here.
+		{"no from at all", config.ExportRule{Name: "FLAG"}, false},
+		{"no from with comment", config.ExportRule{Name: "FLAG", Comment: "left blank on purpose"}, false},
 		{"reserved name", config.ExportRule{Name: "PROJECT", From: "vars.nope"}, false},
 		{"missing path with bool format", config.ExportRule{Name: "FLAG", From: "services.app.enabld", Format: "bool"}, true},
 		{"missing path with int format", config.ExportRule{Name: "PORT", From: "services.app.ports.htp", Format: "int"}, true},

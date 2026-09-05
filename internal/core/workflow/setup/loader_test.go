@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -272,6 +273,22 @@ func TestLoadSetupYAMLEmptyFile(t *testing.T) {
 	got, err := LoadSetupYAML(path)
 	require.NoError(t, err)
 	require.Equal(t, &Config{Questions: nil}, got)
+}
+
+// TestLoadSetupYAMLAllCommentFile pins the io.EOF branch: unlike the four
+// pipeline loaders, setup.yml does not read an all-comment file as "absent" —
+// it errors, and the error must name the file rather than degrading to the bare
+// "EOF" that yamlstrict passes through untouched.
+func TestLoadSetupYAMLAllCommentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "setup.yml")
+
+	require.NoError(t, os.WriteFile(path, []byte("# nothing here\n# questions:\n"), 0o644))
+
+	_, err := LoadSetupYAML(path)
+	require.Error(t, err)
+	require.ErrorIs(t, err, io.EOF)
+	require.Contains(t, err.Error(), path)
 }
 
 func TestLoadSetupYAMLValidContent(t *testing.T) {

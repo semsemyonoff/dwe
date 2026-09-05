@@ -4,8 +4,10 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -347,7 +349,7 @@ func dotPathDiagnostics(cmd model.CommandDef, relFile string, cfg *config.DweCon
 		return !found
 	}
 
-	for _, pname := range sortedKeys(cmd.Params) {
+	for _, pname := range slices.Sorted(maps.Keys(cmd.Params)) {
 		pdef := cmd.Params[pname]
 		paramTarget := fmt.Sprintf("%s:params.%s", target, pname)
 
@@ -377,7 +379,7 @@ func dotPathDiagnostics(cmd model.CommandDef, relFile string, cfg *config.DweCon
 		}
 	}
 
-	for _, cname := range sortedKeys(cmd.Context) {
+	for _, cname := range slices.Sorted(maps.Keys(cmd.Context)) {
 		cdef := cmd.Context[cname]
 		if cdef.From == "" || !unresolved(cdef.From) {
 			continue
@@ -416,17 +418,6 @@ func defaultFromHint(pdef model.ParamDef) string {
 		return "the param defaults to an empty value — check for a typo in the path, " +
 			"or add a default:"
 	}
-}
-
-// sortedKeys returns a map's keys in lexical order, keeping diagnostics stable
-// across runs (Go map iteration is randomized).
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 // paramStructuralDiagnostics emits categorized diagnostics for param validation violations.

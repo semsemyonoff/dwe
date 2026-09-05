@@ -116,7 +116,7 @@ This makes typos in formalized keys (`runtim:`, `exprots:`) fail loudly instead 
 The same treatment applies *inside* a file. Every strictly decoded config file — the pipelines (`deploy.yml`, `lifecycle.yml`, `reset.yml`), `service.yml`, `snapshot.yml`, `validate.yml`, command files, template-pack manifests, test scenarios, `setup.yml` and translation bundles — reports an unknown key with the file, the line, the key and the fields actually accepted at that position:
 
 ```text
-workspace/deploy.yml:12: unknown field "defaults" — allowed here: fail_fast, log, phases
+workspace/deploy.yml:12: unknown field "defaults" — allowed here: log, phases
 (a field you did not invent may come from a newer dwe version — check `dwe version`)
 ```
 

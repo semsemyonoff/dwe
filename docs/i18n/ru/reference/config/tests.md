@@ -1,4 +1,4 @@
-> Translated from: reference/config/tests.md @ d77f0c4f3213
+> Translated from: reference/config/tests.md @ 916dd7f503c6
 
 # workspace/tests/
 
@@ -279,7 +279,7 @@ dwe test list
         "external_images": ["postgres:16", "redis:7"],
         "max_start_period_seconds": 30,
         "shared_volumes": 1,
-        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache"}],
+        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache", "shared": true}],
         "host_steps": 2
       }
     }

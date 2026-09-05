@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 48f7ba4797ce
+> Translated from: reference/config/workspace.md @ b15113fe33a5
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -117,7 +117,7 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 То же самое действует и *внутри* файла. Каждый строго декодируемый конфиг — пайплайны (`deploy.yml`, `lifecycle.yml`, `reset.yml`), `service.yml`, `snapshot.yml`, `validate.yml`, файлы команд, манифесты template-паков, сценарии тестов, `setup.yml` и бандлы переводов — сообщает о неизвестном ключе с файлом, строкой, ключом и набором полей, которые допустимы в этом месте:
 
 ```text
-workspace/deploy.yml:12: unknown field "defaults" — allowed here: fail_fast, log, phases
+workspace/deploy.yml:12: unknown field "defaults" — allowed here: log, phases
 (a field you did not invent may come from a newer dwe version — check `dwe version`)
 ```
 

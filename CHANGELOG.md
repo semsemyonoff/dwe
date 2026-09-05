@@ -193,7 +193,10 @@ generated from commit subjects and stay on the
   names the consequence for the rule at hand — the variable renders empty, the
   `default:` is always used, or the render fails on a `required:` rule. These
   are warnings, not errors: `from:` with a `default:` is a legitimate optional
-  path, and a path may live in a `local.yml` that is not on this machine.
+  path, and a path may live in a `local.yml` that is not on this machine. Note
+  that `dwe validate --strict` treats warnings as errors, so a CI job using it
+  can start failing on a path that was deliberately optional — give such a rule
+  a `default:`, or correct the path.
 - **`dwe render env` warns about each variable it renders empty**, on stderr,
   at the moment the empty value is produced:
   `warning: exports.env[DB_PASSWORD]: from "vars.db.passwrod" does not resolve —
@@ -222,8 +225,11 @@ generated from commit subjects and stay on the
   `has no active content (all comments or empty) — built-in default pipeline is
   active`. The second state used to report **OK**, which was actively
   misleading — the inert `deploy.yml` that `dwe init` scaffolds runs the
-  built-in pipeline, not the one in the file. An absent `reset.yml` stays
-  silent as before, since the scaffold never ships one.
+  built-in pipeline, not the one in the file. A file that parses but carries no
+  pipeline reports at info for the same reason: `deploy.yml` / `reset.yml`
+  `declares no phases`, and `lifecycle.yml` `declares no run: section` (or
+  `stop:`), each naming the built-in default that runs in its place. An absent
+  `reset.yml` stays silent as before, since the scaffold never ships one.
 - **An unknown field in a config file now names the file, the line, the key and
   the fields that are allowed there.** Every strictly decoded file — the
   pipelines, `service.yml`, `snapshot.yml`, `validate.yml`, command files,
@@ -231,7 +237,7 @@ generated from commit subjects and stay on the
   — used to surface the underlying YAML library's `field defaults not found in
   type config.DeployConfig`, a Go type name nothing in the docs mentions. It
   now reads `workspace/deploy.yml:12: unknown field "defaults" — allowed here:
-  fail_fast, log, phases`, followed once by a hint that a field you did not
+  log, phases`, followed once by a hint that a field you did not
   invent may come from a newer `dwe`. The unknown top-level key error carries
   the same hint next to its existing `vars:` advice. A script grepping for the
   old `not found in type` text needs updating.
@@ -421,5 +427,15 @@ generated from commit subjects and stay on the
   have run the whole lifecycle without the deploy and snapshot locks. That
   cross-build now fails at compile time on purpose. No behaviour changes on a
   supported platform.
+
+### Fixed
+
+- **A `default_from:` pointing at an empty YAML key no longer passes the literal
+  text `<nil>` to the command.** `vars: {branch:}` — a key written with no value
+  — resolved as "found", and the resolver rendered it with Go's default
+  formatting, so `git checkout ${param.branch}` ran as `git checkout <nil>`. An
+  empty key is now treated the way a missing one already was: the `default:`
+  applies, and a `required:` param fails with its own message. The same fix
+  covers a `context.<name>` whose `env:` variable was exported as `<nil>`.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD
