@@ -1528,12 +1528,17 @@ type ExportsConfig struct {
 	Env []ExportRule `yaml:"env"`
 }
 
-// ReservedExportNames lists env variable names that the renderer always emits
-// itself before any user-defined export rule runs. User rules are forbidden
-// from redeclaring them: the rendering layer reads the system values from the
-// project config and host environment, and a duplicate line in the output
-// .env would have parser-defined precedence.
-var ReservedExportNames = []string{"PROJECT", "UID", "GID"}
+// ReservedExportNames lists env variable names that the renderer emits itself,
+// in this order, before any user-defined export rule runs. Slice order is the
+// emission order of the system block in the generated .env. User rules are
+// forbidden from redeclaring them: the rendering layer reads the system values
+// from the project config and host environment, and a duplicate line in the
+// output .env would have parser-defined precedence.
+//
+// A name is emitted whenever its value resolves. PROJECT, UID and GID always
+// do; COMPOSE_PROJECT_NAME (ResolveComposeProjectName) is omitted when it
+// resolves empty, mirroring the compose wrapper omitting -p.
+var ReservedExportNames = []string{"PROJECT", "UID", "GID", "COMPOSE_PROJECT_NAME"}
 
 // IsReservedExportName reports whether name is reserved by the system and
 // therefore cannot be used as an ExportRule.Name.

@@ -455,13 +455,14 @@ func isKeygateRefusal(err error) bool {
 		errors.Is(err, keygate.ErrKeyfileUnusable)
 }
 
-// renderAndSourceDotEnv regenerates workspace/.env from the current config and
-// loads its key=value pairs into the process environment, so commands run by
-// preflight checks and lifecycle phases observe the freshly-rendered values.
-// Mirrors the implicit render-env step at the head of the deploy pipeline.
+// renderAndSourceDotEnv regenerates the project-root .env from the current
+// config and loads its key=value pairs into the process environment, so
+// commands run by preflight checks and lifecycle phases observe the
+// freshly-rendered values. Mirrors the implicit render-env step at the head of
+// the deploy pipeline.
 func renderAndSourceDotEnv(cfg *config.DweConfig, workDir string) error {
 	envPath := filepath.Join(workDir, ".env")
-	if err := envfile.Write(cfg, envPath); err != nil {
+	if err := envfile.Write(cfg, workDir, envPath); err != nil {
 		return fmt.Errorf("rendering .env: %w", err)
 	}
 	if err := deploy.SourceDotEnv(envPath); err != nil {

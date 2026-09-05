@@ -41,12 +41,12 @@ func runRenderEnv(flags *cmdctx.RootFlags, outputPath string) error {
 	}
 
 	if outputPath == "" {
-		content, err := envfile.BuildContent(cfg)
+		content, err := envfile.BuildContent(cfg, flags.ProjectRoot())
 		if err != nil {
 			return err
 		}
 		fmt.Print(content)
 		return nil
 	}
-	return envfile.Write(cfg, outputPath)
+	return envfile.Write(cfg, flags.ProjectRoot(), outputPath)
 }

@@ -558,27 +558,32 @@ get the qualification.
 - Modify: `internal/core/workflow/lifecycle/run.go`
 - Modify: `internal/cli/service/service_toggle.go`
 
-- [ ] `workspace.go:1540`: append `"COMPOSE_PROJECT_NAME"` to
+- [x] `workspace.go:1540`: append `"COMPOSE_PROJECT_NAME"` to
       `ReservedExportNames`; rewrite the doc comment (`:1535-1539`): the slice
       order is the `.env` emission order, and "always emits" becomes "emits
       whenever the value resolves" (the compose name is omitted when empty)
-- [ ] `render.go`: `BuildContent(cfg, baseDir)`; resolve via
+- [x] `render.go`: `BuildContent(cfg, baseDir)`; resolve via
       `config.ResolveComposeProjectName(baseDir, cfg)`, wrap errors as
       `compose project name: %w`, skip the line when empty, guard non-empty
       values with `checkValue` and a `systemSources` label; rewrite the godoc
       per Technical Details
-- [ ] `write.go`: `Write(cfg, baseDir, outputPath)`; `Regenerate` passes the
+- [x] `write.go`: `Write(cfg, baseDir, outputPath)`; `Regenerate` passes the
       `baseDir` it already computes
-- [ ] update callers: `cli/render/env.go:44,51` (`flags.ProjectRoot()`),
+- [x] update callers: `cli/render/env.go:44,51` (`flags.ProjectRoot()`),
       `lifecycle/run.go:464` (`workDir` — also fix the stale "workspace/.env"
       wording in the godoc at `:458`), `service_toggle.go:392,509` (both
       `mutateAndPlan` at `:327` and `mutateAndPlanBatch` at `:451` already take
       `baseDir` as a parameter — pass it, do not re-derive from `configPath`);
       `cli/docker/docker.go:65` is unchanged
-- [ ] `go build ./...` clean; `go vet` type-checks `_test.go` too, so it and
+- [x] `go build ./...` clean; `go vet` type-checks `_test.go` too, so it and
       the two known test breaks are expected to fail here and are fixed in
       Task 6 — both the vet-clean and tests-green gates are at the end of
       Task 6
+      - ⚠️ commit granularity: as with items 1–2, each task is committed
+        separately, so `git log` carries two commits per plan item instead of
+        the single squashed commit named in Task 7. Task 10's
+        `git log --oneline -4` / reverse-revert check applies per *item pair*,
+        not per single commit.
 
 ### Task 6: `COMPOSE_PROJECT_NAME` — tests, goldens, scaffold comment
 
