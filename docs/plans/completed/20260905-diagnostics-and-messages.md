@@ -712,11 +712,11 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 
 ### Task 14: [Final] Update documentation
 
-- [ ] re-read the four `CHANGELOG.md` entries as a block — user-facing wording, no internals
-- [ ] `docs/internals/packages.md` sections from tasks 2, 8, 12 are consistent with the code as landed
-- [ ] `AGENTS.md` unchanged beyond the one pointer; `TestAgentsMdBudget` green
-- [ ] `README.md` needs nothing (no new command or flag)
-- [ ] open PR `feat/diagnostics-and-messages` → `release/0.6.0`; move this plan to `docs/plans/completed/`
+- [x] re-read the four `CHANGELOG.md` entries as a block — user-facing wording, no internals. ✅ five entries (two `### Added` for item 3's two surfaces, three `### Changed` for items 1, 2 and 4 plus the `builtins.md` docs fix); each states the observable symptom before the fix, names the new message text verbatim, and the item-4 entry carries the "a script grepping for `not found in type` breaks" note. No Go identifiers, no package paths, no internals
+- [x] `docs/internals/packages.md` sections from tasks 2, 8, 12 are consistent with the code as landed. ✅ `compose_scan.go` entry names `markSharedVolumes` + the `{…, Shared, …}` field list; § Core — Validation carries the three-state `PipelineFileState` → severity mapping and the `config.exports` / commands dot-path paragraph; the `config/` loaders paragraph and the new `internal/shared/yamlstrict/` bullet match `Decode` / `AllowedFields` / the three `*WithState` siblings as they exist in the code
+- [x] `AGENTS.md` unchanged beyond the one pointer; `TestAgentsMdBudget` green. ✅ diff is the one "YAML loader strictness" bullet (two lines replaced); 40920 B → 40914 B, net −6; `go test ./internal/cli/docs -run TestAgentsMd` green
+- [x] `README.md` needs nothing (no new command or flag). ✅ confirmed — it names `dwe validate` and `deploy.yml` only as tour steps and a tree entry, and quotes none of the changed message text
+- [x] move this plan to `docs/plans/completed/`; PR `feat/diagnostics-and-messages` → `release/0.6.0` **not opened** (skipped — the branch has never been pushed and publishing it is the user's call, not automatable here)
 
 ## Post-Completion
 
