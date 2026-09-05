@@ -558,11 +558,11 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `internal/core/project/config/workspace.go`
 - Modify: `internal/core/project/config/workspace_test.go`
 
-- [ ] add `PipelineFileState` (`Authored`, `DefaultFallback`) next to the pipeline loaders, godoc referencing `InfoConfigState`
-- [ ] `loadDeployConfigDecode`, `loadProjectDeployConfigDecode`, `LoadLifecycleConfig`: thread the `io.EOF` outcome out as a state (internal helper shape `(cfg, state, err)`); public `LoadProjectDeployConfig`, `LoadResetConfig`, `LoadLifecycleConfig`, `ParseDeployConfigForValidation` keep their signatures. `loadServiceDeployConfigDecode` is deliberately NOT threaded — no validator reports per-service pipeline state
-- [ ] add `ParseDeployConfigForValidationWithState`, `LoadLifecycleConfigWithState`, `LoadResetConfigWithState`
-- [ ] tests: absent → `os.ErrNotExist`; all-comment and empty → `DefaultFallback`, zero cfg, nil error; authored → `Authored`; a syntax error still errors; each existing public loader's behaviour unchanged (existing tests keep passing)
-- [ ] run `go test ./internal/core/project/config/...` — must pass before task 4
+- [x] add `PipelineFileState` (`Authored`, `DefaultFallback`) next to the pipeline loaders, godoc referencing `InfoConfigState`
+- [x] `loadDeployConfigDecode`, `loadProjectDeployConfigDecode`, `LoadLifecycleConfig`: thread the `io.EOF` outcome out as a state (internal helper shape `(cfg, state, err)`); public `LoadProjectDeployConfig`, `LoadResetConfig`, `LoadLifecycleConfig`, `ParseDeployConfigForValidation` keep their signatures. `loadServiceDeployConfigDecode` is deliberately NOT threaded — no validator reports per-service pipeline state
+- [x] add `ParseDeployConfigForValidationWithState`, `LoadLifecycleConfigWithState`, `LoadResetConfigWithState`
+- [x] tests: absent → `os.ErrNotExist`; all-comment and empty → `DefaultFallback`, zero cfg, nil error; authored → `Authored`; a syntax error still errors; each existing public loader's behaviour unchanged (existing tests keep passing)
+- [x] run `go test ./internal/core/project/config/...` — must pass before task 4
 
 ### Task 4: Validators report the three pipeline states
 
