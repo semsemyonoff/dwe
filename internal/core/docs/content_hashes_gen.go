@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference, docs/guides, and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"README.md":                                "5054aaa0c311",
+	"README.md":                                "1e328aa5e19f",
 	"guides/add-a-service.md":                  "c5ab3861731c",
 	"guides/author-project-commands.md":        "9769294619a1",
 	"guides/background-daemons.md":             "b2dcd1937aba",
@@ -24,7 +24,7 @@ var ContentHashes = map[string]string{
 	"guides/troubleshooting.md":                "32e3c8b81254",
 	"guides/write-snapshot-workflows.md":       "1b87b72a80f8",
 	"internals/architecture.md":                "cb1aa72beee3",
-	"internals/packages.md":                    "cd90c772366b",
+	"internals/packages.md":                    "8bf942940fc3",
 	"internals/tui-keymap.md":                  "739fe9a61f5d",
 	"reference/concepts/architecture.md":       "0fa38ae667ca",
 	"reference/concepts/bridge.md":             "e780cf781a73",
@@ -51,7 +51,7 @@ var ContentHashes = map[string]string{
 	"reference/config/index.md":                "00a1843a72e3",
 	"reference/config/info.md":                 "ca3d55c2ae1e",
 	"reference/config/lifecycle.md":            "cfac239a39be",
-	"reference/config/notifications.md":        "4f55b57ed363",
+	"reference/config/notifications.md":        "c59fb8be7882",
 	"reference/config/reset.md":                "702ea8f95a98",
 	"reference/config/secrets.md":              "cd978e2fd0f6",
 	"reference/config/services/examples.md":    "b84d6e3b1375",
@@ -66,7 +66,7 @@ var ContentHashes = map[string]string{
 	"reference/config/state/schema.md":         "31283338303e",
 	"reference/config/styles.md":               "4ce282def2da",
 	"reference/config/tests.md":                "01e48889aee2",
-	"reference/config/userconfig.md":           "c7fd6a13f334",
+	"reference/config/userconfig.md":           "5d61f17860b3",
 	"reference/config/validate.md":             "03f2a8e8756e",
 	"reference/config/vars.md":                 "7c924e1a105b",
 	"reference/config/workspace.md":            "715c63728e8e",

@@ -774,7 +774,7 @@ get the qualification.
 - Modify: `CHANGELOG.md`
 - Modify: `internal/core/docs/content_hashes_gen.go` (generated, git-tracked)
 
-- [ ] `packages.md:168` (validate/bridge `path.IsAbs` rationale — keep the
+- [x] `packages.md:168` (validate/bridge `path.IsAbs` rationale — keep the
       rule, drop "a Windows host"), `:177` (mermaid — drop "default kill on
       Windows"), `:273` (notify — platform split wording stays; it is
       `!darwin`, not Windows-specific — verify no Windows claim), `:280,281`
@@ -783,24 +783,34 @@ get the qualification.
       `:296` (`shared/lock` — no longer "Unix-only build tag"; say the package
       is unix-only by construction and a `GOOS=windows` build fails at compile
       time on purpose)
-- [ ] `notifications.md:50,131,197` + RU `:52,133,199`; `userconfig.md:24` +
+      - `:273` verified: the notify bullet says `native_other.go` (build
+        `!darwin`) / `native_darwin.go` and names no Windows backend — left
+        untouched.
+      - `:177` keeps `OpenSystem`'s `cmd /c start ""` (windows) branch: that is
+        `mermaid/term.go`, explicitly out of scope per Overview.
+- [x] `notifications.md:50,131,197` + RU `:52,133,199`; `userconfig.md:24` +
       RU `:26`: replace the "every OS (Linux, macOS, Windows)" / "Windows
       toast" claims with "macOS and Linux; on Windows run dwe inside WSL2",
       matching `bridge.md:272`
-- [ ] `README.md`: one "Supported platforms" sentence under `## Install`
+      - the "Windows uses native toast notifications" line became a sentence
+        saying there is no Windows path and that WSL2 follows the Linux
+        (libnotify) route, rather than being deleted — the section is a
+        per-platform walk-through and a silent gap would read as an omission.
+- [x] `README.md`: one "Supported platforms" sentence under `## Install`
       (macOS Intel + Apple Silicon, Linux; Windows through WSL2 with dwe
       installed in the distro); same in `docs/i18n/ru/README.md` under
       `## Установка`
-- [ ] `CHANGELOG.md` `### Removed`: Windows build stubs entry with the
+- [x] `CHANGELOG.md` `### Removed`: Windows build stubs entry with the
       platform statement
-- [ ] `make gen-docs-manifest`, then copy the new hashes into the RU headers
+- [x] `make gen-docs-manifest`, then copy the new hashes into the RU headers
       of `reference/config/notifications.md`, `reference/config/userconfig.md`
       **and `README.md`** — the root README is a manifest topic too
       (`scripts/gen-docs-content-hashes.sh:29-34`, `content_hashes_gen.go:9`)
       and `docs/i18n/ru/README.md:1` carries a `> Translated from: README.md @ …`
       header; `make embedded-docs`
-- [ ] `make test` for `./internal/core/docs/...`
-- [ ] commit: `chore: drop Windows build stubs`
+- [x] `make test` for `./internal/core/docs/...` (ran the full `make test` —
+      green)
+- [x] commit: `chore: drop Windows build stubs`
 
 ### Task 10: Verify acceptance criteria
 

@@ -355,5 +355,13 @@ generated from commit subjects and stay on the
   The hotkey table, parameter-form overlay, fallback ladder and mouse behaviour
   that lived on the `ui` reference page are now documented under
   *Interactive browser* in the commands reference.
+- **The Windows build stubs are gone.** dwe supports macOS (Intel + Apple
+  Silicon) and Linux; on Windows run it inside WSL2 with dwe installed in the
+  distro. Nothing ever shipped or tested a Windows binary — the stubs only kept
+  `GOOS=windows go build` type-checking, and one of them made `lock.Acquire`
+  return "file locking is not supported on Windows", so such a binary would
+  have run the whole lifecycle without the deploy and snapshot locks. That
+  cross-build now fails at compile time on purpose. No behaviour changes on a
+  supported platform.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

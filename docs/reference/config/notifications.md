@@ -47,7 +47,7 @@ The flag is available on: `dwe deploy run`, `dwe run`, `dwe snapshot create`, `d
 
 Two files are read in this precedence order (lower → higher):
 
-1. **Global user config** at `~/.config/dwe/config` on every OS (Linux, macOS, Windows). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
+1. **Global user config** at `~/.config/dwe/config` on every supported OS (macOS and Linux; on Windows run dwe inside WSL2, where the path is the distro's). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
 
 2. **Per-project override** at `<project>/.dwe/config`. The `.dwe/` directory is already gitignored by DWE. Missing file is silently treated as empty.
 
@@ -128,7 +128,7 @@ killall NotificationCenter
 
 **Linux** uses libnotify via dbus (or `notify-send` as a fallback); the icon comes through as the PNG payload directly.
 
-**Windows** uses native toast notifications with the embedded PNG.
+There is no Windows path: dwe supports macOS and Linux, and on Windows it runs inside WSL2, where notifications follow the Linux route (a libnotify daemon must be reachable in the distro).
 
 ## Sample config
 
@@ -194,4 +194,4 @@ When `terminal-notifier` is present, beeep delegates to it and the embedded DWE 
 
 Without it, beeep falls back to AppleScript (`osascript`), which on recent macOS releases shows the sender as **Script Editor** and ignores the icon. Functionality is unaffected — only the visual presentation degrades. The title text (which already carries the `DWE · <project>` prefix) remains correct in either path.
 
-Linux (libnotify) and Windows (toast) honor the embedded icon and app name without any extra setup.
+Linux (libnotify) honors the embedded icon and app name without any extra setup.
