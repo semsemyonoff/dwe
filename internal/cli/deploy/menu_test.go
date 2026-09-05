@@ -138,7 +138,7 @@ func TestRunDeployMenu_SetupYMLErrors_BlocksMenu(t *testing.T) {
 
 	// Stub loader to return a parse error (unknown field) without requiring a real file.
 	loadSetupYAMLFn = func(path string) (*setup.Config, error) {
-		return nil, errors.New("yaml: unmarshal errors: field unknownfield not found in type setup.Question")
+		return nil, errors.New(`workspace/setup.yml:4: unknown field "unknownfield" — allowed here: default, id, prompt, type`)
 	}
 
 	selectCalled := false

@@ -739,9 +739,9 @@ func TestStripParseFilePrefix(t *testing.T) {
 		},
 		{
 			name: "strips wrapper before yaml error",
-			err:  errors.New("parse command file /abs/b.yml: YAML parse error: yaml: line 4: bad"),
+			err:  errors.New(`parse command file /abs/b.yml: line 4: unknown field "widgett" — allowed here: default, description, type`),
 			path: "/abs/b.yml",
-			want: "YAML parse error: yaml: line 4: bad",
+			want: `line 4: unknown field "widgett" — allowed here: default, description, type`,
 		},
 		{
 			name: "path containing colon-space is stripped exactly",

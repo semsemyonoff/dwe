@@ -675,12 +675,12 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `internal/core/workflow/setup/loader.go` (+ test)
 - Modify: `internal/shared/i18n/loader.go` (+ test)
 
-- [ ] `types.go:1697`: `yamlstrict.Decode(data, &cf, "")` — signature of `ParseCommandFile` unchanged (re-exported at `usercommands.go:218`), drop `YAML parse error:`; `loader.go:101`'s `parse command file %s:` wrap keeps naming the file. Note the lenient first pass already rejects top-level per-command unknowns, so the new text appears for nested unknowns and type-less commands only
-- [ ] `manifest.go:62-76`: `os.ReadFile` + `yamlstrict.Decode`, preserving the `ErrManifestMissing`/`os.ErrNotExist` double-wrap and the `io.EOF` → "manifest is empty" branch; `scenario.go:85` (keep the "scenario file is empty or invalid" wrap — `io.EOF` is deliberately NOT tolerated there); `setup/loader.go:31`
-- [ ] `i18n/loader.go`: `parseBundle(data []byte, file string)`; `Load` passes the embedded name, `LoadProjectBundles` the project-relative path; `io.EOF` → empty bundle as today
-- [ ] update tests pinning the old strings in each package (incl. the synthetic strings at `validate/commands/commands_test.go:741-743` and `cli/deploy/menu_test.go:141`, rewritten to the new shape); add one unknown-field assertion per loader
-- [ ] `go build ./...` and `git grep -nE '\.KnownFields\(true\)' -- internal ':!*_test.go'` → only `internal/shared/yamlstrict/` (the two test-local strict decoders in `internal/shared/i18n/coverage_test.go:22,68` are assertions, not loaders, and stay as they are)
-- [ ] run `make test` — must pass before task 12
+- [x] `types.go:1697`: `yamlstrict.Decode(data, &cf, "")` — signature of `ParseCommandFile` unchanged (re-exported at `usercommands.go:218`), drop `YAML parse error:`; `loader.go:101`'s `parse command file %s:` wrap keeps naming the file. Note the lenient first pass already rejects top-level per-command unknowns, so the new text appears for nested unknowns and type-less commands only
+- [x] `manifest.go:62-76`: `os.ReadFile` + `yamlstrict.Decode`, preserving the `ErrManifestMissing`/`os.ErrNotExist` double-wrap and the `io.EOF` → "manifest is empty" branch; `scenario.go:85` (keep the "scenario file is empty or invalid" wrap — `io.EOF` is deliberately NOT tolerated there); `setup/loader.go:31`. ⚠️ two deviations from the literal step: `scenario.go` passes `file = ""` (its own wrap already names the path — otherwise the path is printed twice in one line), and `setup/loader.go` keeps its `load %s: %w` wrap on the `io.EOF` branch only, so an all-comment `setup.yml` still errors with a message naming the file rather than a bare `EOF`
+- [x] `i18n/loader.go`: `parseBundle(data []byte, file string)`; `Load` passes the embedded name, `LoadProjectBundles` the project-relative path; `io.EOF` → empty bundle as today
+- [x] update tests pinning the old strings in each package (incl. the synthetic strings at `validate/commands/commands_test.go:741-743` and `cli/deploy/menu_test.go:141`, rewritten to the new shape); add one unknown-field assertion per loader
+- [x] `go build ./...` and `git grep -nE '\.KnownFields\(true\)' -- internal ':!*_test.go'` → only `internal/shared/yamlstrict/` (the two test-local strict decoders in `internal/shared/i18n/coverage_test.go:22,68` are assertions, not loaders, and stay as they are)
+- [x] run `make test` — must pass before task 12
 
 ### Task 12: Root-key hint, docs, internals; commit 4
 

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 var (
@@ -1691,12 +1693,12 @@ func ParseCommandFile(data []byte) (*CommandFile, error) {
 		}
 	}
 
-	// Second pass: standard YAML decode with KnownFields validation.
+	// Second pass: strict decode. The file name is not known here — the caller
+	// (loader.ParseCommandFile) wraps with it — so yamlstrict gets an empty file
+	// and emits the bare "line N: unknown field …" form.
 	var cf CommandFile
-	dec = yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&cf); err != nil {
-		return nil, fmt.Errorf("YAML parse error: %w", err)
+	if err := yamlstrict.Decode(data, &cf, ""); err != nil {
+		return nil, err
 	}
 	return &cf, nil
 }

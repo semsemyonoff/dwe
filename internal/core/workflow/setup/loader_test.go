@@ -302,3 +302,24 @@ func TestLoadSetupYAMLValidContent(t *testing.T) {
 	require.NotNil(t, got.Questions[1].Validate)
 	require.Equal(t, "port", got.Questions[1].Validate.Preset)
 }
+
+// TestLoadSetupYAMLUnknownFieldMessage pins the yamlstrict shape: the file, the
+// line, the rejected field and the fields accepted at that position.
+func TestLoadSetupYAMLUnknownFieldMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "setup.yml")
+	content := "questions:\n  - id: name\n    type: input\n    titel: Project Name\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+
+	_, err := LoadSetupYAML(path)
+	require.Error(t, err)
+	msg := err.Error()
+	for _, want := range []string{
+		path + ":4:",
+		`unknown field "titel"`,
+		"allowed here: description, id, options, required, title, type, validate, writes",
+		"check `dwe version`",
+	} {
+		require.Contains(t, msg, want)
+	}
+}

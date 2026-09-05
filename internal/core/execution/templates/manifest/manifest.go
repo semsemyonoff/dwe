@@ -11,9 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 // ErrManifestMissing is the sentinel returned when manifest.yml does not exist.
@@ -59,23 +58,21 @@ type SymlinkEntry struct {
 // rejected. When the file does not exist the returned error wraps BOTH
 // ErrManifestMissing and os.ErrNotExist so callers can branch on either.
 func Load(path string) (*File, error) {
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("loading %s: %w: %w", path, ErrManifestMissing, err)
 		}
 		return nil, fmt.Errorf("loading %s: %w", path, err)
 	}
-	defer func() { _ = f.Close() }()
 
 	var m File
-	dec := yaml.NewDecoder(f)
-	dec.KnownFields(true)
-	if err := dec.Decode(&m); err != nil {
+	if err := yamlstrict.Decode(data, &m, path); err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("loading %s: manifest is empty", path)
 		}
-		return nil, fmt.Errorf("loading %s: %w", path, err)
+		// yamlstrict already names the file; the "loading" context would repeat it.
+		return nil, err
 	}
 	return &m, nil
 }
