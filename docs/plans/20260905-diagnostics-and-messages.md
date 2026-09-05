@@ -588,10 +588,10 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `docs/i18n/ru/reference/config/deploy/builtins.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] lines 7, 28, 305 (RU 9, 30, 307): "`check:`/`when:`" → "`check:`"; add one sentence after `:7` linking `[two type: builtin registries](../conditions.md#two-type-builtin-registries)` (EN) / `(../conditions.md#два-регистра-type-builtin)` (RU): `when: {type: builtin}` takes the predicate registry (`dir-exists`, `file-missing`, …), never these builtins; confirm with `make build` that no dangling-link warning is printed
-- [ ] leave `:339` (`source_clone` gates itself) as is
-- [ ] `CHANGELOG.md` `### Changed`: `dwe validate` names the built-in default pipeline when `deploy.yml` / `lifecycle.yml` / `reset.yml` are absent or all-comment (the scaffold's inert `deploy.yml` no longer reports OK); docs fix for predicate builtins
-- [ ] `make build`, `make test` — must pass; commit 2: `feat(validate): report the default-pipeline state for deploy/lifecycle/reset`
+- [x] lines 7, 28, 305 (RU 9, 30, 307): "`check:`/`when:`" → "`check:`"; add one sentence after `:7` linking `[two type: builtin registries](../conditions.md#two-type-builtin-registries)` (EN) / `(../conditions.md#два-регистра-type-builtin)` (RU): `when: {type: builtin}` takes the predicate registry (`dir-exists`, `file-missing`, …), never these builtins; confirm with `make build` that no dangling-link warning is printed
+- [x] leave `:339` (`source_clone` gates itself) as is
+- [x] `CHANGELOG.md` `### Changed`: `dwe validate` names the built-in default pipeline when `deploy.yml` / `lifecycle.yml` / `reset.yml` are absent or all-comment (the scaffold's inert `deploy.yml` no longer reports OK); docs fix for predicate builtins
+- [x] `make build`, `make test` — must pass; commit 2: `feat(validate): report the default-pipeline state for deploy/lifecycle/reset`
 
 ### Task 6: `config.exports` validator
 

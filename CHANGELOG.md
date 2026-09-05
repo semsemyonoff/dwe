@@ -198,6 +198,22 @@ generated from commit subjects and stay on the
   `cost_profile.isolation_findings`, marked `"shared": true` — the profile
   reports facts, not verdicts — and the key is omitted for every
   unacknowledged finding, so that output is otherwise unchanged.
+- **`dwe validate` names the built-in default pipeline instead of reporting a
+  bare absence.** `config.deploy`, `config.lifecycle` and `config.reset` now
+  distinguish three states, the way `config.info` already did: an absent
+  `deploy.yml` / `lifecycle.yml` reports at info as `no deploy.yml — built-in
+  default pipeline is active`; a file that is empty or all comments reports
+  `has no active content (all comments or empty) — built-in default pipeline is
+  active`. The second state used to report **OK**, which was actively
+  misleading — the inert `deploy.yml` that `dwe init` scaffolds runs the
+  built-in pipeline, not the one in the file. An absent `reset.yml` stays
+  silent as before, since the scaffold never ships one.
+- **Documentation fix: predicate builtins are `check:`-only.**
+  `docs/reference/config/deploy/builtins.md` claimed the builtins on that page
+  can be used in a `when:` guard. They cannot — `when: {type: builtin}`
+  resolves against the separate predicate registry (`dir-exists`,
+  `file-missing`, …), which shares nothing with the builtin registry. No
+  behaviour changed; the page was wrong.
 - **A failing command now prints its fix instruction in the terminal too.**
   Every typed `dwe` error carries a hint, and until now `--output json` was the
   only place it appeared: the error text handed to the renderer is the message
