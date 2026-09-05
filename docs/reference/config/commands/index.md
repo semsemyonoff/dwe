@@ -286,7 +286,7 @@ db.start:
 - `dwe commands --inspect <id>` (or `-i`) — show the resolved definition (params, context, env, runner)
 - `dwe docs generate` — regenerate the per-command reference under `docs/reference/commands/`
 
-When `dwe commands` is invoked without an exact command ID on an interactive terminal, an interactive two-panel command browser opens — see [Interactive browser](#interactive-browser).
+When `dwe commands` is invoked without an exact command ID on an interactive terminal — and without `--inspect`, which requires one — an interactive two-panel command browser opens; see [Interactive browser](#interactive-browser).
 
 `--inspect` / `-i` is mutually exclusive with `--set` and `--yes`; it requires an exact command id and prints the definition without running it.
 
@@ -294,7 +294,7 @@ When `dwe commands` is invoked without an exact command ID on an interactive ter
 
 The browser runs on the shared `tui` framework: two bordered panels (tree on the left, command list on the right), a bottom status line (brand · breadcrumb · `? help`), and a `?`-triggered modal help that lists the bindings active in the current mode. Panel focus cycles with `Tab` / `Shift+Tab`; the focused panel is highlighted by its border. The mouse is supported (see [Mouse](#mouse)).
 
-It takes no configuration: top-level groups are expanded on entry, empty subtrees collapse during fuzzy filtering, and type badges are on.
+It takes no configuration: top-level groups are expanded on entry, empty subtrees collapse during fuzzy filtering, and type badges are on. This describes the full two-panel frame; on a terminal narrower than 100 columns badges and group counts drop, and below 80 columns or 15 rows the browser degrades to a flat list — see [Fallback ladder](#fallback-ladder).
 
 ### Hotkeys
 
