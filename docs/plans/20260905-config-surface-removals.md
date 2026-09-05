@@ -814,27 +814,72 @@ get the qualification.
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] every item in Overview is implemented: `state:` and `ui:` fail to load
+- [x] every item in Overview is implemented: `state:` and `ui:` fail to load
       with the strict-root error; `.env` ends its system block with
       `COMPOSE_PROJECT_NAME`; `GOOS=windows go build ./...` fails
-- [ ] full suite: `make build && make test && make test-race && make lint`
-- [ ] `go vet ./...` clean; `cd web && npm test`
-- [ ] `git log --oneline -4` shows the four commits in order; on a throwaway
+      - verified with `bin/dwe` against a throwaway project: `state:` and
+        `ui.commands.show_type_badges` each produce
+        `unknown top-level key "…" — move custom values under "vars:" …` naming
+        the offending file, in `workspace.yml` and in `workspace/defaults.yml`;
+        `dwe render env` emits `PROJECT / UID / GID / COMPOSE_PROJECT_NAME`
+        with `COMPOSE_PROJECT_NAME=dwe-t10proj` (lowercased) last in the system
+        block; `GOOS=windows go build ./...` exits 1 with
+        `internal/shared/lock/lock.go:53:20: undefined: syscall.Flock` first
+- [x] full suite: `make build && make test && make test-race && make lint`
+      — all green (`golangci-lint`: 0 issues); working tree clean afterwards,
+      so the regenerated `content_hashes_gen.go` is byte-identical to the
+      committed one
+- [x] `go vet ./...` clean; `cd web && npm test` (28 pass, 0 fail)
+- [x] `git log --oneline -4` shows the four commits in order; on a throwaway
       branch `git revert --no-edit` of commit 4, then 3, then 2, then 1
       applies cleanly in that reverse order (the forward-order property does
       not hold — see Development Approach)
-- [ ] `dwe docs show --lang ru <every RU page touched>` shows no stale
+      - ⚠️ deviation (already noted in Task 5): the four plan items landed as
+        **nine** commits, so the rehearsal reverted them in reverse commit
+        order — `908430c1, 33dc6a92` (item 4), `77be76f2, bfd0e085, 8604a6bf`
+        (item 3), `f948a1ef, 4c937339` (item 2), `23ac1fc9, 968e1952` (item 1).
+        All nine applied with no conflict in a throwaway worktree, and the
+        resulting tree diffs empty against the pre-implementation commit
+        `26f05462` outside `docs/plans/`.
+- [x] `dwe docs show --lang ru <every RU page touched>` shows no stale
       translation warning (provenance hashes match the regenerated manifest)
-- [ ] grep the twelve real workspaces for `name: COMPOSE_PROJECT_NAME` under
+      — clean for all fifteen touched pages; additionally verified repo-wide:
+      all 73 RU mirrors carry a provenance header and every header hash matches
+      `ContentHashes`
+- [x] grep the twelve real workspaces for `name: COMPOSE_PROJECT_NAME` under
       `exports:`, and for top-level `state:` / `ui:` in `workspace.yml`,
       `workspace/defaults.yml`, `workspace/local.yml` — expected: zero hits
-- [ ] live check on the beetDeck workspace with `bin/dwe`: `dwe render env`
+      — zero hits on all three greps across magento, cueBreaker, podlapka,
+      AlbFetcharr, dwe-meetup, alto, ficbird, beetDeck, laravel,
+      work/divan/dwe, work/tbm/tbm, work/oggetto/kpi
+- [x] live check on the beetDeck workspace with `bin/dwe`: `dwe render env`
       prints `COMPOSE_PROJECT_NAME=<lowercase>` as the last system line and
       the value equals the `-p` argument echoed by `dwe status --debug`
       (compose probes echo at Debug level); `dwe run` deploys;
       `dwe test run <one scenario>` passes and the copy's `.env` (path from
       the run's manifest) carries the copy's stamped name, not the original's
-- [ ] ⚠️/➕ every deviation into this plan
+      - `dwe render env` → `COMPOSE_PROJECT_NAME=dwe-beetdeck`, last of the
+        four system lines, ahead of the user rules.
+      - ⚠️ deviation: `dwe status --debug` echoes no `-p`. Status probes
+        containers with a label-filtered `docker ps`, never compose, so there
+        is no compose invocation to echo. Used `dwe docker ps --debug` instead
+        (`-p dwe-beetdeck`), cross-checked against `dwe docker project-name`
+        (`dwe-beetdeck`) — both equal the `.env` value.
+      - ⚠️ blocked by the environment, not by this change: `dwe run` stops at
+        the `env/ports_free` preflight (port 8932 held by another project's
+        `dwe-podlapka-playwright-1`), and `dwe test run core-only` — which
+        remaps the ports and so gets past that — fails at
+        `backend/image/build-image` because the private registry `git.horn`
+        (192.168.10.10:443) is unreachable from this host right now
+        ("no route to host"). Neither failure touches the config surface this
+        plan changed; the deploy path itself is covered by `make test`.
+      - the part of the scenario check that *is* about this change passed: the
+        disposable copy's `.env` carries
+        `COMPOSE_PROJECT_NAME=dwe-t-core-only-7e1b37` — the copy's stamped
+        identity, matching the `-p` the runner tore down with, not the
+        original's `dwe-beetdeck`. The kept run was swept with
+        `dwe test clean core-only`.
+- [x] ⚠️/➕ every deviation into this plan
 
 ### Task 11: [Final] Update documentation and file the plan
 
