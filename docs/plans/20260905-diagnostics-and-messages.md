@@ -543,14 +543,14 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `docs/internals/packages.md` (§ `compose_scan.go` entry)
 - Modify: `CHANGELOG.md`
 
-- [ ] `tests.go`: skip `f.Shared` findings before building the `tests.isolation` warning
-- [ ] `runner.go` `scanComposeIsolationGate`: skip `f.Shared` findings before the warn / blocking loop
-- [ ] `profile.go`: add `Shared bool \`json:"shared,omitempty"\`` to `testIsolationFindingJSON`, populate from `f.Shared`
-- [ ] tests: validate emits no `tests.isolation` row for a shared volume and still emits one for an unacknowledged one; runner gate prints no warning for shared; `list_test.go`: `TestRunTestList_CostProfileHeavyProject` (`:184`) now expects `shared: true` on its `composer-cache` finding (it already declares the matching `shared: true` volume), and a new case asserts the key is absent for an unacknowledged finding
-- [ ] `tests.md` EN + RU: kinds table gets a sentence on `shared: true` acknowledgement; "Compose isolation scanner" section explains the match rule (effective name vs `docker.yml` shared volume name) and that networks are not covered; `:352`, `:368`, `:369` ("every finding is printed as a warning" / "regardless of `Blocking`") rewritten to exclude acknowledged findings; `cost_profile` `isolation_findings` row documents `shared`; limitations bullet `:406` qualified
-- [ ] `packages.md`: scanner entry (`:83`) — add `Shared` (and the missing `Value`) to the field list, one sentence on the `docker.yml` read and the match rule
-- [ ] `CHANGELOG.md` `### Changed`: isolation scanner no longer warns on volumes declared `shared: true` in `docker.yml`; `dwe test list --output json` marks them `"shared": true`
-- [ ] `make build` (embedded docs + hashes), `make test` — must pass; commit 1: `fix(tests): isolation scanner honours shared volumes`
+- [x] `tests.go`: skip `f.Shared` findings before building the `tests.isolation` warning
+- [x] `runner.go` `scanComposeIsolationGate`: skip `f.Shared` findings before the warn / blocking loop
+- [x] `profile.go`: add `Shared bool \`json:"shared,omitempty"\`` to `testIsolationFindingJSON`, populate from `f.Shared`
+- [x] tests: validate emits no `tests.isolation` row for a shared volume and still emits one for an unacknowledged one; runner gate prints no warning for shared; `list_test.go`: `TestRunTestList_CostProfileHeavyProject` (`:184`) now expects `shared: true` on its `composer-cache` finding (it already declares the matching `shared: true` volume), and a new case asserts the key is absent for an unacknowledged finding
+- [x] `tests.md` EN + RU: kinds table gets a sentence on `shared: true` acknowledgement; "Compose isolation scanner" section explains the match rule (effective name vs `docker.yml` shared volume name) and that networks are not covered; `:352`, `:368`, `:369` ("every finding is printed as a warning" / "regardless of `Blocking`") rewritten to exclude acknowledged findings; `cost_profile` `isolation_findings` row documents `shared`; limitations bullet `:406` qualified
+- [x] `packages.md`: scanner entry (`:83`) — add `Shared` (and the missing `Value`) to the field list, one sentence on the `docker.yml` read and the match rule
+- [x] `CHANGELOG.md` `### Changed`: isolation scanner no longer warns on volumes declared `shared: true` in `docker.yml`; `dwe test list --output json` marks them `"shared": true`
+- [x] `make build` (embedded docs + hashes), `make test` — must pass; commit 1: `fix(tests): isolation scanner honours shared volumes`
 
 ### Task 3: `PipelineFileState` and the three `*WithState` loaders
 

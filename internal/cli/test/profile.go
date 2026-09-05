@@ -71,6 +71,12 @@ type testCostProfileJSON struct {
 type testIsolationFindingJSON struct {
 	Kind     string `json:"kind"`
 	Resource string `json:"resource"`
+	// Shared marks a volume acknowledged by a docker.yml resources.volumes
+	// entry with shared: true. It stays listed — the profile reports facts,
+	// not verdicts — but `dwe validate tests` and the runner no longer warn
+	// about it. Omitted when false so unacknowledged findings serialize
+	// exactly as before.
+	Shared bool `json:"shared,omitempty"`
 }
 
 // costProfiler holds the once-per-command project state every per-scenario
@@ -187,7 +193,7 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 		if f.Blocking {
 			continue
 		}
-		findings = append(findings, testIsolationFindingJSON{Kind: string(f.Kind), Resource: f.Resource})
+		findings = append(findings, testIsolationFindingJSON{Kind: string(f.Kind), Resource: f.Resource, Shared: f.Shared})
 	}
 
 	enabled := 0

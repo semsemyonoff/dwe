@@ -186,6 +186,18 @@ generated from commit subjects and stay on the
 
 ### Changed
 
+- **The compose isolation scanner no longer warns about a volume the project
+  already declares `shared: true`.** The documented cross-project cache recipe
+  — a `docker.yml` `resources.volumes.<key>` with `shared: true` plus the
+  matching raw compose `external: true` / `name:` declaration — used to earn
+  two permanent, unfixable warnings per volume (`external_volume` and
+  `named_volume`) on every `dwe validate tests` and `dwe test run`, for a
+  volume `dwe` creates itself. Those volumes are now recognised by the name
+  they resolve to and are silent. There is no new config surface. They stay
+  listed in `dwe test list --output json` under
+  `cost_profile.isolation_findings`, marked `"shared": true` — the profile
+  reports facts, not verdicts — and the key is omitted for every
+  unacknowledged finding, so that output is otherwise unchanged.
 - **A failing command now prints its fix instruction in the terminal too.**
   Every typed `dwe` error carries a hint, and until now `--output json` was the
   only place it appeared: the error text handed to the renderer is the message

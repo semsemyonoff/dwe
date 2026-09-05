@@ -259,9 +259,11 @@ steps:
 	if p.SharedVolumes != 1 {
 		t.Errorf("shared_volumes = %d, want 1", p.SharedVolumes)
 	}
+	// docker.yml declares composer-cache shared: true, so the profile still
+	// lists the finding — it reports facts, not verdicts — but marks it.
 	if len(p.IsolationFindings) != 1 || p.IsolationFindings[0].Kind != "external_volume" ||
-		p.IsolationFindings[0].Resource != "composer-cache" {
-		t.Errorf("isolation_findings = %+v, want one external_volume composer-cache", p.IsolationFindings)
+		p.IsolationFindings[0].Resource != "composer-cache" || !p.IsolationFindings[0].Shared {
+		t.Errorf("isolation_findings = %+v, want one shared external_volume composer-cache", p.IsolationFindings)
 	}
 	// One scenario step + three service deploy steps (a flat shell step, a
 	// shell step nested in a parallel group, and a step whose `when:` is shell).
@@ -383,6 +385,32 @@ volumes:
 	}
 	if !reflect.DeepEqual(kinds, []string{"external_volume"}) {
 		t.Errorf("isolation_findings kinds = %v, want [external_volume] only", kinds)
+	}
+	if p.IsolationFindings[0].Shared {
+		t.Errorf("no docker.yml declares this volume shared, got %+v", p.IsolationFindings[0])
+	}
+}
+
+// TestRunTestList_CostProfileSharedKeyOmitted pins the omitempty half of the
+// contract: an unacknowledged finding serializes exactly as it did before the
+// Shared field existed, so existing consumers see byte-identical output.
+func TestRunTestList_CostProfileSharedKeyOmitted(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", "project:\n  name: demo\ncompose:\n  base: compose.yaml\n")
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "compose.yaml", "services: {}\nvolumes:\n  data:\n    external: true\n")
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+	flags := &cmdctx.RootFlags{Root: baseDir, Output: "json"}
+	cmd, out := newListTestCmd()
+	if err := runTestList(cmd, flags); err != nil {
+		t.Fatalf("runTestList: %v", err)
+	}
+	if !strings.Contains(out.String(), `"kind":"external_volume"`) {
+		t.Fatalf("expected an external_volume finding in %s", out.String())
+	}
+	if strings.Contains(out.String(), `"shared"`) {
+		t.Errorf("shared must be omitted when false, got %s", out.String())
 	}
 }
 
