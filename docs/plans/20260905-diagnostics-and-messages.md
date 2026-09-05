@@ -644,11 +644,11 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Create: `internal/shared/yamlstrict/yamlstrict.go`
 - Create: `internal/shared/yamlstrict/yamlstrict_test.go`
 
-- [ ] `Decode(data, out, file)`: `yaml.NewDecoder` + `KnownFields(true)`; `io.EOF` returned untouched; `*yaml.TypeError` → `*Error`; a plain error matching the unknown-field regex → `*Error` with one `UnknownField`; any other error → `fmt.Errorf("%s: %w", file, err)` (no prefix when `file == ""`)
-- [ ] exported `AllowedFields(t reflect.Type) []string` + the allowed-set index by reflection (`reflect.Type.String()` → tags; struct / pointer / slice / array / map recursion; `,inline` flattening; `yaml:"-"` and unexported skipped; untagged → yaml.v3's lower-cased default; cycle guard)
-- [ ] `Error.Error()` exactly as in Technical Details (one line per unknown field, `Other` lines verbatim with file prefix, hint once at the end, `file:line:` / `file:` / `line N:` prefix forms); `Unwrap()` returns the original error
-- [ ] tests: single unknown field with line and allowed set; nested type (slice of struct, map of struct, pointer) resolves the right allowed set; `,inline` fields appear in the parent's set; two unknown fields → two lines, one hint; type not reachable → no allowed clause; empty `file` → no prefix; `io.EOF` passthrough (`errors.Is`); syntax error passthrough with file prefix; plain-error form (a fixture type whose `UnmarshalYAML` returns `line 4: field x not found in type pkg.T`); `errors.As(err, *yaml.TypeError)` works through `Unwrap` on the `TypeError` path (the plain-error path unwraps to the plain error — assert that too)
-- [ ] run `go test ./internal/shared/yamlstrict/...` — must pass before task 10
+- [x] `Decode(data, out, file)`: `yaml.NewDecoder` + `KnownFields(true)`; `io.EOF` returned untouched; `*yaml.TypeError` → `*Error`; a plain error matching the unknown-field regex → `*Error` with one `UnknownField`; any other error → `fmt.Errorf("%s: %w", file, err)` (no prefix when `file == ""`)
+- [x] exported `AllowedFields(t reflect.Type) []string` + the allowed-set index by reflection (`reflect.Type.String()` → tags; struct / pointer / slice / array / map recursion; `,inline` flattening; `yaml:"-"` and unexported skipped; untagged → yaml.v3's lower-cased default; cycle guard)
+- [x] `Error.Error()` exactly as in Technical Details (one line per unknown field, `Other` lines verbatim with file prefix, hint once at the end, `file:line:` / `file:` / `line N:` prefix forms); `Unwrap()` returns the original error
+- [x] tests: single unknown field with line and allowed set; nested type (slice of struct, map of struct, pointer) resolves the right allowed set; `,inline` fields appear in the parent's set; two unknown fields → two lines, one hint; type not reachable → no allowed clause; empty `file` → no prefix; `io.EOF` passthrough (`errors.Is`); syntax error passthrough with file prefix; plain-error form (a fixture type whose `UnmarshalYAML` returns `line 4: field x not found in type pkg.T`); `errors.As(err, *yaml.TypeError)` works through `Unwrap` on the `TypeError` path (the plain-error path unwraps to the plain error — assert that too)
+- [x] run `go test ./internal/shared/yamlstrict/...` — must pass before task 10
 
 ### Task 10: Migrate the `config`-package loaders; `checkKnownFields` gains a line
 
