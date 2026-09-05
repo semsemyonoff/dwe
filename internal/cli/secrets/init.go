@@ -220,9 +220,10 @@ func alreadyInitializedError(existing string) error {
 // `--replace-recipient`, i.e. "re-enter every value from its plaintext", to a
 // developer who holds the key. The keys directory is consulted after it, which
 // also finds a MISNAMED file holding this project's identity (`key list`
-// reports those under the recipient they hold). `KeyfileOK` is required
-// because `KeyfileInfo.Recipient` falls back to the filename stem for a file
-// that does not parse, and a corrupt `<recipient>.key` is not an identity.
+// reports those under the recipient they hold). `KeyfileOK` and
+// `KeyfileMisnamed` are the two states whose `Recipient` came from the PARSED
+// identity; for `KeyfileUnparsable` / `KeyfileUnreadable` it falls back to the
+// filename stem, and a corrupt `<recipient>.key` is not an identity.
 func identityPresent(recipient string) bool {
 	if _, _, err := secrets.LoadIdentity(recipient); err == nil {
 		return true
@@ -232,7 +233,10 @@ func identityPresent(recipient string) bool {
 		return false
 	}
 	return slices.ContainsFunc(infos, func(i secrets.KeyfileInfo) bool {
-		return i.State == secrets.KeyfileOK && i.Recipient == recipient
+		if i.State != secrets.KeyfileOK && i.State != secrets.KeyfileMisnamed {
+			return false
+		}
+		return i.Recipient == recipient
 	})
 }
 

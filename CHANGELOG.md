@@ -183,9 +183,77 @@ generated from commit subjects and stay on the
   created under the old name. Either set `project_name` in `workspace/docker.yml`
   to that old value and redeploy once, or write `name: ${COMPOSE_PROJECT_NAME}`
   in the compose file, which now resolves from `.env`.
+- **A dot-path that does not resolve is now reported instead of silently
+  rendering empty.** `dwe validate` warns on an `exports.env` rule whose `from:`
+  or `when:` path is not in the merged config (`config.exports`), and on a
+  command's `params.<name>.default_from`, `params.<name>.options.from` or
+  `context.<name>.from` (`commands` domain). Until now `from: vars.db.passwrod`
+  passed every check and `dwe render env` wrote `DB_PASSWORD=`, an empty value
+  that reached every container as if it had been declared that way. The hint
+  names the consequence for the rule at hand — the variable renders empty, the
+  `default:` is always used, or the render fails on a `required:` rule. The
+  `when:` gate is read first, exactly as the renderer reads it: a rule whose
+  gate is falsy right now is still reported, but the hint says nothing is
+  written either way and the miss surfaces once the gate turns on, and a rule
+  whose `when:` cannot resolve at all is reported once, on the gate, rather
+  than twice. These
+  are warnings, not errors: `from:` with a `default:` is a legitimate optional
+  path, and a path may live in a `local.yml` that is not on this machine. Note
+  that `dwe validate --strict` treats warnings as errors, so a CI job using it
+  can start failing on a path that was deliberately optional — give such a rule
+  a `default:`, or correct the path.
+- **`dwe render env` warns about each variable it renders empty**, on stderr,
+  at the moment the empty value is produced:
+  `warning: exports.env[DB_PASSWORD]: from "vars.db.passwrod" does not resolve —
+  rendered empty`. stdout is untouched, so `dwe render env > .env` is
+  byte-identical to before, and `--output json` prints no warning.
 
 ### Changed
 
+- **The compose isolation scanner no longer warns about a volume the project
+  already declares `shared: true`.** The documented cross-project cache recipe
+  — a `docker.yml` `resources.volumes.<key>` with `shared: true` plus the
+  matching raw compose `external: true` / `name:` declaration — used to earn
+  two permanent, unfixable warnings per volume (`external_volume` and
+  `named_volume`) on every `dwe validate tests` and `dwe test run`, for a
+  volume `dwe` creates itself. Those volumes are now recognised by the name
+  they resolve to — an explicit `name:`, else the name carried by compose's
+  legacy `external: { name: … }` long form, else the compose map key — and are
+  silent. There is no new config surface. They stay
+  listed in `dwe test list --output json` under
+  `cost_profile.isolation_findings`, marked `"shared": true` — the profile
+  reports facts, not verdicts — and the key is omitted for every
+  unacknowledged finding, so that output is otherwise unchanged.
+- **`dwe validate` names the built-in default pipeline instead of reporting a
+  bare absence.** `config.deploy`, `config.lifecycle` and `config.reset` now
+  distinguish three states, the way `config.info` already did: an absent
+  `deploy.yml` / `lifecycle.yml` reports at info as `no deploy.yml — built-in
+  default pipeline is active`; a file that is empty or all comments reports
+  `has no active content (all comments or empty) — built-in default pipeline is
+  active`. The second state used to report **OK**, which was actively
+  misleading — the inert `deploy.yml` that `dwe init` scaffolds runs the
+  built-in pipeline, not the one in the file. A file that parses but carries no
+  pipeline reports at info for the same reason: `deploy.yml` / `reset.yml`
+  `declares no phases`, and `lifecycle.yml` `declares no run: section` (or
+  `stop:`), each naming the built-in default that runs in its place. An absent
+  `reset.yml` stays silent as before, since the scaffold never ships one.
+- **An unknown field in a config file now names the file, the line, the key and
+  the fields that are allowed there.** Every strictly decoded file — the
+  pipelines, `service.yml`, `snapshot.yml`, `validate.yml`, command files,
+  template-pack manifests, test scenarios, `setup.yml` and translation bundles
+  — used to surface the underlying YAML library's `field defaults not found in
+  type config.DeployConfig`, a Go type name nothing in the docs mentions. It
+  now reads `workspace/deploy.yml:12: unknown field "defaults" — allowed here:
+  log, phases`, followed once by a hint that a field you did not
+  invent may come from a newer `dwe`. The unknown top-level key error carries
+  the same hint next to its existing `vars:` advice. A script grepping for the
+  old `not found in type` text needs updating.
+- **Documentation fix: predicate builtins are `check:`-only.**
+  `docs/reference/config/deploy/builtins.md` claimed the builtins on that page
+  can be used in a `when:` guard. They cannot — `when: {type: builtin}`
+  resolves against the separate predicate registry (`dir-exists`,
+  `file-missing`, …), which shares nothing with the builtin registry. No
+  behaviour changed; the page was wrong.
 - **A failing command now prints its fix instruction in the terminal too.**
   Every typed `dwe` error carries a hint, and until now `--output json` was the
   only place it appeared: the error text handed to the renderer is the message
@@ -366,5 +434,38 @@ generated from commit subjects and stay on the
   have run the whole lifecycle without the deploy and snapshot locks. That
   cross-build now fails at compile time on purpose. No behaviour changes on a
   supported platform.
+
+### Fixed
+
+- **A keyfile stored under the wrong filename is no longer invisible to
+  `dwe secrets`.** `~/.config/dwe/keys/<recipient>.key` is the only path the
+  identity lookup reads, so a key filed under another recipient's name — the row
+  `dwe secrets key list` reports as `misnamed` — was skipped by every consumer:
+  `secrets status` classified the whole tree as `no_identity`, `secrets get` and
+  `rekey` could not read a value, and `secrets init` offered
+  `--replace-recipient` (re-enter every secret from its plaintext) to a machine
+  that held the key. Worse, `init --replace-recipient --yes` then saw nothing
+  readable and its data-loss guard let the replacement through, orphaning every
+  encrypted value. Such a keyfile now counts as an identity everywhere, and the
+  guard refuses. The same lookup gap hid a canonical keyfile whenever a
+  `DWE_AGE_KEY` exported for another project shadowed it.
+- **A `default_from:` pointing at an empty YAML key no longer passes the literal
+  text `<nil>` to the command.** `vars: {branch:}` — a key written with no value
+  — resolved as "found", and the resolver rendered it with Go's default
+  formatting, so `git checkout ${param.branch}` ran as `git checkout <nil>`. An
+  empty key is now treated the way a missing one already was: the `default:`
+  applies, and a `required:` param fails with its own message. The same fix
+  covers a `context.<name>` whose `env:` variable was exported as `<nil>`.
+- **A `${context.<name>}` that does not resolve now renders empty instead of the
+  literal `<no value>`.** A declared, non-`required:` context whose `from:` path
+  is a typo resolved to nil, and `text/template` spells a nil interface as
+  `<no value>` — so `docker exec ${context.container}` ran against a container
+  by that name. The template resolver now treats a present-but-nil value the
+  way it already treated a missing key, which is also what `dwe validate`
+  promises when it warns about an unresolvable `context.<name>.from`.
+- **An empty or all-comment `workspace/snapshot.yml` / `workspace/validate.yml`
+  no longer fails with the bare message `EOF`.** Both loaders reject an empty
+  document (unlike the pipeline files, which fall back to the built-in default),
+  and the error again names the file it came from.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

@@ -1047,6 +1047,36 @@ func TestRunScenario_IsolationGate_WarnOnlyFindingProceeds(t *testing.T) {
 	}
 }
 
+// TestScanComposeIsolationGate_SharedVolumeSilent pins that a volume
+// acknowledged by docker.yml resources.volumes shared: true produces no warning
+// at all, while an unacknowledged one in the same file still does.
+func TestScanComposeIsolationGate_SharedVolumeSilent(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n  data:\n    external: true\n")
+	writeFixtureFile(t, dir, "workspace/docker.yml", "resources:\n  volumes:\n    npm_cache:\n      name: dwe_npm_cache\n      shared: true\n")
+
+	var warnings []string
+	blocked := scanComposeIsolationGate(dir, false, func(msg string) { warnings = append(warnings, msg) })
+	if blocked {
+		t.Fatalf("non-blocking findings must never block, warnings: %v", warnings)
+	}
+	for _, w := range warnings {
+		if strings.Contains(w, "npm_cache") {
+			t.Errorf("shared volume must not warn, got %q", w)
+		}
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "data") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning for the unacknowledged volume, got %v", warnings)
+	}
+}
+
 // TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped pins that a
 // copy whose own workspace.yml fails to load simply skips the isolation scan
 // (never blocks) — exercised directly against scanComposeIsolationGate since

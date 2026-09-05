@@ -327,6 +327,43 @@ func TestRenderCommand_nilContext(t *testing.T) {
 	}
 }
 
+// A key that is PRESENT but holds nil is the shape resolve.Context produces for
+// a declared, non-required context whose from: does not resolve. Without the
+// guard text/template prints a nil interface as the literal "<no value>", so
+// `docker exec ${context.container}` ran against a container named <no value>.
+func TestRenderCommand_presentNilValuesRenderEmpty(t *testing.T) {
+	cases := []struct {
+		name string
+		ctx  *RenderContext
+		expr string
+		want string
+	}{
+		{
+			name: "context",
+			ctx:  &RenderContext{Context: map[string]any{"container": nil}},
+			expr: "docker exec ${context.container}",
+			want: "docker exec ",
+		},
+		{
+			name: "param",
+			ctx:  &RenderContext{Params: map[string]any{"branch": nil}},
+			expr: "git checkout ${param.branch}",
+			want: "git checkout ",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RenderCommand(tc.expr, tc.ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRenderCommand_invalidGoTemplate(t *testing.T) {
 	ctx := &RenderContext{}
 	_, err := RenderCommand("{{ .Unclosed", ctx)

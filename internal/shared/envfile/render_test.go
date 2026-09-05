@@ -339,3 +339,98 @@ func TestBuildContent_multiPortService(t *testing.T) {
 		}
 	}
 }
+
+// TestUnresolvedRules covers the one shape that renders NAME= silently against
+// every neighbouring shape that does not: a default, required (BuildContent
+// fails instead), a falsy when: (no line at all) and a path that resolves.
+func TestUnresolvedRules(t *testing.T) {
+	raw := map[string]any{
+		"services": map[string]any{
+			"app": map[string]any{
+				"enabled": true,
+				"ports":   map[string]any{"http": 8080},
+			},
+			"off": map[string]any{"enabled": false},
+		},
+		"vars": map[string]any{"empty": nil},
+	}
+
+	tests := []struct {
+		name string
+		rule config.ExportRule
+		want bool // reported as rendering empty
+	}{
+		{"resolving path", config.ExportRule{Name: "APP_PORT", From: "services.app.ports.http"}, false},
+		{"missing path", config.ExportRule{Name: "APP_PORT", From: "services.app.ports.htpp"}, true},
+		{"missing path with default", config.ExportRule{Name: "APP_URL", From: "runtime.urls.app", Default: "http://localhost"}, false},
+		{"missing path required", config.ExportRule{Name: "TOKEN", From: "vars.tokn", Required: true}, false},
+		{"missing path skipped by falsy when", config.ExportRule{Name: "OFF_HOST", From: "services.off.hosts.web", When: "services.off.enabled"}, false},
+		{"missing path with truthy when", config.ExportRule{Name: "APP_HOST", From: "services.app.hosts.web", When: "services.app.enabled"}, true},
+		{"present key holding nil", config.ExportRule{Name: "EMPTY", From: "vars.empty"}, false},
+		// No from: at all renders NAME= on purpose. ResolvePath calls an empty
+		// path not-found, so without the guard this would warn `from ""` at an
+		// author who never wrote one — and config.exports stays silent here.
+		{"no from at all", config.ExportRule{Name: "FLAG"}, false},
+		{"no from with comment", config.ExportRule{Name: "FLAG", Comment: "left blank on purpose"}, false},
+		{"reserved name", config.ExportRule{Name: "PROJECT", From: "vars.nope"}, false},
+		{"missing path with bool format", config.ExportRule{Name: "FLAG", From: "services.app.enabld", Format: "bool"}, true},
+		{"missing path with int format", config.ExportRule{Name: "PORT", From: "services.app.ports.htp", Format: "int"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UnresolvedRules(makeEnvCfg([]config.ExportRule{tt.rule}, raw))
+			if tt.want {
+				if len(got) != 1 || got[0].Name != tt.rule.Name || got[0].From != tt.rule.From {
+					t.Fatalf("UnresolvedRules = %+v, want one entry for %s/%s", got, tt.rule.Name, tt.rule.From)
+				}
+				return
+			}
+			if len(got) != 0 {
+				t.Fatalf("UnresolvedRules = %+v, want none", got)
+			}
+		})
+	}
+}
+
+// TestUnresolvedRules_orderAndNilConfig pins source order (the order the empty
+// lines appear in .env) and the nil-config guard.
+func TestUnresolvedRules_orderAndNilConfig(t *testing.T) {
+	if got := UnresolvedRules(nil); got != nil {
+		t.Errorf("UnresolvedRules(nil) = %+v, want nil", got)
+	}
+
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "FIRST", From: "vars.a"},
+		{Name: "OK", From: "vars.here"},
+		{Name: "SECOND", From: "vars.b"},
+	}, map[string]any{"vars": map[string]any{"here": "yes"}})
+
+	got := UnresolvedRules(cfg)
+	if len(got) != 2 || got[0].Name != "FIRST" || got[1].Name != "SECOND" {
+		t.Fatalf("UnresolvedRules = %+v, want FIRST then SECOND", got)
+	}
+}
+
+// TestUnresolvedRules_matchesBuildContent ties the report to the rendered
+// output: every reported rule must actually appear as a bare NAME= line, and
+// no unreported rule may.
+func TestUnresolvedRules_matchesBuildContent(t *testing.T) {
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "EMPTY_ONE", From: "vars.typo"},
+		{Name: "WITH_DEFAULT", From: "vars.typo", Default: "fallback"},
+		{Name: "RESOLVED", From: "vars.here"},
+	}, map[string]any{"vars": map[string]any{"here": "yes"}})
+
+	out, err := BuildContent(cfg, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "\nEMPTY_ONE=\n") {
+		t.Errorf("expected a bare EMPTY_ONE= line, got:\n%s", out)
+	}
+	got := UnresolvedRules(cfg)
+	if len(got) != 1 || got[0].Name != "EMPTY_ONE" {
+		t.Fatalf("UnresolvedRules = %+v, want only EMPTY_ONE", got)
+	}
+}

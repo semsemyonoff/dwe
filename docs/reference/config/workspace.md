@@ -9,6 +9,7 @@ The three layers of the merged DWE config.
 - [Dot-path resolution](#dot-path-resolution)
   - [Where service fields come from](#where-service-fields-come-from)
 - [Strict root + the `vars:` sandbox](#strict-root--the-vars-sandbox)
+  - [Unknown field errors](#unknown-field-errors)
 - [workspace.yml](#workspaceyml)
   - [Field reference](#field-reference)
   - [The `secrets:` block](#the-secrets-block)
@@ -105,10 +106,21 @@ project · runtime · exports · compose · docs · services · vars · update �
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
 
 ```text
-workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
 ```
 
 This makes typos in formalized keys (`runtim:`, `exprots:`) fail loudly instead of being silently swallowed, and lets the schema tighten without colliding with project-specific values. The same error is surfaced as a `dwe validate` error diagnostic.
+
+### Unknown field errors
+
+The same treatment applies *inside* a file. Every strictly decoded config file — the pipelines (`deploy.yml`, `lifecycle.yml`, `reset.yml`), `service.yml`, `snapshot.yml`, `validate.yml`, command files, template-pack manifests, test scenarios, `setup.yml` and translation bundles — reports an unknown key with the file, the line, the key and the fields actually accepted at that position:
+
+```text
+workspace/deploy.yml:12: unknown field "defaults" — allowed here: log, phases
+(a field you did not invent may come from a newer dwe version — check `dwe version`)
+```
+
+Several unknown fields in one file are listed one per line, with the hint printed once at the end.
 
 ### `vars:` — the home for free-form values
 

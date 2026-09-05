@@ -85,7 +85,7 @@ dwe snapshot rollback                       # quick: restore the rollback_target
 | `restore` | workflow | — | Restore workflow. |
 | `remove` | workflow | — | Cleanup workflow run by `dwe snapshot remove` before the directory is deleted. |
 
-The loader uses strict decoding (`KnownFields(true)`): unknown top-level keys are hard errors.
+The loader uses strict decoding (`KnownFields(true)`): unknown keys are hard errors, reported as `workspace/snapshot.yml:<line>: unknown field "<key>" — allowed here: …` (see [Unknown field errors](workspace.md#unknown-field-errors)).
 
 ## Workflow blocks: `create` / `restore` / `remove`
 

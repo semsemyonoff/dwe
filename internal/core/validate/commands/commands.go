@@ -4,8 +4,10 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -121,6 +123,11 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 					categorisedDaemonFields[cf.FilePath+"/"+name] = fields
 				}
 			}
+
+			// Warn on dot-paths that do not resolve. Deliberately NOT marked
+			// categorised: these are warnings alongside cmd.Validate(), not a
+			// replacement for it.
+			diags = append(diags, dotPathDiagnostics(cmd, relFile, ctx.Cfg)...)
 
 			// Emit param diagnostics.
 			pDiags := paramStructuralDiagnostics(cmd, relFile, ctx.Cfg)
@@ -312,6 +319,110 @@ func sortedCommandNames(cf *model.CommandFile) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// dotPathDiagnostics warns on a command dot-path that does not resolve in the
+// merged config: params.<p>.default_from, params.<p>.options.from and
+// context.<c>.from.
+//
+// Nothing catches these today. `default_from: vars.git.brnch` is a well-formed
+// string; resolve.Params treats the miss as not-found and silently falls
+// through to default: or to an empty value, and an unresolvable options.from
+// yields a select widget with nothing to choose. The criterion is
+// config.ResolvePath reporting not-found — the same call the resolvers make.
+//
+// One deliberate difference: a present key holding nil is not a finding here,
+// while resolve.Params/ParamDefaults guard `found && v != nil` and do fall
+// through to default:. Warning on it would report a path the author demonstrably
+// wrote — the empty value is the declaration, not a typo — and the two shapes
+// are indistinguishable in the message that matters ("does not resolve"), so
+// the quieter reading wins. Anywhere else, the two agree by construction.
+//
+// Warning, not error: the path may live in a local.yml that is not on this
+// machine, and `default_from` paired with `default:` is a legitimate
+// optional-path pattern. The hint names the consequence, which differs per
+// shape.
+func dotPathDiagnostics(cmd model.CommandDef, relFile string, cfg *config.DweConfig) []validate.Diagnostic {
+	if cfg == nil {
+		return nil
+	}
+	var out []validate.Diagnostic
+	target := fmt.Sprintf("commands:%s", cmd.ID)
+
+	unresolved := func(path string) bool {
+		_, found := config.ResolvePath(cfg.Raw, path)
+		return !found
+	}
+
+	for _, pname := range slices.Sorted(maps.Keys(cmd.Params)) {
+		pdef := cmd.Params[pname]
+		paramTarget := fmt.Sprintf("%s:params.%s", target, pname)
+
+		if pdef.DefaultFrom != "" && unresolved(pdef.DefaultFrom) {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityWarning,
+				Domain:   "commands",
+				Target:   paramTarget,
+				File:     relFile,
+				Message: fmt.Sprintf("params.%s: default_from %q does not resolve in the merged config",
+					pname, pdef.DefaultFrom),
+				Hint: defaultFromHint(pdef),
+			})
+		}
+
+		if pdef.Options != nil && pdef.Options.From != "" && unresolved(pdef.Options.From) {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityWarning,
+				Domain:   "commands",
+				Target:   paramTarget,
+				File:     relFile,
+				Message: fmt.Sprintf("params.%s: options ${%s} does not resolve in the merged config",
+					pname, pdef.Options.From),
+				Hint: "the choice list resolves empty, so the form offers nothing to select — " +
+					"check for a typo in the path",
+			})
+		}
+	}
+
+	for _, cname := range slices.Sorted(maps.Keys(cmd.Context)) {
+		cdef := cmd.Context[cname]
+		if cdef.From == "" || !unresolved(cdef.From) {
+			continue
+		}
+		hint := "the context value renders empty — check for a typo in the path"
+		if cdef.Required {
+			hint = "the context value is required, so the command fails at run time — " +
+				"check for a typo in the path"
+		}
+		out = append(out, validate.Diagnostic{
+			Severity: validate.SeverityWarning,
+			Domain:   "commands",
+			Target:   fmt.Sprintf("%s:context.%s", target, cname),
+			File:     relFile,
+			Message: fmt.Sprintf("context.%s: from %q does not resolve in the merged config",
+				cname, cdef.From),
+			Hint: hint,
+		})
+	}
+
+	return out
+}
+
+// defaultFromHint names the consequence of an unresolvable default_from, which
+// depends on what else the param declares (resolve.Params tries default_from
+// first, then default:, then fails when required).
+func defaultFromHint(pdef model.ParamDef) string {
+	switch {
+	case pdef.Default != "":
+		return "the literal default: is always used — check for a typo in the path, " +
+			"or drop default_from: if the literal is the intent"
+	case pdef.Required:
+		return "the param has no other default, so the command fails unless the value is " +
+			"supplied explicitly — check for a typo in the path"
+	default:
+		return "the param defaults to an empty value — check for a typo in the path, " +
+			"or add a default:"
+	}
 }
 
 // paramStructuralDiagnostics emits categorized diagnostics for param validation violations.

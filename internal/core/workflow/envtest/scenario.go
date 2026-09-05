@@ -11,7 +11,6 @@
 package envtest
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,9 +18,8 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 // AutoPortSentinel is the only magic value permitted for an env.vars entry: it
@@ -81,11 +79,10 @@ func LoadScenario(path string) (*Scenario, error) {
 		return nil, err
 	}
 	var scn Scenario
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	// Deliberate divergence from the pipeline loaders: io.EOF (empty / all-comment
 	// document) is NOT tolerated. An empty scenario is a user mistake, so surface it.
-	if err := dec.Decode(&scn); err != nil {
+	// yamlstrict gets an empty file name — the wrap below already names the path.
+	if err := yamlstrict.Decode(data, &scn, ""); err != nil {
 		return nil, fmt.Errorf("scenario file is empty or invalid (%s): %w", path, err)
 	}
 	if err := config.ValidateDeploySteps(scn.Steps, "scenario "+name); err != nil {

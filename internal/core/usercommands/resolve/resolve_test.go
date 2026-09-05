@@ -137,6 +137,60 @@ func TestParams_DefaultFromMissingFallsBackToLiteralDefault(t *testing.T) {
 	}
 }
 
+// TestParams_DefaultFromNilNeverRendersNilLiteral guards the shape a
+// declared-but-empty YAML key produces: `vars: {branch:}` resolves as found
+// with a nil value, and Go's %v spells that "<nil>" — which used to reach the
+// command line as a four-character value nobody wrote.
+func TestParams_DefaultFromNilNeverRendersNilLiteral(t *testing.T) {
+	cfg := makeConfig(map[string]any{
+		"vars": map[string]any{"branch": nil},
+	})
+
+	t.Run("falls back to the literal default", func(t *testing.T) {
+		defs := map[string]ParamDef{
+			"branch": {Type: ParamTypeString, Default: "main", DefaultFrom: "vars.branch"},
+		}
+		got, err := Params(defs, nil, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got["branch"] != "main" {
+			t.Errorf("expected literal default, got %v", got["branch"])
+		}
+	})
+
+	t.Run("required param fails instead of resolving to <nil>", func(t *testing.T) {
+		defs := map[string]ParamDef{
+			"branch": {Type: ParamTypeString, Required: true, DefaultFrom: "vars.branch"},
+		}
+		if _, err := Params(defs, nil, cfg); err == nil {
+			t.Fatal("expected an error for a required param backed by a nil path")
+		}
+	})
+
+	t.Run("no default resolves empty", func(t *testing.T) {
+		defs := map[string]ParamDef{
+			"branch": {Type: ParamTypeString, DefaultFrom: "vars.branch"},
+		}
+		got, err := Params(defs, nil, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got["branch"] != "" {
+			t.Errorf("expected empty value, got %q", got["branch"])
+		}
+	})
+
+	t.Run("form prefill shows the default, not <nil>", func(t *testing.T) {
+		defs := map[string]ParamDef{
+			"branch": {Type: ParamTypeString, Default: "main", DefaultFrom: "vars.branch"},
+		}
+		if got := ParamDefaults(defs, nil, cfg)["branch"]; got != "main" {
+			t.Errorf("ParamDefaults = %q, want %q", got, "main")
+		}
+	})
+}
+
 func TestParams_RequiredMissing(t *testing.T) {
 	defs := map[string]ParamDef{
 		"token": {Type: ParamTypeString, Required: true},
@@ -385,6 +439,30 @@ func TestBuildEnv_ContextEnv(t *testing.T) {
 	}
 	if env["APP_CONTAINER"] != "dwe-laravel-main" {
 		t.Errorf("expected APP_CONTAINER=dwe-laravel-main, got %v", env["APP_CONTAINER"])
+	}
+}
+
+// TestBuildEnv_ContextEnvNilIsEmptyNotNilLiteral pins that an unresolved
+// non-required context — Context() stores nil for it — exports an empty
+// variable rather than the string "<nil>".
+func TestBuildEnv_ContextEnvNilIsEmptyNotNilLiteral(t *testing.T) {
+	cmd := &CommandDef{
+		Type: CommandTypeShell,
+		Cmd:  "echo",
+		Context: map[string]ContextDef{
+			"container": {From: "services.main.container", Env: "APP_CONTAINER"},
+		},
+	}
+	ctx, err := Context(cmd.Context, makeConfig(map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	env, err := BuildEnv(cmd, nil, ctx, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, ok := env["APP_CONTAINER"]; !ok || got != "" {
+		t.Errorf("APP_CONTAINER = %q (present=%v), want an empty value", got, ok)
 	}
 }
 

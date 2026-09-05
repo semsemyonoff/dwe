@@ -9,6 +9,7 @@ Generate `.env` content from the merged config. Output goes to stdout by default
 - [Export rules](#export-rules)
   - [Rule fields](#rule-fields)
   - [Evaluation order](#evaluation-order)
+  - [Unresolvable paths](#unresolvable-paths)
 - [Value resolution](#value-resolution)
 - [Truthiness](#truthiness)
 - [Encrypted values and the marker guard](#encrypted-values-and-the-marker-guard)
@@ -108,6 +109,16 @@ For each rule, in source order:
 4. **Required check** — if the path was absent and no `default` is set and `required: true`, fail with an error naming the missing path.
 5. **Comment** — if `comment` is set, emit `# <comment>` on its own line.
 6. **Emit** — write `<name>=<value>`.
+
+### Unresolvable paths
+
+A rule whose `from:` does not resolve, with no `default:` and no `required: true`, renders as a bare `NAME=` — an empty value that reaches every container as if it had been declared that way. `dwe render env` says so, once per rule, on **stderr**, before writing the content:
+
+```text
+warning: exports.env[DB_PASSWORD]: from "vars.db.passwrod" does not resolve — rendered empty
+```
+
+stderr keeps `dwe render env > .env` byte-identical, and `--output json` suppresses the warning. The other two shapes are not warned about here: with a `default:` the rendered value is the author's own fallback, and `required: true` fails the render outright. `dwe validate` reports all three shapes as `config.exports` warnings (see [`validate.md`](../config/validate.md)), including an unresolvable `when:`, which this warning cannot cover — such a rule is skipped, so it renders no line at all.
 
 ## Value resolution
 

@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -274,6 +275,22 @@ func TestLoadSetupYAMLEmptyFile(t *testing.T) {
 	require.Equal(t, &Config{Questions: nil}, got)
 }
 
+// TestLoadSetupYAMLAllCommentFile pins the io.EOF branch: unlike the four
+// pipeline loaders, setup.yml does not read an all-comment file as "absent" —
+// it errors, and the error must name the file rather than degrading to the bare
+// "EOF" that yamlstrict passes through untouched.
+func TestLoadSetupYAMLAllCommentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "setup.yml")
+
+	require.NoError(t, os.WriteFile(path, []byte("# nothing here\n# questions:\n"), 0o644))
+
+	_, err := LoadSetupYAML(path)
+	require.Error(t, err)
+	require.ErrorIs(t, err, io.EOF)
+	require.Contains(t, err.Error(), path)
+}
+
 func TestLoadSetupYAMLValidContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "setup.yml")
@@ -301,4 +318,25 @@ func TestLoadSetupYAMLValidContent(t *testing.T) {
 	require.Equal(t, "port", got.Questions[1].ID)
 	require.NotNil(t, got.Questions[1].Validate)
 	require.Equal(t, "port", got.Questions[1].Validate.Preset)
+}
+
+// TestLoadSetupYAMLUnknownFieldMessage pins the yamlstrict shape: the file, the
+// line, the rejected field and the fields accepted at that position.
+func TestLoadSetupYAMLUnknownFieldMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "setup.yml")
+	content := "questions:\n  - id: name\n    type: input\n    titel: Project Name\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+
+	_, err := LoadSetupYAML(path)
+	require.Error(t, err)
+	msg := err.Error()
+	for _, want := range []string{
+		path + ":4:",
+		`unknown field "titel"`,
+		"allowed here: description, id, options, required, title, type, validate, writes",
+		"check `dwe version`",
+	} {
+		require.Contains(t, msg, want)
+	}
 }

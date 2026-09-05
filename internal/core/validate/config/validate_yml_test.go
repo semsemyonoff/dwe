@@ -62,11 +62,11 @@ func TestValidateYmlValidator(t *testing.T) {
 		{
 			name: "strict decode error surfaces as single error diagnostic",
 			ctx: validate.Context{
-				ValidateCfgLoadErr: errors.New("parse workspace/validate.yml: yaml: unmarshal errors:\n  line 3: field foo not found in type config.rawCheckEntry"),
+				ValidateCfgLoadErr: errors.New("workspace/validate.yml:3: unknown field \"foo\" — allowed here: cmd, description, hint, id, services, severity, stages, type, with\n(a field you did not invent may come from a newer dwe version — check `dwe version`)"),
 			},
 			wantLen:  1,
 			wantSev:  validate.SeverityError,
-			wantMsg:  "parse workspace/validate.yml: yaml: unmarshal errors:\n  line 3: field foo not found in type config.rawCheckEntry",
+			wantMsg:  "workspace/validate.yml:3: unknown field \"foo\" — allowed here: cmd, description, hint, id, services, severity, stages, type, with\n(a field you did not invent may come from a newer dwe version — check `dwe version`)",
 			wantFile: "workspace/validate.yml",
 		},
 		{

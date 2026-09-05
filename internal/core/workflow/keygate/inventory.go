@@ -65,6 +65,15 @@ type IdentitySet struct {
 // LoadIdentitySet resolves the configured identity and the fallbacks. Neither
 // lookup failing is an error: the inventory reports per value what could be
 // read, and a keyless machine is a normal, documented state.
+//
+// The configured recipient is excluded from the stragglers ONLY when the
+// primary lookup succeeded. LoadIdentity is first-present-source-wins with no
+// fall-through and only ever reads `keys/<recipient>.key`, so when it fails the
+// keys directory can still hold that very identity — under a foreign name, or
+// canonically while a `DWE_AGE_KEY` exported for another project shadowed it.
+// Excluding it unconditionally dropped the one key that opens the tree, which
+// made every value read `no_identity` and let `init --replace-recipient`'s
+// readability guard orphan a project whose key sat on disk.
 func LoadIdentitySet(recipient string) IdentitySet {
 	set := IdentitySet{recipient: recipient}
 	if recipient == "" {
@@ -72,7 +81,11 @@ func LoadIdentitySet(recipient string) IdentitySet {
 		return set
 	}
 	set.primary, set.source, set.err = secrets.LoadIdentity(recipient)
-	others, err := secrets.LoadAnyIdentity(recipient)
+	exclude := recipient
+	if set.err != nil {
+		exclude = ""
+	}
+	others, err := secrets.LoadAnyIdentity(exclude)
 	if err == nil {
 		set.others = others
 	}

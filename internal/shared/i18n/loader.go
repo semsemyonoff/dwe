@@ -10,19 +10,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 //go:embed translations/*.yml
 var builtinFS embed.FS
 
-// parseBundle parses a YAML bundle with strict field validation.
-func parseBundle(r io.Reader) (*Bundle, error) {
-	dec := yaml.NewDecoder(r)
-	dec.KnownFields(true)
-
+// parseBundle parses a YAML bundle with strict field validation. file names the
+// bundle in unknown-field errors: the embedded file name for built-ins, the
+// project-relative path for a project overlay.
+func parseBundle(data []byte, file string) (*Bundle, error) {
 	var b Bundle
-	if err := dec.Decode(&b); err != nil {
+	if err := yamlstrict.Decode(data, &b, file); err != nil {
 		// EOF is valid; it means empty input
 		if errors.Is(err, io.EOF) {
 			return &Bundle{}, nil
@@ -61,7 +60,7 @@ func Load(projectRoot string) (*Store, error) {
 			return nil, fmt.Errorf("reading embedded %s: %w", name, err)
 		}
 
-		bundle, err := parseBundle(strings.NewReader(string(data)))
+		bundle, err := parseBundle(data, "translations/"+name)
 		if err != nil {
 			return nil, fmt.Errorf("parsing embedded %s: %w", name, err)
 		}
@@ -164,7 +163,7 @@ func LoadProjectBundles(projectRoot string) ([]ProjectFile, error) {
 			continue
 		}
 
-		bundle, err := parseBundle(strings.NewReader(string(data)))
+		bundle, err := parseBundle(data, filepath.ToSlash(filepath.Join("workspace", "i18n", name)))
 		if err != nil {
 			results = append(results, ProjectFile{
 				Path:     path,

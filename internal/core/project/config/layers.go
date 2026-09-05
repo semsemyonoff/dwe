@@ -383,7 +383,10 @@ func validateLayerRoots(layers []Layer) error {
 			if _, ok := allowedRootKeySet[key]; ok {
 				continue
 			}
-			return fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
+			// The hint mirrors yamlstrict's: a key the author did not invent is
+			// far more likely a forward-compat schema than a typo, and the
+			// "move it under vars:" advice would be wrong advice for it.
+			return fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s; a key you did not invent may come from a newer dwe version — check `dwe version`",
 				layer.Path, key, key, strings.Join(allowedRootKeys, ", "))
 		}
 	}

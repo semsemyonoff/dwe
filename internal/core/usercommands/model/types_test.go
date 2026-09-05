@@ -3203,3 +3203,38 @@ func TestValidate_ArgvAppendFrom(t *testing.T) {
 		})
 	}
 }
+
+// TestParseCommandFile_UnknownNestedField pins the yamlstrict shape. The lenient
+// first pass rejects unknown per-command top-level keys with its own message, so
+// only a nested unknown reaches the strict decode. ParseCommandFile has no path,
+// so the message carries the bare "line N:" prefix and the caller's
+// "parse command file %s:" wrap supplies the file.
+func TestParseCommandFile_UnknownNestedField(t *testing.T) {
+	src := `commands:
+  build:
+    type: shell
+    cmd: "echo hi"
+    params:
+      tag:
+        type: string
+        widgett: input
+`
+	_, err := ParseCommandFile([]byte(src))
+	if err == nil {
+		t.Fatal("expected an unknown-field error, got nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"line 8:",
+		`unknown field "widgett"`,
+		"allowed here: default, default_from, description, env, options, pattern, required, separator, type, widget",
+		"check `dwe version`",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not contain %q", msg, want)
+		}
+	}
+	if strings.Contains(msg, "YAML parse error") {
+		t.Errorf("error %q still carries the old wrap", msg)
+	}
+}

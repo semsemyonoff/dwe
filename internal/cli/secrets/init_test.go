@@ -209,6 +209,102 @@ func TestInit_RefusalIgnoresAForeignEnvKey(t *testing.T) {
 	}
 }
 
+// misnamedIdentityProject builds an initialized project with one committed
+// marker whose ONLY copy of the identity sits in the keys directory under
+// another recipient's filename — the state `key list` reports as `misnamed`.
+// Returns the configured recipient.
+func misnamedIdentityProject(t *testing.T, flags *cmdctx.RootFlags, root string) string {
+	t.Helper()
+	recipient := initProject(t, flags)
+	marker, err := secrets.Encrypt("token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"),
+		[]byte("vars:\n  token: "+marker+"\n"), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+
+	keyfile, err := secrets.KeyfilePath(recipient)
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	other, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	stray, err := secrets.KeyfilePath(other.Recipient())
+	if err != nil {
+		t.Fatalf("keyfile path: %v", err)
+	}
+	if err := os.Rename(keyfile, stray); err != nil {
+		t.Fatalf("renaming the keyfile: %v", err)
+	}
+	return recipient
+}
+
+// TestInit_RefusalFindsAMisnamedKeyfile pins that a keyfile holding THIS
+// project's identity counts as present even under a foreign filename.
+// LoadIdentity only ever reads keys/<recipient>.key, and gating the directory
+// pass on KeyfileOK dropped exactly the rows whose Recipient came from the
+// PARSED identity — so the refusal advertised the destructive recovery to a
+// machine that holds the key.
+func TestInit_RefusalFindsAMisnamedKeyfile(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	misnamedIdentityProject(t, flags, root)
+
+	_, _, err := runSecrets(t, flags, "init")
+	if err == nil {
+		t.Fatal("init succeeded on an already-initialized project")
+	}
+	coded := codedError(t, err)
+	if coded.Details["identity"] != identityAvailable {
+		t.Errorf("details[identity] = %v, want %q — the identity is in the keys dir under another name",
+			coded.Details["identity"], identityAvailable)
+	}
+	if strings.Contains(coded.Hint, "--replace-recipient") {
+		t.Errorf("hint = %q offers the destructive recovery to a machine that holds the key", coded.Hint)
+	}
+}
+
+// TestInit_ReplaceRecipientRefusesOnAMisnamedKeyfile pins the data-loss half of
+// the same bug: the straggler scan excluded the configured recipient
+// unconditionally, so a misnamed file holding it was dropped from BOTH lookups,
+// every marker classified as unreadable, and --replace-recipient --yes orphaned
+// a tree whose key sat on disk.
+func TestInit_ReplaceRecipientRefusesOnAMisnamedKeyfile(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	misnamedIdentityProject(t, flags, root)
+
+	before, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading workspace.yml: %v", err)
+	}
+
+	_, _, err = runSecrets(t, flags, "init", "--replace-recipient", "--yes")
+	if err == nil {
+		t.Fatal("--replace-recipient orphaned a value a misnamed keyfile still opens")
+	}
+	coded := codedError(t, err)
+	if coded.Code != "secrets_identity_available" {
+		t.Fatalf("error code = %q, want secrets_identity_available", coded.Code)
+	}
+	if coded.Details["readable"] != 1 {
+		t.Errorf("details[readable] = %v, want 1", coded.Details["readable"])
+	}
+	after, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("re-reading workspace.yml: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("workspace.yml changed on a refused replacement:\n%s", after)
+	}
+}
+
 // TestInit_ReplaceRecipientRefusesWhileReadable pins the guard: with the
 // identity present the values are not lost, and re-encrypting them is `rekey`'s
 // job — so the destructive flag must refuse rather than orphan them. The

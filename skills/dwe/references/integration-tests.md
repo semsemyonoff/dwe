@@ -20,7 +20,7 @@ Each scenario carries a `cost_profile` object. Two groups, judged differently:
 
 | Field | Meaning | How it decides |
 | --- | --- | --- |
-| `isolation_findings` | named / `external:` volumes and networks the copy shares with the real env | **hard stop** if non-empty |
+| `isolation_findings` | named / `external:` volumes and networks the copy shares with the real env. An entry carrying `"shared": true` is a `docker.yml` `shared: true` volume the project acknowledges — already counted by `shared_volumes` | **hard stop** if non-empty after dropping `"shared": true` entries |
 | `shared_volumes` | `shared: true` volumes — the real cache/data | **hard stop** if > 0 |
 | `host_steps` | steps running **project-authored code on the host** — `type: shell`, the `shell` builtin, a `type: command` resolving to a host command, a `type: dwe` re-entering a pipeline, and shell `when:` / `check:` conditions — in the scenario, in the deploy it triggers, and in the `workspace/validate.yml` checks the run executes (`cmd: shell` or `type: command`). dwe's own subcommands don't count, so the built-in default pipeline reports 0 | **hard stop** if > 0 |
 | `build_services` | compose services that build locally | judge the build (below) |

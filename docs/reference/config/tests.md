@@ -24,6 +24,7 @@ Declarative integration-test scenarios (`dwe test`).
 - [`dwe test clean`](#dwe-test-clean)
 - [`dwe validate tests`](#dwe-validate-tests)
 - [Compose isolation scanner](#compose-isolation-scanner)
+  - [Volumes acknowledged by `shared: true`](#volumes-acknowledged-by-shared-true)
 - [Exit codes](#exit-codes)
 - [JSON output](#json-output-run--list)
 - [Documented limitations](#documented-limitations)
@@ -276,7 +277,7 @@ Lists every scenario under `workspace/tests/*.yml` with its `description:`, verb
         "external_images": ["postgres:16", "redis:7"],
         "max_start_period_seconds": 30,
         "shared_volumes": 1,
-        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache"}],
+        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache", "shared": true}],
         "host_steps": 2
       }
     }
@@ -291,7 +292,7 @@ Lists every scenario under `workspace/tests/*.yml` with its `description:`, verb
 | `external_images` | Distinct `image:` references of compose services that do **not** build locally, sorted — what a cold run would have to pull. A service that builds carries a local tag (`image: myproject-app:dev`), which is not something to pull and is therefore excluded. |
 | `max_start_period_seconds` | The largest healthcheck `start_period` in the enabled chain. **Max, not sum**: `docker compose up --wait` waits in parallel, so a sum over-estimates the more services a project has. A disabled or unparseable healthcheck contributes nothing. |
 | `shared_volumes` | Count of `docker.yml` volumes declared `shared: true`. These resolve to their verbatim names and are written into by a test run. |
-| `isolation_findings` | The **non-blocking** findings of the [compose isolation scanner](#compose-isolation-scanner) — `named_volume` / `external_volume` / `named_network` / `external_network`, i.e. resources shared with the working environment. The blocking kinds (`container_name`, `raw_host_port`) are omitted: they abort the scenario before deploy anyway. Full messages come from `dwe validate tests`. |
+| `isolation_findings` | The **non-blocking** findings of the [compose isolation scanner](#compose-isolation-scanner) — `named_volume` / `external_volume` / `named_network` / `external_network`, i.e. resources shared with the working environment. The blocking kinds (`container_name`, `raw_host_port`) are omitted: they abort the scenario before deploy anyway. A volume [acknowledged](#volumes-acknowledged-by-shared-true) by a `docker.yml` `shared: true` declaration stays listed and carries `"shared": true` (the key is omitted otherwise) — the profile reports facts, not verdicts, so a caller that only wants unacknowledged hazards filters on it. Full messages come from `dwe validate tests`. |
 | `host_steps` | Steps this scenario would run **on the host**, outside the container sandbox: its own steps, the deploy pipeline it triggers (project-wide plus the enabled services'), and the [`workspace/validate.yml`](validate.md) checks the run's `dwe validate` and `dwe deploy run` preflight execute in the copy — a check counts when it is `type: builtin` with `cmd: shell` or a `type: command` (the loader restricts those to `shell` / `script` user commands), subject to the same `services:` gate the checks loader applies. Pipeline steps are counted descending into `parallel:` groups. The counted step forms are `type: shell`, `type: builtin` with `cmd: shell`, a `type: dwe` whose subcommand re-enters project-authored code (`cmd`, `run`, `restart`, `deploy`, `reset`, `test`), a `type: command` whose command resolves to a host-executing one, and any step carrying a shell `when:` or a host-executing `check:` (including `check: auto`). A referenced command counts as host-executing when it declares `argv_append_from:` (the expression runs on the host even for a container command), or — absent that — when it is neither `service_exec` nor `service_run`, applying the same `type: dwe` / `type: builtin` rules recursively and, for a `workflow`, counting a sub-step that is itself host-executing or carries a `cmd:` `when:`. dwe's own subcommands (`docker up --wait`, `info`, `render …` — the whole built-in default pipeline) are **not** counted: they are dwe machinery acting on the disposable copy, which is what the scenario exists to run. A step is counted once however many of those it uses, and a phase-level shell `when:` counts as one. A `type: command` reference that does not resolve counts as a host step — the field gates an unattended run, so the unknown case closes the gate. Host side effects are [not sandboxed](#documented-limitations). |
 
 Two properties are deliberate:
@@ -349,7 +350,7 @@ Per file, in order:
 - **`env.services`** — every `enable`/`disable` entry must name a service that exists in the project's merged config; an unknown name is an error.
 - **`steps`** — all steps are rendered and resolved **as one whole phase**, exactly like a real run (`pipeline.ResolvePhaseSteps` over a single synthetic phase) — this catches step schema errors, invalid builtin `with:` params, broken `when:` conditions, and duplicate top-level step names (a per-step check would miss the last one, since uniqueness is a whole-phase invariant). Rendering substitutes any `env.vars` entry whose value is the literal `auto` with a valid placeholder host port, so `${vars.db.port}` renders to a valid int and a `tcp_reachable`/`http_check` step validates normally — a genuinely bad param (e.g. `status: nope`) still errors even next to a templated `url:`. A var populated only **post-deploy** (a `${generated.*}` secret, or a var the deploy itself creates) is absent at validate time and may produce a spurious diagnostic; give it a project-level default to avoid this — the validator sees pre-deploy config, the real run sees post-deploy config.
 - **`type: command` steps** — each command ID is looked up in the project's command registry; an unknown ID is an error.
-- **compose isolation** — see [Compose isolation scanner](#compose-isolation-scanner) below; findings are emitted once per project as warnings (never errors — the tiered fail/warn policy applies only to `dwe test run`, not to static validation).
+- **compose isolation** — see [Compose isolation scanner](#compose-isolation-scanner) below; findings that are not acknowledged as shared are emitted once per project as warnings (never errors — the tiered fail/warn policy applies only to `dwe test run`, not to static validation).
 
 ## Compose isolation scanner
 
@@ -362,12 +363,40 @@ Per file, in order:
 | `external: true` volume/network | `external_volume` / `external_network` | Warning — a shared-resource hazard, not a hard collision |
 | An explicit `name:` on a volume/network | `named_volume` / `named_network` | Warning — same hazard class as `external:` |
 
+The two volume kinds are silenced when the volume is [declared `shared: true`](#volumes-acknowledged-by-shared-true) in `docker.yml`.
+
+### Volumes acknowledged by `shared: true`
+
+A volume the project already declares under [`docker.yml`](docker.md) `resources.volumes.<key>` with `shared: true` is a deliberate cross-project resource — a package cache dwe creates itself through `ensure_before` — not an isolation mistake. The scanner reads `workspace/docker.yml` (plus `docker.local.yml`) and marks such findings acknowledged, so the recipe below is silent instead of warning twice per volume on every run:
+
+```yaml
+# workspace/docker.yml
+resources:
+  volumes:
+    npm_cache:
+      name: dwe_npm_cache
+      shared: true
+```
+
+```yaml
+# compose.yaml
+volumes:
+  npm_cache:
+    external: true
+    name: dwe_npm_cache
+```
+
+The match is by **effective name**: the volume's explicit `name:` after the `-f` chain collapses (a later overlay's `name:` wins), else the name carried by a legacy long-form `external: { name: … }`, else the compose map key when neither is set, compared against the shared `docker.yml` volume's own name (a `shared: true` volume resolves to its `name:` verbatim, without the project prefix). A mismatch is not acknowledged, and neither is `shared: false`. Both the `external_volume` and the `named_volume` finding for that volume are marked together.
+
+Networks are never acknowledged — `docker.yml` declares no network resources, so there is nothing to match against. Blocking kinds are never acknowledged either.
+
 `${...}`-interpolated or env-var host-port tokens and container-port-only entries (random host port) are not flagged — only a literal port number or range. IPv6-bracketed hosts (`[::1]:8080:80`) are out of scope and are not flagged (rare in dev compose). A `container_name:` finding is always emitted regardless of which compose service it's on — mapping a compose service back to a dwe service key isn't reliable, so false positives are cleared with `--skip-isolation-check` rather than suppressed at the source.
 
 The scanner itself has no opinion on severity beyond the intrinsic `Blocking` flag — each caller decides what to do with a finding:
 
-- **`dwe test run`** — runs the scan against the disposable copy right before the `dwe validate` subprocess. Every finding is printed as a warning. A **blocking** finding fails the scenario immediately (teardown still runs; no deploy subprocess is spawned) unless `--skip-isolation-check` is passed, in which case every finding — blocking or not — is a warning only and the run proceeds. See the [ports prerequisite](../../guides/integration-tests.md#ports-are-isolated-automatically) for how to avoid a `raw_host_port` finding in the first place: model the port under `services.<name>.ports`.
-- **`dwe validate tests`** — emits every finding as a warning, regardless of `Blocking`; static validation never fails a build over an isolation hazard, it only surfaces it early.
+- **`dwe test run`** — runs the scan against the disposable copy right before the `dwe validate` subprocess. Every finding that is not [acknowledged as shared](#volumes-acknowledged-by-shared-true) is printed as a warning. A **blocking** finding fails the scenario immediately (teardown still runs; no deploy subprocess is spawned) unless `--skip-isolation-check` is passed, in which case every finding — blocking or not — is a warning only and the run proceeds. See the [ports prerequisite](../../guides/integration-tests.md#ports-are-isolated-automatically) for how to avoid a `raw_host_port` finding in the first place: model the port under `services.<name>.ports`.
+- **`dwe validate tests`** — emits every finding that is not acknowledged as shared as a warning, regardless of `Blocking`; static validation never fails a build over an isolation hazard, it only surfaces it early.
+- **`dwe test list --output json`** — lists the non-blocking findings under `cost_profile.isolation_findings`, acknowledged ones included and marked `"shared": true`.
 
 ## Exit codes
 
@@ -403,7 +432,7 @@ dwe test list --output json
 ## Documented limitations
 
 - **`.git/` is excluded from the copy.** A deploy or scenario step that shells out to `git` against the project root will fail or behave differently inside the copy.
-- **Named compose resources bypass isolation.** `container_name:`, explicitly named networks/volumes, and `external: true` in raw compose files ignore the compose project-name scoping and can collide with — or attach to — the working environment. This is why teardown never uses `compose down -v`. The [compose isolation scanner](#compose-isolation-scanner) detects these constructs and, for `container_name:` and literal host ports, fails the scenario before deploy (downgradeable with `--skip-isolation-check`) — it does not make them safe, it surfaces them before they cause a collision.
+- **Named compose resources bypass isolation.** `container_name:`, explicitly named networks/volumes, and `external: true` in raw compose files ignore the compose project-name scoping and can collide with — or attach to — the working environment. This is why teardown never uses `compose down -v`. The [compose isolation scanner](#compose-isolation-scanner) detects these constructs and, for `container_name:` and literal host ports, fails the scenario before deploy (downgradeable with `--skip-isolation-check`) — it does not make them safe, it surfaces them before they cause a collision. A volume declared `shared: true` in `docker.yml` is [acknowledged](#volumes-acknowledged-by-shared-true) and reported no longer: it still bypasses isolation, deliberately.
 - **Host ports not modelled in `services.<name>.ports` aren't isolated.** The automatic remap and the `ports_free` preflight only see ports declared via `services.<name>.ports`; a host port hardcoded straight in a raw compose file (`8080:8080`) bypasses both. Declare it under `services.<name>.ports`, or route the compose interpolation through a var set with `env.vars: { …: auto }`. The isolation scanner flags this as a **blocking** `raw_host_port` finding.
 - **Host side effects of a project's own deploy/scenario steps aren't sandboxed.** A `shell` step touching absolute paths, `~`, or bind mounts outside the project affects the real host, same as it would from a real deploy. `dwe test` isolates dwe-managed state (files, containers, volumes, networks, ports) — not arbitrary side effects a step chooses to have.
 - **The copy is not atomic.** Nothing locks the original project while `git ls-files` and the copy run; editing files during a test run can produce a mixed snapshot.
