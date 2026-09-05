@@ -11,9 +11,10 @@ import (
 )
 
 // Write renders the .env content from cfg and writes it to outputPath,
-// creating parent directories as needed.
-func Write(cfg *config.DweConfig, outputPath string) error {
-	content, err := BuildContent(cfg)
+// creating parent directories as needed. baseDir is the project root, used to
+// resolve the compose project name (see BuildContent).
+func Write(cfg *config.DweConfig, baseDir, outputPath string) error {
+	content, err := BuildContent(cfg, baseDir)
 	if err != nil {
 		return err
 	}
@@ -43,7 +44,7 @@ func Regenerate(configPath string) (string, error) {
 	}
 	baseDir := filepath.Dir(configPath)
 	envPath := filepath.Join(baseDir, ".env")
-	if err := Write(cfg, envPath); err != nil {
+	if err := Write(cfg, baseDir, envPath); err != nil {
 		return "", err
 	}
 	return envPath, nil

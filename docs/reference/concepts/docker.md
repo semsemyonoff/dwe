@@ -45,6 +45,7 @@ project_name: "${project.prefix}-${project.name}"
 - The non-shared volume name resolver (`<project>_<volume>` — see [Volumes](#volumes)).
 - The per-service container name resolver used by per-service stop and reset (see [Compose-bypass](#compose-bypass-on-the-per-service-path)).
 - The compose-bypass volume-removal builtin, which uses the project name as a prefix filter when sweeping volumes.
+- The generated `.env`, as the reserved [`COMPOSE_PROJECT_NAME`](../render/env.md#system-variables) system variable — which is what makes a raw `docker compose` run from the project root scope to the same project as DWE, above any top-level `name:` in the compose file.
 
 A typical resolved name looks like `myorg-shop` or `dwe-laravel`. The exact form is part of the public surface — renaming the project requires updating `local.yml` so the prefix matches, otherwise the next `docker compose` invocation talks to a different project and the old containers and volumes go orphan.
 

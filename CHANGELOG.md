@@ -158,6 +158,31 @@ generated from commit subjects and stay on the
   `secrets key list`, instead of plain text. Colour degrades to none when the
   output is not a terminal, `--output json` is unaffected, and `key export`,
   `secrets get` and `--out -` still print their raw bytes with nothing added.
+- **Breaking: `COMPOSE_PROJECT_NAME` is now the fourth reserved `.env` system
+  variable.** The generated `.env` ends its system block with
+  `COMPOSE_PROJECT_NAME=<name>`, where `<name>` is the compose project name
+  `dwe` passes as `-p`: `project_name` from `workspace/docker.yml` (or
+  `docker.local.yml`), otherwise `<project.prefix>-<project.name>`, always
+  lowercased. It can differ from `PROJECT`, which stays the verbatim
+  `project.name`, and it is the same value the `type: shell` command contract
+  already exported. The line is omitted when the name resolves empty (`dwe`
+  omits `-p` in that case too), and a broken `${...}` in `project_name` fails
+  the render instead of writing a guessed name. Scripts and Makefiles that
+  rebuilt the compose name from `PROJECT` by hand can read the variable
+  instead; it is regenerated on every `dwe run` and `dwe render env`, so no
+  forced redeploy is needed.
+  Two consequences. A project whose `exports.env` already declares a rule named
+  `COMPOSE_PROJECT_NAME` now fails to load for **every** command with
+  `exports.env[N]: "COMPOSE_PROJECT_NAME" is a reserved system variable …` —
+  delete the rule, the built-in line carries the same value. And because `.env`
+  sits in the compose project directory, a raw `docker compose` run from the
+  project root — and a pipeline `type: shell` step that calls compose itself —
+  now scopes to dwe's project name, above any top-level `name:` in the compose
+  file; a compose file declaring a divergent `name:` (what `dwe validate`
+  reports as `config.compose_project_name`) loses sight of the resources it
+  created under the old name. Either set `project_name` in `workspace/docker.yml`
+  to that old value and redeploy once, or write `name: ${COMPOSE_PROJECT_NAME}`
+  in the compose file, which now resolves from `.env`.
 
 ### Changed
 
@@ -309,5 +334,37 @@ generated from commit subjects and stay on the
   per-service `deploy.yml` skeleton now point at a single project-level
   `render ai`, which walks every service and honours each `render.ai.enabled`.
   Rendering on deploy stays opt-in; nothing renders automatically.
+
+### Removed
+
+- **Breaking:** the top-level `state:` key is gone. It was a free-form string
+  with a single consumer — one line in the bare-`dwe` summary — and the docs
+  claimed it was exported as `STATE` in `.env`, which it never was. A project
+  that still declares it in `workspace.yml`, `workspace/defaults.yml` or
+  `workspace/local.yml` now fails to load with the strict-root error naming the
+  file (`<file>: unknown top-level key "state" — move custom values under
+  "vars:" (e.g. vars.state.*); allowed top-level keys: …`). There is no
+  replacement: delete the key, and put free-form values under `vars:`, their
+  single home.
+- **Breaking:** the top-level `ui:` block is gone. Its three command-browser
+  knobs (`ui.commands.default_expanded_depth`, `auto_collapse_empty`,
+  `show_type_badges`) had no adoption, and the dedicated `config.ui` validator
+  goes with them. A project that still declares the block in any of the three
+  layers now fails to load with the strict-root error naming the file
+  (`<file>: unknown top-level key "ui" — move custom values under "vars:" (e.g.
+  vars.ui.*); allowed top-level keys: …`); delete the block. The command browser
+  itself is unchanged and runs with the former defaults — top-level groups
+  expanded, empty subtrees collapsed during fuzzy filtering, type badges on.
+  The hotkey table, parameter-form overlay, fallback ladder and mouse behaviour
+  that lived on the `ui` reference page are now documented under
+  *Interactive browser* in the commands reference.
+- **The Windows build stubs are gone.** dwe supports macOS (Intel + Apple
+  Silicon) and Linux; on Windows run it inside WSL2 with dwe installed in the
+  distro. Nothing ever shipped or tested a Windows binary — the stubs only kept
+  `GOOS=windows go build` type-checking, and one of them made `lock.Acquire`
+  return "file locking is not supported on Windows", so such a binary would
+  have run the whole lifecycle without the deploy and snapshot locks. That
+  cross-build now fails at compile time on purpose. No behaviour changes on a
+  supported platform.
 
 [Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD

@@ -100,7 +100,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 
 | Path | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
-| `workspace/defaults.yml` | Versioned project defaults: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (merge layer 2) | Author manually | yes |
+| `workspace/defaults.yml` | Versioned project defaults: `services.<name>.enabled`, `runtime`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (merge layer 2) | Author manually | yes |
 | `workspace/local.yml` | Per-developer overrides on top of `defaults.yml`: port overrides, enabled flags, credentials, wizard answers | CLI (merge layer 3) | Author manually + setup wizard + `dwe services enable/disable` | no |
 | `workspace/services/<name>/` | One folder per service. Folder name is the service ID — there is no `name:` field. | CLI service loader | Author manually | yes (except `local.yml` overrides) |
 | `workspace/commands/` | Declarative user commands surfaced under `dwe <name>` | CLI command registry | Author manually | yes |

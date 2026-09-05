@@ -389,7 +389,7 @@ func mutateAndPlan(
 		rollback()
 		return TogglePlan{}, nil, nil, fmt.Errorf("reloading config after toggle: %w", err)
 	}
-	if err := envfile.Write(cfgNew, envPath); err != nil {
+	if err := envfile.Write(cfgNew, baseDir, envPath); err != nil {
 		rollback()
 		return TogglePlan{}, nil, nil, fmt.Errorf("regenerating .env: %w", err)
 	}
@@ -506,7 +506,7 @@ func mutateAndPlanBatch(
 		rollback()
 		return TogglePlan{}, nil, nil, fmt.Errorf("reloading config after toggle: %w", err)
 	}
-	if err := envfile.Write(cfgNew, envPath); err != nil {
+	if err := envfile.Write(cfgNew, baseDir, envPath); err != nil {
 		rollback()
 		return TogglePlan{}, nil, nil, fmt.Errorf("regenerating .env: %w", err)
 	}

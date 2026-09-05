@@ -8,6 +8,11 @@ import (
 )
 
 // makeEnvCfg builds a DweConfig with the given export rules and raw map.
+//
+// These tests pass an empty baseDir to BuildContent: that skips the docker.yml
+// read entirely, so COMPOSE_PROJECT_NAME falls back to the lowercased
+// FullName() and no test needs a project tree on disk. The docker.yml /
+// docker.local.yml precedence lives in compose_name_test.go.
 func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
 	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
@@ -18,7 +23,7 @@ func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig
 
 func TestBuildContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -33,21 +38,24 @@ func TestBuildContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 func TestBuildContent_silentlyDropsReservedRules(t *testing.T) {
 	// Defense-in-depth: a rule with a reserved name should be silently dropped
 	// even if it slips past LoadConfig validation, so the output never has
-	// duplicate lines for PROJECT/UID/GID.
+	// duplicate lines for PROJECT/UID/GID/COMPOSE_PROJECT_NAME.
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "PROJECT", From: "state"},
-		{Name: "UID", From: "state"},
-		{Name: "GID", From: "state"},
-		{Name: "MY_VAR", From: "state"},
-	}, map[string]any{"state": "shouldnotappear"})
+		{Name: "PROJECT", From: "env"},
+		{Name: "UID", From: "env"},
+		{Name: "GID", From: "env"},
+		{Name: "COMPOSE_PROJECT_NAME", From: "env"},
+		{Name: "MY_VAR", From: "env"},
+	}, map[string]any{"env": "shouldnotappear"})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, name := range config.ReservedExportNames {
-		if strings.Count(out, name+"=") != 1 {
-			t.Errorf("%s should appear exactly once in output, got:\n%s", name, out)
+		// Count whole lines, not substrings: "PROJECT=" is a substring of
+		// "COMPOSE_PROJECT_NAME=".
+		if got := countAssignments(out, name); got != 1 {
+			t.Errorf("%s should appear exactly once in output, got %d:\n%s", name, got, out)
 		}
 		if strings.Contains(out, name+"=shouldnotappear") {
 			t.Errorf("rule with reserved name %s leaked its From value into the output:\n%s", name, out)
@@ -60,10 +68,10 @@ func TestBuildContent_silentlyDropsReservedRules(t *testing.T) {
 
 func TestBuildContent_simpleStringRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -79,7 +87,7 @@ func TestBuildContent_boolFormatTrue(t *testing.T) {
 		"runtime": map[string]any{"use_https": true},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,7 +103,7 @@ func TestBuildContent_boolFormatFalse(t *testing.T) {
 		"runtime": map[string]any{"use_https": false},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -115,7 +123,7 @@ func TestBuildContent_intFormat(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,7 +137,7 @@ func TestBuildContent_defaultFallback(t *testing.T) {
 		{Name: "MISSING_VAR", From: "no.such.path", Default: "fallback"},
 	}, map[string]any{})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,7 +151,7 @@ func TestBuildContent_requiredMissingReturnsError(t *testing.T) {
 		{Name: "REQUIRED_VAR", From: "no.such.path", Required: true},
 	}, map[string]any{})
 
-	_, err := BuildContent(cfg)
+	_, err := BuildContent(cfg, "")
 	if err == nil {
 		t.Error("expected error for required missing path, got nil")
 	}
@@ -161,7 +169,7 @@ func TestBuildContent_whenFalsySkipsRule(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -179,7 +187,7 @@ func TestBuildContent_whenTruthyIncludesRule(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -190,14 +198,14 @@ func TestBuildContent_whenTruthyIncludesRule(t *testing.T) {
 
 func TestBuildContent_commentEmitted(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state", Comment: "Active state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env", Comment: "Active env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "# Active state") {
+	if !strings.Contains(out, "# Active env") {
 		t.Errorf("expected comment in output, got:\n%s", out)
 	}
 }
@@ -276,7 +284,7 @@ func TestBuildContent_toolPortResolution(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -297,7 +305,7 @@ func TestBuildContent_toolHostResolution(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -321,7 +329,7 @@ func TestBuildContent_multiPortService(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

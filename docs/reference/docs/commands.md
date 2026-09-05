@@ -179,7 +179,7 @@ dwe docs llms-txt --lang ru                # localize command descriptions
 - `## Builtins` — every registered step builtin (`name — kind — purpose`, including `internal` ones), then the disjoint `when:` predicate registry. The two registries share the word "builtin" and accept nothing from each other; the section says so explicitly.
 - `## Template syntax by site` — which of `${...}` / `{{ ... }}` is evaluated where, and which `${...}` namespaces are unavailable in pipeline fields.
 - `## Diagnostics and machine-readable output` — `--quiet`, `--level`, `-v`/`--debug`, `docs show --toc`/`--anchors`, and the `-o json` exceptions.
-- `## Reserved env names` — the names `dwe render env` always emits itself (`PROJECT`, `UID`, `GID`), which `exports.env` rules may not redeclare.
+- `## Reserved env names` — the names `dwe render env` emits itself (`PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME`), which `exports.env` rules may not redeclare.
 
 **Details:**
 - Read-only. Acquires no project lock and runs no preflight; works without `workspace.yml`.

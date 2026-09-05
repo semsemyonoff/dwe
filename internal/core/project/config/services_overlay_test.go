@@ -611,7 +611,7 @@ func TestValidateOverlayCompose(t *testing.T) {
 }
 
 // TestValidateLocalCompose covers the project-wide compose.extra shape check
-// in workspace/local.yml. Other top-level keys (state:, runtime:) must remain
+// in workspace/local.yml. Other top-level keys (vars:, runtime:) must remain
 // accepted — only the shape of `compose:` is validated.
 func TestValidateLocalCompose(t *testing.T) {
 	t.Run("accepts_extra_list", func(t *testing.T) {
@@ -626,9 +626,9 @@ func TestValidateLocalCompose(t *testing.T) {
 	})
 
 	t.Run("accepts_unknown_top_level_keys", func(t *testing.T) {
-		// local.yml legitimately carries other convention keys (state, runtime, …).
+		// local.yml legitimately carries other convention keys (vars, runtime, …).
 		raw := map[string]any{
-			"state":   map[string]any{"foo": "bar"},
+			"vars":    map[string]any{"foo": "bar"},
 			"runtime": map[string]any{"x": "y"},
 		}
 		if err := validateLocalCompose("workspace/local.yml", raw); err != nil {

@@ -35,7 +35,7 @@ func TestCompileVarSyntax_headOnlyIsLiteral(t *testing.T) {
 		"${host}",
 		"${files}",
 		"${param}",
-		"${state}",
+		"${update}",
 		"for f in ${files}; do echo $f; done",
 	} {
 		if got := CompileVarSyntax(in); got != in {

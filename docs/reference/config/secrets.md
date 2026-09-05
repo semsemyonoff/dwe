@@ -729,8 +729,9 @@ Two renderers run with no preflight (`dwe render env`, `dwe render config`), and
 `dwe run` renders `.env` *before* its preflight. They therefore enforce the
 policy themselves:
 
-- **`.env`** — every emitted value is checked: the system variables (including
-  `PROJECT`, from `project.name`) and every `exports.env` rule. A marker is an
+- **`.env`** — every emitted value is checked: the system variables (`PROJECT`,
+  from `project.name`, and `COMPOSE_PROJECT_NAME`, from the compose project
+  name) and every `exports.env` rule. A marker is an
   error naming the variable and its source path, and pointing at
   `dwe secrets status`. This fires from all four `.env` write sites:
   `dwe render env`, the compose auto-regeneration before `dwe docker up` / `run`

@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ fa331ed46fa8
+> Translated from: reference/docs/commands.md @ bddfaf9ea1fb
 
 # Неинтерактивные команды документации
 
@@ -181,7 +181,7 @@ dwe docs llms-txt --lang ru                # локализовать описа
 - `## Builtins` — все зарегистрированные step-билтины (`имя — вид — назначение`, включая `internal`), затем непересекающийся реестр предикатов `when:`. Оба реестра называются «builtin», но не принимают имена друг друга — секция говорит об этом прямо.
 - `## Template syntax by site` — где вычисляется `${...}`, а где `{{ ... }}`, и какие пространства имён `${...}` недоступны в полях пайплайна.
 - `## Diagnostics and machine-readable output` — `--quiet`, `--level`, `-v`/`--debug`, `docs show --toc`/`--anchors` и исключения для `-o json`.
-- `## Reserved env names` — имена, которые `dwe render env` всегда выводит сам (`PROJECT`, `UID`, `GID`) и которые нельзя переобъявить правилом `exports.env`.
+- `## Reserved env names` — имена, которые `dwe render env` выводит сам (`PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME`) и которые нельзя переобъявить правилом `exports.env`.
 
 **Подробности:**
 - Только чтение. Не берёт проектную блокировку и не запускает preflight; работает без `workspace.yml`.

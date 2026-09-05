@@ -18,7 +18,6 @@ The three layers of the merged DWE config.
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [`services` overlay](#services-overlay)
   - [`runtime`](#runtime)
-  - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
 - [workspace/local.yml](#workspacelocalyml)
@@ -60,7 +59,6 @@ The three files share a single namespace — the same key in different layers is
 | Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
 | Export rules (`exports.env`) | `defaults.yml` |
 | `vars.db.*` block defaults | `defaults.yml` |
-| Active state | `local.yml` |
 | Service port / host values | [`workspace/services/<name>/service.yml`](services/index.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
 | Personal credentials (`vars.db.user`, `vars.db.password`) | `local.yml` |
 | Team-shared credentials (a bot token, a service-account JSON) | `defaults.yml`, encrypted — see [`secrets.md`](secrets.md) |
@@ -101,7 +99,7 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop · secrets
+project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
@@ -273,9 +271,9 @@ All three layers share the same strict key set, so any block *can* appear in any
 
 | Layer | Holds | Why |
 |-------|-------|-----|
-| `workspace.yml` | Compact formalized blocks: `project`, `ui`, `update` | Small, structural, rarely changes |
+| `workspace.yml` | Compact formalized blocks: `project`, `update` | Small, structural, rarely changes |
 | `defaults.yml` | The bulky blocks: `vars`, `exports`, `services` overlay, `runtime`, `bridge.vars_writable` | Versioned team defaults; the biggest content. `bridge.vars_writable` is a team-shared security policy — keep it here, not in `local.yml` (see [the allowlist note above](#bridgevars_writable--container-write-allowlist)) |
-| `local.yml` | Personal overrides: `state`, `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
+| `local.yml` | Personal overrides: `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
 
 For example, a project author enables update policy in `workspace.yml` (`update: { mode: on }`) and a developer who wants to skip the probe locally overrides it in `local.yml` (`update: { mode: off }`).
 
@@ -323,14 +321,6 @@ runtime:
 | `runtime.use_https` | Whether URLs use HTTPS (exported as `USE_HTTPS`). |
 | `runtime.spx.path` | SPX profiler URL path (empty = disabled). |
 
-### `state`
-
-```yaml
-state: ""
-```
-
-Active state name. Empty string means no state. Exported as `STATE` in `.env`. Override in `local.yml` (e.g. `state: staging`).
-
 ### `exports.env`
 
 Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name. All per-service fields — `container`, `enabled`, `ports.<name>`, `hosts.<name>` — live under `services.<name>.*`.
@@ -365,15 +355,16 @@ exports:
 
 #### Implicit system variables
 
-`dwe render env` always emits three variables before any rule runs, regardless of `exports.env`:
+`dwe render env` emits four variables before any rule runs, regardless of `exports.env`:
 
 | Variable | Source | Notes |
 |----------|--------|-------|
-| `PROJECT` | `project.name` | Used by Docker labels and Make targets |
+| `PROJECT` | `project.name` | The name verbatim, including uppercase. Used by Make targets |
 | `UID` | host UID | Hard-coded to `1000` on macOS, real UID on Linux/WSL — keeps container builds deterministic across hosts |
 | `GID` | host GID | Same logic as `UID` |
+| `COMPOSE_PROJECT_NAME` | the compose project name `dwe` passes as `-p` | `project_name` from [`docker.yml`](docker.md#project_name) / `docker.local.yml`, else `<project.prefix>-<project.name>`, always lowercased. Omitted when it resolves empty; a resolution error fails the render |
 
-These are managed by the CLI; do not redeclare them as export rules.
+The first three are always present; `COMPOSE_PROJECT_NAME` is emitted whenever the name resolves to a non-empty value. All four are managed by the CLI; do not redeclare them as export rules — a rule using one of these names is a hard config-load error.
 
 #### Single-line values only
 
@@ -405,8 +396,6 @@ Service-specific overlays live under `services.<name>.compose` (a list of file p
 
 **Example overrides**:
 ```yaml
-state: staging
-
 services:
   main-debug:
     enabled: true
@@ -499,13 +488,8 @@ Commits made inside the `dev` container now use the developer's project-specific
 
 - **Editing `defaults.yml` for personal settings** — changes are tracked and affect every team member. Personal overrides always go in `local.yml`.
 - **Committing `local.yml`** — it is gitignored for a reason (may contain credentials).
-- **Setting `state:` in `defaults.yml`** — state is inherently per-user, put it in `local.yml`.
-- **Scalar collision** — if `defaults.yml` sets `state: ""` and `local.yml` sets `state: staging`, the effective value is `staging`. If `local.yml` omits `state`, the `defaults.yml` value wins.
+- **Scalar collision** — if `defaults.yml` sets `runtime.use_https: false` and `local.yml` sets `runtime.use_https: true`, the effective value is `true`. If `local.yml` omits the key, the `defaults.yml` value wins.
 - **Lists replace, maps merge** — maps are deep-merged: redeclaring `services` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `bridge.vars_writable: ["vars.db.*"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
-
-## Optional `ui:` block
-
-`workspace.yml` may carry an optional top-level `ui:` block that configures the interactive command browser. See [`ui.md`](ui.md) for the schema, defaults, and the `*bool` omit-vs-`false` semantics. Behaviour is unchanged for projects that omit the block.
 
 ## Related commands
 

@@ -87,6 +87,10 @@ The Docker Compose project name passed as `-p <name>` to every compose invocatio
 
 **The resolved name is lowercased.** Docker Compose requires a project name matching `[a-z0-9][a-z0-9_-]*` and rejects uppercase outright, while `project.name`, `project.prefix`, and this field are all free-form user text — so `project.name: cueBreaker` resolves to `dwe-cuebreaker`, and `project_name: "MyApp"` to `myapp`. The lowercased form is what `docker compose -p` receives, what `dwe docker project-name` prints, and what every derived name follows: container names (`<project>-<service>`), the non-shared volume prefix `<project_name>_`, and the `com.docker.compose.project` label filter used by status, per-service stop/restart, and reset. A project that previously ran under a name carrying uppercase should stop its stack with the older dwe version first — compose treats the old containers and volumes as belonging to a different project, so they would otherwise be left behind.
 
+**The resolved name is also written to `.env`** as the reserved [`COMPOSE_PROJECT_NAME`](../render/env.md#system-variables) system variable, regenerated on every `dwe run` and `dwe render env`. Because `.env` sits in the compose project directory, Docker Compose picks it up on its own: a raw `docker compose …` invoked from the project root — and a pipeline `type: shell` step that calls compose itself — scopes to the same project as `dwe`, **above** any top-level `name:` declared in the compose file. Scripts that used to rebuild the name from `PROJECT` can read the variable instead.
+
+If your compose chain declares a `name:` that diverges from this resolver (`dwe validate` reports that as `config.compose_project_name`), raw compose stops seeing the containers, networks and volumes it created under the old name. Either set `project_name` here to the old value — this re-scopes `dwe` itself too, so redeploy once — or write `name: ${COMPOSE_PROJECT_NAME}` in the compose file, which now resolves from `.env`.
+
 Override locally:
 ```yaml
 # docker.local.yml

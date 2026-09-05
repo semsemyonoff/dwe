@@ -83,7 +83,7 @@ commands:
       "$DWE_BIN" shell app -c "php artisan cache:warm"
 ```
 
-`COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` let `docker compose ...` invocations inside `cmd:` pick up DWE's overlay set without `-p` / `-f` flags.
+`COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` let `docker compose ...` invocations inside `cmd:` pick up DWE's overlay set without `-p` / `-f` flags. `COMPOSE_PROJECT_NAME` is the same value DWE also writes into the generated `.env` as a [reserved system variable](../reference/render/env.md#system-variables) — one resolver, two delivery paths.
 
 ## `type: service_exec` — run inside a container
 

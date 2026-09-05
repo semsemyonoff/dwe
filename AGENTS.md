@@ -20,7 +20,7 @@ The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Te
 
 Keep behavior and docs aligned. DWE user-facing documentation lives in `docs/reference/` (schemas) and `docs/guides/` (task-oriented recipes):
 
-- `docs/reference/config/` — project config files (`workspace.md`, `services/`, `docker.md`, `info.md`, `styles.md`), pipelines (`deploy/`, `lifecycle.md`, `reset.md`, `conditions.md`, `state/`), user commands (`commands/`), user-level notifications and i18n (`notifications.md`, `i18n.md`), snapshot workflows (`snapshot.md`), project readiness checks (`validate.md`), setup wizard (`setup.md`), and command browser settings (`ui.md`).
+- `docs/reference/config/` — project config files (`workspace.md`, `services/`, `docker.md`, `info.md`, `styles.md`), pipelines (`deploy/`, `lifecycle.md`, `reset.md`, `conditions.md`, `state/`), user commands (`commands/`), user-level notifications and i18n (`notifications.md`, `i18n.md`), snapshot workflows (`snapshot.md`), project readiness checks (`validate.md`), and setup wizard (`setup.md`).
 - `docs/reference/render/` — render subcommands (env / ide / ai / git) and template-pack mechanics (manifest schema, local overrides, collision policies).
 - `docs/guides/` — task-oriented recipes and integrations (e.g. Starship prompt). Each page solves a concrete user-facing problem that cuts across the reference. Translations live in `docs/i18n/<lang>/guides/`.
 

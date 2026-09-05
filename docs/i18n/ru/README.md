@@ -1,4 +1,4 @@
-> Translated from: README.md @ 5054aaa0c311
+> Translated from: README.md @ 1e328aa5e19f
 
 # DWE — Dev Workspace Engine
 
@@ -22,6 +22,8 @@ CLI в виде одного бинарника для декларативно�
 ## Установка
 
 DWE поставляется как один статический Go-бинарник. Выбирайте удобный канал.
+
+**Поддерживаемые платформы:** macOS (Intel + Apple Silicon) и Linux (x86_64 + arm64). Сборки под Windows нет — под Windows запускайте DWE внутри WSL2, установив его в дистрибутив.
 
 ### Через Homebrew
 

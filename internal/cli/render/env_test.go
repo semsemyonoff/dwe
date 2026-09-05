@@ -12,6 +12,11 @@ import (
 )
 
 // makeEnvCfg builds a DweConfig with the given export rules and raw map.
+//
+// The BuildContent calls below pass an empty baseDir, which skips the
+// docker.yml read: COMPOSE_PROJECT_NAME then falls back to the lowercased
+// FullName(). The resolver's own precedence rules are covered in
+// internal/shared/envfile.
 func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
 	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
@@ -22,7 +27,7 @@ func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig
 
 func TestBuildEnvContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -36,10 +41,10 @@ func TestBuildEnvContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 
 func TestBuildEnvContent_simpleStringRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +60,7 @@ func TestBuildEnvContent_boolFormatTrue(t *testing.T) {
 		"runtime": map[string]any{"use_https": true},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +76,7 @@ func TestBuildEnvContent_boolFormatFalse(t *testing.T) {
 		"runtime": map[string]any{"use_https": false},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -91,7 +96,7 @@ func TestBuildEnvContent_intFormat(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +110,7 @@ func TestBuildEnvContent_defaultFallback(t *testing.T) {
 		{Name: "MISSING_VAR", From: "no.such.path", Default: "fallback"},
 	}, map[string]any{})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,7 +124,7 @@ func TestBuildEnvContent_requiredMissingReturnsError(t *testing.T) {
 		{Name: "REQUIRED_VAR", From: "no.such.path", Required: true},
 	}, map[string]any{})
 
-	_, err := envfile.BuildContent(cfg)
+	_, err := envfile.BuildContent(cfg, "")
 	if err == nil {
 		t.Error("expected error for required missing path, got nil")
 	}
@@ -137,7 +142,7 @@ func TestBuildEnvContent_whenFalsySkipsRule(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +160,7 @@ func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,14 +171,14 @@ func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
 
 func TestBuildEnvContent_commentEmitted(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state", Comment: "Active state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env", Comment: "Active env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "# Active state") {
+	if !strings.Contains(out, "# Active env") {
 		t.Errorf("expected comment in output, got:\n%s", out)
 	}
 }
@@ -259,6 +264,42 @@ func TestRunRenderEnv_ToFile(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "PROJECT=testproject") {
 		t.Errorf("output missing PROJECT=testproject: %q", body)
+	}
+}
+
+// TestRunRenderEnv_ComposeProjectNameFromDockerYML pins the baseDir this
+// command threads into envfile. The parameter is the only thing that makes
+// COMPOSE_PROJECT_NAME follow workspace/docker.yml, and a wrong value fails
+// silently: envfile.BuildContent(cfg, "") returns <prefix>-<name> with no
+// error, so .env would carry a different project than the -p dwe passes —
+// exactly the split-brain the export exists to remove. Asserting only
+// PROJECT= (as the sibling test does) cannot see that.
+func TestRunRenderEnv_ComposeProjectNameFromDockerYML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
+	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wsDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(wsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wsDir, "docker.yml"), []byte("project_name: Custom_Scope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := filepath.Join(dir, ".env")
+	if err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+
+	body, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if !strings.Contains(string(body), "COMPOSE_PROJECT_NAME=custom_scope\n") {
+		t.Errorf("expected COMPOSE_PROJECT_NAME=custom_scope (lowercased docker.yml project_name), got:\n%s", body)
 	}
 }
 

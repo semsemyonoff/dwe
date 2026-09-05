@@ -1,4 +1,4 @@
-> Translated from: reference/config/secrets.md @ 0e25da4a6b18
+> Translated from: reference/config/secrets.md @ cd978e2fd0f6
 
 # `dwe secrets` — зашифрованные значения, закоммиченные в репозиторий
 
@@ -742,7 +742,8 @@ compose-меток не совпал бы ни с одним контейнер�
 сами:
 
 - **`.env`** — проверяется каждое выдаваемое значение: системные переменные
-  (включая `PROJECT` из `project.name`) и каждое правило `exports.env`. Маркер —
+  (`PROJECT` из `project.name` и `COMPOSE_PROJECT_NAME` из имени
+  compose-проекта) и каждое правило `exports.env`. Маркер —
   это ошибка с именем переменной и её исходного пути и указанием на
   `dwe secrets status`. Срабатывает во всех четырёх местах записи `.env`:
   `dwe render env`, автоматическая регенерация перед `dwe docker up` / `run` /

@@ -21,6 +21,8 @@ A single-binary CLI for running, configuring, and maintaining containerised loca
 
 DWE ships as a single static Go binary. Pick whichever channel fits.
 
+**Supported platforms:** macOS (Intel + Apple Silicon) and Linux (x86_64 + arm64). There is no Windows build — on Windows run DWE inside WSL2, installed in the distro.
+
 ### Using Homebrew
 
 ```sh

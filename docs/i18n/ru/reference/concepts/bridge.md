@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/bridge.md @ e780cf781a73
+> Translated from: reference/concepts/bridge.md @ f21a702ba0e5
 
 # Хост-бридж
 
@@ -100,7 +100,7 @@ Shim и демон всегда поддерживают оба транспор
 |---|---|---|
 | Linux (нативный Docker) | unix-сокет `.dwe/bridge/host.sock` | uid пира должен совпадать с uid демона (`SO_PEERCRED`) |
 | Linux rootless | unix-сокет (`host-gateway` там сломан) | uid пира |
-| Docker Desktop (macOS / Windows) | TCP `host.docker.internal:<port>` (Desktop проксирует на loopback-листенер) | 256-битный пер-проектный токен |
+| Docker Desktop (macOS) | TCP `host.docker.internal:<port>` (Desktop проксирует на loopback-листенер) | 256-битный пер-проектный токен |
 | OrbStack / Colima | TCP | токен |
 | WSL2 (dwe внутри дистрибутива) | TCP | токен |
 

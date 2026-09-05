@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ d23597330bb0
+> Translated from: reference/config/workspace.md @ 715c63728e8e
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -20,7 +20,6 @@
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [Оверлей `services`](#оверлей-services)
   - [`runtime`](#runtime)
-  - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
 - [workspace/local.yml](#workspacelocalyml)
@@ -62,7 +61,6 @@ flowchart TB
 | Опциональное состояние enabled для сервисов (для всех типов) | `defaults.yml` (переопределяемо в `local.yml`) |
 | Правила экспорта (`exports.env`) | `defaults.yml` |
 | Дефолты блока `vars.db.*` | `defaults.yml` |
-| Активное состояние | `local.yml` |
 | Значения портов / хостов сервисов | [`workspace/services/<name>/service.yml`](services/index.md) (проектные определения) и `local.yml` (переопределения на разработчика, deep-merge по имени записи) |
 | Личные креды (`vars.db.user`, `vars.db.password`) | `local.yml` |
 | Общекомандные креды (токен бота, JSON сервис-аккаунта) | `defaults.yml`, в зашифрованном виде — см. [`secrets.md`](secrets.md) |
@@ -102,7 +100,7 @@ Dot-path'ы используются:
 **Корень** смерженного трёхслойного конфига строгий. После слияния трёх слоёв DWE проверяет ключи верхнего уровня по фиксированному allowlist'у:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop · secrets
+project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
@@ -274,9 +272,9 @@ docs:
 
 | Слой | Содержит | Зачем |
 |-------|-------|-----|
-| `workspace.yml` | Компактные формализованные блоки: `project`, `ui`, `update` | Маленькие, структурные, редко меняются |
+| `workspace.yml` | Компактные формализованные блоки: `project`, `update` | Маленькие, структурные, редко меняются |
 | `defaults.yml` | Объёмные блоки: `vars`, `exports`, оверлей `services`, `runtime`, `bridge.vars_writable` | Версионированные командные дефолты; самый большой контент. `bridge.vars_writable` — общекомандная политика безопасности, держите её здесь, а не в `local.yml` (см. [замечание про allowlist выше](#bridgevars_writable--allowlist-контейнерной-записи)) |
-| `local.yml` | Личные переопределения: `state`, `vars.db.password`, тогглы сервисов, `compose.extra`, `update.mode` | На разработчика, gitignored |
+| `local.yml` | Личные переопределения: `vars.db.password`, тогглы сервисов, `compose.extra`, `update.mode` | На разработчика, gitignored |
 
 Например, автор проекта включает политику обновления в `workspace.yml` (`update: { mode: on }`), а разработчик, который хочет локально пропустить пробу, переопределяет её в `local.yml` (`update: { mode: off }`).
 
@@ -324,14 +322,6 @@ runtime:
 | `runtime.use_https` | Используют ли URL'ы HTTPS (экспортируется как `USE_HTTPS`). |
 | `runtime.spx.path` | URL-путь профайлера SPX (пусто = выключено). |
 
-### `state`
-
-```yaml
-state: ""
-```
-
-Имя активного состояния. Пустая строка означает отсутствие состояния. Экспортируется как `STATE` в `.env`. Переопределяйте в `local.yml` (например, `state: staging`).
-
 ### `exports.env`
 
 Декларативные правила экспорта, управляющие генерацией `.env`. Каждое правило сопоставляет dot-path в смерженном конфиге имени env-переменной. Все поля сервисов — `container`, `enabled`, `ports.<name>`, `hosts.<name>` — находятся под `services.<name>.*`.
@@ -366,15 +356,16 @@ exports:
 
 #### Неявные системные переменные
 
-`dwe render env` всегда выводит три переменные до выполнения любого правила, независимо от `exports.env`:
+`dwe render env` выводит четыре переменные до выполнения любого правила, независимо от `exports.env`:
 
 | Переменная | Источник | Заметки |
 |----------|--------|-------|
-| `PROJECT` | `project.name` | Используется Docker labels и Make-таргетами |
+| `PROJECT` | `project.name` | Имя как есть, включая верхний регистр. Используется Make-таргетами |
 | `UID` | хостовый UID | Жёстко зафиксирован в `1000` на macOS, реальный UID на Linux/WSL — сборки контейнеров остаются детерминированными между хостами |
 | `GID` | хостовый GID | Та же логика, что для `UID` |
+| `COMPOSE_PROJECT_NAME` | имя compose-проекта, которое `dwe` передаёт в `-p` | `project_name` из [`docker.yml`](docker.md#project_name) / `docker.local.yml`, иначе `<project.prefix>-<project.name>`, всегда в нижнем регистре. Опускается, если разрешается в пустое значение; ошибка разрешения валит рендер |
 
-Они управляются CLI; не декларируйте их повторно как правила экспорта.
+Первые три есть всегда; `COMPOSE_PROJECT_NAME` выводится, когда имя разрешается в непустое значение. Все четыре управляются CLI; не декларируйте их повторно как правила экспорта — правило с таким именем даёт жёсткую ошибку загрузки конфигурации.
 
 #### Только однострочные значения
 
@@ -406,8 +397,6 @@ compose:
 
 **Пример переопределений**:
 ```yaml
-state: staging
-
 services:
   main-debug:
     enabled: true
@@ -500,13 +489,8 @@ services:
 
 - **Редактирование `defaults.yml` для личных настроек** — изменения отслеживаются и влияют на каждого члена команды. Личные переопределения всегда кладутся в `local.yml`.
 - **Коммит `local.yml`** — он gitignored не просто так (может содержать креды).
-- **Указание `state:` в `defaults.yml`** — состояние по своей природе индивидуальное, кладите его в `local.yml`.
-- **Коллизия скаляров** — если `defaults.yml` выставляет `state: ""`, а `local.yml` выставляет `state: staging`, эффективное значение — `staging`. Если `local.yml` опускает `state`, выигрывает значение из `defaults.yml`.
+- **Коллизия скаляров** — если `defaults.yml` выставляет `runtime.use_https: false`, а `local.yml` выставляет `runtime.use_https: true`, эффективное значение — `true`. Если `local.yml` опускает ключ, выигрывает значение из `defaults.yml`.
 - **Списки заменяют, карты мерджатся** — карты deep-merge'атся: повторная декларация `services` в `local.yml` переопределяет только перечисленные ключи, остальные проваливаются из `defaults.yml`. Списки же заменяются целиком: выставление `bridge.vars_writable: ["vars.db.*"]` в `local.yml` отбрасывает каждую запись, которую имели нижние слои, поэтому включайте полный нужный список.
-
-## Опциональный блок `ui:`
-
-`workspace.yml` может нести опциональный верхнеуровневый блок `ui:`, конфигурирующий интерактивный браузер команд. См. [`ui.md`](ui.md) для схемы, дефолтов и семантики omit-vs-`false` для `*bool`. Поведение не меняется для проектов, опускающих блок.
 
 ## Связанные команды
 

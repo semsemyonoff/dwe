@@ -98,7 +98,7 @@ The shim and the daemon both always support two transports; there is no platform
 |---|---|---|
 | Linux (native Docker) | unix socket `.dwe/bridge/host.sock` | peer uid must equal the daemon's uid (`SO_PEERCRED`) |
 | Linux rootless | unix socket (`host-gateway` is broken there) | peer uid |
-| Docker Desktop (macOS / Windows) | TCP `host.docker.internal:<port>` (Desktop proxies to the loopback listener) | 256-bit per-project token |
+| Docker Desktop (macOS) | TCP `host.docker.internal:<port>` (Desktop proxies to the loopback listener) | 256-bit per-project token |
 | OrbStack / Colima | TCP | token |
 | WSL2 (dwe inside the distro) | TCP | token |
 

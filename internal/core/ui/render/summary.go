@@ -10,34 +10,25 @@ import (
 )
 
 // Summary returns a compact project summary string.
-// It shows the project name, state, and enabled service/tool counts.
+// It shows the enabled service/tool counts.
 // When deploySummary is provided, also shows deploy status (N/M deployed).
 // The returned string contains no trailing newline on the last line.
 func Summary(cfg *config.DweConfig, deploySummary *statusview.DeploySummary) string {
-	var lines []string
-
-	// Project identity now lives in the branded header (render.BrandHeader);
-	// the summary only carries state (when set) and counts.
-	if cfg.State != "" {
-		lines = append(lines, styles.MutedStyle().Render("state")+" "+styles.DefSep+" "+cfg.State)
-	}
-
-	// Service and tool counts, plus deploy status if available.
+	// Project identity lives in the branded header (render.BrandHeader); the
+	// summary carries counts only, on a single line.
 	enabledSvcs, totalSvcs := countServices(cfg)
 	enabledTools := countTools(cfg)
 
-	var line2Parts []string
-	line2Parts = append(line2Parts, styles.MutedStyle().Render(fmt.Sprintf("services %d/%d enabled", enabledSvcs, totalSvcs)))
-	line2Parts = append(line2Parts, styles.MutedStyle().Render(fmt.Sprintf("tools %d enabled", enabledTools)))
+	var parts []string
+	parts = append(parts, styles.MutedStyle().Render(fmt.Sprintf("services %d/%d enabled", enabledSvcs, totalSvcs)))
+	parts = append(parts, styles.MutedStyle().Render(fmt.Sprintf("tools %d enabled", enabledTools)))
 
 	if deploySummary != nil && deploySummary.Total > 0 {
 		deployedStr := fmt.Sprintf("services %d/%d deployed", deploySummary.Deployed, deploySummary.Total)
-		line2Parts = append(line2Parts, styles.MutedStyle().Render(deployedStr))
+		parts = append(parts, styles.MutedStyle().Render(deployedStr))
 	}
 
-	lines = append(lines, strings.Join(line2Parts, "  "))
-
-	return strings.Join(lines, "\n")
+	return strings.Join(parts, "  ")
 }
 
 // countServices returns (enabled, total) counts for app-type services only.

@@ -152,7 +152,7 @@ func stubBriefingOpts() llmstxt.Opts {
 		Conditions: []llmstxt.ConditionSummary{
 			{Name: "dir-empty", Args: "<path>", Summary: "path is missing or is an empty directory"},
 		},
-		ReservedEnvNames: []string{"PROJECT", "UID", "GID"},
+		ReservedEnvNames: []string{"PROJECT", "UID", "GID", "COMPOSE_PROJECT_NAME"},
 	}
 }
 

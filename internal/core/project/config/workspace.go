@@ -41,10 +41,8 @@ var allowedRootKeys = []string{
 	"schema_version",
 	"project",
 	"runtime",
-	"state",
 	"exports",
 	"compose",
-	"ui",
 	"docs",
 	"services",
 	"vars",
@@ -117,11 +115,9 @@ func MmdcBin(cfg *DweConfig) string { return binOverride(cfg, "mmdc", "mmdc") }
 type DweConfig struct {
 	Project ProjectConfig        `yaml:"project"`
 	Runtime RuntimeConfig        `yaml:"runtime"`
-	State   string               `yaml:"state"`
 	Exports ExportsConfig        `yaml:"exports"`
 	Compose ComposeConfig        `yaml:"compose"`
 	Deploy  *ProjectDeployConfig `yaml:"-"`
-	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
 
 	// Update is the formalized top-level self-update policy. It participates in
@@ -1532,12 +1528,17 @@ type ExportsConfig struct {
 	Env []ExportRule `yaml:"env"`
 }
 
-// ReservedExportNames lists env variable names that the renderer always emits
-// itself before any user-defined export rule runs. User rules are forbidden
-// from redeclaring them: the rendering layer reads the system values from the
-// project config and host environment, and a duplicate line in the output
-// .env would have parser-defined precedence.
-var ReservedExportNames = []string{"PROJECT", "UID", "GID"}
+// ReservedExportNames lists env variable names that the renderer emits itself,
+// in this order, before any user-defined export rule runs. Slice order is the
+// emission order of the system block in the generated .env. User rules are
+// forbidden from redeclaring them: the rendering layer reads the system values
+// from the project config and host environment, and a duplicate line in the
+// output .env would have parser-defined precedence.
+//
+// A name is emitted whenever its value resolves. PROJECT, UID and GID always
+// do; COMPOSE_PROJECT_NAME (ResolveComposeProjectName) is omitted when it
+// resolves empty, mirroring the compose wrapper omitting -p.
+var ReservedExportNames = []string{"PROJECT", "UID", "GID", "COMPOSE_PROJECT_NAME"}
 
 // IsReservedExportName reports whether name is reserved by the system and
 // therefore cannot be used as an ExportRule.Name.
@@ -2107,7 +2108,7 @@ func validateOverlayCompose(layerPath, svcName string, raw any) error {
 
 // validateLocalCompose validates the SHAPE of `raw["compose"]` in
 // workspace/local.yml. It does NOT whitelist other top-level keys: local.yml
-// legitimately carries `state:`, `runtime:`, etc. so rejecting unknown
+// legitimately carries `runtime:`, `vars:`, etc. so rejecting unknown
 // top-level keys would break existing files. Under `compose` it accepts only
 // `extra: [<string>, ...]` — `compose.base` belongs in workspace.yml and
 // must not be overridden per-developer.

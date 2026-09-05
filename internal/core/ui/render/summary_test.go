@@ -24,25 +24,14 @@ func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
 	}
 }
 
-func TestRenderSummary_State(t *testing.T) {
-	cfg := &config.DweConfig{
-		Project: config.ProjectConfig{Name: "myapp"},
-		State:   "running",
-	}
-	out := Summary(cfg, nil)
-	if !strings.Contains(out, "running") {
-		t.Errorf("expected state in summary, got:\n%s", out)
-	}
-}
-
-func TestRenderSummary_NoState(t *testing.T) {
+// The state: root key is gone; the summary must never grow a "state" label back.
+func TestRenderSummary_NoStateLabel(t *testing.T) {
 	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out := Summary(cfg, nil)
-	// "state" label should not appear when state is empty
 	if strings.Contains(out, "state") {
-		t.Errorf("did not expect 'state' label when state is empty, got:\n%s", out)
+		t.Errorf("did not expect a 'state' label in summary, got:\n%s", out)
 	}
 }
 
@@ -130,7 +119,7 @@ func TestRenderSummary_ToolCounts(t *testing.T) {
 	}
 }
 
-func TestRenderSummary_OneLineWhenNoState(t *testing.T) {
+func TestRenderSummary_SingleCountsLine(t *testing.T) {
 	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
@@ -138,18 +127,6 @@ func TestRenderSummary_OneLineWhenNoState(t *testing.T) {
 	lines := strings.Split(out, "\n")
 	if len(lines) != 1 {
 		t.Errorf("expected exactly 1 line in summary (counts only), got %d:\n%s", len(lines), out)
-	}
-}
-
-func TestRenderSummary_TwoLinesWithState(t *testing.T) {
-	cfg := &config.DweConfig{
-		Project: config.ProjectConfig{Name: "myapp"},
-		State:   "running",
-	}
-	out := Summary(cfg, nil)
-	lines := strings.Split(out, "\n")
-	if len(lines) != 2 {
-		t.Errorf("expected exactly 2 lines in summary (state + counts), got %d:\n%s", len(lines), out)
 	}
 }
 

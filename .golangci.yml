@@ -32,12 +32,11 @@ linters:
         path: internal/core/docs/tui/
         text: "exported"
       # info_test.go uses ptrBool helper to create bool pointers in test fixtures.
-      # ui_test.go uses intPtr helper to create int pointers in test fixtures.
       # The modernize newexpr check suggests simplifying helper(x) to new(x),
       # but new(T) creates a zero-value pointer, not a pointer to the intended value.
       - linters:
           - modernize
-        path: internal/core/project/config/(info|ui)_test\.go
+        path: internal/core/project/config/info_test\.go
         text: "newexpr"
 
 formatters:
