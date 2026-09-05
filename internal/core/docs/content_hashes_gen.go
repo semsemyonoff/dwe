@@ -77,7 +77,7 @@ var ContentHashes = map[string]string{
 	"reference/index.md":                       "be9e62d4ee6d",
 	"reference/render/ai.md":                   "9a8adea6c36c",
 	"reference/render/config.md":               "cf52454e7bd0",
-	"reference/render/env.md":                  "392f7cc27ac9",
+	"reference/render/env.md":                  "6410a2486faf",
 	"reference/render/git.md":                  "23d430061993",
 	"reference/render/ide.md":                  "8987c5ab04eb",
 	"reference/render/index.md":                "e2d0ffb704b8",
