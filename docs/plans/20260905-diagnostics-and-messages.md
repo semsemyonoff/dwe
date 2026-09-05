@@ -600,11 +600,11 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Create: `internal/core/validate/config/exports_test.go`
 - Modify: `internal/core/validate/config/all.go`
 
-- [ ] implement `exportsValidator` (`ID() "exports"`, `Domain() "config"`): iterate `ctx.Cfg.Exports.Env`, skip reserved names, check `From` and non-empty `When` with `config.ResolvePath(ctx.Cfg.Raw, …)`; warning with the message / hint shapes from Technical Details; File from `config.LoadRawLayers(ctx.ConfigPath)` (first layer whose `exports.env` entry has this `name`), fallback `relPath(ctx.ProjectRoot, ctx.ConfigPath)`, and `workspace.yml` under `ctx.ProjectRoot` when `ConfigPath` is empty
-- [ ] no `SeverityOK` row when everything resolves (the `template_refs` / `ports_exports` convention) — goldens stay unchanged in this task
-- [ ] register in `all.go`
-- [ ] tests: resolving `from` → no diag; missing `from` without default → warning + "renders empty" hint; with default → "default is always used"; `required: true` → "fails"; missing `when` → warning; nil-valued present key → no diag; File points at `local.yml` when the rule lives there; `ConfigPath == ""` → File is `workspace.yml`
-- [ ] run `go test ./internal/core/validate/... ./internal/cli/validate/...` — must pass before task 7
+- [x] implement `exportsValidator` (`ID() "exports"`, `Domain() "config"`): iterate `ctx.Cfg.Exports.Env`, skip reserved names, check `From` and non-empty `When` with `config.ResolvePath(ctx.Cfg.Raw, …)`; warning with the message / hint shapes from Technical Details; File from `config.LoadRawLayers(ctx.ConfigPath)` (first layer whose `exports.env` entry has this `name`), fallback `relPath(ctx.ProjectRoot, ctx.ConfigPath)`, and `workspace.yml` under `ctx.ProjectRoot` when `ConfigPath` is empty
+- [x] no `SeverityOK` row when everything resolves (the `template_refs` / `ports_exports` convention) — goldens stay unchanged in this task
+- [x] register in `all.go`
+- [x] tests: resolving `from` → no diag; missing `from` without default → warning + "renders empty" hint; with default → "default is always used"; `required: true` → "fails"; missing `when` → warning; nil-valued present key → no diag; File points at `local.yml` when the rule lives there; `ConfigPath == ""` → File is `workspace.yml`
+- [x] run `go test ./internal/core/validate/... ./internal/cli/validate/...` — must pass before task 7
 
 ### Task 7: `commands` validator checks `default_from` / `options.from` / `context.from`
 
