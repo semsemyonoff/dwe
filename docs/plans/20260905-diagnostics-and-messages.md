@@ -522,13 +522,13 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `internal/core/project/config/compose_scan.go`
 - Modify: `internal/core/project/config/compose_scan_test.go`
 
-- [ ] add `Shared bool` to `IsolationFinding` (godoc as in Technical Details); update `ScanComposeIsolation`'s godoc (`:87-97`) — it now also reads `workspace/docker.yml` + `docker.local.yml`, still without importing `diag`/`validate`
-- [ ] `scanNamedEntity`: set `Value: explicit` on the `named_*` finding
-- [ ] `ScanComposeIsolation`: load `LoadDockerConfigOrEmpty(projectRoot, cfg)`; on error use an empty set; build `sharedNames` from `Resources.Volumes` entries with `Shared` (`ResolveName("")`)
-- [ ] after the collapse loop, compute each volume key's effective name (surviving `KindNamedVolume.Value`, else key) and set `Shared = true` on its surviving `external_volume` / `named_volume` findings; never on networks, never on blocking kinds
-- [ ] table tests: shared match by explicit `name:`; match by key when compose has no `name:`; `name:` mismatch (not shared); `shared: false` (not shared); absent `docker.yml` (not shared); network with the same name (not shared); a later overlay `!reset`ting `name:` changes the effective name and the match
-- [ ] test that `Blocking` and `Message` are unchanged for shared findings
-- [ ] run `go test ./internal/core/project/config/...` — must pass before task 2
+- [x] add `Shared bool` to `IsolationFinding` (godoc as in Technical Details); update `ScanComposeIsolation`'s godoc (`:87-97`) — it now also reads `workspace/docker.yml` + `docker.local.yml`, still without importing `diag`/`validate`
+- [x] `scanNamedEntity`: set `Value: explicit` on the `named_*` finding
+- [x] `ScanComposeIsolation`: load `LoadDockerConfigOrEmpty(projectRoot, cfg)`; on error use an empty set; build `sharedNames` from `Resources.Volumes` entries with `Shared` (`ResolveName("")`)
+- [x] after the collapse loop, compute each volume key's effective name (surviving `KindNamedVolume.Value`, else key) and set `Shared = true` on its surviving `external_volume` / `named_volume` findings; never on networks, never on blocking kinds
+- [x] table tests: shared match by explicit `name:`; match by key when compose has no `name:`; `name:` mismatch (not shared); `shared: false` (not shared); absent `docker.yml` (not shared); network with the same name (not shared); a later overlay `!reset`ting `name:` changes the effective name and the match
+- [x] test that `Blocking` and `Message` are unchanged for shared findings
+- [x] run `go test ./internal/core/project/config/...` — must pass before task 2
 
 ### Task 2: Scanner consumers honour `Shared`; docs + changelog for item 1
 

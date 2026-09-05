@@ -35,8 +35,13 @@ type IsolationFinding struct {
 	Value    string // the declared value (container_name / explicit name:), else ""
 	HostPort int    // raw_host_port only, else 0
 	Blocking bool   // intrinsic: causes a hard collision with the working env
-	Message  string
-	File     string // compose file the finding came from
+	// Shared marks a volume finding acknowledged by a docker.yml
+	// resources.volumes entry with shared: true whose resolved name equals the
+	// compose volume's effective name. Callers decide what to do with it; the
+	// scanner only reports the fact.
+	Shared  bool
+	Message string
+	File    string // compose file the finding came from
 }
 
 // composeScanDoc is the narrow shape ScanComposeIsolation needs from a compose
@@ -89,8 +94,11 @@ var hostPortLiteralRe = regexp.MustCompile(`^\d+(-\d+)?$`)
 // container_name:, literal host ports not modelled in dwe ports, and
 // external:/explicitly-named volumes & networks.
 //
-// This is a leaf function (no diag/validate import) — Blocking is intrinsic
-// to the finding kind; callers decide their own severity policy.
+// It also reads workspace/docker.yml (+ docker.local.yml) to mark the volume
+// findings a `resources.volumes` entry already declares `shared: true` — see
+// markSharedVolumes. Still a leaf function (no diag/validate import): Blocking
+// and Shared are facts about the declaration; callers decide their own
+// severity policy.
 //
 // An unreadable or malformed compose file is skipped silently: the copy's
 // `dwe validate` subprocess / `docker compose` itself surface real parse
@@ -145,7 +153,67 @@ func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding
 		out = append(out, f)
 	}
 
+	markSharedVolumes(cfg, projectRoot, out)
+
 	return out
+}
+
+// markSharedVolumes sets Shared on the volume findings whose effective name is
+// declared `shared: true` under docker.yml's resources.volumes — the recipe for
+// a cross-project cache, where the compose declaration is the point rather than
+// an isolation mistake. dwe creates those volumes itself (ensure_before), so
+// flagging them is unactionable.
+//
+// The effective name of a compose volume is the surviving explicit `name:`
+// after the `-f` collapse, else the compose map key — the same value compose
+// itself would use. A shared docker.yml volume resolves to its Name verbatim,
+// so the project name is irrelevant here. Networks are never marked: docker.yml
+// declares no network resources.
+//
+// A docker.yml that fails to load yields an empty set: the scanner stays
+// advisory and never errors on config `dwe validate` reports elsewhere.
+func markSharedVolumes(cfg *DweConfig, projectRoot string, findings []IsolationFinding) {
+	if !slices.ContainsFunc(findings, isVolumeFinding) {
+		return
+	}
+
+	dockerCfg, err := LoadDockerConfigOrEmpty(projectRoot, cfg)
+	if err != nil {
+		return
+	}
+	sharedNames := make(map[string]bool)
+	for _, vol := range dockerCfg.Resources.Volumes {
+		if name := vol.ResolveName(""); vol.Shared && name != "" {
+			sharedNames[name] = true
+		}
+	}
+	if len(sharedNames) == 0 {
+		return
+	}
+
+	effective := make(map[string]string)
+	for _, f := range findings {
+		if f.Kind == KindNamedVolume && f.Value != "" {
+			effective[f.Resource] = f.Value
+		}
+	}
+
+	for i, f := range findings {
+		if !isVolumeFinding(f) {
+			continue
+		}
+		name := f.Resource
+		if explicit, ok := effective[f.Resource]; ok {
+			name = explicit
+		}
+		findings[i].Shared = sharedNames[name]
+	}
+}
+
+// isVolumeFinding reports whether a finding is one of the two non-blocking
+// volume-scoping kinds markSharedVolumes may acknowledge.
+func isVolumeFinding(f IsolationFinding) bool {
+	return !f.Blocking && (f.Kind == KindExternalVolume || f.Kind == KindNamedVolume)
 }
 
 // declKey identifies one last-declaration-wins declaration across the `-f`
@@ -572,6 +640,7 @@ func scanNamedEntity(e composeScanNamedEntity, name, file string, externalKind, 
 		findings = append(findings, IsolationFinding{
 			Kind:     namedKind,
 			Resource: name,
+			Value:    explicit,
 			Blocking: false,
 			Message:  string(namedKind) + " " + name + " sets an explicit name: " + explicit + " — bypasses compose project-name scoping",
 			File:     file,
