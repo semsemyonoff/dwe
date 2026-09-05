@@ -267,6 +267,42 @@ func TestRunRenderEnv_ToFile(t *testing.T) {
 	}
 }
 
+// TestRunRenderEnv_ComposeProjectNameFromDockerYML pins the baseDir this
+// command threads into envfile. The parameter is the only thing that makes
+// COMPOSE_PROJECT_NAME follow workspace/docker.yml, and a wrong value fails
+// silently: envfile.BuildContent(cfg, "") returns <prefix>-<name> with no
+// error, so .env would carry a different project than the -p dwe passes —
+// exactly the split-brain the export exists to remove. Asserting only
+// PROJECT= (as the sibling test does) cannot see that.
+func TestRunRenderEnv_ComposeProjectNameFromDockerYML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
+	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wsDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(wsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wsDir, "docker.yml"), []byte("project_name: Custom_Scope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := filepath.Join(dir, ".env")
+	if err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+
+	body, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if !strings.Contains(string(body), "COMPOSE_PROJECT_NAME=custom_scope\n") {
+		t.Errorf("expected COMPOSE_PROJECT_NAME=custom_scope (lowercased docker.yml project_name), got:\n%s", body)
+	}
+}
+
 // TestRunRenderEnv_InvalidConfig verifies that a config-load failure is
 // surfaced as an error (not silently dropped).
 func TestRunRenderEnv_InvalidConfig(t *testing.T) {

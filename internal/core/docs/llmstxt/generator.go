@@ -59,8 +59,10 @@ type Opts struct {
 	// core/docs must not import internal/core/execution.
 	Builtins   []BuiltinSummary
 	Conditions []ConditionSummary
-	// ReservedEnvNames are the env variable names the renderer always emits
-	// itself (config.ReservedExportNames), likewise passed in from the CLI.
+	// ReservedEnvNames are the env variable names the renderer emits itself
+	// (config.ReservedExportNames), likewise passed in from the CLI. Not every
+	// one is unconditional — COMPOSE_PROJECT_NAME is omitted when it resolves
+	// empty — but all of them are reserved against an exports.env rule.
 	ReservedEnvNames []string
 }
 

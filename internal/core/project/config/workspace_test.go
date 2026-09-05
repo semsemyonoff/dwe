@@ -483,11 +483,13 @@ func TestLoadConfig_strictRoot_removedKeysRejected(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error for removed root key %q", rk.key)
 				}
-				if !strings.Contains(err.Error(), "unknown top-level key") {
-					t.Errorf("error = %q, want 'unknown top-level key'", err)
-				}
-				if !strings.Contains(err.Error(), rk.key) {
-					t.Errorf("error = %q, want the key name %q", err, rk.key)
+				// Assert the quoted form the formatter emits, not a bare
+				// substring: layer.Path is rooted at t.TempDir(), whose name
+				// embeds the sanitized subtest name — so a bare "state"/"ui"
+				// match would pass no matter which key the error named.
+				wantKey := fmt.Sprintf("unknown top-level key %q", rk.key)
+				if !strings.Contains(err.Error(), wantKey) {
+					t.Errorf("error = %q, want %q", err, wantKey)
 				}
 				if !strings.Contains(err.Error(), layer.wantFile) {
 					t.Errorf("error = %q, want layer file %q", err, layer.wantFile)
@@ -5642,6 +5644,32 @@ func TestAllowedRootKeysSubsetOfKnownVarHeads(t *testing.T) {
 	for _, k := range allowedRootKeys {
 		if _, ok := known[k]; !ok {
 			t.Errorf("allowedRootKeys contains %q, which is missing from tpl.KnownVarHeads", k)
+		}
+	}
+}
+
+// TestKnownVarHeadsCarryNoStaleRootKeys is the reverse direction of the subset
+// test above, and it is the one that catches a REMOVED root key. Dropping a key
+// from allowedRootKeys without dropping it from tpl.KnownVarHeads leaves the
+// head rewritable: `${state.foo}` still compiles to a lenient Raw lookup that
+// renders to "", silently blanking a pipeline cmd:, while template_refs cannot
+// warn about it either — that validator gates on config.IsAllowedRootKey, which
+// is false for the removed key. The subset assertion alone never fires on this.
+func TestKnownVarHeadsCarryNoStaleRootKeys(t *testing.T) {
+	// The special namespaces CompileVarSyntax switches on directly; they
+	// resolve from a RenderContext field rather than from a config root key,
+	// so they are legitimately absent from allowedRootKeys.
+	special := map[string]struct{}{
+		"files": {}, "host": {}, "param": {}, "context": {},
+		"snapshot": {}, "generated": {}, "args": {},
+	}
+	for _, h := range tpl.KnownVarHeads {
+		if _, ok := special[h]; ok {
+			continue
+		}
+		if _, ok := allowedRootKeySet[h]; !ok {
+			t.Errorf("tpl.KnownVarHeads contains %q, which is neither a special namespace nor a member of allowedRootKeys — "+
+				"drop it from KnownVarHeads, or add it to the special set if it is a new RenderContext namespace", h)
 		}
 	}
 }

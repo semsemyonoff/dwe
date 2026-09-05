@@ -158,8 +158,8 @@ generated from commit subjects and stay on the
   `secrets key list`, instead of plain text. Colour degrades to none when the
   output is not a terminal, `--output json` is unaffected, and `key export`,
   `secrets get` and `--out -` still print their raw bytes with nothing added.
-- **`COMPOSE_PROJECT_NAME` is now the fourth reserved `.env` system variable.**
-  The generated `.env` ends its system block with
+- **Breaking: `COMPOSE_PROJECT_NAME` is now the fourth reserved `.env` system
+  variable.** The generated `.env` ends its system block with
   `COMPOSE_PROJECT_NAME=<name>`, where `<name>` is the compose project name
   `dwe` passes as `-p`: `project_name` from `workspace/docker.yml` (or
   `docker.local.yml`), otherwise `<project.prefix>-<project.name>`, always
@@ -342,14 +342,17 @@ generated from commit subjects and stay on the
   claimed it was exported as `STATE` in `.env`, which it never was. A project
   that still declares it in `workspace.yml`, `workspace/defaults.yml` or
   `workspace/local.yml` now fails to load with the strict-root error naming the
-  file (`unknown root key "state" … allowed: …`). There is no replacement:
-  delete the key, and put free-form values under `vars:`, their single home.
+  file (`<file>: unknown top-level key "state" — move custom values under
+  "vars:" (e.g. vars.state.*); allowed top-level keys: …`). There is no
+  replacement: delete the key, and put free-form values under `vars:`, their
+  single home.
 - **Breaking:** the top-level `ui:` block is gone. Its three command-browser
   knobs (`ui.commands.default_expanded_depth`, `auto_collapse_empty`,
   `show_type_badges`) had no adoption, and the dedicated `config.ui` validator
   goes with them. A project that still declares the block in any of the three
   layers now fails to load with the strict-root error naming the file
-  (`unknown root key "ui" … allowed: …`); delete the block. The command browser
+  (`<file>: unknown top-level key "ui" — move custom values under "vars:" (e.g.
+  vars.ui.*); allowed top-level keys: …`); delete the block. The command browser
   itself is unchanged and runs with the former defaults — top-level groups
   expanded, empty subtrees collapsed during fuzzy filtering, type badges on.
   The hotkey table, parameter-form overlay, fallback ladder and mouse behaviour

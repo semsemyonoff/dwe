@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
 // DockerConfig holds Docker Compose execution policy.
@@ -258,21 +260,44 @@ func normalizeComposeProjectName(name string) string {
 //
 // baseDir is the project root (the directory containing workspace.yml); an
 // empty baseDir skips the docker.yml read and returns FullName().
+//
+// An undecrypted secret marker anywhere in the resolved name is refused, and
+// the check runs BEFORE normalizeComposeProjectName: lowercasing turns
+// "ENC[age:…]" into "enc[age:…]", which secrets.ContainsMarker (case-sensitive
+// by design) no longer recognises, so a guard placed after normalization — in
+// envfile.BuildContent, say — can never fire. Refusing here rather than at the
+// one sink also matches the resolver's existing "fail loudly" rule for a
+// broken ${...}: every derived identity (the -p value, "<project>-<container>"
+// container names, the "<project>_" volume prefix, the label filter) would
+// otherwise be built from ciphertext.
 func ResolveComposeProjectName(baseDir string, cfg *DweConfig) (string, error) {
+	name, err := resolveComposeProjectNameRaw(baseDir, cfg)
+	if err != nil {
+		return "", err
+	}
+	if secrets.ContainsMarker(name) {
+		return "", fmt.Errorf("resolves to an undecrypted secret — see 'dwe secrets status'")
+	}
+	return normalizeComposeProjectName(name), nil
+}
+
+// resolveComposeProjectNameRaw applies the precedence without normalizing or
+// guarding the result — split out so the marker check sees the name as written.
+func resolveComposeProjectNameRaw(baseDir string, cfg *DweConfig) (string, error) {
 	if baseDir == "" {
-		return normalizeComposeProjectName(cfg.Project.FullName()), nil
+		return cfg.Project.FullName(), nil
 	}
 	name, err := readDockerProjectName(baseDir, cfg)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return normalizeComposeProjectName(cfg.Project.FullName()), nil
+			return cfg.Project.FullName(), nil
 		}
 		return "", err
 	}
 	if name == "" {
-		return normalizeComposeProjectName(cfg.Project.FullName()), nil
+		return cfg.Project.FullName(), nil
 	}
-	return normalizeComposeProjectName(name), nil
+	return name, nil
 }
 
 // ComposeProjectName returns the compose project name from an already-loaded

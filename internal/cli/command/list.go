@@ -165,8 +165,8 @@ func writeCommandsList(cmd *cobra.Command, flags *cmdctx.RootFlags, reg *usercom
 type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string, error)
 
 // makeBrowserSelector returns a selectCommandFn that drives the cmdbrowser
-// TUI. The returned closure captures cfg (for resolving ui.commands.*
-// defaults via the nil-safe accessors), mode, the includePrivate flag, the
+// TUI. The returned closure captures cfg (for the per-item inspect renderer
+// and the param-form spec), mode, the includePrivate flag, the
 // raw --set flags (parsed lazily inside the param-form closures — see below),
 // and (run-site only) pointers to bools that receive Result.SkipConfirm and
 // Result.ForceParamForm plus a prefilledOut pointer that receives the params

@@ -186,6 +186,59 @@ func TestBuildContent_composeProjectNameResolutionError(t *testing.T) {
 	}
 }
 
+// TestBuildContent_composeProjectNameValueGuards pins the fourth rule: the
+// resolved name clears the same two value guards as PROJECT before it is
+// written. Neither case can be reached through cfg.Project.Name — PROJECT is
+// emitted first and fails first — so both drive the value in through
+// docker.yml's project_name instead.
+func TestBuildContent_composeProjectNameValueGuards(t *testing.T) {
+	cases := []struct {
+		name     string
+		scope    string
+		wantText string
+	}{
+		{
+			// The marker survives resolution into project_name while
+			// project.name stays clean, and `render env` runs no preflight —
+			// so this render is the first thing that can catch it.
+			name:     "undecrypted marker",
+			scope:    "ENC[age:YWdlLWVuY3J5cHRpb24ub3JnL3Yx]",
+			wantText: "undecrypted secret",
+		},
+		{
+			// A line break would be parsed by compose as a further .env entry,
+			// injecting a variable nobody declared.
+			name:     "line break",
+			scope:    "scope\nUID=0",
+			wantText: "multiple lines",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseDir := t.TempDir()
+			writeDockerYAML(t, baseDir, "docker.yml", "\"dwe-${vars.scope}\"")
+			cfg := &config.DweConfig{
+				Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
+				Raw: map[string]any{
+					"project": map[string]any{"name": "laravel"},
+					"vars":    map[string]any{"scope": tc.scope},
+				},
+			}
+
+			out, err := BuildContent(cfg, baseDir)
+			if err == nil {
+				t.Fatalf("expected an error, got output:\n%s", out)
+			}
+			if !strings.Contains(err.Error(), tc.wantText) {
+				t.Errorf("error = %q, want it to mention %q", err, tc.wantText)
+			}
+			if out != "" {
+				t.Errorf("expected no output on refusal, got:\n%s", out)
+			}
+		})
+	}
+}
+
 // TestRegenerate_writesComposeProjectName covers the whole-file path a
 // lifecycle command takes: Regenerate derives baseDir from the config path and
 // the line lands in the written .env.
