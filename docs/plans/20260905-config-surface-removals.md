@@ -744,17 +744,22 @@ get the qualification.
 - Modify: `internal/core/usercommands/runtime/internal/runio/runio_unix_test.go`
 - Modify: `internal/core/docs/mermaid/mmdc.go`
 
-- [ ] delete the four stub files
-- [ ] remove the `//go:build !windows` line (and the blank line after it) from
+- [x] delete the four stub files
+- [x] remove the `//go:build !windows` line (and the blank line after it) from
       `lock.go`, `lock_test.go`, `project_test.go`
-- [ ] `runio_unix_test.go:1`: `//go:build unix`
-- [ ] `mermaid/mmdc.go:82`: fix the comment that points at `mmdc_windows.go`
-- [ ] negative control: `GOOS=windows go build ./... 2>&1 | head` must fail
+- [x] `runio_unix_test.go:1`: `//go:build unix`
+- [x] `mermaid/mmdc.go:82`: fix the comment that points at `mmdc_windows.go`
+- [x] negative control: `GOOS=windows go build ./... 2>&1 | head` must fail
       (undefined `setProcessGroup` / `spawnDetached` / `syscall.Flock` …);
       record the first error line in this plan under ⚠️/➕ if it is anything
       other than a missing-symbol error
-- [ ] `go build ./...`, `make lint`, `make test-race` (it names
+      - first error line is `internal/shared/lock/lock.go:53:20: undefined:
+        syscall.Flock`, followed by `LOCK_EX`/`LOCK_NB`/`LOCK_UN`/`syscall.Kill`
+        and `mermaid/mmdc.go: undefined: configureCommand / killCommandGroup` —
+        missing symbols only, as expected
+- [x] `go build ./...`, `make lint`, `make test-race` (it names
       `./internal/shared/lock` explicitly) — must pass before Task 9
+      (also ran the full `make test` — green)
 
 ### Task 9: Windows — platform statement in docs and README; commit 4
 
