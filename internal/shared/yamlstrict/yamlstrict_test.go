@@ -254,6 +254,34 @@ func TestDecodeMixedUnknownAndTypeMismatch(t *testing.T) {
 	}
 }
 
+// TestDecodeTypeMismatchOnly pins the deliberate shape of a *yaml.TypeError
+// carrying no unknown field: it is still adopted, so every line names the file
+// instead of hanging under yaml.v3's bare "yaml: unmarshal errors:" header. No
+// version hint is appended — nothing here suggests a newer dwe.
+func TestDecodeTypeMismatchOnly(t *testing.T) {
+	err := Decode([]byte("fail_fast: nope\n"), &pipeline{}, "d.yml")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	strictErr, ok := errors.AsType[*Error](err)
+	if !ok {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if len(strictErr.Unknown) != 0 || len(strictErr.Other) != 1 {
+		t.Fatalf("unknown=%v other=%v", strictErr.Unknown, strictErr.Other)
+	}
+	got := err.Error()
+	if !strings.HasPrefix(got, "d.yml: line 1: cannot unmarshal") {
+		t.Errorf("every line must name the file:\n%s", got)
+	}
+	if strings.Contains(got, versionHint) {
+		t.Errorf("no unknown field, so no version hint:\n%s", got)
+	}
+	if strings.Contains(got, "yaml: unmarshal errors") {
+		t.Errorf("the yaml.v3 aggregate header must not survive:\n%s", got)
+	}
+}
+
 func TestDecodePlainUnmarshalerError(t *testing.T) {
 	err := Decode([]byte("step:\n  bogus: a\n"), &strictHolder{}, "workspace/deploy.yml")
 	if err == nil {

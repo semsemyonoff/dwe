@@ -150,8 +150,14 @@ func Decode(data []byte, out any, file string) error {
 	return fmt.Errorf("%s: %w", file, err)
 }
 
-// rewrite turns an unknown-field decode error into *Error, or returns nil when
-// err carries no unknown field and is better left alone.
+// rewrite turns a decode error into *Error, or returns nil when err is better
+// left alone.
+//
+// A *yaml.TypeError is always adopted, even when it carries no unknown field:
+// Error prefixes each of its lines with the file, where the pass-through would
+// print yaml.v3's "yaml: unmarshal errors:" header once and leave the lines
+// under it bare. A plain error is adopted only when it reports an unknown
+// field, since there is nothing to improve otherwise.
 func rewrite(err error, out any, file string) *Error {
 	if typeErr, ok := errors.AsType[*yaml.TypeError](err); ok {
 		res := &Error{File: file, err: err}

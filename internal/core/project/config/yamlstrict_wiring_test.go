@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -62,6 +63,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 		file        string
 		body        string
 		load        func(path string) error
+		wantLine    int
 		wantField   string
 		wantAllowed string
 	}{
@@ -71,6 +73,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "defaults: {}\nphases: []\n",
 			load: func(p string) error { _, err := LoadProjectDeployConfig(p); return err },
 
+			wantLine:    1,
 			wantField:   `unknown field "defaults"`,
 			wantAllowed: "allowed here: log, phases",
 		},
@@ -80,6 +83,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "bogus: 1\n",
 			load: func(p string) error { _, err := LoadResetConfig(p); return err },
 
+			wantLine:    1,
 			wantField:   `unknown field "bogus"`,
 			wantAllowed: "allowed here: log, phases",
 		},
@@ -89,6 +93,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "bogus: 1\n",
 			load: func(p string) error { _, err := LoadServiceDeployConfig(p); return err },
 
+			wantLine:    1,
 			wantField:   `unknown field "bogus"`,
 			wantAllowed: "allowed here: after, log, phases",
 		},
@@ -98,6 +103,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "bogus: 1\n",
 			load: func(p string) error { _, err := LoadLifecycleConfig(p); return err },
 
+			wantLine:    1,
 			wantField:   `unknown field "bogus"`,
 			wantAllowed: "allowed here: run, stop",
 		},
@@ -107,6 +113,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "phases:\n  - name: p\n    steps:\n      - name: s\n        cmdd: echo hi\n",
 			load: func(p string) error { _, err := LoadProjectDeployConfig(p); return err },
 
+			wantLine:    5,
 			wantField:   `unknown field "cmdd"`,
 			wantAllowed: "allowed here: check, cmd, continue_on_error, description, files_gate, name, parallel, skip_confirm, sub_step_overrides, timeout, type, untracked, when",
 		},
@@ -116,6 +123,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "dir: ./snap\nmystery: 1\n",
 			load: func(p string) error { _, err := LoadSnapshotConfig(p); return err },
 
+			wantLine:    2,
 			wantField:   `unknown field "mystery"`,
 			wantAllowed: "allowed here:",
 		},
@@ -125,6 +133,7 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 			body: "checks:\n  - id: c\n    bogus: 1\n",
 			load: func(p string) error { _, _, err := LoadValidateConfig(p); return err },
 
+			wantLine:    3,
 			wantField:   `unknown field "bogus"`,
 			wantAllowed: "allowed here: cmd, description, hint, id, services, severity, stages, type, with",
 		},
@@ -138,7 +147,12 @@ func TestStrictLoadersReportUnknownField(t *testing.T) {
 				t.Fatal("expected an unknown-field error, got nil")
 			}
 			msg := err.Error()
-			for _, want := range []string{p + ":", tc.wantField, tc.wantAllowed, "check `dwe version`"} {
+			for _, want := range []string{
+				p + ":" + strconv.Itoa(tc.wantLine) + ":",
+				tc.wantField,
+				tc.wantAllowed,
+				"check `dwe version`",
+			} {
 				if !strings.Contains(msg, want) {
 					t.Errorf("error %q does not contain %q", msg, want)
 				}
