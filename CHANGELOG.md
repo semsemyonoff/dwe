@@ -191,7 +191,12 @@ generated from commit subjects and stay on the
   passed every check and `dwe render env` wrote `DB_PASSWORD=`, an empty value
   that reached every container as if it had been declared that way. The hint
   names the consequence for the rule at hand — the variable renders empty, the
-  `default:` is always used, or the render fails on a `required:` rule. These
+  `default:` is always used, or the render fails on a `required:` rule. The
+  `when:` gate is read first, exactly as the renderer reads it: a rule whose
+  gate is falsy right now is still reported, but the hint says nothing is
+  written either way and the miss surfaces once the gate turns on, and a rule
+  whose `when:` cannot resolve at all is reported once, on the gate, rather
+  than twice. These
   are warnings, not errors: `from:` with a `default:` is a legitimate optional
   path, and a path may live in a `local.yml` that is not on this machine. Note
   that `dwe validate --strict` treats warnings as errors, so a CI job using it
@@ -212,7 +217,9 @@ generated from commit subjects and stay on the
   two permanent, unfixable warnings per volume (`external_volume` and
   `named_volume`) on every `dwe validate tests` and `dwe test run`, for a
   volume `dwe` creates itself. Those volumes are now recognised by the name
-  they resolve to and are silent. There is no new config surface. They stay
+  they resolve to — an explicit `name:`, else the name carried by compose's
+  legacy `external: { name: … }` long form, else the compose map key — and are
+  silent. There is no new config surface. They stay
   listed in `dwe test list --output json` under
   `cost_profile.isolation_findings`, marked `"shared": true` — the profile
   reports facts, not verdicts — and the key is omitted for every

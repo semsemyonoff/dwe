@@ -952,6 +952,50 @@ func TestResetValidator_FileExistsStillReportsOK(t *testing.T) {
 	hasDiag(t, diags, validate.SeverityOK, "")
 }
 
+// TestDeployValidator_AllowedSetMatchesTheRuntimeShape pins that the two rows
+// naming workspace/deploy.yml describe ONE schema. The validator parses through
+// the permissive union shape so deployAfterValidator can read an `after:` that
+// lands here, but yamlstrict derives "allowed here:" by reflecting the decode
+// target — so without narrowing, config.deploy would offer a field the runtime
+// loader (and the config.workspace row on the very same file) rejects, sending
+// the author from one error straight into another.
+func TestDeployValidator_AllowedSetMatchesTheRuntimeShape(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	deployPath := filepath.Join(root, "workspace", "deploy.yml")
+	require.NoError(t, os.WriteFile(deployPath, []byte("bogus: 1\n"), 0o644))
+
+	diags := (&deployValidator{}).Run(validate.Context{ProjectRoot: root})
+	require.NotEmpty(t, diags)
+	msg := diags[0].Message
+	require.Equal(t, validate.SeverityError, diags[0].Severity)
+	require.Contains(t, msg, `unknown field "bogus"`)
+	require.Contains(t, msg, "allowed here: log, phases")
+	require.NotContains(t, msg, "after")
+
+	// The runtime loader for this file is the authority the row now matches.
+	_, runtimeErr := devconfig.LoadProjectDeployConfig(deployPath)
+	require.ErrorContains(t, runtimeErr, "allowed here: log, phases")
+}
+
+// A project-wide `after:` keeps deployAfterValidator's precise message and does
+// not regress into a bare unknown-field row: the permissive parse is what lets
+// that validator see the field at all.
+func TestDeployValidator_AfterKeepsThePreciseMessage(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "deploy.yml"),
+		[]byte("after: [db]\nphases:\n  - name: p\n    steps:\n      - type: shell\n        cmd: \"true\"\n"), 0o644))
+
+	for _, d := range (&deployValidator{}).Run(validate.Context{ProjectRoot: root}) {
+		require.NotContains(t, d.Message, `unknown field "after"`)
+	}
+}
+
 // TestPipelineValidators_ThreeStates pins the absent / all-comment /
 // parses-but-inert / authored matrix for the three pipeline files. The two
 // inactive states are the load-bearing ones: `dwe init` scaffolds an inert

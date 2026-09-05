@@ -329,9 +329,14 @@ func sortedCommandNames(cf *model.CommandFile) []string {
 // string; resolve.Params treats the miss as not-found and silently falls
 // through to default: or to an empty value, and an unresolvable options.from
 // yields a select widget with nothing to choose. The criterion is
-// config.ResolvePath reporting not-found — the same call the resolvers make, so
-// this validator cannot drift from run-time behaviour. A present key holding
-// nil is not a finding: the path exists and the author wrote it.
+// config.ResolvePath reporting not-found — the same call the resolvers make.
+//
+// One deliberate difference: a present key holding nil is not a finding here,
+// while resolve.Params/ParamDefaults guard `found && v != nil` and do fall
+// through to default:. Warning on it would report a path the author demonstrably
+// wrote — the empty value is the declaration, not a typo — and the two shapes
+// are indistinguishable in the message that matters ("does not resolve"), so
+// the quieter reading wins. Anywhere else, the two agree by construction.
 //
 // Warning, not error: the path may live in a local.yml that is not on this
 // machine, and `default_from` paired with `default:` is a legitimate

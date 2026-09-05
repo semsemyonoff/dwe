@@ -7,6 +7,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/shared/envfile"
 )
 
 // exportsValidator warns on an exports.env rule whose from: or when: dot-path
@@ -19,9 +20,11 @@ import (
 // skipped and the variable simply never appears.
 //
 // The criterion is config.ResolvePath reporting not-found — literally the
-// function envfile.BuildContent calls (render.go), so this validator and the
-// renderer cannot drift. A present key holding nil is NOT a finding: the path
-// exists, the author wrote it, and the empty render is then intentional.
+// function envfile.BuildContent calls (render.go), evaluated in BuildContent's
+// own order (when: gate first, then from:), so this validator and the renderer
+// cannot drift on which rules they read or on what the miss costs. A present
+// key holding nil is NOT a finding: the path exists, the author wrote it, and
+// the empty render is then intentional.
 //
 // Warning, not error: `from:` paired with `default:` is a legitimate
 // optional-path pattern, and a path may be declared in a local.yml that is not
@@ -61,24 +64,13 @@ func (v *exportsValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			file = f
 		}
 
-		if rule.From != "" {
-			if _, found := config.ResolvePath(ctx.Cfg.Raw, rule.From); !found {
-				diags = append(diags, validate.Diagnostic{
-					Severity: validate.SeverityWarning,
-					Domain:   "config",
-					Target:   "config.exports",
-					File:     file,
-					Message: fmt.Sprintf(
-						"exports.env[%s]: from %q does not resolve in the merged config",
-						rule.Name, rule.From,
-					),
-					Hint: unresolvedFromHint(rule),
-				})
-			}
-		}
-
+		// The gate is read first because BuildContent reads it first: a rule
+		// whose when: is falsy is skipped before from: is ever resolved, so
+		// every from: consequence below has to be stated through the gate.
+		gated := false
 		if rule.When != "" {
-			if _, found := config.ResolvePath(ctx.Cfg.Raw, rule.When); !found {
+			v, found := config.ResolvePath(ctx.Cfg.Raw, rule.When)
+			if !found {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityWarning,
 					Domain:   "config",
@@ -91,6 +83,27 @@ func (v *exportsValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Hint: "an unresolvable when: is falsy, so the rule is always skipped and " +
 						"the variable never reaches .env — check for a typo",
 				})
+				// The gate can never pass, so the rule as a whole is dead. A
+				// second warning about its from: would describe a render that
+				// cannot happen and point at the wrong path to fix.
+				continue
+			}
+			gated = !envfile.IsTruthy(v)
+		}
+
+		if rule.From != "" {
+			if _, found := config.ResolvePath(ctx.Cfg.Raw, rule.From); !found {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityWarning,
+					Domain:   "config",
+					Target:   "config.exports",
+					File:     file,
+					Message: fmt.Sprintf(
+						"exports.env[%s]: from %q does not resolve in the merged config",
+						rule.Name, rule.From,
+					),
+					Hint: unresolvedFromHint(rule, gated),
+				})
 			}
 		}
 	}
@@ -99,7 +112,18 @@ func (v *exportsValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // unresolvedFromHint names the consequence of the miss, which depends on what
 // else the rule declares — the three branches mirror BuildContent's own.
-func unresolvedFromHint(rule config.ExportRule) string {
+//
+// gated collapses all three: a falsy when: makes BuildContent skip the rule
+// before it resolves from: or reaches the required: failure, so nothing renders
+// and nothing fails. The miss is still reported — the gate is data, and the
+// same config on another machine (or after a `dwe vars set`) turns it on — but
+// the hint has to say what actually happens rather than borrow the ungated
+// wording.
+func unresolvedFromHint(rule config.ExportRule, gated bool) string {
+	if gated {
+		return "the rule's when: gate is falsy right now, so nothing is written either way — " +
+			"the miss surfaces once the gate turns on"
+	}
 	switch {
 	case rule.Required && rule.Default == "":
 		return "the rule is required, so `dwe render env` fails on it — check for a typo in the path"

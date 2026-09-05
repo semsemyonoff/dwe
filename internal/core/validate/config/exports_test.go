@@ -9,6 +9,7 @@ import (
 
 	devconfig "github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/shared/envfile"
 )
 
 // writeExportsProject writes a project whose workspace.yml is the given body
@@ -153,6 +154,96 @@ exports:
 	require.Contains(t, diags[0].Hint, "always skipped")
 }
 
+// An unresolvable when: makes the rule dead, so the from: miss on the SAME rule
+// must not be reported a second time: BuildContent skips the rule at the gate
+// and never resolves from:, so the ungated "renders empty" wording would
+// describe a render that cannot happen and point at the wrong path to fix.
+func TestExportsValidator_UnresolvableWhenSuppressesFrom(t *testing.T) {
+	t.Parallel()
+	root := writeExportsProject(t, `project:
+  name: test
+exports:
+  env:
+    - name: METRICS_URL
+      from: vars.metrics.endpoint
+      when: vars.features.metrics
+`)
+	diags := runExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, `when "vars.features.metrics"`)
+	require.NotContains(t, diags[0].Message, "from")
+}
+
+// A gate that resolves but is falsy still gets the from: miss reported — the
+// gate is data, and the same config elsewhere turns it on — but the hint has to
+// name what actually happens: nothing is written either way today.
+func TestExportsValidator_FalsyGateRestatesTheConsequence(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		rule string
+	}{
+		{
+			name: "plain",
+			rule: "",
+		},
+		// required: does not fail the render either — BuildContent returns at
+		// the gate, before it can reach the required-path error.
+		{
+			name: "required",
+			rule: "      required: true\n",
+		},
+		{
+			name: "with default",
+			rule: "      default: fallback\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := writeExportsProject(t, `project:
+  name: test
+vars:
+  features:
+    metrics: false
+exports:
+  env:
+    - name: METRICS_URL
+      from: vars.metrics.endpoint
+      when: vars.features.metrics
+`+tt.rule)
+			diags := runExportsValidator(t, root)
+			require.Len(t, diags, 1)
+			require.Equal(t,
+				`exports.env[METRICS_URL]: from "vars.metrics.endpoint" does not resolve in the merged config`,
+				diags[0].Message,
+			)
+			require.Contains(t, diags[0].Hint, "gate is falsy right now")
+			require.NotContains(t, diags[0].Hint, "renders empty")
+		})
+	}
+}
+
+// The validator and envfile.UnresolvedRules must agree on which rules the gate
+// lets through — the drift this ordering exists to prevent.
+func TestExportsValidator_TruthyGateKeepsTheUngatedHint(t *testing.T) {
+	t.Parallel()
+	root := writeExportsProject(t, `project:
+  name: test
+vars:
+  features:
+    metrics: true
+exports:
+  env:
+    - name: METRICS_URL
+      from: vars.metrics.endpoint
+      when: vars.features.metrics
+`)
+	diags := runExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Hint, "renders empty")
+}
+
 // A rule declared in local.yml is reported at local.yml, not at workspace.yml.
 func TestExportsValidator_FileFollowsDeclaringLayer(t *testing.T) {
 	t.Parallel()
@@ -191,6 +282,33 @@ exports:
 	diags := (&exportsValidator{}).Run(validate.Context{ProjectRoot: root, Cfg: cfg})
 	require.Len(t, diags, 1)
 	require.Equal(t, "workspace.yml", diags[0].File)
+}
+
+// The two surfaces must not contradict each other on the gate: `dwe validate`
+// may say more than `dwe render env` (it reports all three from: shapes), but
+// it must never promise a render the renderer will not perform.
+func TestExportsValidator_AgreesWithRenderOnTheGate(t *testing.T) {
+	t.Parallel()
+	root := writeExportsProject(t, `project:
+  name: test
+vars:
+  features:
+    metrics: false
+exports:
+  env:
+    - name: METRICS_URL
+      from: vars.metrics.endpoint
+      when: vars.features.metrics
+`)
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
+	require.NoError(t, err)
+
+	// The renderer skips the rule at the gate, so it reports nothing...
+	require.Empty(t, envfile.UnresolvedRules(cfg))
+	// ...and the validator, which does report it, must not claim otherwise.
+	diags := runExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.NotContains(t, diags[0].Hint, "renders empty")
 }
 
 func TestExportsValidator_NilConfigIsSilent(t *testing.T) {

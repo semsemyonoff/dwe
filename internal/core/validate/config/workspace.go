@@ -17,6 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 var errNotExist = os.ErrNotExist
@@ -1170,6 +1171,26 @@ func (v *deployValidator) Domain() string {
 	return "config"
 }
 
+// projectDeployStrictError narrows an unknown-field error raised while parsing
+// the project-wide workspace/deploy.yml so its "allowed here:" list matches the
+// runtime loader.
+//
+// The parse deliberately goes through config.DeployConfig, the union of the
+// project and per-service shapes, so deployAfterValidator can read an `after:`
+// that lands here and answer with its own precise message. yamlstrict derives
+// the allowed set by reflecting the decode target, so without this the row
+// would offer `after` — which LoadProjectDeployConfig rejects structurally, and
+// which config.workspace reports on the very same file without it. Two rows
+// naming one file must not describe two different schemas.
+//
+// A non-yamlstrict error (a type mismatch, an unreadable file) passes through.
+func projectDeployStrictError(err error) error {
+	if strictErr, ok := errors.AsType[*yamlstrict.Error](err); ok {
+		return strictErr.WithoutAllowed("after")
+	}
+	return err
+}
+
 func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
@@ -1190,7 +1211,7 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.deploy",
 				File:     relPath(ctx.ProjectRoot, deployPath),
-				Message:  err.Error(),
+				Message:  projectDeployStrictError(err).Error(),
 			})
 		}
 		return diags

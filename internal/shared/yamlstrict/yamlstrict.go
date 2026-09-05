@@ -20,6 +20,7 @@ import (
 	"io"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -98,6 +99,33 @@ func (e *Error) prefix(line int) string {
 }
 
 func (e *Error) Unwrap() error { return e.err }
+
+// WithoutAllowed returns a copy of e with fields removed from every reported
+// allowed set. It exists for the one caller shape reflection cannot see: a
+// validator that decodes through a deliberately wider union type than the
+// runtime loader for the same file uses (config.DeployConfig vs
+// config.ProjectDeployConfig), so that a sibling validator can read the extra
+// key and name it precisely. Without this the "allowed here:" list would
+// advertise a field the runtime rejects, sending the author from one error
+// straight into another.
+//
+// Nothing else should reach for it: the reflected set is the truth wherever the
+// decode target and the runtime target are the same type.
+func (e *Error) WithoutAllowed(fields ...string) *Error {
+	if e == nil || len(fields) == 0 {
+		return e
+	}
+	out := *e
+	out.Unknown = make([]UnknownField, len(e.Unknown))
+	copy(out.Unknown, e.Unknown)
+	for i := range out.Unknown {
+		allowed := slices.DeleteFunc(slices.Clone(out.Unknown[i].Allowed), func(f string) bool {
+			return slices.Contains(fields, f)
+		})
+		out.Unknown[i].Allowed = allowed
+	}
+	return &out
+}
 
 // Decode strictly decodes data into out (a non-nil pointer). Unknown-field
 // errors are rewritten into *Error; io.EOF passes through untouched so callers

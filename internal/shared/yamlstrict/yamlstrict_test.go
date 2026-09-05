@@ -360,3 +360,75 @@ func TestAllowedFields(t *testing.T) {
 		})
 	}
 }
+
+// TestErrorWithoutAllowed pins the narrowing a validator needs when its decode
+// target is deliberately wider than the runtime loader's shape for the same
+// file: the reported allowed set drops the extra fields, the rest of the error
+// is untouched, and the receiver is not mutated.
+func TestErrorWithoutAllowed(t *testing.T) {
+	type union struct {
+		After  []string `yaml:"after"`
+		Log    *bool    `yaml:"log"`
+		Phases []string `yaml:"phases"`
+	}
+
+	var out union
+	err := Decode([]byte("bogus: 1\n"), &out, "workspace/deploy.yml")
+
+	strictErr, ok := errors.AsType[*Error](err)
+	if !ok {
+		t.Fatalf("Decode error = %v, want *Error", err)
+	}
+	if got := strictErr.Error(); !strings.Contains(got, "allowed here: after, log, phases") {
+		t.Fatalf("unnarrowed error = %q", got)
+	}
+
+	narrowed := strictErr.WithoutAllowed("after")
+	got := narrowed.Error()
+	if !strings.Contains(got, "allowed here: log, phases") {
+		t.Errorf("narrowed error = %q, want the after-less allowed set", got)
+	}
+	if strings.Contains(got, "after") {
+		t.Errorf("narrowed error = %q, still advertises after", got)
+	}
+	// Everything else survives: file, line, field and the version hint.
+	if !strings.Contains(got, `workspace/deploy.yml:1: unknown field "bogus"`) {
+		t.Errorf("narrowed error = %q, lost its location", got)
+	}
+	if !strings.Contains(got, versionHint) {
+		t.Errorf("narrowed error = %q, lost the version hint", got)
+	}
+	if !errors.Is(narrowed, strictErr.Unwrap()) {
+		t.Error("narrowed error lost its wrapped cause")
+	}
+
+	// The copy must not have written through to the original.
+	if orig := strictErr.Error(); !strings.Contains(orig, "allowed here: after, log, phases") {
+		t.Errorf("receiver mutated: %q", orig)
+	}
+}
+
+// A no-op call and a nil receiver are both safe, so a caller can narrow
+// unconditionally.
+func TestErrorWithoutAllowedEdgeCases(t *testing.T) {
+	var nilErr *Error
+	if got := nilErr.WithoutAllowed("after"); got != nil {
+		t.Errorf("nil receiver = %v, want nil", got)
+	}
+
+	var out struct {
+		Log *bool `yaml:"log"`
+	}
+	strictErr, ok := errors.AsType[*Error](Decode([]byte("bogus: 1\n"), &out, "f.yml"))
+	if !ok {
+		t.Fatal("want *Error")
+	}
+	if got := strictErr.WithoutAllowed().Error(); got != strictErr.Error() {
+		t.Errorf("no fields = %q, want unchanged", got)
+	}
+	// Removing every allowed field drops the clause rather than printing an
+	// empty list.
+	if got := strictErr.WithoutAllowed("log").Error(); strings.Contains(got, "allowed here") {
+		t.Errorf("emptied set = %q, want no allowed-here clause", got)
+	}
+}

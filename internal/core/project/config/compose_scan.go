@@ -165,10 +165,11 @@ func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding
 // flagging them is unactionable.
 //
 // The effective name of a compose volume is the surviving explicit `name:`
-// after the `-f` collapse, else the compose map key — the same value compose
-// itself would use. A shared docker.yml volume resolves to its Name verbatim,
-// so the project name is irrelevant here. Networks are never marked: docker.yml
-// declares no network resources.
+// after the `-f` collapse, else the name carried by a legacy
+// `external: { name: … }`, else the compose map key — the same value compose
+// itself would use, in compose's own precedence. A shared docker.yml volume
+// resolves to its Name verbatim, so the project name is irrelevant here.
+// Networks are never marked: docker.yml declares no network resources.
 //
 // A docker.yml that fails to load yields an empty set: the scanner stays
 // advisory and never errors on config `dwe validate` reports elsewhere.
@@ -191,7 +192,15 @@ func markSharedVolumes(cfg *DweConfig, projectRoot string, findings []IsolationF
 		return
 	}
 
+	// Compose's own precedence, applied by writing the weaker source first: the
+	// legacy `external: { name: … }` long form names the volume, but a
+	// surviving top-level `name:` overrides it.
 	effective := make(map[string]string)
+	for _, f := range findings {
+		if f.Kind == KindExternalVolume && f.Value != "" {
+			effective[f.Resource] = f.Value
+		}
+	}
 	for _, f := range findings {
 		if f.Kind == KindNamedVolume && f.Value != "" {
 			effective[f.Resource] = f.Value
@@ -622,6 +631,7 @@ func scanNamedEntity(e composeScanNamedEntity, name, file string, externalKind, 
 		findings = append(findings, IsolationFinding{
 			Kind:     externalKind,
 			Resource: name,
+			Value:    externalName(e.External),
 			Blocking: false,
 			Message:  string(externalKind) + " " + name + " is declared external: — shared with other projects/runs, not scoped to this one",
 			File:     file,
@@ -650,6 +660,33 @@ func scanNamedEntity(e composeScanNamedEntity, name, file string, externalKind, 
 	}
 
 	return findings, cleared
+}
+
+// externalName reads the volume/network name out of the legacy long-form
+// `external: { name: dwe_npm_cache }` spelling, or "" for any other shape.
+//
+// Compose deprecated the long form in favour of a top-level `name:`, but still
+// honours it, and it names the same real resource — so the effective name a
+// `shared: true` docker.yml entry has to match can only live there. Without
+// this the acknowledgement falls back to the compose map key and a project
+// spelling the documented cross-project cache that way keeps a warning it can
+// never clear. A top-level `name:` outranks it, as it does in compose;
+// markSharedVolumes applies that precedence.
+func externalName(n yaml.Node) string {
+	n = resolveAlias(n)
+	if n.Kind != yaml.MappingNode {
+		return ""
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value != "name" {
+			continue
+		}
+		if mergeTagOf(*n.Content[i+1]) == mergeReset {
+			return ""
+		}
+		return scalarValue(*n.Content[i+1])
+	}
+	return ""
 }
 
 // entityTruthy reports whether an `external:` node is truthy: either the bool

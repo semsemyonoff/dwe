@@ -401,6 +401,58 @@ func TestScanComposeIsolation_SharedVolumes(t *testing.T) {
 			kind:      KindExternalVolume,
 			resource:  "npm_cache",
 		},
+		// Compose's deprecated long form names the same real volume, so it has
+		// to be acknowledgeable too — otherwise a project spelling the cache
+		// this way keeps a warning it can never clear.
+		{
+			name:       "legacy external long form matches",
+			dockerYML:  sharedDocker,
+			docs:       []string{"volumes:\n  npm_cache:\n    external:\n      name: dwe_npm_cache\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		{
+			name:      "legacy external long form mismatch",
+			dockerYML: sharedDocker,
+			docs:      []string{"volumes:\n  npm_cache:\n    external:\n      name: other_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		// Compose lets a top-level name: override the long form; so must the
+		// effective name the acknowledgement matches on.
+		{
+			name:      "top-level name outranks the long form",
+			dockerYML: sharedDocker,
+			docs:      []string{"volumes:\n  npm_cache:\n    external:\n      name: dwe_npm_cache\n    name: other_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		{
+			name:       "top-level name outranks the long form the other way",
+			dockerYML:  sharedDocker,
+			docs:       []string{"volumes:\n  npm_cache:\n    external:\n      name: other_cache\n    name: dwe_npm_cache\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		// A bare `external: true` carries no name, so the map key stays the
+		// effective name — the pre-existing fallback must survive.
+		{
+			name:       "long form absent falls back to the map key",
+			dockerYML:  "resources:\n  volumes:\n    npm:\n      name: npm_cache\n      shared: true\n",
+			docs:       []string{"volumes:\n  npm_cache:\n    external: true\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		{
+			name:      "networks are never acknowledged via the long form either",
+			dockerYML: sharedDocker,
+			docs:      []string{"networks:\n  npm_cache:\n    external:\n      name: dwe_npm_cache\n"},
+			kind:      KindExternalNetwork,
+			resource:  "npm_cache",
+		},
 		{
 			name:      "shared false is not an acknowledgement",
 			dockerYML: "resources:\n  volumes:\n    npm:\n      name: dwe_npm_cache\n      shared: false\n",
