@@ -437,6 +437,18 @@ generated from commit subjects and stay on the
 
 ### Fixed
 
+- **A keyfile stored under the wrong filename is no longer invisible to
+  `dwe secrets`.** `~/.config/dwe/keys/<recipient>.key` is the only path the
+  identity lookup reads, so a key filed under another recipient's name — the row
+  `dwe secrets key list` reports as `misnamed` — was skipped by every consumer:
+  `secrets status` classified the whole tree as `no_identity`, `secrets get` and
+  `rekey` could not read a value, and `secrets init` offered
+  `--replace-recipient` (re-enter every secret from its plaintext) to a machine
+  that held the key. Worse, `init --replace-recipient --yes` then saw nothing
+  readable and its data-loss guard let the replacement through, orphaning every
+  encrypted value. Such a keyfile now counts as an identity everywhere, and the
+  guard refuses. The same lookup gap hid a canonical keyfile whenever a
+  `DWE_AGE_KEY` exported for another project shadowed it.
 - **A `default_from:` pointing at an empty YAML key no longer passes the literal
   text `<nil>` to the command.** `vars: {branch:}` — a key written with no value
   — resolved as "found", and the resolver rendered it with Go's default
