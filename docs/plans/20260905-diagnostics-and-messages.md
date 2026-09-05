@@ -612,10 +612,10 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `internal/core/validate/commands/commands.go`
 - Modify: `internal/core/validate/commands/commands_test.go`
 
-- [ ] inside the existing per-parsed-file loop (`commands.go:104-106`, which never sees daemon-expanded synthetic commands), warn on each of `params.<p>.default_from`, `params.<p>.options.from`, `context.<c>.from` that does not resolve in `cfg.Raw`; Target = the existing `paramTarget` (`commands:<id>:params.<name>`) and `commands:<id>:context.<name>`; File = `relFile`
-- [ ] keep the existing default-in-options check as is (its `canCheck = false` branch now sits under the new warning)
-- [ ] tests: each of the three fields, resolving vs not; a command with both `default_from` miss and options mismatch yields the warning and not a spurious error; `cfg == nil` → no diags
-- [ ] run `go test ./internal/core/validate/commands/...` — must pass before task 8
+- [x] inside the existing per-parsed-file loop (`commands.go:104-106`, which never sees daemon-expanded synthetic commands), warn on each of `params.<p>.default_from`, `params.<p>.options.from`, `context.<c>.from` that does not resolve in `cfg.Raw`; Target = the existing `paramTarget` (`commands:<id>:params.<name>`) and `commands:<id>:context.<name>`; File = `relFile`
+- [x] keep the existing default-in-options check as is (its `canCheck = false` branch now sits under the new warning)
+- [x] tests: each of the three fields, resolving vs not; a command with both `default_from` miss and options mismatch yields the warning and not a spurious error; `cfg == nil` → no diags
+- [x] run `go test ./internal/core/validate/commands/...` — must pass before task 8
 
 ### Task 8: `dwe render env` warns on rules that render empty; docs + commit 3
 

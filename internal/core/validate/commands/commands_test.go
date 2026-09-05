@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	devconfig "github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
@@ -768,5 +769,300 @@ func TestStripParseFilePrefix(t *testing.T) {
 				t.Errorf("stripParseFilePrefix() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// writeDotPathProject writes a project whose workspace.yml declares the vars
+// the dot-path cases resolve against, plus one command file, and returns the
+// project root and the loaded config.
+func writeDotPathProject(t *testing.T, commandsYAML string) (string, *devconfig.DweConfig) {
+	t.Helper()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(`project:
+  name: test
+vars:
+  git:
+    branch: main
+  dbs:
+    - mysql
+    - postgres
+  empty: null
+`), 0o644))
+	cmdDir := filepath.Join(root, "workspace", "commands")
+	require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "test.yml"), []byte(commandsYAML), 0o644))
+
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
+	require.NoError(t, err)
+	return root, cfg
+}
+
+// dotPathWarnings filters the validator output down to the warnings this
+// validator emits, so unrelated diagnostics (the OK row, structural errors)
+// do not have to be enumerated per case.
+func dotPathWarnings(diags []validate.Diagnostic) []validate.Diagnostic {
+	var out []validate.Diagnostic
+	for _, d := range diags {
+		if d.Severity == validate.SeverityWarning &&
+			strings.Contains(d.Message, "does not resolve in the merged config") {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// TestDotPathDiagnostics pins the motivating case: a typo in default_from /
+// options / context.from is accepted by every check today and silently renders
+// as an empty value.
+func TestDotPathDiagnostics(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantTarget  string
+		wantMessage string
+		wantHint    string
+	}{
+		{
+			name: "default_from resolves",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      branch:
+        type: string
+        default_from: vars.git.branch
+`,
+		},
+		{
+			name: "default_from misses without default renders empty",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      branch:
+        type: string
+        default_from: vars.git.brnch
+`,
+			wantTarget:  "commands:test.test:params.branch",
+			wantMessage: `params.branch: default_from "vars.git.brnch" does not resolve in the merged config`,
+			wantHint:    "defaults to an empty value",
+		},
+		{
+			name: "default_from misses with a literal default",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      branch:
+        type: string
+        default_from: vars.git.brnch
+        default: main
+`,
+			wantTarget:  "commands:test.test:params.branch",
+			wantMessage: `params.branch: default_from "vars.git.brnch" does not resolve in the merged config`,
+			wantHint:    "the literal default: is always used",
+		},
+		{
+			name: "default_from misses on a required param",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      branch:
+        type: string
+        required: true
+        default_from: vars.git.brnch
+`,
+			wantTarget:  "commands:test.test:params.branch",
+			wantMessage: `params.branch: default_from "vars.git.brnch" does not resolve in the merged config`,
+			wantHint:    "no other default",
+		},
+		{
+			name: "options from resolves",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+        options: ${vars.dbs}
+`,
+		},
+		{
+			name: "options from misses",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+        options: ${vars.dbss}
+`,
+			wantTarget:  "commands:test.test:params.db",
+			wantMessage: `params.db: options ${vars.dbss} does not resolve in the merged config`,
+			wantHint:    "the choice list resolves empty",
+		},
+		{
+			name: "context from resolves",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    context:
+      branch:
+        from: vars.git.branch
+`,
+		},
+		{
+			name: "context from misses",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    context:
+      branch:
+        from: vars.git.brnch
+`,
+			wantTarget:  "commands:test.test:context.branch",
+			wantMessage: `context.branch: from "vars.git.brnch" does not resolve in the merged config`,
+			wantHint:    "renders empty",
+		},
+		{
+			name: "required context from misses",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    context:
+      branch:
+        from: vars.git.brnch
+        required: true
+`,
+			wantTarget:  "commands:test.test:context.branch",
+			wantMessage: `context.branch: from "vars.git.brnch" does not resolve in the merged config`,
+			wantHint:    "fails at run time",
+		},
+		{
+			name: "a present key holding nil is not a finding",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    context:
+      value:
+        from: vars.empty
+`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root, cfg := writeDotPathProject(t, tc.yaml)
+			diags := (&Validator{}).Run(validate.Context{
+				ProjectRoot: root,
+				ConfigPath:  filepath.Join(root, "workspace.yml"),
+				Cfg:         cfg,
+			})
+			got := dotPathWarnings(diags)
+			if tc.wantMessage == "" {
+				require.Empty(t, got, "expected no dot-path warning; got: %#v", got)
+				return
+			}
+			require.Len(t, got, 1, "expected exactly one dot-path warning; got: %#v", diags)
+			require.Equal(t, tc.wantTarget, got[0].Target)
+			require.Equal(t, tc.wantMessage, got[0].Message)
+			require.Equal(t, "commands", got[0].Domain)
+			require.Equal(t, filepath.Join("workspace", "commands", "test.yml"), got[0].File)
+			require.Contains(t, got[0].Hint, tc.wantHint)
+		})
+	}
+}
+
+// TestDotPathDiagnostics_UnresolvableDefaultFromKeepsOptionsCheckSilent pins
+// the interaction with the existing default-in-options check: its canCheck =
+// false short-circuit stays, so the miss surfaces once, as a warning, and never
+// as a spurious "not found in resolved options" error.
+func TestDotPathDiagnostics_UnresolvableDefaultFromKeepsOptionsCheckSilent(t *testing.T) {
+	root, cfg := writeDotPathProject(t, `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+        options: ${vars.dbs}
+        default_from: vars.dbb
+`)
+	diags := (&Validator{}).Run(validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+		Cfg:         cfg,
+	})
+
+	require.Len(t, dotPathWarnings(diags), 1)
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error diagnostic: %#v", d)
+	}
+}
+
+// TestDotPathDiagnostics_NilConfig covers the preflight/menu Context shape:
+// with no merged config there is nothing to resolve against, and the checks
+// must stay silent rather than report every path as missing.
+func TestDotPathDiagnostics_NilConfig(t *testing.T) {
+	root, _ := writeDotPathProject(t, `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      branch:
+        type: string
+        default_from: vars.git.brnch
+    context:
+      value:
+        from: vars.nope
+`)
+	diags := (&Validator{}).Run(validate.Context{ProjectRoot: root})
+	require.Empty(t, dotPathWarnings(diags))
+}
+
+// TestDotPathDiagnostics_MultipleAreStable pins deterministic ordering: params
+// and context are walked in lexical order, so a project with several misses
+// reports them the same way on every run.
+func TestDotPathDiagnostics_MultipleAreStable(t *testing.T) {
+	root, cfg := writeDotPathProject(t, `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      zeta:
+        type: string
+        default_from: vars.nope.zeta
+      alpha:
+        type: string
+        default_from: vars.nope.alpha
+    context:
+      beta:
+        from: vars.nope.beta
+`)
+	for range 5 {
+		diags := (&Validator{}).Run(validate.Context{
+			ProjectRoot: root,
+			ConfigPath:  filepath.Join(root, "workspace.yml"),
+			Cfg:         cfg,
+		})
+		got := dotPathWarnings(diags)
+		require.Len(t, got, 3)
+		require.Equal(t, "commands:test.test:params.alpha", got[0].Target)
+		require.Equal(t, "commands:test.test:params.zeta", got[1].Target)
+		require.Equal(t, "commands:test.test:context.beta", got[2].Target)
 	}
 }
