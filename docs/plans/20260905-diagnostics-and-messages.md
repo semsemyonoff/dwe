@@ -573,13 +573,13 @@ workspace.yml: unknown top-level key "db" — move custom values under "vars:" (
 - Modify: `docs/reference/config/validate.md`, `docs/i18n/ru/reference/config/validate.md`
 - Modify: `docs/internals/packages.md` (§ Core — Foundation pipeline loaders, § Core — Validation)
 
-- [ ] `deployValidator`, `lifecycleValidator`, `resetValidator` switch to the `*WithState` loaders; absent → info `no deploy.yml — built-in default pipeline is active` (deploy, lifecycle only; reset keeps its silent branch and comment); `DefaultFallback` → info `<file> has no active content (all comments or empty) — built-in default pipeline is active` (all three); `Authored` → OK
-- [ ] keep the deploy / reset `ResolvePlan` cross-check running after the info row in the fallback state
-- [ ] tests: per validator, the three states produce the expected severity + message; the all-comment deploy.yml case explicitly asserts **not** OK
-- [ ] regenerate goldens with `UPDATE_GOLDEN=1`, diff by eye — only the two message strings move
-- [ ] `validate.md` EN + RU: extend the `config.info` paragraph (`:86`) to the three pipeline files (absent / no active content / authored), rewrite the reset sentence (`:90`): absence stays silent, an all-comment file is reported
-- [ ] `packages.md`: pipeline-loader paragraph gains `PipelineFileState` + the three `*WithState` siblings (the `io.EOF` tolerance is now observable, not just swallowed); § Core — Validation gains the three-state rule for `config.deploy` / `config.lifecycle` / `config.reset`. `AGENTS.md` is NOT touched here — its budget is handled once in task 12
-- [ ] run `go test ./internal/core/validate/... ./internal/cli/validate/...` — must pass before task 5
+- [x] `deployValidator`, `lifecycleValidator`, `resetValidator` switch to the `*WithState` loaders; absent → info `no deploy.yml — built-in default pipeline is active` (deploy, lifecycle only; reset keeps its silent branch and comment); `DefaultFallback` → info `<file> has no active content (all comments or empty) — built-in default pipeline is active` (all three); `Authored` → OK
+- [x] keep the deploy / reset `ResolvePlan` cross-check running after the info row in the fallback state
+- [x] tests: per validator, the three states produce the expected severity + message; the all-comment deploy.yml case explicitly asserts **not** OK
+- [x] regenerate goldens with `UPDATE_GOLDEN=1`, diff by eye — only the two message strings move
+- [x] `validate.md` EN + RU: extend the `config.info` paragraph (`:86`) to the three pipeline files (absent / no active content / authored), rewrite the reset sentence (`:90`): absence stays silent, an all-comment file is reported
+- [x] `packages.md`: pipeline-loader paragraph gains `PipelineFileState` + the three `*WithState` siblings (the `io.EOF` tolerance is now observable, not just swallowed); § Core — Validation gains the three-state rule for `config.deploy` / `config.lifecycle` / `config.reset`. `AGENTS.md` is NOT touched here — its budget is handled once in task 12
+- [x] run `go test ./internal/core/validate/... ./internal/cli/validate/...` — must pass before task 5
 
 ### Task 5: `builtins.md` — predicate builtins are `check:`-only; commit 2
 

@@ -1093,7 +1093,7 @@ func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	lifecyclePath := filepath.Join(ctx.ProjectRoot, "workspace", "lifecycle.yml")
 
-	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
+	lifecycleCfg, state, err := config.LoadLifecycleConfigWithState(lifecyclePath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			diags = append(diags, validate.Diagnostic{
@@ -1101,7 +1101,7 @@ func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.lifecycle",
 				File:     relPath(ctx.ProjectRoot, lifecyclePath),
-				Message:  "no lifecycle.yml",
+				Message:  "no lifecycle.yml — built-in default pipeline is active",
 			})
 		} else {
 			diags = append(diags, validate.Diagnostic{
@@ -1115,12 +1115,24 @@ func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.lifecycle",
-		File:     relPath(ctx.ProjectRoot, lifecyclePath),
-	})
+	// An all-comment file must NOT read as OK: the built-in default pipeline is
+	// what runs, and an agent that sees SeverityOK has no reason to look further.
+	if state == config.PipelineStateDefaultFallback {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.lifecycle",
+			File:     relPath(ctx.ProjectRoot, lifecyclePath),
+			Message:  "lifecycle.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		})
+	} else {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.lifecycle",
+			File:     relPath(ctx.ProjectRoot, lifecyclePath),
+		})
+	}
 
 	_ = lifecycleCfg // Unused; just checking that it loads cleanly
 
@@ -1141,7 +1153,7 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 
-	deployCfg, err := config.ParseDeployConfigForValidation(deployPath)
+	deployCfg, state, err := config.ParseDeployConfigForValidationWithState(deployPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			diags = append(diags, validate.Diagnostic{
@@ -1149,7 +1161,7 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.deploy",
 				File:     relPath(ctx.ProjectRoot, deployPath),
-				Message:  "no deploy.yml",
+				Message:  "no deploy.yml — built-in default pipeline is active",
 			})
 		} else {
 			diags = append(diags, validate.Diagnostic{
@@ -1163,12 +1175,26 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.deploy",
-		File:     relPath(ctx.ProjectRoot, deployPath),
-	})
+	// The scaffold ships an all-comment deploy.yml; reporting OK for it would
+	// claim the user's pipeline is in force when the built-in default is what
+	// actually runs. The ResolvePlan cross-check below still runs — the plan
+	// resolves from the default, which is exactly what deploy executes.
+	if state == config.PipelineStateDefaultFallback {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.deploy",
+			File:     relPath(ctx.ProjectRoot, deployPath),
+			Message:  "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		})
+	} else {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.deploy",
+			File:     relPath(ctx.ProjectRoot, deployPath),
+		})
+	}
 
 	_ = deployCfg
 
@@ -1213,7 +1239,7 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	resetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 
-	resetCfg, err := config.LoadResetConfig(resetPath)
+	resetCfg, state, err := config.LoadResetConfigWithState(resetPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			// Unlike deploy.yml/lifecycle.yml, reset.yml is never shipped by the
@@ -1232,12 +1258,24 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.reset",
-		File:     relPath(ctx.ProjectRoot, resetPath),
-	})
+	// Absence is silent (see above), but a present all-comment file is a
+	// deliberate authoring state the user can see and misread as active.
+	if state == config.PipelineStateDefaultFallback {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.reset",
+			File:     relPath(ctx.ProjectRoot, resetPath),
+			Message:  "reset.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		})
+	} else {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.reset",
+			File:     relPath(ctx.ProjectRoot, resetPath),
+		})
+	}
 
 	_ = resetCfg
 

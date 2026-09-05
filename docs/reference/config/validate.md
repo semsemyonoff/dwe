@@ -85,9 +85,11 @@ Its scope is not pipeline steps alone, but it is not every field either: it cove
 
 `config.info` reports the effective state of `workspace/info.yml`, not merely "does it exist": an **all-comment or empty file** is treated the same as absent — the built-in dashboard is silently active — and is reported at `SeverityInfo` (not `SeverityOK`, so an agent scanning for green does not stop looking); a deliberate `sections: []` reports its own state at `SeverityInfo`; only an authored dashboard with real content earns `SeverityOK`.
 
+`config.deploy`, `config.lifecycle` and `config.reset` apply the same three-state model to the pipeline files. An **absent** `workspace/deploy.yml` / `workspace/lifecycle.yml` reports `no <file> — built-in default pipeline is active` at `SeverityInfo`. An **all-comment or empty** file — the state `dwe init` scaffolds — reports `<file> has no active content (all comments or empty) — built-in default pipeline is active`, also at `SeverityInfo`: the file exists, but the built-in default is what actually runs, so reporting `SeverityOK` for it would claim a pipeline that is not in force. Only a file with at least one active top-level key earns `SeverityOK`. The plan cross-check (`plan resolution failed: …`) runs in every state, since the resolved plan is exactly what deploy executes.
+
 `templates.ai` / `templates.ide` / `templates.git` warn about a missing template pack only once the service sets `render.<kind>.enabled` explicitly. A `type: app` service running on the implicit default with no pack on disk is the scaffolded state, not a defect, and stays silent. `templates.git` applies the same rule to its "no `src/.git`" notice — the repository may still be populated by a deploy step before render runs.
 
-`config.reset` likewise no longer reports an absent `workspace/reset.yml`: the file is optional and the built-in default applies, so its absence is the normal state rather than something to report.
+`config.reset` is the one exception to the paragraph above on the absent state: it stays **completely silent** when `workspace/reset.yml` is missing. Unlike `deploy.yml` / `lifecycle.yml`, the file is never shipped by the scaffold, so its absence is the universal default on nearly every project rather than a deliberate opt-out. A `reset.yml` that *is* present but all-comment or empty is reported like the other two.
 
 The `checks.*` validators are synthesized one per `validate.yml` entry. Each dispatches to either a built-in inspection routine or a locked-down user command at run time.
 

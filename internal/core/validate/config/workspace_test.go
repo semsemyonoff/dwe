@@ -948,6 +948,125 @@ func TestResetValidator_FileExistsStillReportsOK(t *testing.T) {
 	hasDiag(t, diags, validate.SeverityOK, "")
 }
 
+// TestPipelineValidators_ThreeStates pins the absent / all-comment / authored
+// matrix for the three pipeline files. The all-comment case is the load-bearing
+// one: `dwe init` scaffolds an inert deploy.yml, and reporting OK for it would
+// claim the user's pipeline is in force while the built-in default is what runs.
+func TestPipelineValidators_ThreeStates(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, file, body string) []validate.Diagnostic {
+		t.Helper()
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+		if body != "" {
+			require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", file), []byte(body), 0o644))
+		}
+		ctx := validate.Context{ProjectRoot: root}
+		switch file {
+		case "deploy.yml":
+			return (&deployValidator{}).Run(ctx)
+		case "lifecycle.yml":
+			return (&lifecycleValidator{}).Run(ctx)
+		default:
+			return (&resetValidator{}).Run(ctx)
+		}
+	}
+
+	const allComment = "# nothing active here\n#phases: []\n"
+
+	tests := []struct {
+		name    string
+		file    string
+		body    string
+		wantSev validate.Severity
+		wantMsg string
+		silent  bool
+	}{
+		{
+			name:    "deploy absent",
+			file:    "deploy.yml",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "no deploy.yml — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy all-comment",
+			file:    "deploy.yml",
+			body:    allComment,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy empty",
+			file:    "deploy.yml",
+			body:    "\n\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy authored",
+			file:    "deploy.yml",
+			body:    "phases: []\n",
+			wantSev: validate.SeverityOK,
+		},
+		{
+			name:    "lifecycle absent",
+			file:    "lifecycle.yml",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "no lifecycle.yml — built-in default pipeline is active",
+		},
+		{
+			name:    "lifecycle all-comment",
+			file:    "lifecycle.yml",
+			body:    allComment,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "lifecycle.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			name:    "lifecycle authored",
+			file:    "lifecycle.yml",
+			body:    "run:\n  phases: []\n",
+			wantSev: validate.SeverityOK,
+		},
+		{
+			name:   "reset absent stays silent",
+			file:   "reset.yml",
+			silent: true,
+		},
+		{
+			name:    "reset all-comment",
+			file:    "reset.yml",
+			body:    allComment,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "reset.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			name:    "reset authored",
+			file:    "reset.yml",
+			body:    "phases: []\n",
+			wantSev: validate.SeverityOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			diags := run(t, tt.file, tt.body)
+			if tt.silent {
+				require.Empty(t, diags, "expected no diagnostic; got %+v", diags)
+				return
+			}
+			hasDiag(t, diags, tt.wantSev, tt.wantMsg)
+			if tt.wantSev == validate.SeverityInfo {
+				for _, d := range diags {
+					require.NotEqual(t, validate.SeverityOK, d.Severity,
+						"an inactive pipeline file must not report OK: %+v", d)
+				}
+			}
+		})
+	}
+}
+
 func TestServicesValidator_InfoTitleWithControlChars(t *testing.T) {
 	t.Parallel()
 	body := `
