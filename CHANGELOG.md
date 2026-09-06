@@ -227,6 +227,25 @@ generated from commit subjects and stay on the
 
 ### Changed
 
+- **Pipeline log files record one line per committed line instead of one line
+  per redraw frame.** Every `\r` a child wrote to redraw a progress line used to
+  become its own line in `.dwe/logs/<pipeline>.log`. On a measured workspace
+  that made `deploy.log` 1001 lines, ~601 of them redrawn CR frames from a
+  single `git clone` — more than half the file, for a log that exists to be read
+  after a failed deploy. A `\r`-terminated frame is now held as pending and
+  evicted by the next one, exactly as the terminal overwrites it, so
+  `50%\r100%\n` records one `100%` line; a run that ends on a bare `\r` (a
+  killed clone, a tool that never closes its last progress line) is still
+  written when the step finishes. Both executor routes are covered: the
+  sequential step body's log tee, and the per-sub-step files under
+  `.dwe/logs/parallel/**`. Two consequences worth knowing. Collapsing is not
+  terminal emulation — `abc\rX\n` renders as `Xbc` on a real terminal but is
+  logged as `X` — and repeated whole-frame redraws driven by cursor-up
+  sequences rather than `\r`, such as compose's `[+] up 2/3` block, are out of
+  scope and still land once per redraw. And redraw frames no longer reach the
+  file as they happen, so `tail -f .dwe/logs/deploy.log` no longer shows live
+  clone progress, only committed lines; the live view on the terminal is
+  unaffected. Reporter status lines are untouched and still appear exactly once.
 - **The compose isolation scanner no longer warns about a volume the project
   already declares `shared: true`.** The documented cross-project cache recipe
   — a `docker.yml` `resources.volumes.<key>` with `shared: true` plus the

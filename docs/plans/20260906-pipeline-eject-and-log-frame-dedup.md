@@ -566,32 +566,32 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `docs/i18n/ru/reference/concepts/pipelines.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] amend the `log` field row at `docs/reference/config/deploy/index.md:118`:
+- [x] amend the `log` field row at `docs/reference/config/deploy/index.md:118`:
       the file receives one line per committed line, redraw frames are collapsed
       to the last frame, and ANSI codes are stripped
-- [ ] state the `abc\rX\n` limitation once, in the same place, so it is
+- [x] state the `abc\rX\n` limitation once, in the same place, so it is
       discoverable from the field that promises the behaviour
-- [ ] state the one behavioural loss in the same row: today each `\r` frame
+- [x] state the one behavioural loss in the same row: today each `\r` frame
       reaches disk immediately, so `tail -f .dwe/logs/deploy.log` shows clone
       progress live; after this change those frames never reach the file at all
-- [ ] rewrite the three falsified lines in
+- [x] rewrite the three falsified lines in
       `docs/reference/config/deploy/examples.md`: `:190` (the
       `logSanitizer`-wrapped sequential tee), `:192` (the old `\r` normalisation)
       and `:194` (per-sub-step logs described as `\r`→`\n`). Leave `:191` (PTY /
       `Reporter.StepOutput`) and `:197` ("CI dumps have no `\r`-spam") alone;
       both stay true
-- [ ] check whether `docs/reference/concepts/pipelines.md:149` (the parallel
+- [x] check whether `docs/reference/concepts/pipelines.md:149` (the parallel
       frame parser paragraph) now describes both paths and update it if it does
-      not
-- [ ] update the Russian mirrors of all three pages and re-stamp their
+      not — it did not; it now names both routes and the collapse rule
+- [x] update the Russian mirrors of all three pages and re-stamp their
       `> Translated from: … @ <hash>` headers
-- [ ] add a `### Changed` entry under `## [Unreleased]` in `CHANGELOG.md` naming
+- [x] add a `### Changed` entry under `## [Unreleased]` in `CHANGELOG.md` naming
       the measured before/after, the documented limitation and the loss of live
       `tail -f` progress
-- [ ] run `make build` (re-syncs embedded docs, regenerates
+- [x] run `make build` (re-syncs embedded docs, regenerates
       `content_hashes_gen.go`), then `make test` — `TestRussianTranslationsAreFresh`
       is the gate that catches a missed re-stamp
-- [ ] commit Part A as its own commit before starting Part B
+- [x] commit Part A as its own commit before starting Part B
 
 ### Task 4: Embed the default deploy pipeline as an asset
 

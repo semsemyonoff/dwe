@@ -115,7 +115,7 @@ phases:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee dwe status messages and child stdout/stderr to `.dwe/logs/<pipeline>.log` (ANSI codes stripped). |
+| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee dwe status messages and child stdout/stderr to `.dwe/logs/<pipeline>.log`. The file receives one line per **committed** line, with ANSI codes stripped: a run of in-place redraw frames written with a lone `\r` (git clone progress, `curl`) collapses to its last frame instead of landing one line per frame, and a run that ends on a bare `\r` with no closing newline still has its last frame written at step end. Collapsing is not terminal emulation — `abc\rX\n` renders as `Xbc` on a real terminal but is logged as `X`. Trade-off: redraw frames no longer reach the file as they happen, so `tail -f .dwe/logs/deploy.log` no longer shows live clone progress, only committed lines. |
 | `phases` | list | — | Ordered list of phases. |
 | `after` | list of strings | `[]` | **Per-service `deploy.yml` only.** Declares deploy-time ordering: this service deploys after the named services. Omitted or empty means no deploy-ordering constraint. Distinct from runtime `depends_on:` (which controls container startup order) — use `after:` when you want one service's deploy steps to complete before another's begin. Not valid in `workspace/deploy.yml`, `workspace/reset.yml`, or `workspace/services/<name>/reset.yml` (load-time error). Full deploy (`dwe deploy run`) topo-sorts services by `after:`; `dwe deploy run --service <name>` does NOT cascade to declared `after:` dependencies (explicit intent overrides ordering). |
 
