@@ -366,3 +366,31 @@ func TestPathIsUnder(t *testing.T) {
 		})
 	}
 }
+
+// TestIsCanonicalPipelinePath pins the gate that keeps an inert-pipeline note
+// off a file dwe never reads: only <root>/workspace/<file> qualifies.
+func TestIsCanonicalPipelinePath(t *testing.T) {
+	root := t.TempDir()
+	tests := []struct {
+		name string
+		root string
+		file string
+		abs  string
+		want bool
+	}{
+		{name: "the canonical target", root: root, file: "deploy.yml", abs: filepath.Join(root, "workspace", "deploy.yml"), want: true},
+		{name: "the other pipeline", root: root, file: "reset.yml", abs: filepath.Join(root, "workspace", "reset.yml"), want: true},
+		{name: "wrong pipeline name", root: root, file: "deploy.yml", abs: filepath.Join(root, "workspace", "reset.yml")},
+		{name: "project root instead of workspace", root: root, file: "deploy.yml", abs: filepath.Join(root, "deploy.yml")},
+		{name: "scratch file outside the project", root: root, file: "deploy.yml", abs: filepath.Join(t.TempDir(), "deploy.yml")},
+		{name: "no project resolved", root: "", file: "deploy.yml", abs: filepath.Join(root, "workspace", "deploy.yml")},
+		{name: "empty target", root: root, file: "deploy.yml", abs: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsCanonicalPipelinePath(tt.root, tt.file, tt.abs); got != tt.want {
+				t.Fatalf("IsCanonicalPipelinePath(%q, %q, %q) = %v, want %v", tt.root, tt.file, tt.abs, got, tt.want)
+			}
+		})
+	}
+}

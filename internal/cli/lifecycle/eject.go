@@ -68,7 +68,7 @@ lifecycle.yml declaring it would not load back.`,
 	// --out, never --output: the root command owns -o for --output, and a second
 	// shorthand would shadow it. Same reason `dwe secrets` and `dwe docs
 	// llms-txt` spell it --out.
-	cmd.Flags().StringVar(&out, "out", "", "write to PATH ('"+resetEjectStdoutTarget+"' emits to stdout) instead of stdout")
+	cmd.Flags().StringVar(&out, "out", "", "write the document to PATH instead of stdout ('"+resetEjectStdoutTarget+"' means stdout)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing output file")
 	// Cobra file-completes a string flag on its own; a custom ValidArgsFunction
 	// touching project state would pull in the CompletionConfigPath obligation
@@ -103,7 +103,7 @@ func runResetEject(cmd *cobra.Command, flags *cmdctx.RootFlags, out string, outS
 		// one the repository already owns.
 		TightenMode: false,
 		Force:       force,
-		ExistsNote:  existingResetNote(dst),
+		ExistsNote:  existingResetNote(flags.ProjectRoot(), dst),
 	}); err != nil {
 		return err
 	}
@@ -120,7 +120,14 @@ func runResetEject(cmd *cobra.Command, flags *cmdctx.RootFlags, out string, outS
 // message. A file that does not load — a syntax error, an unknown field — gets
 // no note on purpose: the command still refuses, but as "a file is already
 // here", never by propagating a parse error as if it were a write failure.
-func existingResetNote(path string) string {
+//
+// Only the project's own workspace/reset.yml gets a note: the sentence claims
+// the built-in default "is what runs today", which is true of the project's
+// pipeline, not of an arbitrary --out target that dwe never reads.
+func existingResetNote(projectRoot, path string) string {
+	if !cmdctx.IsCanonicalPipelinePath(projectRoot, "reset.yml", path) {
+		return ""
+	}
 	cfg, state, err := config.LoadResetConfigWithState(path)
 	if err != nil || cfg == nil {
 		return ""

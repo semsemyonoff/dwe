@@ -166,7 +166,8 @@ type ActionContext struct {
 //
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
-// as a pipe rather than a TTY). The log tee via logSanitizer is unaffected.
+// as a pipe rather than a TTY). The log tee via liveui.FrameLogWriter is
+// unaffected.
 // When skipConfirm is true, DWE_NONINTERACTIVE=1 is added so that nested
 // dwe subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
@@ -276,9 +277,11 @@ func execDweAction(ctx context.Context, a config.Action, actx ActionContext) err
 
 // execBuiltinAction executes a builtin action. Builtin output is routed
 // through actx.StepWriter, which in sequential mode is
-// io.MultiWriter(os.Stdout, logSanitizer{logFile}) — so the user sees the
-// colored builtin messages on the host terminal while a sanitized copy
-// lands in the on-disk log. In parallel mode StepWriter is the
+// io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile}) — so the user sees
+// the colored builtin messages on the host terminal while a sanitized,
+// frame-collapsed copy lands in the on-disk log. That copy is buffered until
+// the step's flushTee runs, so a builtin's last un-terminated line reaches the
+// file at step end rather than per write. In parallel mode StepWriter is the
 // lineTee → live-block routing. When nil (ad-hoc external callers),
 // output falls back to os.Stdout directly.
 func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext) error {
@@ -855,8 +858,9 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			// the same guard to the workflow runner's sub-step logs.
 			//
 			// What the guard costs: lineTee.Flush delivers an un-terminated
-			// tail as final=false (liveui/output.go:225), so a `\r`-terminated
-			// tail never reaches this file — in both implementations alike.
+			// tail as final=false (liveui/output.go:225), so ANY tail the child
+			// left without a closing newline — `\r`-terminated or not — never
+			// reaches this file, in both implementations alike.
 			// Here it is not lost, because the same frame also reaches
 			// Reporter.StepOutput → entry.inProgress → commitTrailingTail →
 			// the global pipeline log (plain.go:659-668, :700-718).
@@ -898,7 +902,15 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			// LogSanitizer on the same file handle.
 			frameLog := liveui.NewFrameLogWriter(opts.LogWriter)
 			stepWriter = io.MultiWriter(os.Stdout, frameLog)
-			flushTee = frameLog.Flush
+			// A flush-time write failure is the one log error the step cannot
+			// see: everything else surfaces through the MultiWriter above. It
+			// is reported, not escalated — a broken log sink must not fail a
+			// step whose work succeeded.
+			flushTee = func() {
+				if err := frameLog.Flush(); err != nil {
+					trace.Debugf(ctx, "log write failed while flushing step %q: %v", rs.Step.Name, err)
+				}
+			}
 		} else {
 			stepWriter = os.Stdout
 		}
@@ -1142,8 +1154,11 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 
 	// Per-sub-step log file is passed as a raw io.Writer to executeStepBody.
 	// The lineTee callback in executeStepBody writes each assembled, ANSI-clean
-	// frame (both final and non-final) to this writer via fmt.Fprintln, so the
-	// file receives clean line-separated output without needing a logSanitizer
+	// frame to this writer via fmt.Fprintln — but only the COMMITTED (final)
+	// ones, so a `\r` redraw run does not land one line per frame and any tail
+	// the child left un-terminated reaches the global log instead (see the gate
+	// and its rationale in executeStepBody). The file therefore receives clean
+	// line-separated output without needing a logSanitizer
 	// wrapper. This approach also handles OSC/CSI sequences split across PTY
 	// read boundaries — the double-strip inside lineTee reassembles them before
 	// the callback fires. The global pipeline log is fed via PlainReporter's

@@ -24,6 +24,8 @@ All three are loaded separately and are not merged with the 3-layer config.
 
 Both `workspace/deploy.yml` and `workspace/reset.yml` are optional. When absent, DWE substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (override with workspace/<deploy|reset>.yml).` The info line is suppressed in `--output json` mode.
 
+To start from that default instead of writing a pipeline from scratch, run `dwe deploy eject` (or `dwe reset eject`) — it emits the built-in pipeline as a commented, editable file. See [Related commands](#related-commands).
+
 **Default deploy pipeline** (fires when `workspace/deploy.yml` is absent):
 
 Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: dwe`, `cmd: "docker up --wait"`) → `post-deploy` (info display + success message).

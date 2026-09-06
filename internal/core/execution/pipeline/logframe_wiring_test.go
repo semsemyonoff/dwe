@@ -183,48 +183,63 @@ func TestParallelSubStepLog_OnlyCommittedFrames(t *testing.T) {
 	}
 }
 
-// TestParallelSubStep_TrailingCRFrame_ReachesGlobalLog documents what the
-// final gate costs and why it is affordable here: the `\r`-terminated tail is
-// dropped from .dwe/logs/parallel/**, but the same frame reaches
+// TestParallelSubStep_UnterminatedTail_ReachesGlobalLog documents what the
+// final gate costs and why it is affordable here. lineTee.Flush delivers ANY
+// un-terminated tail as final=false, so both a `\r`-terminated redraw frame and
+// a plain last line with no newline (the common shape of a tool's error
+// message) are dropped from .dwe/logs/parallel/** — but the same frame reaches
 // Reporter.StepOutput → commitTrailingTail → the global pipeline log, the
 // second sink usercommands/runtime/runners/workflow/parallel.go does not have.
-func TestParallelSubStep_TrailingCRFrame_ReachesGlobalLog(t *testing.T) {
-	tmp := t.TempDir()
-
-	scr := &bytes.Buffer{}
-	globalLog := &syncBuf{}
-	rep := NewPlainReporter(render.NewWriter(scr), globalLog, io.Discard)
-	defer rep.Close()
-
-	phase := config.DeployPhase{Name: "p"}
-	group := buildParallelGroupStep(phase, "g", true, 0, []config.DeployStep{
-		{Name: "alpha", Type: "shell", Cmd: `printf 'sub-tail\r'`},
-	})
-
-	opts := RunOptions{
-		Steps:       []ResolvedStep{group},
-		Reporter:    rep,
-		Name:        "deploy",
-		Config:      &config.DweConfig{Raw: map[string]any{}},
-		WorkDir:     tmp,
-		LogWriter:   globalLog,
-		Recorder:    &mockRecorder{},
-		SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+// The second case is the one a `strings.HasSuffix(frame, "\r")`-style "fix"
+// would silently keep losing.
+func TestParallelSubStep_UnterminatedTail_ReachesGlobalLog(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+	}{
+		{name: "tail ends on a bare CR", cmd: `printf 'sub-tail\r'`},
+		{name: "tail ends without any terminator", cmd: `printf 'sub-tail'`},
 	}
-	if err := RunWithOptions(opts); err != nil {
-		t.Fatalf("RunWithOptions: %v", err)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
 
-	if !strings.Contains(globalLog.String(), "sub-tail") {
-		t.Errorf("global pipeline log must keep the `\\r`-terminated tail:\n%s", globalLog.String())
-	}
-	alphaPath := filepath.Join(tmp, ".dwe", "logs", "parallel", "deploy", "g", "alpha.log")
-	alpha, err := os.ReadFile(alphaPath)
-	if err != nil {
-		t.Fatalf("read alpha log: %v", err)
-	}
-	if strings.Contains(string(alpha), "sub-tail") {
-		t.Errorf("per-sub-step log records committed lines only; got %q", alpha)
+			scr := &bytes.Buffer{}
+			globalLog := &syncBuf{}
+			rep := NewPlainReporter(render.NewWriter(scr), globalLog, io.Discard)
+			defer rep.Close()
+
+			phase := config.DeployPhase{Name: "p"}
+			group := buildParallelGroupStep(phase, "g", true, 0, []config.DeployStep{
+				{Name: "alpha", Type: "shell", Cmd: tc.cmd},
+			})
+
+			opts := RunOptions{
+				Steps:       []ResolvedStep{group},
+				Reporter:    rep,
+				Name:        "deploy",
+				Config:      &config.DweConfig{Raw: map[string]any{}},
+				WorkDir:     tmp,
+				LogWriter:   globalLog,
+				Recorder:    &mockRecorder{},
+				SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+			}
+			if err := RunWithOptions(opts); err != nil {
+				t.Fatalf("RunWithOptions: %v", err)
+			}
+
+			if !strings.Contains(globalLog.String(), "sub-tail") {
+				t.Errorf("global pipeline log must keep the un-terminated tail:\n%s", globalLog.String())
+			}
+			alphaPath := filepath.Join(tmp, ".dwe", "logs", "parallel", "deploy", "g", "alpha.log")
+			alpha, err := os.ReadFile(alphaPath)
+			if err != nil {
+				t.Fatalf("read alpha log: %v", err)
+			}
+			if strings.Contains(string(alpha), "sub-tail") {
+				t.Errorf("per-sub-step log records committed lines only; got %q", alpha)
+			}
+		})
 	}
 }
 

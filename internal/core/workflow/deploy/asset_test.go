@@ -44,11 +44,17 @@ func TestDefaultDeployYAML_CarriesComments(t *testing.T) {
 	require.Contains(t, doc, "dwe deploy eject", "header must name the command that emits it")
 	require.Contains(t, doc, "full replacement", "header must warn that an active file replaces the whole pipeline")
 
-	// A comment on each phase, not just the file header.
+	// A comment on each phase, not just the file header — so the window under
+	// test is the text BETWEEN the previous phase and this one. Asserting on
+	// doc[:idx] would pass for every phase after the first as soon as the first
+	// one has a comment.
+	prev := 0
 	for _, phase := range deploy.DefaultDeployConfig().Phases {
 		idx := strings.Index(doc, "- name: "+phase.Name)
 		require.NotEqual(t, -1, idx, "phase %q missing from asset", phase.Name)
-		require.Contains(t, doc[:idx], "  #", "phase %q has no explanatory comment above it", phase.Name)
+		require.Greater(t, idx, prev, "phases must appear in DefaultDeployConfig order")
+		require.Contains(t, doc[prev:idx], "  #", "phase %q has no explanatory comment above it", phase.Name)
+		prev = idx
 	}
 }
 

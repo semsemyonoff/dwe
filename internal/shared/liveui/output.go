@@ -186,19 +186,25 @@ func (f *FrameLogWriter) Write(p []byte) (int, error) {
 // flushed FIRST and the pending frame emitted after. Idempotency does not come
 // for free the way it does for LineTee (whose buffer simply empties) — it is
 // the explicit clear below.
-func (f *FrameLogWriter) Flush() {
+//
+// It returns the destination's write error because this is the ONLY path that
+// emits a frame the caller never saw fail: a step whose whole output is an
+// un-terminated redraw run (`50%\r100%\r`) writes nothing until here, so a
+// failing log sink would otherwise be silent end to end.
+func (f *FrameLogWriter) Flush() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.err = nil
 	f.tee.Flush()
 	if !f.hasPending {
-		return
+		return f.err
 	}
 	pending := f.pending
 	f.pending, f.hasPending = "", false
 	if pending != "" {
 		f.writeLine(pending)
 	}
+	return f.err
 }
 
 // JoinWriters returns a single io.Writer that fan-outs to every non-nil writer

@@ -148,6 +148,8 @@ Top-level field on both `run:` and `stop:`. Defaults to `false` for lifecycle pi
 
 When enabled, dwe status messages and child-process stdout/stderr are teed to `.dwe/logs/<name>.log` (with ANSI codes stripped) — `.dwe/logs/run.log` for run, `.dwe/logs/stop.log` for stop.
 
+The file receives one line per **committed** line, exactly as for `deploy.yml`: a run of in-place redraw frames written with a lone `\r` collapses to its last frame instead of landing one line per frame, and a run ending on a bare `\r` still has its last frame written at step end. The same trade-offs apply (no live redraw progress under `tail -f`, and collapsing is not terminal emulation) — see [`deploy.yml` → `log`](deploy/index.md#top-level-fields).
+
 ```yaml
 run:
   log: true     # tee to .dwe/logs/run.log

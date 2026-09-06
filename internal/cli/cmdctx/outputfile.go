@@ -164,6 +164,22 @@ func InertPipelineNote(state config.PipelineFileState, phases int, pipelineName 
 	return ""
 }
 
+// IsCanonicalPipelinePath reports whether abs is the project's own
+// workspace/<file> — the one target an InertPipelineNote may describe. The note
+// says what runs "today", which is a statement about the project's pipeline, so
+// attaching it to `--out /tmp/scratch.yml` would assert it about a file dwe
+// never reads. An empty projectRoot (no project resolved) is never canonical.
+func IsCanonicalPipelinePath(projectRoot, file, abs string) bool {
+	if projectRoot == "" || abs == "" {
+		return false
+	}
+	canonical, err := filepath.Abs(filepath.Join(projectRoot, "workspace", file))
+	if err != nil {
+		return false
+	}
+	return canonical == abs
+}
+
 // PathIsUnder reports whether abs lives inside root.
 func PathIsUnder(root, abs string) bool {
 	if root == "" {

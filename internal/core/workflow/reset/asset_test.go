@@ -61,11 +61,17 @@ func TestDefaultResetYAML_CarriesComments(t *testing.T) {
 	// needs; it lives in defaults.go and must survive into the asset.
 	require.Contains(t, doc, "continue_on_error", "the remove-volumes rationale must survive into the asset")
 
-	// A comment on each phase, not just the file header.
+	// A comment on each phase, not just the file header — so the window under
+	// test is the text BETWEEN the previous phase and this one. Asserting on
+	// doc[:idx] would pass for every phase after the first as soon as the first
+	// one has a comment.
+	prev := 0
 	for _, phase := range reset.DefaultResetConfig().Phases {
 		idx := strings.Index(doc, "- name: "+phase.Name)
 		require.NotEqual(t, -1, idx, "phase %q missing from asset", phase.Name)
-		require.Contains(t, doc[:idx], "  #", "phase %q has no explanatory comment above it", phase.Name)
+		require.Greater(t, idx, prev, "phases must appear in DefaultResetConfig order")
+		require.Contains(t, doc[prev:idx], "  #", "phase %q has no explanatory comment above it", phase.Name)
+		prev = idx
 	}
 }
 

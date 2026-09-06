@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/index.md @ 0696b5dd0fd6
+> Translated from: reference/config/deploy/index.md @ c5e97cd4b974
 
 # deploy.yml / reset.yml
 
@@ -26,6 +26,8 @@
 Все три файла загружаются отдельно и не участвуют в трёхслойном мердже.
 
 И `workspace/deploy.yml`, и `workspace/reset.yml` опциональны. При их отсутствии DWE подставляет встроенный пайплайн по умолчанию и выводит одну info-строку в stderr: `Using built-in default <deploy|reset> pipeline (override with workspace/<deploy|reset>.yml).` Эта строка подавляется в режиме `--output json`.
+
+Чтобы не переписывать пайплайн с нуля, можно взять этот дефолт за основу: `dwe deploy eject` (или `dwe reset eject`) выдаёт встроенный пайплайн готовым к правке файлом с комментариями. См. [Связанные команды](#связанные-команды).
 
 **Дефолтный пайплайн деплоя** (срабатывает, когда `workspace/deploy.yml` отсутствует):
 

@@ -240,7 +240,10 @@ generated from commit subjects and stay on the
   `eject` **refuses an existing target unless `--force`** — it writes a source
   file a human edits — and the refusal says when the file it is protecting is
   itself inert, on the same two conditions `dwe validate` uses (an all-comment
-  file, or one carrying only `log:`). Under `--output json` the `--out` path
+  file, or one carrying only `log:`). That note is attached only to the
+  project's own `workspace/deploy.yml` / `workspace/reset.yml`: it states what
+  runs today, which says nothing about an unrelated `--out` target, so a scratch
+  file elsewhere is refused without it. Under `--output json` the `--out` path
   prints no confirmation line and emits `{path, pipeline}` instead; the stdout
   path emits the raw document with no envelope. There is deliberately **no
   lifecycle equivalent**: the effective `stop` pipeline carries the
@@ -261,7 +264,10 @@ generated from commit subjects and stay on the
   killed clone, a tool that never closes its last progress line) is still
   written when the step finishes. Both executor routes are covered: the
   sequential step body's log tee, and the per-sub-step files under
-  `.dwe/logs/parallel/**`. Two consequences worth knowing. Collapsing is not
+  `.dwe/logs/parallel/**` — where the file now records committed lines only, so
+  a tail a sub-step left without a closing newline reaches
+  `.dwe/logs/<pipeline>.log` instead of that per-sub-step file. Two consequences
+  worth knowing. Collapsing is not
   terminal emulation — `abc\rX\n` renders as `Xbc` on a real terminal but is
   logged as `X` — and repeated whole-frame redraws driven by cursor-up
   sequences rather than `\r`, such as compose's `[+] up 2/3` block, are out of

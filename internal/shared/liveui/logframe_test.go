@@ -42,7 +42,9 @@ func TestFrameLogWriter_FrameSemantics(t *testing.T) {
 				}
 			}
 			if tc.flush {
-				w.Flush()
+				if err := w.Flush(); err != nil {
+					t.Fatalf("flush: %v", err)
+				}
 			}
 			if got := buf.String(); got != tc.want {
 				t.Errorf("log contents = %q, want %q", got, tc.want)
@@ -104,8 +106,12 @@ func TestFrameLogWriter_FlushIsIdempotent(t *testing.T) {
 	if _, err := w.Write([]byte("50%\r")); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	w.Flush()
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	if err := w.Flush(); err != nil {
+		t.Fatalf("second flush: %v", err)
+	}
 	if got := buf.String(); got != "50%\n" {
 		t.Errorf("double Flush emitted %q, want %q", got, "50%\n")
 	}
@@ -114,7 +120,9 @@ func TestFrameLogWriter_FlushIsIdempotent(t *testing.T) {
 func TestFrameLogWriter_FlushOnEmptyWriterEmitsNothing(t *testing.T) {
 	var buf bytes.Buffer
 	w := NewFrameLogWriter(&buf)
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
 	if got := buf.String(); got != "" {
 		t.Errorf("Flush on an untouched writer emitted %q, want nothing", got)
 	}
@@ -163,6 +171,28 @@ func TestFrameLogWriter_WriteSurfacesUnderlyingError(t *testing.T) {
 	}
 }
 
+// TestFrameLogWriter_FlushSurfacesUnderlyingError covers the one frame no
+// caller can see fail any other way: a step whose whole output is an
+// un-terminated redraw run writes nothing until Flush, so without this return
+// a dead log sink would be silent end to end.
+func TestFrameLogWriter_FlushSurfacesUnderlyingError(t *testing.T) {
+	sentinel := errors.New("disk full")
+	w := NewFrameLogWriter(&failingWriter{err: sentinel})
+	// Ends on a bare `\r`: nothing is committed, so Write itself never touches
+	// the destination and returns nil.
+	if _, err := w.Write([]byte("50%\r")); err != nil {
+		t.Fatalf("write on an uncommitted frame returned %v, want nil", err)
+	}
+	if err := w.Flush(); !errors.Is(err, sentinel) {
+		t.Errorf("Flush error = %v, want %v", err, sentinel)
+	}
+	// Idempotency survives the failure: the pending frame is cleared either way,
+	// so a second Flush has nothing left to fail on.
+	if err := w.Flush(); err != nil {
+		t.Errorf("second Flush error = %v, want nil", err)
+	}
+}
+
 // TestFrameLogWriter_ConcurrentWrites_NoPanic mirrors
 // TestLogSanitizer_ConcurrentWrites_NoPanic: stepWriter also reaches builtins
 // as ActionContext.StepWriter, so the pending-frame state must survive
@@ -180,7 +210,9 @@ func TestFrameLogWriter_ConcurrentWrites_NoPanic(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
 	out := buf.String()
 	if strings.Contains(out, "\r") {
 		t.Errorf("expected no \\r in output, got %q", out)

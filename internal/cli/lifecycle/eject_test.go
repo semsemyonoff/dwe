@@ -191,7 +191,12 @@ func TestResetEject_RefusesExistingFile(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			dst := filepath.Join(root, "reset.yml")
+			// The project's own workspace/reset.yml: the only target an inert
+			// note may describe (see existingResetNote).
+			dst := filepath.Join(root, "workspace", "reset.yml")
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
 			if err := os.WriteFile(dst, []byte(tc.content), 0o644); err != nil {
 				t.Fatalf("seed: %v", err)
 			}
@@ -225,6 +230,29 @@ func TestResetEject_RefusesExistingFile(t *testing.T) {
 				t.Fatalf("existing file changed:\n%s", after)
 			}
 		})
+	}
+}
+
+// TestResetEject_NoInertNoteOffCanonicalPath pins the note's scope: it claims
+// the built-in default "is what runs today", so it may only describe the
+// project's own workspace/reset.yml. An inert scratch file elsewhere is still
+// refused — just without a sentence about a pipeline dwe never reads there.
+func TestResetEject_NoInertNoteOffCanonicalPath(t *testing.T) {
+	root := t.TempDir()
+	dst := filepath.Join(root, "scratch.yml")
+	if err := os.WriteFile(dst, []byte("# nothing active here\n"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_, _, err := runResetEjectCmd(t, root, "text", "--out", dst)
+	if err == nil {
+		t.Fatal("err = nil, want a refusal")
+	}
+	coded := ejectCodedError(t, err)
+	if coded.Code != "reset_eject_output_exists" {
+		t.Fatalf("code = %q, want reset_eject_output_exists", coded.Code)
+	}
+	if strings.Contains(coded.Message, "—") {
+		t.Fatalf("a non-canonical target must carry no inert note: %q", coded.Message)
 	}
 }
 
