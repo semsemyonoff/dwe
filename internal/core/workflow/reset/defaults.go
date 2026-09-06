@@ -1,8 +1,34 @@
 package reset
 
-import "github.com/semsemyonoff/dwe/internal/core/project/config"
+import (
+	_ "embed"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+)
+
+//go:embed default_reset.yml
+var defaultResetYAML string
+
+// DefaultResetYAML returns the built-in reset pipeline as an authorable,
+// commented reset.yml document — the payload `dwe reset eject` emits.
+//
+// It is an asset rather than a marshalled DefaultResetConfig() because a
+// marshaller would have to stay in sync with DeployStep's custom UnmarshalYAML
+// and deployStepKnownFields (which nothing cross-checks) and would drop the
+// comments, which are the point of handing a human a file to edit. What keeps
+// the asset from drifting from the constructor is the round-trip test in
+// asset_test.go: it loads these bytes through the real strict loader and
+// requires the result to equal DefaultResetConfig(). Edit one, run that test.
+//
+// The returned slice is a fresh copy; callers may mutate it.
+func DefaultResetYAML() []byte {
+	return []byte(defaultResetYAML)
+}
 
 // DefaultResetConfig returns a freshly-allocated default reset pipeline. Callers may mutate the result safely.
+// Log is left nil on purpose: LoadResetConfig fills an absent log: key with false, so nil here and a loaded
+// reset.yml without the key describe the same behaviour. The asset spells `log: false` out anyway — see
+// asset_test.go, which normalises the asymmetry rather than hiding it.
 func DefaultResetConfig() *config.ProjectDeployConfig {
 	return &config.ProjectDeployConfig{
 		Phases: []config.DeployPhase{
@@ -54,6 +80,12 @@ func DefaultResetConfig() *config.ProjectDeployConfig {
 						Name: "remove-services",
 						Type: "builtin",
 						Cmd:  "remove_paths",
+						// The With shapes here must be the shapes yaml.v3 decodes
+						// into — map[string]any for a mapping, []any for a
+						// sequence. A []string or a map[string]string reads the
+						// same to a human but fails the asset round-trip test in
+						// asset_test.go for a reason that has nothing to do with
+						// the asset.
 						With: map[string]any{
 							"paths": []any{"services/"},
 						},

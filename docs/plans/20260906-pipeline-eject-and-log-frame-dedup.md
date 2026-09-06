@@ -630,25 +630,28 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `internal/core/workflow/reset/defaults.go`
 - Create: `internal/core/workflow/reset/asset_test.go`
 
-- [ ] author `default_reset.yml` as the commented form of `DefaultResetConfig()`
+- [x] author `default_reset.yml` as the commented form of `DefaultResetConfig()`
       (`defaults.go:6-66`), declaring `log: false` explicitly, and keep the
       existing explanatory comment about `docker_remove_project_volumes` not
       taking `continue_on_error` (`defaults.go:45-50`) — it is exactly the kind of
       thing an author editing the ejected file needs
-- [ ] expose it via `//go:embed` behind the same accessor shape as Task 4
-- [ ] write the round-trip test using `config.LoadResetConfig` and
+- [x] expose it via `//go:embed` behind the same accessor shape as Task 4
+      (`DefaultResetYAML()`, returning a fresh copy per call)
+- [x] write the round-trip test using `config.LoadResetConfig` and
       `require.Equal`, normalising the `Log` asymmetry explicitly:
       `DefaultResetConfig()` leaves `Log` nil while the loader fills `&false`
-- [ ] add a comment in the test naming that asymmetry, so a future reader does
+- [x] add a comment in the test naming that asymmetry, so a future reader does
       not "simplify" the normalisation away, and the same `[]any` decode-shape
       note as Task 4 next to `reset/defaults.go:57-59`
       (`With: {"paths": []any{"services/"}}`)
-- [ ] ➕ note as a separate one-line fix (or a follow-up if it grows): the doc
+- [x] ➕ note as a separate one-line fix (or a follow-up if it grows): the doc
       comment on `LoadResetConfig` at `workspace.go:3299` claims reset pipelines
       "must not contain deploy_services phases", but the decoder passes
       `allowDeployServices=true` for reset as well (`:3197`). Do **not** write a
-      test asserting the documented-but-absent restriction
-- [ ] run tests - must pass before task 6
+      test asserting the documented-but-absent restriction —
+      **confirmed and deferred to Task 12**, which already carries the one-line
+      comment fix; no test asserts the absent restriction
+- [x] run tests - must pass before task 6 (`make lint`, `make test` green)
 
 ### Task 6: Promote the existing output-file writer into `cmdctx`
 

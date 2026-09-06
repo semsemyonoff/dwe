@@ -1,0 +1,59 @@
+# workspace/reset.yml — project reset pipeline.
+#
+# This is the built-in default pipeline, emitted verbatim by `dwe reset eject`.
+# It is the pipeline that runs when no workspace/reset.yml is present (or when
+# the one that is present is empty / all comments).
+#
+# Once this file is active it REPLACES the built-in pipeline whole — composition
+# is full replacement, not a merge — so keep every phase you still want and edit
+# from there. Deleting the file restores the built-in default.
+#
+# Schema and field reference: `dwe docs show config/reset`
+
+# Reset does not write .dwe/logs/reset.log. This is the loader default for
+# reset.yml, spelled out so the file behaves the same wherever it is read.
+log: false
+
+phases:
+  # Ask before anything destructive happens. Untracked at phase level, so the
+  # prompt is not counted as a step in the [N/M] progress counter.
+  - name: pre
+    description: "Confirm destructive reset"
+    untracked: true
+    steps:
+      - name: confirm
+        type: builtin
+        cmd: confirm
+        with:
+          message: "This will stop containers, remove project volumes, and delete generated data."
+        description: "Confirm before proceeding with destructive operations"
+
+  # Take the stack down before removing anything it holds open.
+  - name: stop
+    description: "Stop all containers"
+    steps:
+      - name: down
+        type: dwe
+        cmd: "docker down"
+        description: "Stop and remove all project containers"
+
+  # Remove the state a fresh deploy will rebuild.
+  - name: cleanup
+    description: "Remove project volumes and generated service data"
+    steps:
+      # No continue_on_error: the builtin already makes individual
+      # `docker volume rm` failures best-effort (a stuck volume is reported and
+      # skipped, not fatal), while keeping project-name resolution and
+      # `docker volume ls` failures fatal so a broken docker setup aborts the
+      # reset instead of silently clearing the journal with volumes left behind.
+      - name: remove-volumes
+        type: builtin
+        cmd: docker_remove_project_volumes
+        description: "Remove all Docker volumes belonging to this project"
+      - name: remove-services
+        type: builtin
+        cmd: remove_paths
+        with:
+          paths:
+            - "services/"
+        description: "Remove generated service hub directories"
