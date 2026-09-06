@@ -189,6 +189,16 @@ func (s IdentitySet) Decrypt(marker string) (string, error) {
 	return "", fmt.Errorf("%w: this value is encrypted to another recipient than %s", secrets.ErrWrongIdentity, s.recipient)
 }
 
+// decryptOK is Decrypt reduced to the shape the shadow scan takes. Routing it
+// through Decrypt rather than the primary identity alone is deliberate: a
+// stale-key marker still has a real plaintext to compare against, and reporting
+// its shadow as "cannot compare" would hide the leftover-copy case in exactly
+// the half-rekeyed tree where it is most likely.
+func (s IdentitySet) decryptOK(marker string) (string, bool) {
+	plain, err := s.Decrypt(marker)
+	return plain, err == nil
+}
+
 // DecryptBytes is Decrypt for a native age file: the configured identity first,
 // then the stragglers a half-rekeyed tree leaves behind.
 func (s IdentitySet) DecryptBytes(data []byte) ([]byte, error) {
@@ -256,6 +266,17 @@ type MarkerRow struct {
 	Path   string `json:"path"`  // dot-path inside that layer
 	State  string `json:"state"`
 	Reason string `json:"reason,omitempty"`
+	// ShadowedBy is the layer file whose PLAINTEXT value at the same path wins
+	// the merge, so this marker's value is not the one the project runs on; ""
+	// when the marker itself is the effective value.
+	//
+	// It is deliberately orthogonal to State/Reason rather than another reason
+	// token: an UNRESOLVED marker can be shadowed too, and that pairing — no key
+	// here, plaintext quietly covering for it — is the one a single-slot reason
+	// would have had to drop.
+	ShadowedBy string `json:"shadowed_by,omitempty"`
+	// ShadowMatch is the config.Shadow* verdict for the shadowing value.
+	ShadowMatch string `json:"shadow_match,omitempty"`
 }
 
 // FileRow is one *.age file under workspace/templates/config/**.
@@ -311,17 +332,30 @@ func (r Result) Readable() (markers, files int) {
 func Inventory(baseDir string, layers []config.Layer, ids IdentitySet) (Result, error) {
 	res := Result{Recipient: ids.recipient, IdentitySource: ids.source, IdentityErr: ids.err}
 
+	// The shadow scan runs over the same raw layers, so a row can report both
+	// "this machine opens it" and "the project does not use it" — two answers
+	// that look the same only until the plaintext override is removed.
+	shadows := make(map[config.SecretRef]config.ShadowedMarker)
+	for _, sh := range config.CollectShadowedMarkers(layers, ids.decryptOK) {
+		shadows[sh.SecretRef] = sh
+	}
+
 	// CollectMarkers is the single marker inventory (layer order, then path), so
 	// status can never disagree with the loader about sequence indices or key
 	// order.
 	for _, m := range config.CollectMarkers(layers) {
 		state, reason := ids.classifyMarker(m.Value)
-		res.Markers = append(res.Markers, MarkerRow{
+		row := MarkerRow{
 			Layer:  RelToRoot(baseDir, m.Layer),
 			Path:   m.Path,
 			State:  state,
 			Reason: reason,
-		})
+		}
+		if sh, ok := shadows[m.SecretRef]; ok {
+			row.ShadowedBy = RelToRoot(baseDir, sh.ShadowLayer)
+			row.ShadowMatch = sh.Match
+		}
+		res.Markers = append(res.Markers, row)
 	}
 
 	files, err := CollectAgeFiles(baseDir)

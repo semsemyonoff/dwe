@@ -403,6 +403,37 @@ causes rather than lumping them together:
 `corrupt` is detected without a key (marker shape, base64, age header), so a
 keyless developer is never sent hunting for a key that would not have helped.
 
+#### Shadowed markers
+
+A marker a **higher layer overrides with a plaintext value** decrypts perfectly
+well and is still not what the project reads. Such a row carries the override on
+its state cell and renders amber:
+
+```
+decrypted (shadowed by workspace/local.yml)
+```
+
+The qualifier is separate from the state, because the two answer different
+questions — "can this machine open the value?" and "is the key pair what
+actually shares it?" — and an *unresolved* marker can be shadowed too. That
+pairing is the one worth naming: with the plaintext covering for it, a lost
+identity shows up nowhere in everyday use except in
+[`dwe render config`](../render/index.md), which has no plaintext layer to fall
+back on.
+
+In `--output json` a shadowed marker row carries two extra fields:
+
+| Field | Meaning |
+|-------|---------|
+| `shadowed_by` | The layer file supplying the plaintext that wins the merge |
+| `shadow_match: identical` | The override holds the **same** value as the marker — almost always a copy left behind when the value was encrypted |
+| `shadow_match: different` | The override holds a different value — a deliberate local override |
+| `shadow_match: unknown` | The marker could not be decrypted here, so the two were not compared |
+
+A marker overridden by **another marker** is not reported: the value that wins is
+still encrypted at rest. `dwe validate secrets` reports the same finding as a
+warning — see [`secrets.shadowed`](validate.md).
+
 A half-rekeyed tree is reported **per value**: the configured identity is tried
 first, then every other keyfile in the keys directory, so `status` says which
 values still need the old key rather than failing wholesale. Those rows are the
@@ -759,12 +790,13 @@ runs as the host UID/GID that `exports.env` already publishes.
 
 ## Validation and preflight
 
-Two validators in the `secrets` domain (`dwe validate secrets`):
+Three validators in the `secrets` domain (`dwe validate secrets`):
 
 | Validator | Kind | Fires when |
 |-----------|------|------------|
 | `secrets.recipient` | content | Markers or `.age` sources exist but `secrets.recipient` is missing or is not a valid `age1…`; or a marker payload is damaged (`corrupt`) |
 | `secrets.unresolved` | readiness | Any value in the merged config is unresolved, or a resolvable config pack's `.age` source fails to decrypt with the loaded identity |
+| `secrets.shadowed` | effectiveness (**warning**) | A higher layer overrides a marker with a plaintext value, so the encrypted value is never read |
 
 `secrets.recipient` raw-loads the layers itself when the config failed to load,
 so a scoped `dwe validate secrets` still diagnoses a malformed recipient
@@ -793,19 +825,30 @@ The `.age` source scan mirrors what `render config` actually iterates, so a
 disabled service or an unresolvable pack is invisible to the validator exactly
 as it is at render time.
 
-**A healthy project says so.** Both validators emit an `✓` row when they find
-nothing wrong, so `dwe validate secrets` after onboarding reports
-`validation result: 2 checks` instead of `validation skipped (no files found)`.
+**A shadowed marker is a warning, not an error.** `secrets.shadowed` reports
+every marker a higher layer overrides with a plaintext value — the case where
+every other row in this domain stays green about a value the project never
+reads. Overriding a shared secret locally is legitimate, so it never blocks and
+never runs in preflight; the findings are grouped by overriding file and by
+whether the override holds the **same** value as the marker (a copy left behind
+when the value was encrypted) or a different one (a deliberate override). See
+[Shadowed markers](#shadowed-markers) for what `dwe secrets status` shows.
+
+**A healthy project says so.** All three validators emit an `✓` row when they
+find nothing wrong, so `dwe validate secrets` after onboarding reports
+`validation result: 3 checks` instead of `validation skipped (no files found)`.
 The `secrets.recipient` row carries no message — the target is the statement —
-and the `secrets.unresolved` row counts the inventory it just read:
-`1 encrypted value(s) and 0 config-pack source(s) readable via keyfile`.
+the `secrets.unresolved` row counts the inventory it just read
+(`1 encrypted value(s) and 0 config-pack source(s) readable via keyfile`), and
+the `secrets.shadowed` row states the thing the other two never checked
+(`1 encrypted value(s), none shadowed by a plaintext override`).
 
 The rows are tied to what each validator actually checked: the recipient row
 needs only a valid `secrets.recipient` (a project that ran `dwe secrets init`
-and has nothing encrypted yet still gets it), and the unresolved row appears
-only when there is an inventory to read *and* no diagnostic was produced. A
-project with no `secrets:` block and nothing encrypted stays silent, exactly as
-before. The identity is named by source word (`env` / `env-file` / `keyfile`) —
+and has nothing encrypted yet still gets it), the unresolved row appears only
+when there is an inventory to read *and* no diagnostic was produced, and the
+shadowed row only when the project carries markers at all. A project with no
+`secrets:` block and nothing encrypted stays silent, exactly as before. The identity is named by source word (`env` / `env-file` / `keyfile`) —
 never by path, and never with key material. Preflight and the deploy wizard's
 gate filter `✓` rows, so neither prints anything extra.
 
@@ -918,7 +961,7 @@ stdout clean; typed errors serialize to a `{"error":{…}}` envelope on stderr.
 | Command | Shape |
 |---------|-------|
 | `init` | `{"recipient": "age1…", "keyfile": "/…/age1….key"}` — `--replace-recipient` adds `old_recipient` plus `orphaned_markers` / `orphaned_files`, which carry the same row shapes `status` reports |
-| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…"}], "files": [{"file": "…", "state": "…", "reason": "…", "detail": "…"}]}` — a file row's `reason` stays inside the fixed vocabulary (`no_identity` / `wrong_identity` / `invalid_identity` / `corrupt` / `stale_key` / `unreadable`); `detail` carries the free-form cause behind `unreadable` |
+| `status` | `{"recipient": "age1…", "identity": {"source": "keyfile\|env\|env-file\|", "keyfile": "…", "reason": "…", "error": "…", "hint": "…"}, "markers": [{"layer": "…", "path": "…", "state": "…", "reason": "…", "shadowed_by": "…", "shadow_match": "identical\|different\|unknown"}], "files": [{"file": "…", "state": "…", "reason": "…", "detail": "…"}]}` — `shadowed_by` / `shadow_match` appear only on a marker a higher layer overrides with plaintext; a file row's `reason` stays inside the fixed vocabulary (`no_identity` / `wrong_identity` / `invalid_identity` / `corrupt` / `stale_key` / `unreadable`); `detail` carries the free-form cause behind `unreadable` |
 | `set` | `{"path": "vars.…", "file": "workspace/defaults.yml"}` |
 | `get` | `{"path": "vars.…", "value": "…"}` |
 | `encrypt` / `decrypt` | `{"from": "…", "to": "…"}` |

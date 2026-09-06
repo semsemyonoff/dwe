@@ -220,3 +220,38 @@ func TestRelToRoot(t *testing.T) {
 		t.Errorf("RelToRoot with no root = %q, want the path as-is", got)
 	}
 }
+
+// A marker a plaintext value in local.yml overrides still DECRYPTS, so state and
+// reason cannot carry the finding: the row has to say both "this machine opens
+// it" and "the project does not read it".
+func TestInventory_ShadowedMarkerRow(t *testing.T) {
+	isolateHome(t)
+	root := t.TempDir()
+	id := installIdentity(t)
+
+	marker := encrypt(t, "s3cret", id.Recipient())
+	layersWithMarker(t, root, id.Recipient(), marker)
+	if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"),
+		[]byte("vars:\n  token: s3cret\n"), 0o644); err != nil {
+		t.Fatalf("writing local.yml: %v", err)
+	}
+	layers := rawLayers(t, filepath.Join(root, "workspace.yml"))
+
+	inv, err := Inventory(root, layers, LoadIdentitySet(id.Recipient()))
+	if err != nil {
+		t.Fatalf("Inventory: %v", err)
+	}
+	if len(inv.Markers) != 1 {
+		t.Fatalf("markers = %+v, want one row", inv.Markers)
+	}
+	row := inv.Markers[0]
+	if row.State != StateDecrypted || row.Reason != "" {
+		t.Errorf("row = %+v, want the decryptability verdict unchanged", row)
+	}
+	if row.ShadowedBy != filepath.Join("workspace", "local.yml") {
+		t.Errorf("ShadowedBy = %q, want a project-relative workspace/local.yml", row.ShadowedBy)
+	}
+	if row.ShadowMatch != config.ShadowIdentical {
+		t.Errorf("ShadowMatch = %q, want %q", row.ShadowMatch, config.ShadowIdentical)
+	}
+}

@@ -47,6 +47,23 @@ generated from commit subjects and stay on the
   is the second validator (after `config.validate`) cherry-picked into
   preflight, so `dwe run` / `deploy` / `reset` and the deploy wizard stop with
   a named fix instead of deploying a broken config.
+- **A marker shadowed by a plaintext value in a higher layer is now reported as
+  such.** Both secrets reports answered "does this marker decrypt?" — which a
+  reader takes as "is this secret actually shared through the key pair?", and
+  the two diverge silently the moment `workspace/local.yml` carries the same
+  path in the open. `dwe secrets status` now renders such a row amber as
+  `decrypted (shadowed by workspace/local.yml)` and carries `shadowed_by` /
+  `shadow_match` in `--output json`; the new `secrets.shadowed` validator warns
+  in `dwe validate secrets` with the paths, and emits an `✓` row when nothing is
+  shadowed, so a green run finally means the key pair is what shares the values.
+  It is a **warning** and stays out of preflight — a temporary local override of
+  a shared secret is legitimate, being invisible is not. The report distinguishes
+  an override holding the **same** value as the marker (almost always a copy left
+  behind when the value was encrypted) from one holding a different value (a
+  deliberate override) from one that could not be compared because the marker
+  does not decrypt here; neither side of the comparison is ever printed. A marker
+  overridden by another marker is not reported — the winning value is still
+  encrypted at rest.
 - **New reference page** [`docs/reference/config/secrets.md`](docs/reference/config/secrets.md)
   (plus the Russian mirror), covering the model, the marker format, key
   locations, every command with its JSON shape, the render guards, where

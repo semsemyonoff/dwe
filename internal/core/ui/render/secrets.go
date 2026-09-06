@@ -18,7 +18,14 @@ type SecretsMarkerRow struct {
 	Path   string // dot-path inside that layer
 	State  string
 	Reason string
-	OK     bool
+	// ShadowedBy is the layer file whose plaintext value at the same path wins
+	// the merge, appended to the STATE cell; "" when the marker is what the
+	// project uses. ShadowIdentical marks the leftover-copy case — a flag rather
+	// than the CLI's verdict token, for the same reason OK is a flag: the
+	// vocabulary stays the CLI's and can grow without touching the renderer.
+	ShadowedBy      string
+	ShadowIdentical bool
+	OK              bool
 }
 
 // SecretsFileRow is one native *.age config-pack source.
@@ -105,6 +112,11 @@ func SecretsStatusAt(v SecretsStatusView, width int) string {
 			blocks = append(blocks, styles.StyleSubheader(fmt.Sprintf("Encrypted files (%d):", len(v.Files)))+
 				"\n"+secretsFileTable(v.Files).Render(width))
 		}
+	}
+	// The shadow note sits above the identity hint: it explains a qualifier the
+	// table above it carries, while the hint answers a header line.
+	if note := secretsShadowNote(v.Markers); note != "" {
+		blocks = append(blocks, note)
 	}
 	// The fix instruction closes the report rather than sitting next to the
 	// Identity line: it applies to every unresolved row below it, and a header
@@ -354,7 +366,7 @@ func secretsMarkerTable(rows []SecretsMarkerRow) tableView {
 	stringRows := make([][]string, len(rows))
 	ok := make([]bool, len(rows))
 	for i, r := range rows {
-		stringRows[i] = []string{r.Layer, r.Path, secretsStateCell(r.State, r.Reason)}
+		stringRows[i] = []string{r.Layer, r.Path, secretsMarkerStateCell(r)}
 		ok[i] = r.OK
 	}
 	return tableView{
@@ -396,6 +408,51 @@ func secretsStateCell(state, reason string) string {
 		return state
 	}
 	return state + ": " + reason
+}
+
+// secretsMarkerStateCell appends the shadow qualifier to the marker's own state.
+// It hangs off the state rather than taking a column of its own because it
+// MODIFIES what the state means: "decrypted" alone reads as "this value works",
+// which is the reading a shadowed marker has to take away.
+func secretsMarkerStateCell(r SecretsMarkerRow) string {
+	cell := secretsStateCell(r.State, r.Reason)
+	if r.ShadowedBy == "" {
+		return cell
+	}
+	return cell + " (shadowed by " + r.ShadowedBy + ")"
+}
+
+// secretsShadowNote explains the qualifier the marker table just added. Without
+// it the table states a fact whose consequence is not obvious — a row can be
+// green-worded and still describe a value the project never reads.
+//
+// The second line is the migration leftover: a plaintext copy holding the SAME
+// value as the marker, which is the case where the reader believes the report
+// already answered "did my migration land?".
+func secretsShadowNote(rows []SecretsMarkerRow) string {
+	total, identical := 0, 0
+	for _, r := range rows {
+		if r.ShadowedBy == "" {
+			continue
+		}
+		total++
+		if r.ShadowIdentical {
+			identical++
+		}
+	}
+	if total == 0 {
+		return ""
+	}
+	// Rendered line by line, like secretsNotes: lipgloss pads a multi-line block
+	// out to its widest line, which would bake trailing spaces into the report.
+	lines := []string{styles.WarningStyle().Render(fmt.Sprintf(
+		"%d encrypted value(s) are shadowed: a plaintext value in a higher layer wins the merge, so the encrypted one is unused.",
+		total))}
+	if identical > 0 {
+		lines = append(lines, styles.WarningStyle().Render(fmt.Sprintf(
+			"Same-value shadows (%d) are most likely copies left behind when the value was encrypted.", identical)))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // secretsReasonText joins a token reason with its free-form detail, so the text

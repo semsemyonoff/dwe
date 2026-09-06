@@ -1418,10 +1418,10 @@ func TestValidateSecretsScopedReportsUnresolved(t *testing.T) {
 	var got validateJSON
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Equal(t, 1, got.Summary.Error)
-	// The fixture's recipient is valid, so the recipient validator affirms it
-	// next to the readiness error; diagnostics sort severity-descending, so the
-	// error stays first.
-	require.Len(t, got.Diagnostics, 2)
+	// The fixture's recipient is valid and its marker is not shadowed, so both
+	// content validators affirm next to the readiness error; diagnostics sort
+	// severity-descending, so the error stays first.
+	require.Len(t, got.Diagnostics, 3)
 	require.Equal(t, "secrets/secrets.unresolved:no_identity", got.Diagnostics[0].Scope)
 	require.Contains(t, got.Diagnostics[0].Message, "vars.token")
 	require.Equal(t, "ok", got.Diagnostics[1].Severity)
@@ -1443,7 +1443,11 @@ func TestValidateFullRunIncludesSecretsDomain(t *testing.T) {
 			scopes = append(scopes, d.Scope)
 		}
 	}
-	require.Equal(t, []string{"secrets/secrets.unresolved:no_identity", "secrets/secrets.recipient"}, scopes)
+	require.Equal(t, []string{
+		"secrets/secrets.unresolved:no_identity",
+		"secrets/secrets.recipient",
+		"secrets/secrets.shadowed",
+	}, scopes)
 }
 
 // writeHealthySecretsFixture creates a project whose marker decrypts with the
@@ -1480,9 +1484,10 @@ func TestValidateSecretsScopedHealthyEmitsOKRows(t *testing.T) {
 	require.Contains(t, stdout, "secrets.unresolved")
 	// The table wraps long messages, so the counter line is asserted in
 	// fragments; the exact string is pinned on the JSON side.
+	require.Contains(t, stdout, "secrets.shadowed")
 	require.Contains(t, stdout, "1 encrypted value(s)")
 	require.Contains(t, stdout, "readable via env")
-	require.Contains(t, stdout, "validation result: 2 checks")
+	require.Contains(t, stdout, "validation result: 3 checks")
 	require.NotContains(t, stdout, "validation skipped")
 	require.NotContains(t, stdout, "s3cr3t-value")
 	require.NotContains(t, stdout, "AGE-SECRET-KEY-")
@@ -1496,10 +1501,10 @@ func TestValidateSecretsScopedHealthyJSON(t *testing.T) {
 
 	var got validateJSON
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
-	require.Equal(t, 2, got.Summary.Ok)
+	require.Equal(t, 3, got.Summary.Ok)
 	require.Zero(t, got.Summary.Error)
 	require.Zero(t, got.Summary.Warning)
-	require.Len(t, got.Diagnostics, 2)
+	require.Len(t, got.Diagnostics, 3)
 
 	byScope := map[string]diagnosticJSON{}
 	for _, d := range got.Diagnostics {
@@ -1516,9 +1521,69 @@ func TestValidateSecretsScopedHealthyJSON(t *testing.T) {
 	require.Equal(t, "ok", unresolvedRow.Severity)
 	require.Equal(t, "1 encrypted value(s) and 0 config-pack source(s) readable via env", unresolvedRow.Message)
 
+	shadowedRow, ok := byScope["secrets/secrets.shadowed"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "ok", shadowedRow.Severity)
+	require.Equal(t, "1 encrypted value(s), none shadowed by a plaintext override", shadowedRow.Message)
+
 	require.NotContains(t, stdout, "s3cr3t-value")
 	require.NotContains(t, stdout, "AGE-SECRET-KEY-")
 	require.NotContains(t, stdout, recipient+".key")
+}
+
+// A marker a higher layer overrides with plaintext decrypts fine, so every other
+// row in this domain stays green about a value the project never reads. The
+// warning is what closes that gap — and it stays a WARNING, because overriding
+// a shared secret locally is a legitimate move.
+func TestValidateSecretsScopedReportsShadowedMarker(t *testing.T) {
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+	t.Setenv("HOME", t.TempDir())
+
+	workspacePath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n  other: "+marker+"\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	// token: the migration leftover (same value). other: a deliberate override.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(
+		"vars:\n  token: s3cr3t-value\n  other: something-else\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Zero(t, got.Summary.Error)
+	require.Equal(t, 2, got.Summary.Warning)
+
+	byScope := map[string]diagnosticJSON{}
+	for _, d := range got.Diagnostics {
+		byScope[d.Scope] = d
+	}
+	identical, ok := byScope["secrets/secrets.shadowed:identical"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "warning", identical.Severity)
+	require.Equal(t, filepath.Join("workspace", "local.yml"), identical.File)
+	require.Contains(t, identical.Message, "identical plaintext value")
+	require.Contains(t, identical.Message, "vars.token")
+	require.Contains(t, identical.Hint, "already holds the same content")
+
+	different, ok := byScope["secrets/secrets.shadowed:different"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "warning", different.Severity)
+	require.Contains(t, different.Message, "different plaintext value")
+	require.Contains(t, different.Message, "vars.other")
+	require.Contains(t, different.Hint, "local override")
+
+	// The report names paths and verdicts, never either side of the comparison.
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "something-else")
 }
 
 // A malformed recipient makes LoadConfig fail; the scoped run must still name

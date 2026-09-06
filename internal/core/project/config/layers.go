@@ -162,6 +162,123 @@ func CollectMarkers(layers []Layer) []Marker {
 	return out
 }
 
+// ShadowedMarker is an ENC[age:…] scalar whose value never reaches the merged
+// config: a higher-precedence layer supplies a plaintext value at the same path,
+// so the age round-trip is not what the project actually runs on.
+//
+// It is the difference between the two questions every secrets report is read
+// as answering — "does this marker decrypt?" (yes) and "is this secret actually
+// shared through the key pair?" (no) — which otherwise diverge silently.
+type ShadowedMarker struct {
+	SecretRef          // the marker itself
+	ShadowLayer string `json:"shadow_layer"` // layer file supplying the effective value
+	Match       string `json:"match"`
+}
+
+// CollectShadowedMarkers reports every marker a higher layer overrides with a
+// plaintext value, in CollectMarkers order.
+//
+// layers must be the RAW set (LoadRawLayers): the markers are read as written,
+// and the effective value is computed with deepMerge — the merge LoadConfig
+// itself performs — so the answer is what the project actually uses rather than
+// a second reading of the precedence rules.
+//
+// A marker overridden by ANOTHER marker is not reported: the value that wins is
+// still encrypted at rest, which is the question this inventory answers.
+//
+// decrypt opens a marker for the identical/different verdict and may be nil; a
+// marker it cannot open is reported as ShadowUnknown rather than dropped — a
+// shadow over a value this machine cannot read is the case most worth naming,
+// not the one to go quiet about.
+func CollectShadowedMarkers(layers []Layer, decrypt func(marker string) (string, bool)) []ShadowedMarker {
+	markers := CollectMarkers(layers)
+	if len(markers) == 0 {
+		return nil
+	}
+
+	// scalars[j] is every string scalar of layers[0..j] merged, keyed by dot-path.
+	// Snapshotting per prefix is what lets the report NAME the layer that wins:
+	// the effective value alone cannot say where it came from once a higher layer
+	// replaced the marker's whole parent subtree.
+	scalars := make([]map[string]string, len(layers))
+	index := make(map[string]int, len(layers))
+	merged := make(map[string]any)
+	for j, l := range layers {
+		index[l.Path] = j
+		merged = deepMergeCopy(merged, l.Data)
+		snapshot := make(map[string]string)
+		walkScalars(merged, "", func(path, s string) (string, bool) {
+			snapshot[path] = s
+			return s, false
+		})
+		scalars[j] = snapshot
+	}
+	top := scalars[len(layers)-1]
+
+	var out []ShadowedMarker
+	for _, m := range markers {
+		i, ok := index[m.Layer]
+		if !ok {
+			continue
+		}
+		effective, isString := top[m.Path]
+		if isString && (effective == m.Value || secrets.IsMarker(effective)) {
+			continue
+		}
+		layer := shadowingLayer(layers, scalars, i, m.Path)
+		if layer == "" {
+			continue
+		}
+		out = append(out, ShadowedMarker{
+			SecretRef:   m.SecretRef,
+			ShadowLayer: layer,
+			Match:       shadowMatch(m.Value, effective, isString, decrypt),
+		})
+	}
+	return out
+}
+
+// shadowingLayer names the highest-precedence layer above idx that changed the
+// value at path — the file the effective value comes from. It compares the
+// merged snapshots rather than the layers' own data so a wholesale subtree
+// replacement (a scalar, a list or a non-string-keyed mapping where the marker's
+// parent map was) names the right file instead of going quiet: deepMerge only
+// merges map[string]any into map[string]any and REPLACES everything else.
+func shadowingLayer(layers []Layer, scalars []map[string]string, idx int, path string) string {
+	for j := len(layers) - 1; j > idx; j-- {
+		prev, prevOK := scalars[j-1][path]
+		cur, curOK := scalars[j][path]
+		if prevOK != curOK || prev != cur {
+			return layers[j].Path
+		}
+	}
+	return ""
+}
+
+// shadowMatch compares the marker's plaintext with the value that wins. Neither
+// value is kept or returned — the verdict is the whole output, because a report
+// that printed the two values to justify itself would leak the secret it is
+// warning about.
+func shadowMatch(marker, effective string, isString bool, decrypt func(string) (string, bool)) string {
+	if !isString {
+		// The winning value is not a string at all (a number, a list, a mapping
+		// that replaced the marker's parent), so it cannot be the leftover copy of
+		// a plaintext that was migrated into the marker.
+		return ShadowDifferent
+	}
+	if decrypt == nil {
+		return ShadowUnknown
+	}
+	plain, ok := decrypt(marker)
+	if !ok {
+		return ShadowUnknown
+	}
+	if plain == effective {
+		return ShadowIdentical
+	}
+	return ShadowDifferent
+}
+
 // RecipientFromLayers reads secrets.recipient out of a raw layer set. Exported
 // for callers that work before (or without) a merged config — the secrets
 // validators diagnose a malformed recipient precisely when LoadConfig refused

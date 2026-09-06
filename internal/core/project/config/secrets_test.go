@@ -897,3 +897,125 @@ func TestUnresolvedAt_coversSequenceElements(t *testing.T) {
 		t.Errorf("UnresolvedAt(vars.tokensx) = true, want false")
 	}
 }
+
+// shadowFixture loads the raw layers of a three-layer project and returns the
+// shadow report, with a decryptor backed by the fixture's own identity.
+func shadowFixture(t *testing.T, ws, defaults, local string, decrypt func(string) (string, bool)) []ShadowedMarker {
+	t.Helper()
+	raw, err := LoadRawLayers(writeLayerFixture(t, ws, defaults, local))
+	if err != nil {
+		t.Fatalf("LoadRawLayers: %v", err)
+	}
+	return CollectShadowedMarkers(raw, decrypt)
+}
+
+// decryptWith opens a marker with the test identity, in the shape
+// CollectShadowedMarkers takes.
+func decryptWith(id secrets.Identity) func(string) (string, bool) {
+	return func(marker string) (string, bool) {
+		plain, err := secrets.Decrypt(marker, id)
+		return plain, err == nil
+	}
+}
+
+// The reported case: a marker in a lower layer with a plaintext copy in
+// local.yml. `dwe secrets status` still decrypts it — but the project reads the
+// plaintext, so the key pair is not what shares the value.
+func TestCollectShadowedMarkers_plaintextOverride(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+	token := mustEncrypt(t, "s3cr3t", r)
+	other := mustEncrypt(t, "s3cr3t", r)
+
+	got := shadowFixture(t,
+		"secrets:\n  recipient: "+r+"\n",
+		"vars:\n  token: "+token+"\n  other: "+other+"\n  kept: "+mustEncrypt(t, "kept", r)+"\n",
+		"vars:\n  token: s3cr3t\n  other: different\n",
+		decryptWith(id))
+
+	if len(got) != 2 {
+		t.Fatalf("shadowed = %+v, want 2 rows (vars.kept is not shadowed)", got)
+	}
+	byPath := map[string]ShadowedMarker{}
+	for _, sh := range got {
+		byPath[sh.Path] = sh
+	}
+	if sh := byPath["vars.token"]; sh.Match != ShadowIdentical ||
+		filepath.Base(sh.ShadowLayer) != "local.yml" {
+		t.Errorf("vars.token = %+v, want identical in local.yml", sh)
+	}
+	if sh := byPath["vars.other"]; sh.Match != ShadowDifferent {
+		t.Errorf("vars.other match = %q, want %q", sh.Match, ShadowDifferent)
+	}
+}
+
+// A marker overridden by ANOTHER marker is not a finding: the value that wins is
+// still encrypted at rest, which is the only question this scan asks.
+func TestCollectShadowedMarkers_markerOverMarkerIsNotShadowed(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+
+	got := shadowFixture(t,
+		"secrets:\n  recipient: "+r+"\n",
+		"vars:\n  token: "+mustEncrypt(t, "shared", r)+"\n",
+		"vars:\n  token: "+mustEncrypt(t, "mine", r)+"\n",
+		decryptWith(id))
+
+	if len(got) != 0 {
+		t.Errorf("shadowed = %+v, want none", got)
+	}
+}
+
+// deepMerge only merges map[string]any into map[string]any and REPLACES
+// everything else, so a higher layer that puts a scalar or a list where the
+// marker's parent was kills the marker without ever mentioning its path. The
+// scan compares MERGED snapshots precisely so those still name a layer.
+func TestCollectShadowedMarkers_subtreeAndSequenceReplacement(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+
+	got := shadowFixture(t,
+		"secrets:\n  recipient: "+r+"\n",
+		"vars:\n  db:\n    pass: "+mustEncrypt(t, "p", r)+"\n  tokens:\n    - "+mustEncrypt(t, "t", r)+"\n",
+		"vars:\n  db: from-dsn\n  tokens:\n    - plain\n",
+		decryptWith(id))
+
+	byPath := map[string]ShadowedMarker{}
+	for _, sh := range got {
+		byPath[sh.Path] = sh
+	}
+	if len(got) != 2 {
+		t.Fatalf("shadowed = %+v, want vars.db.pass and vars.tokens.0", got)
+	}
+	for _, path := range []string{"vars.db.pass", "vars.tokens.0"} {
+		sh, ok := byPath[path]
+		if !ok {
+			t.Fatalf("%s missing from %+v", path, got)
+		}
+		if filepath.Base(sh.ShadowLayer) != "local.yml" {
+			t.Errorf("%s shadow layer = %q, want local.yml", path, sh.ShadowLayer)
+		}
+		if sh.Match != ShadowDifferent {
+			t.Errorf("%s match = %q, want %q — a non-string cannot be a leftover copy",
+				path, sh.Match, ShadowDifferent)
+		}
+	}
+}
+
+// A shadow the machine cannot compare is REPORTED, not dropped: no key here plus
+// a plaintext quietly covering for it is the combination that keeps a lost
+// identity from showing up in everyday use.
+func TestCollectShadowedMarkers_undecryptableIsUnknown(t *testing.T) {
+	id := newTestIdentity(t)
+	r := id.Recipient()
+
+	got := shadowFixture(t,
+		"secrets:\n  recipient: "+r+"\n",
+		"vars:\n  token: "+mustEncrypt(t, "s3cr3t", r)+"\n",
+		"vars:\n  token: s3cr3t\n",
+		nil)
+
+	if len(got) != 1 || got[0].Match != ShadowUnknown {
+		t.Errorf("shadowed = %+v, want one row with match %q", got, ShadowUnknown)
+	}
+}
