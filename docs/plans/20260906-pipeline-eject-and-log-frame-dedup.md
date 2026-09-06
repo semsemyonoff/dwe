@@ -456,49 +456,51 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `internal/shared/liveui/output_test.go` (comment wording only)
 - Create: `internal/shared/liveui/logframe_test.go`
 
-- [ ] add a stateful frame-collapsing writer next to `LogSanitizer` in
+- [x] add a stateful frame-collapsing writer next to `LogSanitizer` in
       `internal/shared/liveui/output.go`, constructed over a `LineTee`: a
       `final=true` frame is written as one line; a `final=false` frame replaces
       the pending frame; `Flush()` writes a surviving pending frame
-- [ ] make `Flush()` call `tee.Flush()` **first**, then emit the pending frame,
+      (`FrameLogWriter` / `NewFrameLogWriter`)
+- [x] make `Flush()` call `tee.Flush()` **first**, then emit the pending frame,
       then clear it — `LineTee.Flush` delivers the tail as `final=false`
       (`output.go:225`), i.e. into the pending slot, and the explicit clear is
       what makes the composite idempotent
-- [ ] give the pending state its **own mutex, held across the whole `Write` and
+- [x] give the pending state its **own mutex, held across the whole `Write` and
       `Flush` body**, with the `LineTee` callback running lock-held and never
       re-acquiring it — `LineTee` calls the callback synchronously inside `Write`
       (`output.go:197-199`), so a non-reentrant `sync.Mutex` taken in both places
       deadlocks on the first frame, while locking only inside the callback lets
       two goroutines evict each other's pending slot. Put the reason in a comment
       on the callback
-- [ ] return `len(p)` from `Write` regardless of what the underlying writer
+- [x] return `len(p)` from `Write` regardless of what the underlying writer
       consumed, as `LogSanitizer.Write` does at `output.go:84` — `stepWriter` is
       an `io.MultiWriter` (`executor.go:872`) and anything else is `ErrShortWrite`
-- [ ] document on the type why lone `\r` is collapsed rather than expanded,
+- [x] document on the type why lone `\r` is collapsed rather than expanded,
       naming the `abc\rX\n` limitation and that the compose-repeat case is out of
       scope — this comment is the counterpart to `LogSanitizer`'s `:58-71` block,
       which documents the opposite choice for its own callers
-- [ ] write table-driven tests in the new `logframe_test.go` covering every row
+- [x] write table-driven tests in the new `logframe_test.go` covering every row
       of the frame-semantics table above (progress run ending in `\n`, run ending
       in a bare `\r` plus `Flush`, plain lines, CRLF, shorter-overwrite, empty
       input)
-- [ ] write tests for split writes: a frame delivered across two `Write` calls,
+- [x] write tests for split writes: a frame delivered across two `Write` calls,
       and an ANSI escape sequence split across the same boundary (the double-strip
       behaviour inherited from `LineTee`)
-- [ ] write tests for `Flush` idempotency (two consecutive `Flush` calls emit the
+- [x] write tests for `Flush` idempotency (two consecutive `Flush` calls emit the
       pending frame exactly once), for `Flush` on an empty writer emitting
       nothing, and for `Write` returning `len(p)` on a short underlying writer
-- [ ] write a concurrent-write test in the shape of the existing
+- [x] write a concurrent-write test in the shape of the existing
       `TestLogSanitizer_ConcurrentWrites_NoPanic` (`output_test.go:301`), aimed at
       `make test-race`
-- [ ] re-word the two stale captions in `output_test.go` — `:195-218`
+- [x] re-word the two stale captions in `output_test.go` — `:195-218`
       (`TestSubStepLog_RoutedViaLineTee_SplitOSCClean` describes writing "both
       final and non-final" frames to the sub-step log) and `:231-242`
       (`TestLogSanitizer_ProgressFrames_BecomeSeparateLines` calls itself "the
       regression test for the live-progress bug") — so each says which path it
       still pins. Both tests keep passing; only the prose is wrong. Comment-only,
       so this stays revert-safe
-- [ ] run tests - must pass before task 2
+- [x] run tests - must pass before task 2 (`make lint`, `make test`,
+      `go test -race ./internal/shared/liveui/` all green)
 
 ### Task 2: Route both executor log paths through the frame writer
 

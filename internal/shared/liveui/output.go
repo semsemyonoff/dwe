@@ -84,6 +84,123 @@ func (s *LogSanitizer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// FrameLogWriter wraps an io.Writer for log-file destinations that want one
+// line per *committed* line rather than one line per redraw frame. It is the
+// stateful counterpart of LogSanitizer, and the two document opposite choices
+// for the same input:
+//
+//   - a frame terminated by `\n` (LineTee `final=true`) is written as one line;
+//   - a frame terminated by a lone `\r` (`final=false`) is held as pending and
+//     is evicted by the next frame, because that is what the terminal does:
+//     in `50%\r100%\n` the screen only ever shows `100%`, so the log records
+//     `100%` and not both frames;
+//   - Flush() writes a surviving pending frame, which covers output that ended
+//     on a bare `\r` with no committing newline (a killed clone, a tool that
+//     never terminates its last progress line).
+//
+// Known limitation, deliberate: this is frame collapsing, not terminal
+// emulation. `abc\rX\n` renders as `Xbc` on a real terminal — the shorter
+// overwrite leaves the tail of the previous frame visible — while the log
+// records `X`. Faithful reproduction needs an emulator with a scrollback
+// window. For the same reason, repeated whole-frame redraws driven by
+// cursor-up (CUU) sequences rather than `\r` — docker compose's `[+] up 2/3`
+// blocks — are out of scope and still land once per redraw.
+//
+// Unlike LogSanitizer this writer carries state and therefore a lifecycle:
+// callers must call Flush() before treating the log as complete.
+type FrameLogWriter struct {
+	mu         sync.Mutex
+	w          io.Writer
+	tee        *LineTee
+	pending    string
+	hasPending bool
+	err        error
+}
+
+// NewFrameLogWriter returns a FrameLogWriter writing committed lines to w.
+// A nil w discards, so callers with an optional log destination need no guard.
+func NewFrameLogWriter(w io.Writer) *FrameLogWriter {
+	if w == nil {
+		w = io.Discard
+	}
+	f := &FrameLogWriter{w: w}
+	f.tee = NewLineTee(f.onFrame)
+	return f
+}
+
+// onFrame runs synchronously inside LineTee.Write / LineTee.Flush, which
+// release only their own mutex around the callback (output.go:196-199,
+// :224-226). It is therefore always entered with f.mu ALREADY HELD by Write or
+// Flush and must never take it itself: a non-reentrant sync.Mutex taken here
+// too would self-deadlock on the very first frame, while moving the lock in
+// here instead of around the whole Write body would let two goroutines evict
+// each other's pending slot out of order — the exact race the lock exists for.
+func (f *FrameLogWriter) onFrame(frame string, final bool) {
+	if !final {
+		// An empty non-final frame is a bare `\r` with nothing before it: the
+		// cursor returns to column 0 but the screen still shows the previous
+		// frame, so it must not evict the pending one.
+		if frame != "" {
+			f.pending, f.hasPending = frame, true
+		}
+		return
+	}
+	line := frame
+	if line == "" && f.hasPending {
+		// CRLF split across two Writes: the `\r` already arrived as a non-final
+		// frame and the `\n` now closes it. The committed line is the pending
+		// frame, not a blank line.
+		line = f.pending
+	}
+	f.pending, f.hasPending = "", false
+	f.writeLine(line)
+}
+
+// writeLine appends one line to the destination. Called with f.mu held.
+func (f *FrameLogWriter) writeLine(line string) {
+	buf := make([]byte, 0, len(line)+1)
+	buf = append(buf, line...)
+	buf = append(buf, '\n')
+	if _, err := f.w.Write(buf); err != nil && f.err == nil {
+		f.err = err
+	}
+}
+
+// Write feeds p through the frame parser. It always reports len(p) consumed,
+// as LogSanitizer does: stepWriter is an io.MultiWriter, which turns any
+// shorter count into io.ErrShortWrite and fails the step with its child output
+// going nowhere.
+func (f *FrameLogWriter) Write(p []byte) (int, error) {
+	f.mu.Lock()
+	f.err = nil
+	_, _ = f.tee.Write(p) // never errors; the callback records write failures
+	err := f.err
+	f.mu.Unlock()
+	return len(p), err
+}
+
+// Flush emits a surviving pending frame and is idempotent.
+//
+// Ordering is load-bearing: LineTee.Flush delivers its un-terminated tail as
+// `(tail, false)` (output.go:225), i.e. *into* the pending slot, so the tee is
+// flushed FIRST and the pending frame emitted after. Idempotency does not come
+// for free the way it does for LineTee (whose buffer simply empties) — it is
+// the explicit clear below.
+func (f *FrameLogWriter) Flush() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.err = nil
+	f.tee.Flush()
+	if !f.hasPending {
+		return
+	}
+	pending := f.pending
+	f.pending, f.hasPending = "", false
+	if pending != "" {
+		f.writeLine(pending)
+	}
+}
+
 // JoinWriters returns a single io.Writer that fan-outs to every non-nil writer
 // in ws. If every writer is nil the result is io.Discard (defensive — parallel
 // callers always supply at least one non-nil writer). When exactly one writer
