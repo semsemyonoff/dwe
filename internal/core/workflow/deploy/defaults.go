@@ -1,6 +1,29 @@
 package deploy
 
-import "github.com/semsemyonoff/dwe/internal/core/project/config"
+import (
+	_ "embed"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+)
+
+//go:embed default_deploy.yml
+var defaultDeployYAML string
+
+// DefaultDeployYAML returns the built-in deploy pipeline as an authorable,
+// commented deploy.yml document — the payload `dwe deploy eject` emits.
+//
+// It is an asset rather than a marshalled DefaultDeployConfig() because a
+// marshaller would have to stay in sync with DeployStep's custom UnmarshalYAML
+// and deployStepKnownFields (which nothing cross-checks) and would drop the
+// comments, which are the point of handing a human a file to edit. What keeps
+// the asset from drifting from the constructor is the round-trip test in
+// asset_test.go: it loads these bytes through the real strict loader and
+// requires the result to equal DefaultDeployConfig(). Edit one, run that test.
+//
+// The returned slice is a fresh copy; callers may mutate it.
+func DefaultDeployYAML() []byte {
+	return []byte(defaultDeployYAML)
+}
 
 // DefaultDeployConfig returns a freshly-allocated default deploy pipeline. Callers may mutate the result safely.
 // Log defaults to true to match LoadProjectDeployConfig's behavior — a project with no deploy.yml gets the
@@ -43,6 +66,12 @@ func DefaultDeployConfig() *config.ProjectDeployConfig {
 						Name: "success",
 						Type: "builtin",
 						Cmd:  "message",
+						// The With shapes here must be the shapes yaml.v3 decodes
+						// into — map[string]any for a mapping, []any for a
+						// sequence. A []string or a map[string]string reads the
+						// same to a human but fails the asset round-trip test in
+						// asset_test.go for a reason that has nothing to do with
+						// the asset.
 						With: map[string]any{
 							"level": "success",
 							"text":  "Deploy completed successfully",

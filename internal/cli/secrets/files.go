@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
-	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
@@ -25,6 +23,12 @@ const ageExt = ".age"
 // stdoutTarget is the --out value that streams raw bytes to stdout instead of
 // writing a file.
 const stdoutTarget = "-"
+
+// codePrefix namespaces the error codes the shared output-file helpers build:
+// secrets_path_invalid, secrets_output_exists, secrets_output_invalid and
+// secrets_output_write_failed, exactly as they read before the helpers moved
+// into cmdctx.
+const codePrefix = "secrets"
 
 // The two ends of a file command, named in path-discipline errors.
 const (
@@ -272,49 +276,11 @@ func checkStreamMode(flags *cmdctx.RootFlags, out string) error {
 		WithHint("drop --output json, or write the result to a file")
 }
 
-// resolveFilePath makes a user-supplied path absolute and applies the same
-// discipline the config-pack renderer applies to its own sources: a path inside
-// the project must stay inside it and must not travel through a symlinked
-// component, and neither end may be a symlink or a device.
-//
-// A path outside the project (an absolute /tmp target, say) is allowed — this is
-// a file utility, not a pack loader — but still may not be a symlink: writing
-// through one is how a "decrypt to a scratch file" turns into an overwrite of
-// something else.
+// resolveFilePath applies the shared path discipline under the secrets code
+// prefix, so every message and code stays what it was before the helper moved
+// into cmdctx.
 func resolveFilePath(projectRoot, path, role string) (string, error) {
-	if strings.TrimSpace(path) == "" {
-		return "", cmdctx.Err("secrets_path_invalid", "empty "+role+" path")
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", cmdctx.ErrWrap("secrets_path_invalid", fmt.Errorf("resolve %s path %s: %w", role, path, err))
-	}
-	if isUnder(projectRoot, abs) {
-		if _, err := pathsafe.ContainedRel(projectRoot, abs); err != nil {
-			return "", cmdctx.ErrWrap("secrets_path_invalid", fmt.Errorf("%s path %s: %w", role, path, err))
-		}
-		if err := pathsafe.CheckNoSymlinks(projectRoot, abs, role+" path"); err != nil {
-			return "", cmdctx.ErrWrap("secrets_path_invalid", err)
-		}
-	}
-
-	fi, err := os.Lstat(abs)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		// Fine for an output; readInputFile reports a missing input by name.
-		return abs, nil
-	case err != nil:
-		return "", cmdctx.ErrWrap("secrets_path_invalid", fmt.Errorf("stat %s: %w", abs, err))
-	case fi.Mode()&os.ModeSymlink != 0:
-		return "", cmdctx.Err("secrets_path_invalid",
-			fmt.Sprintf("%s is a symlink; symlinked %s paths are not supported", abs, role)).
-			WithDetail("path", abs)
-	case !fi.Mode().IsRegular():
-		return "", cmdctx.Err("secrets_path_invalid",
-			fmt.Sprintf("%s is not a regular file (mode %s)", abs, fi.Mode())).
-			WithDetail("path", abs)
-	}
-	return abs, nil
+	return cmdctx.ResolveFilePath(codePrefix, projectRoot, path, role)
 }
 
 // readInputFile reads a required input, naming a missing file rather than
@@ -331,42 +297,18 @@ func readInputFile(path string) ([]byte, error) {
 	return data, nil
 }
 
-// writeOutputFile writes the result, refusing to clobber an existing file
-// without --force. The mode is applied with an explicit Chmod because WriteFile
-// leaves an existing file's mode alone — which would leave a decrypted secret at
-// whatever the previous file happened to be.
+// writeOutputFile writes the result through the shared cmdctx helper under the
+// secrets code prefix. Only the plaintext mode is tightened on an existing
+// file: an overwritten ciphertext file keeps whatever the repository gave it,
+// while a decrypted plaintext file is always forced down to 0600.
 func writeOutputFile(path string, data []byte, mode os.FileMode, force bool) error {
-	existed := false
-	if fi, err := os.Lstat(path); err == nil {
-		if !force {
-			return cmdctx.Err("secrets_output_exists", fmt.Sprintf("%s already exists", path)).
-				WithDetail("path", path).
-				WithHint("pass --force to overwrite it, or choose another --out PATH")
-		}
-		if !fi.Mode().IsRegular() {
-			return cmdctx.Err("secrets_output_invalid",
-				fmt.Sprintf("%s is not a regular file (mode %s)", path, fi.Mode())).
-				WithDetail("path", path)
-		}
-		existed = true
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return cmdctx.ErrWrap("secrets_output_write_failed", err)
-	}
-
-	// Only tighten: an overwritten ciphertext file keeps whatever the repository
-	// gave it, while a decrypted plaintext file is always forced down to 0600.
-	// The chmod runs BEFORE the write — os.WriteFile keeps a pre-existing mode,
-	// so tightening afterwards would leave the plaintext world-readable for the
-	// length of the write (and permanently if the process dies in between).
-	if existed && mode == plaintextMode {
-		if err := os.Chmod(path, mode); err != nil {
-			return cmdctx.ErrWrap("secrets_output_write_failed", err)
-		}
-	}
-	if err := os.WriteFile(path, data, mode); err != nil {
-		return cmdctx.ErrWrap("secrets_output_write_failed", err)
-	}
-	return nil
+	return cmdctx.WriteOutputFile(codePrefix, cmdctx.OutputFile{
+		Path:        path,
+		Data:        data,
+		Mode:        mode,
+		Force:       force,
+		TightenMode: mode == plaintextMode,
+	})
 }
 
 // fileDecryptError names the file that could not be opened, routing a missing
@@ -380,22 +322,10 @@ func fileDecryptError(recipient, file string, err error) error {
 		WithHint("run 'dwe secrets status' to see the state of every encrypted file")
 }
 
-// isUnder reports whether abs lives inside root.
-func isUnder(root, abs string) bool {
-	if root == "" {
-		return false
-	}
-	rel, err := filepath.Rel(root, abs)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
 // displayPath renders a path relative to the project root when it lives inside
 // it, and absolute otherwise — a "../../tmp/x" would be worse than the real path.
 func displayPath(root, abs string) string {
-	if isUnder(root, abs) {
+	if cmdctx.PathIsUnder(root, abs) {
 		return relToRoot(root, abs)
 	}
 	return abs

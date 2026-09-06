@@ -54,10 +54,11 @@ var stdoutIsTTY = func() bool {
 //   - SEQUENTIAL (parallel=false): the LiveLine footer has been paused
 //     (SuspendForExec) so the child can write to the host terminal directly.
 //     stepWriter is expected to include os.Stdout (typically as
-//     io.MultiWriter(os.Stdout, logSanitizer{logFile})) so the user sees
-//     the child output with colors / cursor positioning intact while an
-//     ANSI-stripped copy lands in the on-disk log. When stdoutIsTTY a PTY
-//     is allocated and ptmx → stepWriter so the child sees a real TTY.
+//     io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile})) so the user
+//     sees the child output with colors / cursor positioning intact while an
+//     ANSI-stripped, frame-collapsed copy lands in the on-disk log. When
+//     stdoutIsTTY a PTY is allocated and ptmx → stepWriter so the child sees a
+//     real TTY.
 //     If stepWriter is nil (ad-hoc callers outside RunWithOptions, e.g.
 //     `dwe deploy run`), childIO falls back to os.Stdout/os.Stderr.
 //
@@ -110,10 +111,11 @@ type ActionContext struct {
 	// StepWriter is the per-step destination for child output, populated by
 	// executeStepBody. Its shape depends on Parallel:
 	//
-	//   - sequential: typically io.MultiWriter(os.Stdout, logSanitizer{logFile})
-	//     so the user sees colored / TTY output on the host terminal while a
-	//     sanitized copy lands in the pipeline log. The LiveLine footer is
-	//     paused for the duration of the step.
+	//   - sequential: typically io.MultiWriter(os.Stdout,
+	//     liveui.FrameLogWriter{logFile}) so the user sees colored / TTY output
+	//     on the host terminal while a sanitized, frame-collapsed copy lands in
+	//     the pipeline log. The LiveLine footer is paused for the duration of
+	//     the step.
 	//   - parallel: a lineTee + per-sub-step-log joinWriters target wrapped
 	//     in ansiOnlyStripper. Child output flows ONLY through this writer —
 	//     never to os.Stdout — so the LiveLine block remains intact.
@@ -164,7 +166,8 @@ type ActionContext struct {
 //
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
-// as a pipe rather than a TTY). The log tee via logSanitizer is unaffected.
+// as a pipe rather than a TTY). The log tee via liveui.FrameLogWriter is
+// unaffected.
 // When skipConfirm is true, DWE_NONINTERACTIVE=1 is added so that nested
 // dwe subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
@@ -274,9 +277,11 @@ func execDweAction(ctx context.Context, a config.Action, actx ActionContext) err
 
 // execBuiltinAction executes a builtin action. Builtin output is routed
 // through actx.StepWriter, which in sequential mode is
-// io.MultiWriter(os.Stdout, logSanitizer{logFile}) — so the user sees the
-// colored builtin messages on the host terminal while a sanitized copy
-// lands in the on-disk log. In parallel mode StepWriter is the
+// io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile}) — so the user sees
+// the colored builtin messages on the host terminal while a sanitized,
+// frame-collapsed copy lands in the on-disk log. That copy is buffered until
+// the step's flushTee runs, so a builtin's last un-terminated line reaches the
+// file at step end rather than per write. In parallel mode StepWriter is the
 // lineTee → live-block routing. When nil (ad-hoc external callers),
 // output falls back to os.Stdout directly.
 func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext) error {
@@ -817,15 +822,20 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	//
 	//   - SEQUENTIAL: pause the LiveLine footer so the child can write to
 	//     the host terminal directly. stepWriter becomes
-	//     io.MultiWriter(os.Stdout, logSanitizer{logFile}) — colored output
-	//     reaches the user verbatim while an ANSI-stripped copy lands in
-	//     the on-disk log. No lineTee is needed because nothing is fed
-	//     back to the reporter (the footer just shows the step name).
+	//     io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile}) — colored
+	//     output reaches the user verbatim while an ANSI-stripped copy lands in
+	//     the on-disk log. Nothing is fed back to the reporter (the footer just
+	//     shows the step name), but the log writer is nonetheless frame-aware
+	//     and therefore stateful: it collapses a `\r` redraw run to the frame
+	//     the terminal actually left on screen instead of recording every
+	//     redraw as its own line. State means a lifecycle, which is why
+	//     flushTee is set on this path too.
 	//
 	//   - PARALLEL: route everything through a lineTee → Reporter.StepOutput
 	//     so the LiveLine block row can display the latest \n-terminated
 	//     frame, plus a side-write to the per-sub-step log file inside the
-	//     lineTee callback. The host terminal is owned by the LiveLine
+	//     lineTee callback — gated on final, so the per-sub-step file records
+	//     committed lines only. The host terminal is owned by the LiveLine
 	//     block; child output MUST NOT go to os.Stdout.
 	var (
 		stepWriter io.Writer
@@ -838,11 +848,26 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		tee := liveui.NewLineTee(func(frame string, final bool) {
 			opts.Reporter.StepOutput(stepAddr, frame, final)
 			// Write the assembled, ANSI-clean frame to the per-sub-step log
-			// file. Routing through the lineTee ensures OSC/CSI sequences
-			// split across PTY read boundaries are reassembled and double-
-			// stripped before reaching disk (a stateless per-Write
-			// logSanitizer cannot handle split sequences).
-			if subLog != nil {
+			// file, but only once it is committed by a `\n`. Routing through
+			// the lineTee ensures OSC/CSI sequences split across PTY read
+			// boundaries are reassembled and double-stripped before reaching
+			// disk (a stateless per-Write logSanitizer cannot handle split
+			// sequences); the final gate keeps a `\r` redraw run from landing
+			// one line per frame. Precedent:
+			// usercommands/runtime/runners/workflow/parallel.go:216-234 applies
+			// the same guard to the workflow runner's sub-step logs.
+			//
+			// What the guard costs: lineTee.Flush delivers an un-terminated
+			// tail as final=false (liveui/output.go:225), so ANY tail the child
+			// left without a closing newline — `\r`-terminated or not — never
+			// reaches this file, in both implementations alike.
+			// Here it is not lost, because the same frame also reaches
+			// Reporter.StepOutput → entry.inProgress → commitTrailingTail →
+			// the global pipeline log (plain.go:659-668, :700-718).
+			// parallel.go has no such second sink. Do NOT give this callback
+			// pending-frame state to "fix" that: it would be a new composite
+			// flush hook on a path that already has one.
+			if subLog != nil && final {
 				_, _ = fmt.Fprintln(subLog, frame)
 			}
 		})
@@ -869,7 +894,23 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		opts.Reporter.SuspendForExec()
 		closeStep = func() { opts.Reporter.ResumeAfterExec() }
 		if opts.LogWriter != nil {
-			stepWriter = io.MultiWriter(os.Stdout, &liveui.LogSanitizer{W: opts.LogWriter})
+			// FrameLogWriter carries state, so it joins the existing flushTee
+			// discipline (the defer below plus the eager calls before every
+			// end-of-step reporter event) rather than introducing a second
+			// flush contract. That ordering is also what keeps this buffered
+			// writer in sequence with PlainReporter's own unbuffered
+			// LogSanitizer on the same file handle.
+			frameLog := liveui.NewFrameLogWriter(opts.LogWriter)
+			stepWriter = io.MultiWriter(os.Stdout, frameLog)
+			// A flush-time write failure is the one log error the step cannot
+			// see: everything else surfaces through the MultiWriter above. It
+			// is reported, not escalated — a broken log sink must not fail a
+			// step whose work succeeded.
+			flushTee = func() {
+				if err := frameLog.Flush(); err != nil {
+					trace.Debugf(ctx, "log write failed while flushing step %q: %v", rs.Step.Name, err)
+				}
+			}
 		} else {
 			stepWriter = os.Stdout
 		}
@@ -1113,8 +1154,11 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 
 	// Per-sub-step log file is passed as a raw io.Writer to executeStepBody.
 	// The lineTee callback in executeStepBody writes each assembled, ANSI-clean
-	// frame (both final and non-final) to this writer via fmt.Fprintln, so the
-	// file receives clean line-separated output without needing a logSanitizer
+	// frame to this writer via fmt.Fprintln — but only the COMMITTED (final)
+	// ones, so a `\r` redraw run does not land one line per frame and any tail
+	// the child left un-terminated reaches the global log instead (see the gate
+	// and its rationale in executeStepBody). The file therefore receives clean
+	// line-separated output without needing a logSanitizer
 	// wrapper. This approach also handles OSC/CSI sequences split across PTY
 	// read boundaries — the double-strip inside lineTee reassembles them before
 	// the callback fires. The global pipeline log is fed via PlainReporter's

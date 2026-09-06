@@ -192,15 +192,18 @@ func TestAnsiOnlyRe_TwoByteSequences(t *testing.T) {
 	}
 }
 
-// TestSubStepLog_RoutedViaLineTee_SplitOSCClean verifies that routing sub-step
-// log writes through the lineTee callback (not a stateless LogSanitizer branch)
-// strips OSC sequences that were split across PTY read boundaries.  The lineTee
-// assembles the full sequence in its buffer before emitting the frame, so the
-// double-strip inside lineTee catches sequences that the per-Write pass missed.
+// TestSubStepLog_RoutedViaLineTee_SplitOSCClean pins the LineTee double-strip
+// itself: routing log writes through the callback (not a stateless
+// LogSanitizer branch) strips OSC sequences that were split across PTY read
+// boundaries, because the tee assembles the full sequence in its buffer before
+// emitting the frame. It does not pin any caller's frame policy — the pipeline
+// sub-step log writes only committed frames (see FrameLogWriter and
+// executor.go's parallel branch); this test writes both so the assertion is
+// about escape stripping alone.
 func TestSubStepLog_RoutedViaLineTee_SplitOSCClean(t *testing.T) {
 	var logBuf bytes.Buffer
-	// Simulate the callback in executeStepBody: write each assembled frame
-	// (both final and non-final) as a line to the sub-step log.
+	// Write every assembled frame regardless of `final` — the sequence under
+	// test spans frames, and the callback's own filtering is not the subject.
 	tee := NewLineTee(func(frame string, final bool) {
 		_, _ = fmt.Fprintln(&logBuf, frame)
 	})
@@ -228,9 +231,12 @@ func TestAnsiOnlyRe_PreservesCR(t *testing.T) {
 	}
 }
 
-// TestLogSanitizer_ProgressFrames_BecomeSeparateLines is the regression test
-// for the live-progress bug: progress frames that overwrite each other on a
-// real terminal must land on separate lines in the log file.
+// TestLogSanitizer_ProgressFrames_BecomeSeparateLines pins LogSanitizer's own
+// choice, which survives for the reporter status-line path (plain.go): frames
+// that overwrite each other on a real terminal land on separate lines. The
+// pipeline log itself no longer goes through this writer — it collapses a
+// redraw run to its last frame via FrameLogWriter, whose opposite choice is
+// pinned in logframe_test.go.
 func TestLogSanitizer_ProgressFrames_BecomeSeparateLines(t *testing.T) {
 	var buf bytes.Buffer
 	s := &LogSanitizer{W: &buf}

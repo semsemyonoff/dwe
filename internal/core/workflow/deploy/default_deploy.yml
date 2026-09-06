@@ -1,0 +1,52 @@
+# workspace/deploy.yml — project deploy pipeline.
+#
+# This is the built-in default pipeline, emitted verbatim by `dwe deploy eject`.
+# It is the pipeline that runs when no workspace/deploy.yml is present, and when
+# the one that is present carries nothing the engine can run: empty, all
+# comments, or declaring no phases (a file holding only `log:`, or `phases: []`).
+#
+# Once this file is active it REPLACES the built-in pipeline whole — composition
+# is full replacement, not a merge — so keep every phase you still want and edit
+# from there. Deleting the file restores the built-in default.
+#
+# Schema and field reference: `dwe docs show config/deploy/index`
+
+# Write a copy of the run to .dwe/logs/deploy.log. This is the loader default
+# for deploy.yml, spelled out so the file behaves the same wherever it is read.
+log: true
+
+phases:
+  # Resolver marker, not a step list: dwe inlines the deploy pipeline of every
+  # enabled service here, in dependency order.
+  - name: services
+    description: "Deploy all enabled services (resolved by dependency order)"
+    deploy_services: true
+
+  # Bring the stack up once the services have been prepared.
+  - name: start
+    description: "Start containers and wait for health"
+    steps:
+      - name: up
+        type: dwe
+        cmd: "docker up --wait"
+        description: "Start all containers and wait until healthy"
+        # untracked keeps this step out of the [N/M] counter and hides its
+        # start/done lines; failures are still reported.
+        untracked: true
+
+  # Summary phase. Untracked at phase level, so nothing here is counted and
+  # nothing here runs unless every prior phase succeeded.
+  - name: post-deploy
+    description: "Post-deploy summary (runs only if all prior phases succeeded)"
+    untracked: true
+    steps:
+      - name: info
+        type: dwe
+        cmd: "info"
+        description: "Show environment summary"
+      - name: success
+        type: builtin
+        cmd: message
+        with:
+          level: success
+          text: "Deploy completed successfully"

@@ -54,6 +54,7 @@ application services. Use 'dwe deploy plan' to preview before running.`,
 	cmd.AddCommand(newDeployPlanCmd(flags))
 	cmd.AddCommand(newDeployRunCmd(flags))
 	cmd.AddCommand(newDeployStateCmd(flags))
+	cmd.AddCommand(newDeployEjectCmd(flags))
 	return cmd
 }
 

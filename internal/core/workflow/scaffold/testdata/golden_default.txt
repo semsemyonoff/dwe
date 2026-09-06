@@ -246,8 +246,10 @@ services:
 # doing so REPLACES the whole pipeline (composition is full-replacement, not a
 # merge), so copy every phase you still want, then edit.
 #
-# Authoritative default: deploy.DefaultDeployConfig()
-#   (internal/core/workflow/deploy/defaults.go)
+# Get the built-in default as a ready-to-edit file instead of retyping it:
+#   dwe deploy eject --out workspace/deploy.yml --force
+#   (--force is needed because this file already exists; eject refuses to
+#    overwrite ANY existing file without it, an authored one included)
 # Schema and field reference: `dwe docs show config/deploy/index`
 #
 # log: true
