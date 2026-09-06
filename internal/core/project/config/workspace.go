@@ -3308,7 +3308,11 @@ func LoadServiceDeployConfig(deployPath string) (*ServiceDeployConfig, error) {
 // LoadResetConfig loads the reset pipeline from a reset.yml file.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
-// Reset pipelines must not contain deploy_services phases or after: fields.
+// Reset pipelines carry no after: field — ProjectDeployConfig does not declare
+// one and the decode is strict. A deploy_services phase is NOT rejected here,
+// despite what this comment used to claim: loadProjectDeployConfigDecode passes
+// allowDeployServices=true for reset as well as for deploy, so the only real
+// difference between this loader and LoadProjectDeployConfig is defaultLog.
 //
 // File logging defaults to disabled (Log=false). Enable with `log: true` at the top.
 func LoadResetConfig(resetPath string) (*ProjectDeployConfig, error) {

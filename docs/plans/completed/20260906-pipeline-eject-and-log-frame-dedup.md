@@ -904,7 +904,7 @@ dwe reset  eject [--out PATH] [--force]
 
 ### Task 12: [Final] Update documentation
 
-- [ ] do **not** touch `AGENTS.md`. It is 40914 B against the 40960 B
+- [x] do **not** touch `AGENTS.md` — left untouched, as decided. It is 40914 B against the 40960 B
       `agentsMdBudget` pinned by `TestAgentsMdBudget`
       (`internal/cli/docs/agentsmd_test.go:28`, `:63-67`) — 46 bytes of headroom,
       where an existing Critical Patterns bullet runs 600-1500 B. The repo's own
@@ -912,19 +912,25 @@ dwe reset  eject [--out PATH] [--force]
       here") resolves this in favour of `packages.md` only; adding a pointer would
       require trimming an unrelated bullet in the same commit, which is not this
       branch's business
-- [ ] add the per-package notes to `docs/internals/packages.md`: the frame writer
+- [x] add the per-package notes to `docs/internals/packages.md`: the frame writer
       under `internal/shared/liveui/` (including its three mechanics — flush
       ordering, own lock, `len(p)` return), the assets and their round-trip pin
       under Core — Workflow, and the promoted output-file helper under the CLI
       section, noting that `secrets` now delegates to it
-- [ ] fix the stale doc comment on `LoadResetConfig`
+- [x] fix the stale doc comment on `LoadResetConfig`
       (`internal/core/project/config/workspace.go:3299`), which claims reset
       pipelines must not contain `deploy_services` phases while the decoder passes
-      `allowDeployServices=true` for them (`:3197`) — a one-line comment fix, or a
-      recorded follow-up if closing the gap for real turns out to be behavioural
-- [ ] verify `README.md` needs no change (no new top-level command)
-- [ ] run `make build` and `make test` once more after the docs edits
-- [ ] move this plan to `docs/plans/completed/`
+      `allowDeployServices=true` for them (`:3197`) — done as a comment fix: it now
+      records that only `after:` is actually rejected (the struct declares no such
+      field and the decode is strict) and that `defaultLog` is the sole real
+      difference between the two loaders. Behaviour unchanged, no test asserts the
+      absent restriction
+- [x] verify `README.md` needs no change (no new top-level command) — verified: it
+      names `deploy`/`reset` only in prose and links to `docs/reference/config/`,
+      and carries no subcommand list
+- [x] run `make build` and `make test` once more after the docs edits — both green
+      (`make lint` 0 issues)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
