@@ -44,7 +44,7 @@ The validate command runs seven domains in addition to the existing YAML-shape v
 |--------|--------|---------------|
 | `env.*` | Hardcoded in the CLI | No — seven fixed probes |
 | `checks.*` | `workspace/validate.yml` entries | Yes — declarative |
-| `secrets.*` | The `secrets:` recipient, `ENC[age:…]` markers in the layers, `*.age` pack sources | No — two fixed validators |
+| `secrets.*` | The `secrets:` recipient, `ENC[age:…]` markers in the layers, `*.age` pack sources | No — three fixed validators |
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
 | `translations.*` | `workspace/i18n/` translation files | No — fixed validators (parse errors, orphan command/group ids, unknown `render.*` keys) |
 | `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
@@ -52,12 +52,13 @@ The validate command runs seven domains in addition to the existing YAML-shape v
 
 The `tests.*` domain is validate-only (like `snapshot.*`) — it never runs in preflight, and it stays silent when `workspace/tests/` is absent. See [`tests.md`](tests.md#dwe-validate-tests) for the full scenario-validation surface (`dwe validate tests`).
 
-The `secrets.*` domain has two validators, and they split along the content/readiness line that decides what runs in preflight (see [Stages](#stages)):
+The `secrets.*` domain has three validators, and they split along the content/readiness line that decides what runs in preflight (see [Stages](#stages)):
 
 | Validator | Kind | Fires when |
 |-----------|------|------------|
 | `secrets.recipient` | content — `dwe validate` only | Markers or `.age` sources exist but `secrets.recipient` is missing or is not a valid `age1…`; or a marker payload is **damaged** (bad base64 / not an age file) |
 | `secrets.unresolved` | readiness — **also runs in preflight** | Any encrypted value in the merged config could not be decrypted here, or a resolvable config pack's `.age` source fails to decrypt with the loaded identity |
+| `secrets.shadowed` | effectiveness — `dwe validate` only, **warning** | A marker is overridden by a plaintext value in a higher layer, so the encrypted value is never read |
 
 `secrets.recipient` raw-loads the layer files itself when the config failed to load, so a scoped `dwe validate secrets` still diagnoses a malformed recipient instead of going blind. A `corrupt` payload is detectable without any key, which is why it belongs to the content validator: a keyless developer is never sent hunting for a key that would not have helped.
 
@@ -65,7 +66,19 @@ The `secrets.*` domain has two validators, and they split along the content/read
 
 The `.age` source scan mirrors what `render config` actually iterates, so a disabled service or an unresolvable pack is invisible to the validator exactly as it is at render time. See [`secrets.md`](secrets.md) for the model and for `dwe secrets status`, which reports the same information without blocking anything.
 
-Both secrets validators also emit an **`✓` row when they find nothing wrong**, so a healthy project reports `validation result: 2 checks` instead of `validation skipped (no files found)` — which is what makes `dwe validate secrets` usable as the self-check after key onboarding. The recipient row needs only a valid `secrets.recipient` and carries no message; the unresolved row appears only when there is an inventory to read and no diagnostic was produced, and counts it (`N encrypted value(s) and M config-pack source(s) readable via <source>`, the source named by word — `env` / `env-file` / `keyfile` — never by path). A project with no `secrets:` block and nothing encrypted stays silent. Preflight and the deploy wizard's gate filter `SeverityOK` rows, so neither prints anything extra.
+`secrets.shadowed` answers the question the other two are *read* as answering but never ask. A marker overridden by a plaintext value in a higher layer decrypts fine and is reported readable, while the project reads the plaintext — so the key pair is not what shares that value, and nothing says so. It is a **warning**, never an error: temporarily overriding a shared secret with a local one is a legitimate move and breaking it would cost more than the visibility buys. It stays out of preflight for the same reason.
+
+Findings are grouped **by overriding file and verdict**, because those are exactly the two things that change the fix:
+
+| Verdict | Reading | Hint |
+|---------|---------|------|
+| `secrets.shadowed:identical` | The override holds the **same** value as the marker | Almost always a copy left behind when the value was encrypted — remove it, the marker already holds that content |
+| `secrets.shadowed:different` | The override holds a different value | A deliberate local override; remove it to go back to the shared encrypted value |
+| `secrets.shadowed:unknown` | The marker could not be decrypted here, so the two were **not** compared | Leads with the identity: with the plaintext covering for it, a lost key shows up nowhere else in everyday use |
+
+The comparison is a verdict only — neither side of it ever reaches the report. A marker overridden by **another marker** is not a finding: the value that wins is still encrypted at rest. The effective value is computed with the loader's own merge, so a higher layer that replaces the marker's whole parent subtree (a scalar, a list) is caught too.
+
+All three secrets validators also emit an **`✓` row when they find nothing wrong**, so a healthy project reports `validation result: 3 checks` instead of `validation skipped (no files found)` — which is what makes `dwe validate secrets` usable as the self-check after key onboarding. The recipient row needs only a valid `secrets.recipient` and carries no message; the unresolved row appears only when there is an inventory to read and no diagnostic was produced, and counts it (`N encrypted value(s) and M config-pack source(s) readable via <source>`, the source named by word — `env` / `env-file` / `keyfile` — never by path); the shadowed row appears only when the project carries markers, and counts them (`N encrypted value(s), none shadowed by a plaintext override`) — which is what lets a green run mean "the key pair is what shares these values" rather than only "the markers decrypt". A project with no `secrets:` block and nothing encrypted stays silent. Preflight and the deploy wizard's gate filter `SeverityOK` rows, so neither prints anything extra.
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `dwe validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
 
@@ -458,7 +471,7 @@ commands:
 ## CLI flags
 
 - `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `secrets.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`, `dwe validate secrets`). The summary line names the active scope — `(scope: all)`, `(scope: config)`, `(scope: config/services)` — and `--output json` carries the same value as `summary.scope`, so a narrowed run is distinguishable from a full one by more than its diagnostic count.
-- `dwe validate secrets` — the two [`secrets.*` validators](#validation-domains) only: the recipient's presence and shape, damaged marker payloads, and whether every encrypted value and `.age` pack source can actually be decrypted here. It works even when the config failed to load (a malformed `secrets.recipient` is exactly that case), because the recipient validator raw-loads the layer files itself. Use [`dwe secrets status`](secrets.md#dwe-secrets-status) for the same picture as a report that never blocks.
+- `dwe validate secrets` — the three [`secrets.*` validators](#validation-domains) only: the recipient's presence and shape, damaged marker payloads, whether every encrypted value and `.age` pack source can actually be decrypted here, and whether a plaintext value in a higher layer shadows a marker. It works even when the config failed to load (a malformed `secrets.recipient` is exactly that case), because the recipient validator raw-loads the layer files itself. Use [`dwe secrets status`](secrets.md#dwe-secrets-status) for the same picture as a report that never blocks.
 - `dwe validate bridge` — static checks on per-service `bridge:` blocks only: `on_unreachable` enum (`fail` / `warn`), `shim_path` absoluteness, and the bridged-service `dir` / `dir_internal` workspace mapping the shim translates over. Validate-only — the bridge domain does not participate in preflight.
 - `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
 - `dwe validate --strict` — treat warnings as errors (exit 1).

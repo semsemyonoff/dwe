@@ -459,9 +459,114 @@ func TestAll_domainAndIDs(t *testing.T) {
 	for _, v := range All() {
 		got[v.ID()] = v.Domain()
 	}
-	require.Equal(t, map[string]string{"recipient": "secrets", "unresolved": "secrets"}, got)
+	require.Equal(t, map[string]string{
+		"recipient":  "secrets",
+		"unresolved": "secrets",
+		"shadowed":   "secrets",
+	}, got)
 
+	// The cherry-pick stays a single validator: adding a content validator to
+	// the domain must never start blocking lifecycle commands.
 	only := UnresolvedValidator()
 	require.Equal(t, "secrets", only.Domain())
 	require.Equal(t, "unresolved", only.ID())
+}
+
+// writeLocalLayer writes workspace/local.yml, the shadowing layer in every test
+// below.
+func writeLocalLayer(t *testing.T, root, body string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(body), 0o644))
+}
+
+// A project with no encrypted values gains no row — and pays no identity
+// lookup, which is what keeps `dwe validate` in a secretless project unchanged.
+func TestShadowedValidator_silentWithoutMarkers(t *testing.T) {
+	root := t.TempDir()
+	path := writeProject(t, root, "project:\n  name: test\nvars:\n  token: plain\n")
+	require.Empty(t, (&shadowedValidator{}).Run(loadCtx(t, root, path)))
+}
+
+// The positive row is the point: a green `dwe validate secrets` has to mean
+// "the key pair is what shares these values", not only "the markers decrypt".
+func TestShadowedValidator_okRowWhenNothingIsShadowed(t *testing.T) {
+	id := mustKeygen(t)
+	useIdentity(t, id)
+	root := t.TempDir()
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+		"\nvars:\n  token: "+mustEncrypt(t, "s3cret", id.Recipient())+"\n")
+
+	diags := (&shadowedValidator{}).Run(loadCtx(t, root, path))
+	require.Len(t, diags, 1)
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "secrets.shadowed", diags[0].Target)
+	require.Contains(t, diags[0].Message, "none shadowed")
+}
+
+// The two verdicts get different wording and share one severity: a leftover copy
+// is a migration nobody finished, a different value is a deliberate override,
+// and neither is an error — breaking a legitimate local override would cost more
+// than the visibility buys.
+func TestShadowedValidator_identicalAndDifferentAreSeparateWarnings(t *testing.T) {
+	id := mustKeygen(t)
+	useIdentity(t, id)
+	root := t.TempDir()
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+		"\nvars:\n  token: "+mustEncrypt(t, "s3cret", id.Recipient())+
+		"\n  other: "+mustEncrypt(t, "shared", id.Recipient())+"\n")
+	writeLocalLayer(t, root, "vars:\n  token: s3cret\n  other: mine\n")
+
+	diags := (&shadowedValidator{}).Run(loadCtx(t, root, path))
+	require.Len(t, diags, 2)
+
+	byTarget := map[string]validate.Diagnostic{}
+	for _, d := range diags {
+		require.Equal(t, validate.SeverityWarning, d.Severity)
+		require.Equal(t, filepath.Join("workspace", "local.yml"), d.File)
+		byTarget[d.Target] = d
+	}
+
+	identical := byTarget["secrets.shadowed:identical"]
+	require.Contains(t, identical.Message, "vars.token")
+	require.Contains(t, identical.Message, "identical plaintext value")
+	require.Contains(t, identical.Hint, "already holds the same content")
+
+	different := byTarget["secrets.shadowed:different"]
+	require.Contains(t, different.Message, "vars.other")
+	require.Contains(t, different.Message, "different plaintext value")
+	require.Contains(t, different.Hint, "local override")
+
+	// Neither side of the comparison reaches the report.
+	require.NotContains(t, messages(diags), "s3cret")
+	require.NotContains(t, messages(diags), "mine")
+}
+
+// No key here plus a plaintext quietly covering for it is the pairing that keeps
+// a lost identity invisible in everyday use, so the row leads with the identity
+// rather than claiming a comparison it could not make.
+func TestShadowedValidator_undecryptableMarkerLeadsWithTheIdentity(t *testing.T) {
+	id := mustKeygen(t)
+	noIdentity(t)
+	root := t.TempDir()
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+		"\nvars:\n  token: "+mustEncrypt(t, "s3cret", id.Recipient())+"\n")
+	writeLocalLayer(t, root, "vars:\n  token: s3cret\n")
+
+	diags := (&shadowedValidator{}).Run(loadCtx(t, root, path))
+	require.Len(t, diags, 1)
+	require.Equal(t, validate.SeverityWarning, diags[0].Severity)
+	require.Equal(t, "secrets.shadowed:unknown", diags[0].Target)
+	require.Contains(t, diags[0].Message, "overridden by a plaintext value")
+	require.Contains(t, diags[0].Hint, "were not compared")
+	require.Contains(t, diags[0].Hint, "dwe secrets key import")
+}
+
+// A malformed recipient makes LoadConfig fail; the validator raw-loads for the
+// same reason the recipient validator does, so a scoped run is not blinded by a
+// nil Cfg — and it stays silent rather than duplicating that diagnosis.
+func TestShadowedValidator_survivesAFailedConfigLoad(t *testing.T) {
+	root := t.TempDir()
+	path := writeProject(t, root, "project:\n  name: test\nsecrets:\n  recipient: age1-not-a-real-key\n")
+	require.Empty(t, (&shadowedValidator{}).Run(loadCtx(t, root, path)))
 }

@@ -13,6 +13,11 @@
 //     config.validate) cherry-picked into preflight: a lifecycle command that
 //     would render an undecrypted value must stop with a named fix instead of
 //     writing ciphertext into a config file.
+//   - secrets.shadowed is EFFECTIVENESS, and warns only. It answers the
+//     question the other two are READ as answering — "is this secret actually
+//     shared through the key pair?" — which they never asked: a marker
+//     overridden by a plaintext value in a higher layer decrypts fine and is
+//     never read. Like the recipient validator it runs in `dwe validate` only.
 package secrets
 
 import (
@@ -26,6 +31,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packroot"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/keygate"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
@@ -41,6 +47,7 @@ func All() []validate.Validator {
 	return []validate.Validator{
 		&recipientValidator{},
 		&unresolvedValidator{},
+		&shadowedValidator{},
 	}
 }
 
@@ -321,6 +328,140 @@ func displayRecipient(recipient string) string {
 		return "the project recipient"
 	}
 	return recipient
+}
+
+// shadowedValidator reports markers a higher layer overrides with plaintext.
+//
+// A warning, never an error, and deliberately outside preflight: overriding a
+// shared secret with a local plaintext is a legitimate move and breaking it
+// would cost more than it buys. What is not legitimate is doing it invisibly —
+// `dwe secrets status` says "decrypted" and this domain says "readable" about a
+// value the project never reads, and the two only diverge again months later,
+// in `render config`, which is the one surface a plaintext layer cannot cover.
+type shadowedValidator struct{}
+
+func (v *shadowedValidator) ID() string     { return "shadowed" }
+func (v *shadowedValidator) Domain() string { return domain }
+
+func (v *shadowedValidator) Run(ctx validate.Context) []validate.Diagnostic {
+	configPath := workspacePath(ctx)
+	if configPath == "" {
+		return nil
+	}
+	// Raw layers for the same reason the recipient validator uses them: the
+	// markers ARE the subject, and a decrypting load would have replaced them.
+	// A read failure is the config domain's diagnostic, not ours.
+	layers, err := config.LoadRawLayers(configPath)
+	if err != nil {
+		return nil
+	}
+	markers := config.CollectMarkers(layers)
+	if len(markers) == 0 {
+		return nil
+	}
+
+	// The identity load happens only past the marker gate: a project with no
+	// encrypted values must not pay a keys-directory lookup for a report that
+	// would be empty anyway.
+	recipient := config.RecipientFromLayers(layers)
+	ids := keygate.LoadIdentitySet(recipient)
+	shadowed := config.CollectShadowedMarkers(layers, func(marker string) (string, bool) {
+		plain, derr := ids.Decrypt(marker)
+		return plain, derr == nil
+	})
+
+	file := relPath(ctx.ProjectRoot, configPath)
+	if len(shadowed) == 0 {
+		// The positive row is the point of the validator: it is what lets a green
+		// `dwe validate secrets` mean "the key pair is what shares these values"
+		// rather than only "the markers decrypt".
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityOK,
+			Domain:   domain,
+			Target:   "secrets.shadowed",
+			File:     file,
+			Message:  fmt.Sprintf("%d encrypted value(s), none shadowed by a plaintext override", len(markers)),
+		}}
+	}
+	return shadowedDiags(ctx, shadowed, recipient)
+}
+
+// shadowGroup keys the diagnostics: one row per (overriding file, verdict). The
+// fix differs per verdict and the file to edit differs per layer, so those are
+// exactly the two things that must not be merged into one row — while listing
+// every path separately would bury a single edit under a wall of rows, the same
+// trade unresolvedMarkerDiags makes.
+type shadowGroup struct {
+	layer string
+	match string
+}
+
+// shadowedDiags renders the grouped warnings, sorted by file then verdict so the
+// table is byte-stable across runs.
+func shadowedDiags(ctx validate.Context, shadowed []config.ShadowedMarker, recipient string) []validate.Diagnostic {
+	byGroup := map[shadowGroup][]string{}
+	for _, sh := range shadowed {
+		g := shadowGroup{layer: relPath(ctx.ProjectRoot, sh.ShadowLayer), match: sh.Match}
+		byGroup[g] = append(byGroup[g], sh.Path)
+	}
+	groups := make([]shadowGroup, 0, len(byGroup))
+	for g := range byGroup {
+		groups = append(groups, g)
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].layer != groups[j].layer {
+			return groups[i].layer < groups[j].layer
+		}
+		return groups[i].match < groups[j].match
+	})
+
+	diags := make([]validate.Diagnostic, 0, len(groups))
+	for _, g := range groups {
+		paths := byGroup[g]
+		sort.Strings(paths)
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityWarning,
+			Domain:   domain,
+			Target:   "secrets.shadowed:" + g.match,
+			File:     g.layer,
+			Message: fmt.Sprintf("%d encrypted value(s) %s in %s, so the encrypted value is never read: %s",
+				len(paths), shadowPhrase(g.match), g.layer, strings.Join(paths, ", ")),
+			Hint: shadowHint(g.match, g.layer, recipient),
+		})
+	}
+	return diags
+}
+
+// shadowPhrase describes what the overriding value is, per verdict.
+func shadowPhrase(match string) string {
+	switch match {
+	case config.ShadowIdentical:
+		return "are overridden by an identical plaintext value"
+	case config.ShadowDifferent:
+		return "are overridden by a different plaintext value"
+	default:
+		return "are overridden by a plaintext value"
+	}
+}
+
+// shadowHint names the fix. The identical case gets the insistent wording — a
+// plaintext copy of a value that is already encrypted next to it has no job left
+// to do, and its most likely origin is a migration nobody finished. A different
+// value is a deliberate override and is worded as a fact with an undo, not as a
+// mistake.
+//
+// The unknown case leads with the identity, not the override: the machine cannot
+// read the marker, and the plaintext is the only reason nothing has broken yet.
+func shadowHint(match, layer, recipient string) string {
+	switch match {
+	case config.ShadowIdentical:
+		return "remove those keys from " + layer + " — the encrypted value already holds the same content"
+	case config.ShadowDifferent:
+		return "a local override; remove those keys from " + layer + " to go back to the shared encrypted value"
+	default:
+		return "the marker cannot be decrypted here, so the two values were not compared — " +
+			secrets.IdentityHint(recipient)
+	}
 }
 
 // inventoryPhrase describes what a project holds, for the no-recipient error.

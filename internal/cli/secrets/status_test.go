@@ -815,3 +815,84 @@ func TestStatus_InvalidConfigIsTyped(t *testing.T) {
 		t.Errorf("error code = %q, want project_invalid_config", code)
 	}
 }
+
+// The reported gap: a marker whose value local.yml overrides with plaintext
+// decrypts, so the row read fully green while the age path was not what shared
+// the value. The verdict is carried as its own pair of fields — state and reason
+// still answer only "can this machine open it".
+func TestStatus_JSON_ShadowedMarker(t *testing.T) {
+	isolateHome(t)
+	cfgPath, root := writeFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	recipient := initProject(t, flags)
+
+	leftover, err := secrets.Encrypt("s3cret-token", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	override, err := secrets.Encrypt("shared-value", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	kept, err := secrets.Encrypt("still-used", recipient)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	defaults := "vars:\n  a_token: " + leftover + "\n  b_token: " + override + "\n  c_token: " + kept + "\n"
+	if err := os.WriteFile(filepath.Join(root, "workspace", "defaults.yml"), []byte(defaults), 0o644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+	local := "vars:\n  a_token: s3cret-token\n  b_token: my-own-value\n"
+	if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(local), 0o644); err != nil {
+		t.Fatalf("writing local.yml: %v", err)
+	}
+
+	got := statusOf(t, flags)
+
+	defaultsLayer := filepath.Join("workspace", "defaults.yml")
+	localLayer := filepath.Join("workspace", "local.yml")
+	want := []markerRow{
+		{Layer: defaultsLayer, Path: "vars.a_token", State: stateDecrypted,
+			ShadowedBy: localLayer, ShadowMatch: config.ShadowIdentical},
+		{Layer: defaultsLayer, Path: "vars.b_token", State: stateDecrypted,
+			ShadowedBy: localLayer, ShadowMatch: config.ShadowDifferent},
+		{Layer: defaultsLayer, Path: "vars.c_token", State: stateDecrypted},
+	}
+	if len(got.Markers) != len(want) {
+		t.Fatalf("markers = %+v, want %d rows", got.Markers, len(want))
+	}
+	for i, w := range want {
+		if got.Markers[i] != w {
+			t.Errorf("marker[%d] = %+v, want %+v", i, got.Markers[i], w)
+		}
+	}
+}
+
+// A shadowed row is amber for the same reason a stale-key row is: green here
+// reads as "this value works", and a marker a plaintext override replaces does
+// not work — it is simply never read.
+func TestStatusView_ShadowedRowIsNotOK(t *testing.T) {
+	d := statusJSON{
+		Markers: []markerRow{
+			{Path: "vars.a", State: stateDecrypted},
+			{Path: "vars.b", State: stateDecrypted,
+				ShadowedBy: "workspace/local.yml", ShadowMatch: config.ShadowIdentical},
+			{Path: "vars.c", State: stateDecrypted,
+				ShadowedBy: "workspace/local.yml", ShadowMatch: config.ShadowDifferent},
+		},
+	}
+	v := statusView(d)
+	if !v.Markers[0].OK {
+		t.Error("an unshadowed decrypted row lost its OK flag")
+	}
+	if v.Markers[1].OK || v.Markers[2].OK {
+		t.Errorf("shadowed rows kept OK: %+v / %+v", v.Markers[1], v.Markers[2])
+	}
+	if !v.Markers[1].ShadowIdentical || v.Markers[2].ShadowIdentical {
+		t.Errorf("ShadowIdentical flags = %v/%v, want true/false",
+			v.Markers[1].ShadowIdentical, v.Markers[2].ShadowIdentical)
+	}
+	if v.Markers[1].ShadowedBy != "workspace/local.yml" {
+		t.Errorf("ShadowedBy dropped in the view: %+v", v.Markers[1])
+	}
+}

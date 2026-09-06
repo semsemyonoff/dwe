@@ -404,3 +404,53 @@ func TestSecretsStatus_NeverPrintsAKey(t *testing.T) {
 		}
 	}
 }
+
+// goldenSecretsStatusShadowed is the state this report used to render fully
+// green: every marker decrypts, and a plaintext value in a higher layer is what
+// the project actually reads. One shadow repeats the marker's own value (a
+// migration leftover), the other differs (a deliberate local override).
+func goldenSecretsStatusShadowed() SecretsStatusView {
+	v := goldenSecretsStatus()
+	v.Markers = []SecretsMarkerRow{
+		{
+			Layer: "workspace/defaults.yml", Path: "vars.telegram.token", State: "decrypted",
+			ShadowedBy: "workspace/local.yml", ShadowIdentical: true,
+		},
+		{
+			Layer: "workspace/defaults.yml", Path: "vars.db.password", State: "decrypted",
+			ShadowedBy: "workspace/local.yml",
+		},
+		{Layer: "workspace/defaults.yml", Path: "vars.api.key", State: "decrypted", OK: true},
+	}
+	v.Files = nil
+	return v
+}
+
+func TestGolden_SecretsStatusShadowed(t *testing.T) {
+	pinGoldenPalette(t)
+	assertGolden(t, "secrets_status_shadowed.golden", SecretsStatus(goldenSecretsStatusShadowed()))
+}
+
+// The qualifier hangs off the STATE cell rather than taking a column: it changes
+// what "decrypted" means for that row, and a reader who stops at the word takes
+// away the opposite of the truth.
+func TestSecretsStatus_ShadowQualifierAndNote(t *testing.T) {
+	resetStyles()
+	got := stripANSI(SecretsStatusAt(goldenSecretsStatusShadowed(), 0))
+
+	if !strings.Contains(got, "decrypted (shadowed by workspace/local.yml)") {
+		t.Errorf("shadow qualifier missing from the state cell:\n%s", got)
+	}
+	if !strings.Contains(got, "2 encrypted value(s) are shadowed") {
+		t.Errorf("shadow note missing:\n%s", got)
+	}
+	if !strings.Contains(got, "Same-value shadows (1)") {
+		t.Errorf("leftover-copy count missing:\n%s", got)
+	}
+
+	// A report with nothing shadowed must be byte-identical to before the note
+	// existed, so the common case gains no line.
+	if bare := stripANSI(SecretsStatusAt(goldenSecretsStatus(), 0)); strings.Contains(bare, "shadowed") {
+		t.Errorf("an unshadowed report grew a shadow note:\n%s", bare)
+	}
+}

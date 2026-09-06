@@ -52,6 +52,10 @@ config-pack source under workspace/templates/config. Each one is actually
 decrypted, so the report distinguishes "no key on this machine" from "encrypted
 to somebody else" from "the payload is damaged".
 
+A marker a higher layer overrides with a plaintext value is reported as
+shadowed: it decrypts, but the project reads the plaintext instead, so the key
+pair is not what shares that secret.
+
 Read-only, and never fails over an encrypted value: a missing key, a value
 encrypted to somebody else and a damaged payload are all reported as rows and
 still exit 0. This is the report you run to find out why something is blocked,
@@ -160,10 +164,16 @@ func statusView(d statusJSON) render.SecretsStatusView {
 	// A reason on a readable row is the stale-key qualifier: this machine can
 	// open the value but the CONFIGURED identity cannot, so the loader still
 	// reports it unresolved. Amber, not green — the row is a to-do.
+	//
+	// A shadowed row is amber for the same reason and it is the whole point of
+	// the qualifier: green here means "this value works", and a marker a
+	// plaintext override replaces does not work — it is simply not read.
 	for i, m := range d.Markers {
 		v.Markers[i] = render.SecretsMarkerRow{
 			Layer: m.Layer, Path: m.Path, State: m.State, Reason: m.Reason,
-			OK: m.State == stateDecrypted && m.Reason == "",
+			ShadowedBy:      m.ShadowedBy,
+			ShadowIdentical: m.ShadowMatch == config.ShadowIdentical,
+			OK:              m.State == stateDecrypted && m.Reason == "" && m.ShadowedBy == "",
 		}
 	}
 	for i, f := range d.Files {

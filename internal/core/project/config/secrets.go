@@ -31,6 +31,25 @@ const (
 	ReasonCorrupt = "corrupt"
 )
 
+// Verdicts for a marker a higher layer shadows with plaintext: whether the value
+// that wins is the same one the marker holds. Part of the `dwe secrets status`
+// JSON contract, so they are stable strings.
+const (
+	// ShadowIdentical means the winning plaintext equals the marker's plaintext
+	// — almost always a copy left behind when the value was migrated into a
+	// marker, and the case where a green report answers "did the migration
+	// land?" with a yes it has not checked.
+	ShadowIdentical = "identical"
+	// ShadowDifferent means the two differ: a deliberate local override, which
+	// is a legitimate move and reported neutrally.
+	ShadowDifferent = "different"
+	// ShadowUnknown means the marker could not be decrypted here, so the two
+	// cannot be compared. This is the worst combination to stay silent about:
+	// the shadow is exactly what keeps a missing identity from showing up in
+	// everyday use.
+	ShadowUnknown = "unknown"
+)
+
 // SecretRef locates one encrypted scalar: the layer file that carries it and
 // its dot-path inside that layer (sequence elements carry their index, e.g.
 // vars.tokens.0).
