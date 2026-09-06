@@ -805,20 +805,21 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `docs/i18n/ru/reference/config/deploy/index.md`
 - Modify: `docs/i18n/ru/reference/config/reset.md`
 
-- [ ] add `dwe deploy eject` and `dwe reset eject` to the `## Related commands`
+- [x] add `dwe deploy eject` and `dwe reset eject` to the `## Related commands`
       list at `docs/reference/config/deploy/index.md:235-244`, stating the
       built-in-default scope, the stdout-vs-`--out` split and the refuse-unless-
       `--force` rule
-- [ ] create a `## Related commands` section in
+- [x] create a `## Related commands` section in
       `docs/reference/config/reset.md` — it has none today (only
       `## Project-wide reset` and `## Per-service reset`) — and tie it to the
       `dwe validate` report about an inert pipeline file so a reader arriving from
       that diagnostic finds the action
-- [ ] state explicitly on both pages that there is no lifecycle equivalent, and
+- [x] state explicitly on both pages that there is no lifecycle equivalent, and
       why (`_auto_reap_daemons` would not load back)
-- [ ] update both Russian mirrors and re-stamp their `> Translated from:` headers
-- [ ] run `make build` then `make test`
-- [ ] run tests - must pass before task 10
+- [x] update both Russian mirrors and re-stamp their `> Translated from:` headers
+- [x] run `make build` then `make test`
+- [x] run tests - must pass before task 10 (`make build`, `make test` green;
+      `TestRussianTranslationsAreFresh` re-run uncached)
 
 ### Task 10: CHANGELOG entry for Part B
 

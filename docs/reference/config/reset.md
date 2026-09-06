@@ -91,3 +91,16 @@ phases:
 | `dwe reset run --service <name>` | Removes `state.services.<name>`, writes `PendingDeploy` for `<name>` |
 | `dwe deploy run --service <name>` | Clears `PendingDeploy` for `<name>` on success |
 | `dwe reset run` (project-wide) | Deletes the entire state file (`journal.Remove`) |
+
+## Related commands
+
+- `dwe reset plan` — show the resolved reset pipeline
+- `dwe reset run [--yes]` — execute it (see [Project-wide reset](#project-wide-reset))
+- `dwe reset eject [--out PATH] [--force]` — emit the **built-in default** reset pipeline as a commented, editable `reset.yml`. It is a constant, not this project's effective plan: nothing is rendered, per-service `workspace/services/<name>/reset.yml` files are not inlined, and there is no `--service` filter (use `dwe reset plan` for the resolved instance). With no `--out` (or `--out -`) the document goes to stdout and nothing is written; with `--out PATH` it is written to that file and **refuses to overwrite an existing one unless `--force` is given**. The emitted file declares `log: false` explicitly, matching the built-in default. There is no implicit default path: the canonical target is `workspace/reset.yml`, passed explicitly, and an active file **replaces** the built-in pipeline whole.
+- `dwe validate` — when it reports `reset.yml has no active content (all comments or empty) — built-in default pipeline is active` (or `declares no phases`), `dwe reset eject` is the action that answers it: the file on disk has no effect, so eject the built-in pipeline over it with `--force` and edit from there. `eject`'s own refusal names the same two conditions, so the two commands agree about which files are inert. See [validate.md](validate.md).
+- `dwe deploy eject` — the deploy-side twin; see [deploy/index.md](deploy/index.md).
+
+There is deliberately **no `lifecycle eject`**. The effective `stop` pipeline always
+carries the engine-synthetic `_auto_reap_daemons` phase, and a user-authored phase
+whose name starts with `_` is rejected at load time — an emitted `lifecycle.yml`
+would be a file dwe itself refuses to load back.
