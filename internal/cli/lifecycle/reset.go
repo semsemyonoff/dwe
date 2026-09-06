@@ -56,6 +56,7 @@ func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd.AddCommand(newResetPlanCmd(flags))
 	cmd.AddCommand(newResetRunCmd(flags))
 	cmd.AddCommand(newResetStepCmd(flags))
+	cmd.AddCommand(newResetEjectCmd(flags))
 	return cmd
 }
 

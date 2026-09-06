@@ -778,23 +778,24 @@ dwe reset  eject [--out PATH] [--force]
 - Create: `internal/cli/lifecycle/eject.go`
 - Create: `internal/cli/lifecycle/eject_test.go`
 
-- [ ] add `newResetEjectCmd` in `eject.go` and register it at
+- [x] add `newResetEjectCmd` in `eject.go` and register it at
       `reset.go:56-58`, mirroring Task 7's flags and behaviour (`--out`,
       `--out -`, `--force`, stderr confirmation gated on json) against the reset
       asset and `workspace/reset.yml`, using the already-existing
       `config.LoadResetConfigWithState` for the state check
-- [ ] keep the two commands' user-facing wording parallel — the difference
+- [x] keep the two commands' user-facing wording parallel — the difference
       between them should be the pipeline name and nothing else
-- [ ] write the same command-test set as Task 7, loading the written file with
+- [x] write the same command-test set as Task 7, loading the written file with
       `config.LoadResetConfig`
-- [ ] write a test that the written file loads with logging **off**, which is
+- [x] write a test that the written file loads with logging **off**, which is
       what a user gets from an ejected reset pipeline. Note in the test that the
       value comes from the asset's explicit `log: false` and not from the loader's
       `defaultLog` — `loadProjectDeployConfigDecode` applies `defaultLog` only
       when `cfg.Log == nil` (`workspace.go:3200-3203`) — which is exactly why the
       asset must keep the key: drop it and the file's behaviour silently depends
       on which loader reads it
-- [ ] run tests - must pass before task 9
+- [x] run tests - must pass before task 9 (`make lint` 0 issues, `make test`
+      green)
 
 ### Task 9: Document both subcommands
 
