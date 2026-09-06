@@ -847,31 +847,60 @@ dwe reset  eject [--out PATH] [--force]
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] `dwe deploy eject` with no `--out` prints a commented pipeline; feeding
+- [x] `dwe deploy eject` with no `--out` prints a commented pipeline; feeding
       that output back through `config.LoadProjectDeployConfig` yields
-      `DefaultDeployConfig()`
-- [ ] the same holds for `dwe reset eject` against `DefaultResetConfig()`
-- [ ] `--out` refuses an existing file and leaves it byte-for-byte unchanged;
+      `DefaultDeployConfig()` — `TestDeployEject_Stdout` pins stdout to the asset
+      byte-for-byte and `TestDefaultDeployYAML_RoundTrip` pins the asset to the
+      constructor with `require.Equal`; also confirmed against the built binary,
+      where `deploy eject` and `deploy eject --out <path>` produce identical bytes
+- [x] the same holds for `dwe reset eject` against `DefaultResetConfig()` —
+      `TestResetEject_Stdout` + `TestDefaultResetYAML_RoundTrip` (the latter
+      normalising the documented `Log` nil-vs-`&false` asymmetry)
+- [x] `--out` refuses an existing file and leaves it byte-for-byte unchanged;
       `--force` overwrites; the refusal names the file as inert both for an
       all-comment file and for one carrying only `log: false`, matching what
-      `dwe validate` says about the same file
-- [ ] `--out -` writes to stdout and creates no file named `-`
-- [ ] under `--output json` the `--out` path writes the file and prints no
-      confirmation line; the stdout path emits the raw document with no envelope
-- [ ] the existing `dwe secrets` output-file tests pass unmodified after the
-      helper move
-- [ ] a pipeline log from a step with a CR progress run holds one line per
-      committed line, and the last frame of a `\r`-terminated run survives
-- [ ] reporter status lines still appear exactly once in the log file
-- [ ] confirm `deploy` and `reset` are still absent from `bridgeAllowedTopLevel`,
-      so neither subcommand is reachable from a bridged container
-- [ ] `make lint` clean
-- [ ] `make test` green (this repo has no separate e2e command; the CLI command
+      `dwe validate` says about the same file — `TestDeployEject_RefusesExistingFile`
+      / `TestResetEject_RefusesExistingFile` (4 cases each, incl. the unparseable
+      file refusing as "already here"). End-to-end against the binary: `dwe validate`
+      reports `deploy.yml has no active content`, `eject` refuses with
+      `… already exists — it has no active content`, the `log: false` reset file
+      refuses with `… — it declares no phases`, and after `--force` the inert
+      diagnostic is gone — the loop this part exists to close
+- [x] `--out -` writes to stdout and creates no file named `-` — verified for both
+      commands against the binary (the project dir held only `workspace.yml`
+      afterwards) and by `TestDeployEject_OutDashIsStdoutAndCreatesNoFile` /
+      `TestResetEject_OutDashIsStdoutAndCreatesNoFile`
+- [x] under `--output json` the `--out` path writes the file and prints no
+      confirmation line; the stdout path emits the raw document with no envelope —
+      `TestDeployEject_JSON*` / `TestResetEject_JSON*`; against the binary the
+      write path emits `{"path":…,"pipeline":"deploy"}` on stdout with empty
+      stderr, `--out -` emits the raw document, and a refusal still yields the
+      `{"error":{"code":"deploy_eject_output_exists",…}}` envelope on stderr
+- [x] the existing `dwe secrets` output-file tests pass unmodified after the
+      helper move — `git log --name-only` over the branch shows
+      `internal/cli/secrets/files.go` as the only touched file in that package
+- [x] a pipeline log from a step with a CR progress run holds one line per
+      committed line, and the last frame of a `\r`-terminated run survives —
+      `TestSequentialStep_CRProgressRun_CollapsesToOneLine`,
+      `TestSequentialStep_TrailingCRFrame_SurvivesViaFlush`,
+      `TestParallelSubStepLog_OnlyCommittedFrames`,
+      `TestParallelSubStep_TrailingCRFrame_ReachesGlobalLog`,
+      `TestSequentialStep_ChildOutputPrecedesFinishLine` all pass
+- [x] reporter status lines still appear exactly once in the log file —
+      `TestPlainReporter_LogFile_StatusLines_ExactlyOnce` and
+      `TestPlainReporter_StatusLineReachesLogFile` pass unmodified
+- [x] confirm `deploy` and `reset` are still absent from `bridgeAllowedTopLevel`,
+      so neither subcommand is reachable from a bridged container — the map
+      (`internal/cli/bridgepolicy.go:29-56`) holds only `commands, status, info,
+      logs, docs, prompt, version, help, vars, __complete*`
+- [x] `make lint` clean (0 issues)
+- [x] `make test` green (this repo has no separate e2e command; the CLI command
       tests added above are the end-to-end surface)
-- [ ] `make test-race` green — the frame writer's own lock is the reason this
+- [x] `make test-race` green — the frame writer's own lock is the reason this
       run is not optional here
-- [ ] `make build` produces a binary whose `dwe deploy --help` and
-      `dwe reset --help` list the new subcommand
+- [x] `make build` produces a binary whose `dwe deploy --help` and
+      `dwe reset --help` list the new subcommand (`eject [--flags]  Print the
+      built-in deploy pipeline as an editable deploy.yml`, and its reset twin)
 
 ### Task 12: [Final] Update documentation
 
