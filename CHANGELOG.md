@@ -224,6 +224,29 @@ generated from commit subjects and stay on the
   `warning: exports.env[DB_PASSWORD]: from "vars.db.passwrod" does not resolve —
   rendered empty`. stdout is untouched, so `dwe render env > .env` is
   byte-identical to before, and `--output json` prints no warning.
+- **New `dwe deploy eject` and `dwe reset eject`**, which emit the built-in
+  default pipeline as a commented, editable `deploy.yml` / `reset.yml`. Until
+  now the only way to start from the built-in pipeline was to re-type it from
+  the source, which is why projects carry an all-comment `workspace/deploy.yml`
+  that has no effect — and `dwe validate` reports exactly that file (`has no
+  active content (all comments or empty) — built-in default pipeline is
+  active`) without offering an action. This is the action. What is emitted is
+  the **built-in default only**, a constant: per-service pipelines are not
+  inlined, nothing is rendered and there is no `--service` filter — `dwe deploy
+  plan` remains the resolved instance. With no `--out` the document goes to
+  stdout and nothing is written; `--out PATH` writes that file and `--out -` is
+  stdout again, so the flag never creates a file named `-`. Unlike
+  `dwe docs llms-txt --out`, which silently overwrites a generated artifact,
+  `eject` **refuses an existing target unless `--force`** — it writes a source
+  file a human edits — and the refusal says when the file it is protecting is
+  itself inert, on the same two conditions `dwe validate` uses (an all-comment
+  file, or one carrying only `log:`). Under `--output json` the `--out` path
+  prints no confirmation line and emits `{path, pipeline}` instead; the stdout
+  path emits the raw document with no envelope. There is deliberately **no
+  lifecycle equivalent**: the effective `stop` pipeline carries the
+  engine-synthetic `_auto_reap_daemons` phase, and an emitted `lifecycle.yml`
+  declaring it would be rejected by the loader that wrote it. Neither
+  subcommand is reachable from a bridged container.
 
 ### Changed
 

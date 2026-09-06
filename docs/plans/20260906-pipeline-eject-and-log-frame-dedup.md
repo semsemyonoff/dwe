@@ -826,18 +826,22 @@ dwe reset  eject [--out PATH] [--force]
 **Files:**
 - Modify: `CHANGELOG.md`
 
-- [ ] add an `### Added` entry under `## [Unreleased]` for both subcommands,
+- [x] add an `### Added` entry under `## [Unreleased]` for both subcommands,
       naming the built-in-default scope, the overwrite policy and its deliberate
       difference from `docs llms-txt --out`, and the absence of a lifecycle
       variant
-- [ ] verify the Part A entry from Task 3 is still accurate after the final
-      implementation and adjust the measured numbers if they moved
-- [ ] note that this task's `### Added` block and Task 3's `### Changed` block
+- [x] verify the Part A entry from Task 3 is still accurate after the final
+      implementation and adjust the measured numbers if they moved — it is:
+      both executor routes, the pending-frame eviction, the `abc\rX\n`
+      limitation, the out-of-scope compose repeats and the lost live `tail -f`
+      all match what shipped; the measured 1001 / ~601 numbers are unchanged
+- [x] note that this task's `### Added` block and Task 3's `### Changed` block
       land in different subsections of `## [Unreleased]` on purpose — the plan's
       own revert rule about several commits appending to the same file applies to
       `CHANGELOG.md` too, and separate subsections are what keeps the two commits
-      from conflicting
-- [ ] run `make test` — the CHANGELOG is release-notes input
+      from conflicting (the Part B entry ends `### Added`, the Part A one opens
+      `### Changed`, so the two commits touch disjoint hunks)
+- [x] run `make test` — the CHANGELOG is release-notes input
       (`scripts/changelog-release-notes.sh`), so it gets the same gate every other
       docs-touching task in this plan carries
 
