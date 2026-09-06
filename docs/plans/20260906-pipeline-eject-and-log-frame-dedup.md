@@ -723,53 +723,53 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `internal/core/project/config/workspace.go`
 - Create: `internal/core/project/config/deploy_state_test.go`
 
-- [ ] add `LoadProjectDeployConfigWithState` to
+- [x] add `LoadProjectDeployConfigWithState` to
       `internal/core/project/config/workspace.go` next to `LoadResetConfigWithState`
       (`:3310`), delegating to `loadProjectDeployConfigDecode(path, true)`. It does
       not exist today, and the only deploy-side alternative
       (`ParseDeployConfigForValidationWithState`, `:3270`) returns the lenient
       `*DeployConfig` shape that tolerates `after:` — the validator's shape, not
       the one `deploy.yml` actually loads through
-- [ ] write a test for the new loader in its own file: authored file → phases plus
+- [x] write a test for the new loader in its own file: authored file → phases plus
       `PipelineStateAuthored`; all-comment file → `PipelineStateDefaultFallback`;
       `log: false`-only file → authored state but zero phases; absent file →
       `os.ErrNotExist`
-- [ ] add `newDeployEjectCmd` in `eject.go` and register it at
+- [x] add `newDeployEjectCmd` in `eject.go` and register it at
       `deploy.go:54-56`, with `Args: cobra.NoArgs` and a `Long:` that states it
       emits the **built-in default**, not the project's effective pipeline
-- [ ] add `--out PATH` (never `--output`, which would shadow the root flag's
+- [x] add `--out PATH` (never `--output`, which would shadow the root flag's
       `-o`) and `--force`; treat `--out -` as stdout, reject `--out ""`, and name
       the canonical `workspace/deploy.yml` in the help text rather than making it
       an unreachable default
-- [ ] with no `--out` (or `--out -`), write the asset to the command's stdout
+- [x] with no `--out` (or `--out -`), write the asset to the command's stdout
       writer and return; no preflight, no locks, no config load on this path
-- [ ] with `--out`, resolve the path through the promoted `resolveFilePath`,
+- [x] with `--out`, resolve the path through the promoted `resolveFilePath`,
       derive the existing file's state via the new loader, and delegate to the
       promoted writer, passing the `deploy_eject` code prefix. When the existing
       file **fails to load** (syntax error, unknown field), still refuse — as "a
       file is already here", never by propagating the parse error as if it were a
       write failure
-- [ ] print the success confirmation to stderr, gated on
+- [x] print the success confirmation to stderr, gated on
       `flags.Output != "json"`; do **not** add the command to the interactive
       `dwe deploy` menu (`menu.go:54-62`) — decision and reason are recorded in
       Solution Overview
-- [ ] use `cmd.MarkFlagFilename("out", "yml", "yaml")` rather than a custom
+- [x] use `cmd.MarkFlagFilename("out", "yml", "yaml")` rather than a custom
       `ValidArgsFunction`; cobra already file-completes a string flag, and a
       custom function that touched project state would pull in the
       `cmdctx.CompletionConfigPath` obligation for no gain
-- [ ] write command tests: stdout emit contains the phase names and its comments;
+- [x] write command tests: stdout emit contains the phase names and its comments;
       `--out -` emits to stdout and creates no file; `--out` into an empty dir
       writes a file that `config.LoadProjectDeployConfig` loads; `--out` onto an
       existing file refuses and leaves it unchanged; `--out` onto an unparseable
       file refuses with the same "already here" shape; `--out --force` overwrites
-- [ ] write three json tests: `-o json` on the stdout path emits the raw document
+- [x] write three json tests: `-o json` on the stdout path emits the raw document
       with no envelope; `-o json` on the `--out` path writes the file and emits
       `{path, pipeline}` with no stderr confirmation line; `-o json --out -`
       behaves like the bare command
-- [ ] write a test asserting the refusal's error code is namespaced to this
+- [x] write a test asserting the refusal's error code is namespaced to this
       command, not `secrets_*` — that is what the code-prefix parameter in Task 6
       exists for
-- [ ] run tests - must pass before task 8
+- [x] run tests - must pass before task 8
 
 ### Task 8: Add `dwe reset eject`
 

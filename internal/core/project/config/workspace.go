@@ -3283,6 +3283,18 @@ func LoadProjectDeployConfig(deployPath string) (*ProjectDeployConfig, error) {
 	return cfg, err
 }
 
+// LoadProjectDeployConfigWithState is LoadProjectDeployConfig plus the state
+// that produced the result, so a caller can tell an authored deploy.yml from an
+// all-comment file silently running on the built-in default. It is the deploy
+// sibling of LoadResetConfigWithState.
+//
+// Not to be confused with ParseDeployConfigForValidationWithState: that one
+// returns the lenient *DeployConfig shape that tolerates after:, which is the
+// validator's shape and not the one workspace/deploy.yml loads through.
+func LoadProjectDeployConfigWithState(deployPath string) (*ProjectDeployConfig, PipelineFileState, error) {
+	return loadProjectDeployConfigDecode(deployPath, true)
+}
+
 // LoadServiceDeployConfig loads a per-service deploy pipeline from
 // workspace/services/<name>/deploy.yml. Permits the after: field (deploy-time ordering).
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
