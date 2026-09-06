@@ -600,26 +600,28 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `internal/core/workflow/deploy/defaults.go`
 - Create: `internal/core/workflow/deploy/asset_test.go`
 
-- [ ] author `default_deploy.yml` as the commented, human-editable form of
+- [x] author `default_deploy.yml` as the commented, human-editable form of
       `DefaultDeployConfig()` (`defaults.go:8-56`), declaring `log: true`
       explicitly and carrying a short comment per phase explaining what it does
-- [ ] expose it from `defaults.go` via `//go:embed` behind an accessor that
+- [x] expose it from `defaults.go` via `//go:embed` behind an accessor that
       returns the bytes, with a doc comment pointing at the round-trip test as
       the reason the asset and the constructor cannot drift
-- [ ] write the round-trip test: write the asset to `t.TempDir()`, load it with
+      (`DefaultDeployYAML()`, returning a fresh copy per call)
+- [x] write the round-trip test: write the asset to `t.TempDir()`, load it with
       `config.LoadProjectDeployConfig`, compare against `DefaultDeployConfig()`
       using `require.Equal` (testify is already a dependency and prints a
       readable struct diff — do **not** add `go-cmp` for this, and do not use a
       bare `reflect.DeepEqual`, whose failure across a 3-phase struct is
       unreadable)
-- [ ] add a comment to `defaults.go` next to the `With: map[string]any{…}`
+- [x] add a comment to `defaults.go` next to the `With: map[string]any{…}`
       literals recording that the `map[string]any` / `[]any` shapes are what
       yaml.v3 decodes into, and that writing a `[]string` there would break the
       round-trip test for a reason unrelated to the asset
-- [ ] write a test asserting the asset's own header comment survives in the
+- [x] write a test asserting the asset's own header comment survives in the
       returned bytes (the emitted file must be commented — a marshaller-shaped
-      regression would silently drop them)
-- [ ] run tests - must pass before task 5
+      regression would silently drop them); it also asserts a per-phase comment,
+      the explicit `log: true` and the fresh-copy contract
+- [x] run tests - must pass before task 5 (`make lint`, `make test` green)
 
 ### Task 5: Embed the default reset pipeline as an asset
 
