@@ -30,9 +30,14 @@ reviews:
     # Re-review only the new commits when a branch is pushed.
     auto_incremental_review: true
     drafts: false
+    # Base branches other than the default one. Entries are REGEXES, so
+    # `release/.*` covers every release train: feature work lands there for a
+    # whole cycle, and a PR into one is the last review before the tag.
+    # The release-cut PR itself is still skipped by ignore_title_keywords.
     base_branches:
       - main
       - dev
+      - release/.*
     # Skip release-automation / dependency-bump PRs.
     ignore_title_keywords:
       - "chore(release)"
