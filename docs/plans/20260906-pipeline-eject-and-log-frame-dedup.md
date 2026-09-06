@@ -508,14 +508,14 @@ dwe reset  eject [--out PATH] [--force]
 - Modify: `internal/core/execution/pipeline/executor.go`
 - Create: `internal/core/execution/pipeline/logframe_wiring_test.go`
 
-- [ ] in the sequential branch (`executor.go:864-876`) replace
+- [x] in the sequential branch (`executor.go:864-876`) replace
       `&liveui.LogSanitizer{W: opts.LogWriter}` with the new frame writer and set
       `flushTee` to its `Flush`, so the existing defer (`:877-879`) and the eager
       pre-finish calls (`:931-932`, `:975-976`) cover it
-- [ ] in the parallel branch (`executor.go:845-847`) write to `subLog` only when
+- [x] in the parallel branch (`executor.go:845-847`) write to `subLog` only when
       `final` is set, leaving `opts.Reporter.StepOutput` receiving every frame as
       before (the live block row still needs the non-final frames)
-- [ ] cite `usercommands/runtime/runners/workflow/parallel.go:216-234` in the
+- [x] cite `usercommands/runtime/runners/workflow/parallel.go:216-234` in the
       code comment as the existing precedent, and record what the guard costs:
       because `tee.Flush()` delivers the tail as `final=false`, both
       implementations drop a `\r`-terminated tail from the per-sub-step file. The
@@ -524,33 +524,36 @@ dwe reset  eject [--out PATH] [--force]
       (`plain.go:659-668`, `:700-718`); `parallel.go` has no second sink. Do not
       add pending-frame state to the parallel callback to "fix" this — that would
       be a new composite flush hook and is not this plan's scope
-- [ ] extend the comment block at `:815-829` so it states which writer each path
+- [x] extend the comment block at `:815-829` so it states which writer each path
       now uses and why the sequential path gained state, and fix the stale
       example in `childIO`'s doc at `:51-70`, which spells the sequential shape
       as `io.MultiWriter(os.Stdout, logSanitizer{logFile})` at `:56-58`
-- [ ] write a test that runs a step whose child emits a CR progress run and
+      (the identical stale example on `ActionContext.StepWriter` was fixed too)
+- [x] write a test that runs a step whose child emits a CR progress run and
       asserts the global pipeline log holds one line, not one per frame
-- [ ] write a test for the parallel path asserting the per-sub-step log holds only
+- [x] write a test for the parallel path asserting the per-sub-step log holds only
       committed lines while the reporter still observed the non-final frames
       (that observation is what feeds the tail into the global log)
-- [ ] write a test that a **sequential** step ending on a bare `\r` still has its
+- [x] write a test that a **sequential** step ending on a bare `\r` still has its
       last frame in the global `.dwe/logs/<pipeline>.log` (the `flushTee` →
       pending-frame path). If a parallel assertion is wanted too, assert the tail
       in the **global** log via `commitTrailingTail` — not in
       `.dwe/logs/parallel/**`, where the `final` gate legitimately drops it
-- [ ] write an **ordering** test over the shared `.dwe/logs/<pipeline>.log`: after
+- [x] write an **ordering** test over the shared `.dwe/logs/<pipeline>.log`: after
       this change that one file handle has a buffered writer (the frame writer)
       and an unbuffered one (`PlainReporter`'s own `LogSanitizer`,
       `plain.go:152-155`) writing to it, and only the pre-existing
       `flushTee`-before-finish discipline keeps them in sequence. Assert a step's
       last child line precedes the reporter's finish line for that step — "still
       pass unchanged" and "appears exactly once" do not cover interleaving
-- [ ] confirm `internal/core/execution/pipeline/logging_test.go` and
+- [x] confirm `internal/core/execution/pipeline/logging_test.go` and
       `plain_test.go` still pass unchanged — in particular
       `TestPlainReporter_LogFile_StatusLines_ExactlyOnce` and
       `TestPlainReporter_StatusLineReachesLogFile`, which pin the reporter path
       this task must not disturb
-- [ ] run tests - must pass before task 3
+- [x] run tests - must pass before task 3 (`make lint`, `make test`,
+      `go test -race ./internal/core/execution/pipeline/ ./internal/shared/liveui/`
+      all green)
 
 ### Task 3: Commit Part A and record it in docs and CHANGELOG
 
