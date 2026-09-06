@@ -1,8 +1,9 @@
 # workspace/deploy.yml — project deploy pipeline.
 #
 # This is the built-in default pipeline, emitted verbatim by `dwe deploy eject`.
-# It is the pipeline that runs when no workspace/deploy.yml is present (or when
-# the one that is present is empty / all comments).
+# It is the pipeline that runs when no workspace/deploy.yml is present, and when
+# the one that is present carries nothing the engine can run: empty, all
+# comments, or declaring no phases (a file holding only `log:`, or `phases: []`).
 #
 # Once this file is active it REPLACES the built-in pipeline whole — composition
 # is full replacement, not a merge — so keep every phase you still want and edit
