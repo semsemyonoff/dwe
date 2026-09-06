@@ -790,12 +790,13 @@ runs as the host UID/GID that `exports.env` already publishes.
 
 ## Validation and preflight
 
-Two validators in the `secrets` domain (`dwe validate secrets`):
+Three validators in the `secrets` domain (`dwe validate secrets`):
 
 | Validator | Kind | Fires when |
 |-----------|------|------------|
 | `secrets.recipient` | content | Markers or `.age` sources exist but `secrets.recipient` is missing or is not a valid `age1…`; or a marker payload is damaged (`corrupt`) |
 | `secrets.unresolved` | readiness | Any value in the merged config is unresolved, or a resolvable config pack's `.age` source fails to decrypt with the loaded identity |
+| `secrets.shadowed` | effectiveness (**warning**) | A higher layer overrides a marker with a plaintext value, so the encrypted value is never read |
 
 `secrets.recipient` raw-loads the layers itself when the config failed to load,
 so a scoped `dwe validate secrets` still diagnoses a malformed recipient
