@@ -660,12 +660,14 @@ dwe reset  eject [--out PATH] [--force]
 - Create: `internal/cli/cmdctx/outputfile_test.go`
 - Modify: `internal/cli/secrets/files.go`
 
-- [ ] move **both** `resolveFilePath` (`internal/cli/secrets/files.go:284-318`)
+- [x] move **both** `resolveFilePath` (`internal/cli/secrets/files.go:284-318`)
       and `writeOutputFile` (`:338-370`) into `cmdctx`. They are a pair — every
       secrets caller runs the first for `filepath.Abs`, `pathsafe.ContainedRel`,
       `CheckNoSymlinks` and the empty-path rejection before the second writes —
       and moving only the writer would leave `eject`'s path discipline undefined
-- [ ] parameterise the code **prefix**, not one code: the pair hardcodes four
+      (`cmdctx.ResolveFilePath` / `cmdctx.WriteOutputFile`, the latter taking a
+      `cmdctx.OutputFile` struct rather than six positional parameters)
+- [x] parameterise the code **prefix**, not one code: the pair hardcodes four
       codes across five sites — `secrets_path_invalid`, `secrets_output_exists`
       (`:342`), `secrets_output_invalid` (`:347`) and
       `secrets_output_write_failed` (`:353`, `:363`, `:367`). Take a prefix
@@ -673,36 +675,44 @@ dwe reset  eject [--out PATH] [--force]
       `_output_invalid` / `_output_write_failed`, so `secrets` passing `secrets`
       reproduces all four verbatim and `eject` gets its own namespace instead of
       emitting `secrets_*` codes in its JSON envelope
-- [ ] generalise the chmod condition: today it is `existed && mode ==
+- [x] generalise the chmod condition: today it is `existed && mode ==
       plaintextMode` (`:361`) against a secrets-package constant (`:40`). Make it
       a caller-supplied "tighten the mode on an existing file" boolean; `secrets`
       passes what `plaintextMode` decided, `eject` passes false (an ejected
-      pipeline is not sensitive)
-- [ ] reduce `secrets.resolveFilePath` / `secrets.writeOutputFile` to thin
+      pipeline is not sensitive) (`OutputFile.TightenMode`)
+- [x] reduce `secrets.resolveFilePath` / `secrets.writeOutputFile` to thin
       wrappers passing the `secrets` prefix, so every existing secrets message,
       code and test stays byte-for-byte identical
-- [ ] `resolveFilePath` calls `isUnder` (`files.go:384`), which `displayPath`
+- [x] `resolveFilePath` calls `isUnder` (`files.go:384`), which `displayPath`
       (`:397-398`) also uses — export it alongside the move or keep a copy in
       `secrets`; it is a compile error either way, noted so it is not mistaken for
-      a scope surprise
-- [ ] add an optional "why the existing file matters" note to the refusal, fed by
+      a scope surprise (exported as `cmdctx.PathIsUnder`; `secrets.isUnder` is
+      gone and `displayPath` calls the exported one)
+- [x] add an optional "why the existing file matters" note to the refusal, fed by
       the caller, so `eject` can say the existing file is inert and that the
       built-in pipeline is what runs today — the helper itself loads nothing
-- [ ] have the caller-side inert check cover **both** conditions the validator
+      (`OutputFile.ExistsNote`, appended to the refusal message after an em dash)
+- [x] have the caller-side inert check cover **both** conditions the validator
       uses (`internal/core/validate/config/workspace.go:1225-1245`):
       `PipelineStateDefaultFallback` *or* zero phases; a `deploy.yml` holding only
       `log: false` is inert to `validate` and must be inert here too
-- [ ] write tests for: target absent → written; target present without force →
+      (`cmdctx.InertPipelineNote(state, phases, name)` — shared by both eject
+      commands so the two conditions cannot drift apart between them)
+- [x] write tests for: target absent → written; target present without force →
       refused, file untouched byte-for-byte; target present with force →
       overwritten; target is a directory or a symlink **with `--force`** → the
       non-regular-file guard fires (without `--force` those surface as "already
       exists", because the guard sits after the early return at `:341-350`);
       unwritable directory → error surfaced, not swallowed
-- [ ] write a test asserting the refusal message names the path and distinguishes
+- [x] write a test asserting the refusal message names the path and distinguishes
       an inert existing file from an authored one, including the `log:`-only case
-- [ ] confirm the existing secrets tests pass **unmodified** — that is the check
-      that the move preserved behaviour
-- [ ] run tests - must pass before task 7
+      (driven through the real `config.LoadResetConfigWithState`, so the note
+      tracks the loader rather than a hand-built state)
+- [x] confirm the existing secrets tests pass **unmodified** — that is the check
+      that the move preserved behaviour (no file under
+      `internal/cli/secrets/*_test.go` was touched)
+- [x] run tests - must pass before task 7 (`make lint` 0 issues, `make test`
+      green)
 
 ### Task 7: Add `dwe deploy eject`
 
