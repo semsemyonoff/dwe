@@ -33,9 +33,17 @@ fi
 # heading itself is dropped — the release page already shows the tag.
 # The heading is matched as a literal prefix, not a regex: a version string is
 # not a pattern, and `1.0.0` interpolated into one would also match `1a0b0`.
+#
+# The link-reference block at the end of the file also ends a section. Without
+# that stop the OLDEST version — the one with no `## ` heading after it — drags
+# `[Unreleased]: https://…` and every sibling definition into its release notes,
+# where they render as literal text. Entry lines start with `- ` and their
+# continuations are indented, so a `[label]: ` at column 0 is only ever a
+# link-reference definition.
 notes="$(awk -v heading="## [$version]" '
   substr($0, 1, length(heading)) == heading { in_section = 1; next }
   in_section && /^## / { exit }
+  in_section && /^\[[^]]+\]: / { exit }
   in_section { print }
 ' "$changelog")"
 

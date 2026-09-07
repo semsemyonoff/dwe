@@ -16,6 +16,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.6.0] - 2026-09-07
+
 ### Added
 
 - **Encrypted secrets committed to the repository**, so a value the whole team
@@ -241,4 +245,5 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0
