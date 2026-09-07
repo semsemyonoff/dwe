@@ -146,7 +146,18 @@ snapshot:
 # `--release-notes`. Leaving auto-generation on would append a second,
 # differently-worded account of the same changes below the curated one.
 changelog:
-  disable: true
+  # NOT `disable: true`. That flag also discards `--release-notes` and publishes
+  # an **empty** release body — which is exactly what v0.6.0 shipped with until
+  # the body was restored by hand. GoReleaser documents it: "this will also
+  # ignore any changelog files passed via --release-notes, and will render an
+  # empty changelog."
+  #
+  # Passing `--release-notes` is itself what suppresses auto-generation, so the
+  # curated section is the whole body and nothing is appended below it. The
+  # workflow always passes the flag, and `changelog-release-notes.sh` fails the
+  # release when the tag has no section — so there is no path where an
+  # auto-generated changelog could slip in.
+  use: git
 
 release:
   github:

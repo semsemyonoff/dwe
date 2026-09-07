@@ -43,3 +43,22 @@ jobs:
           # can push the generated Casks/dwe.rb on each release. Configure
           # in repo Settings → Secrets → Actions.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      # v0.6.0 published with an empty body: `.goreleaser.yaml` carried
+      # `changelog.disable: true`, which GoReleaser documents as also discarding
+      # `--release-notes`. The extract step above succeeded, GoReleaser
+      # succeeded, and the release page was still blank — nothing in the run
+      # failed. This is the assertion that closes that gap: the notes reached
+      # the published release, not just the runner's disk.
+      - name: Verify the release body is not empty
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body="$(gh release view "${GITHUB_REF_NAME}" --json body --jq .body)"
+          if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+            echo "::error::${GITHUB_REF_NAME} published with an empty body." \
+                 "Release notes were extracted but never reached the release page —" \
+                 "check that .goreleaser.yaml does not disable the changelog pipe."
+            exit 1
+          fi
+          printf '%s\n' "release body: $(printf '%s' "$body" | wc -c) bytes"
