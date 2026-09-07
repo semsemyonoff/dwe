@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  # For the docs-site refresh below: `gh workflow run` is an Actions API write.
+  actions: write
 
 jobs:
   goreleaser:
@@ -62,3 +64,23 @@ jobs:
             exit 1
           fi
           printf '%s\n' "release body: $(printf '%s' "$body" | wc -c) bytes"
+
+      # The site header shows `git describe`, and docs.yml only fires on a push
+      # that touches docs/ or web/. A tag touches neither, so after every release
+      # the site kept the previous version until someone remembered to dispatch
+      # the workflow by hand — v0.6.0 published with the site still reading
+      # v0.5.0. A `paths`-filtered `push` trigger cannot cover this: tagging an
+      # existing commit pushes no commits, so no path ever matches.
+      #
+      # `workflow_dispatch` is one of the two events GitHub documents as still
+      # creating a run when sent with GITHUB_TOKEN, so no PAT is needed. The
+      # deploy job's own `github.ref == 'refs/heads/main'` guard is satisfied by
+      # `--ref main`.
+      #
+      # A failure here does not un-publish the release, but it is left to fail
+      # the job on purpose: a silent no-op is what made this a recurring manual
+      # step in the first place.
+      - name: Refresh the documentation site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs.yml --ref main

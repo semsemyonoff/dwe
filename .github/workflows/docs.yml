@@ -64,9 +64,12 @@ jobs:
 
   deploy:
     needs: build
-    # Deploy on a push to main (the usual docs-change path) and on a manual
-    # workflow_dispatch on main (lets us refresh the site — e.g. its release-tag
-    # header — after tagging a release, which does not itself touch docs/).
+    # Deploy on a push to main (the usual docs-change path) and on a
+    # workflow_dispatch on main. The dispatch path exists because a tag touches
+    # neither docs/ nor web/, so the push trigger above never fires for a release
+    # and the site keeps the version its last build resolved. release.yml
+    # dispatches this workflow after publishing; the trigger stays available
+    # manually for the same refresh out of band.
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # Only the deploy job publishes to Pages; keep the write scope off every
