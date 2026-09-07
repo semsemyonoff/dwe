@@ -66,7 +66,7 @@ The `secrets.*` domain has three validators, and they split along the content/re
 
 The `.age` source scan mirrors what `render config` actually iterates, so a disabled service or an unresolvable pack is invisible to the validator exactly as it is at render time. See [`secrets.md`](secrets.md) for the model and for `dwe secrets status`, which reports the same information without blocking anything.
 
-`secrets.shadowed` answers the question the other two are *read* as answering but never ask. A marker overridden by a plaintext value in a higher layer decrypts fine and is reported readable, while the project reads the plaintext — so the key pair is not what shares that value, and nothing says so. It is a **warning**, never an error: temporarily overriding a shared secret with a local one is a legitimate move and breaking it would cost more than the visibility buys. It stays out of preflight for the same reason.
+`secrets.shadowed` reports a marker overridden by a plaintext value in a higher layer: it decrypts fine and is reported readable, while the project reads the plaintext — so the key pair is not what shares that value. It is a **warning**, never an error, and stays out of preflight: temporarily overriding a shared secret locally is legitimate.
 
 Findings are grouped **by overriding file and verdict**, because those are exactly the two things that change the fix:
 

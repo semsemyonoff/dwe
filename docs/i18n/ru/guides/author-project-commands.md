@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ 9769294619a1
+> Translated from: guides/author-project-commands.md @ 5bf983317d54
 
 # Авторство проектных команд
 
@@ -201,6 +201,8 @@ commands:
 4. Если всё ещё пусто и `required: true` — ошибка.
 
 Правило `default_from` позволяет оверрайдам из `local.yml` доходить до команд без того, чтобы каждый разработчик переписывал литеральный default. Это тот же паттерн «конфиг побеждает, код даёт safety net», что и в других местах DWE.
+
+`default_from` (равно как `options.from` или `context.<name>.from`), который не резолвится, рендерится пустым и молча уходит в `default:` — поэтому `dwe validate` предупреждает о нём в домене `commands`. Запускайте его после добавления такого пути; `--strict` превращает предупреждение в ошибку.
 
 Используйте разрешённое значение как `${param.<name>}` в `cmd:`, `argv:`, `env:`, `workdir:`, `confirmation_text:` и путях к файлам.
 

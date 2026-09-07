@@ -113,6 +113,9 @@ Phases:
 
 1. **Resolve params** — for each declared parameter try, in order: caller-supplied value → `default_from` (dot-path into the merged config; empty result is treated as missing) → literal `default` → required-error. Then coerce to the declared type and validate `pattern`.
 2. **Resolve context** — read each `context.<key>.from` dot-path out of the merged config.
+
+   `dwe validate` warns (domain `commands`) when a `params.<name>.default_from`, `params.<name>.options.from` or `context.<name>.from` does not resolve in the merged config — an unresolvable path renders empty and silently falls through to `default:`, or fails a `required:` param. `dwe validate --strict` turns the warning into an error.
+
 3. **Compute file paths** — render `path` / `candidates` templates, normalise to absolute, discover files. Non-mutating.
 4. **Confirmation** — when `confirmation: true`, prompt the user; the prompt is bypassed only by `SkipConfirm` (set by `--yes` / `-y` and inherited by workflow children). Otherwise dispatch is by stdin: TTY → `huh.Confirm`, non-TTY → plain Y/n fallback that auto-answers "yes" when the `CI` environment variable is set (to any non-empty value). Refusal aborts the command. See [Confirmation flow](directives.md#confirmation-flow) for the full decision tree.
 5. **Prepare file effects** — `mkdir`, `overwrite` checks, register cleanup callbacks.

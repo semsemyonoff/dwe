@@ -223,9 +223,6 @@ lower layer, `set` prints one note to stderr (suppressed in JSON mode):
 note: vars.telegram.token is an encrypted secret in workspace/defaults.yml; this plaintext override wins locally
 ```
 
-That is a legitimate thing to do — a developer pointing at their own bot token
-— but it is worth knowing you have stopped reading the shared value.
-
 ## Output is not redacted
 
 `dwe vars list`, `get`, and `inspect` print effective values **verbatim** —
@@ -233,10 +230,9 @@ nothing is masked. Some projects legitimately keep third-party credentials (API
 tokens, service DSNs) in `workspace/local.yml` / `.env`, because those cannot be
 faked locally; such values appear in full in the output.
 
-Masking is deliberately not offered: it would raise access by exactly zero bits
-— anyone who can run `dwe vars list` can read `workspace/local.yml` — and both
-files are already gitignored and written `0600`. What it *would* change is where
-the values travel, so that is the thing to watch: prefer `dwe vars get <path>`
+Masking is not offered — anyone who can run `dwe vars list` can already read
+`workspace/local.yml`. What masking *would* change is where the values travel,
+so that is the thing to watch: prefer `dwe vars get <path>`
 over a full `list` before pasting into an AI-agent session, a screenshot, or a
 demo.
 

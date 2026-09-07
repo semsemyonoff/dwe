@@ -88,7 +88,7 @@ hub.chown-src-host:
       chown -R www-data:www-data /workspace/src
 ```
 
-`COMPOSE_PROJECT_NAME` here is the same value, from the same resolver, that `dwe render env` writes into `.env` as a [reserved system variable](../../render/env.md#system-variables) — a shell command sees one project name whether it reads the exported variable or lets compose pick the `.env` line up on its own.
+`COMPOSE_PROJECT_NAME` comes from the same resolver `dwe render env` writes into `.env` as a [reserved system variable](../../render/env.md#system-variables).
 
 `COMPOSE_FILE` is omitted when no overlay files are configured; `COMPOSE_PROJECT_NAME` is omitted when no project name is set. Entries already declared in the command's `env:` block are kept but the contract entry wins when keys collide — Go's `os/exec` uses the last entry for duplicate keys, and the contract is appended after `env:`.
 
@@ -238,7 +238,7 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 | `exec` | runs via `docker compose exec` | calls `compose exec` anyway; docker emits its own (cryptic) error |
 | `run` | always runs a fresh ephemeral container via `docker compose run --rm` | same |
 
-Omitting `mode:` gives you `exec-or-run`: the command works against the live container when the stack is up, and still does something useful on a stopped stack instead of stopping the author to ask which of four spellings they meant. That is what almost every project already declared by hand.
+Omitting `mode:` gives you `exec-or-run`: the command works against the live container when the stack is up, and still runs on a stopped stack.
 
 Declare `mode: exec-or-fail` for tools that **depend on persistent container state** and must never create a container — a database client, an application server's console, anything whose value comes from the running instance's memory, sockets or accumulated files. For those, a stopped container should surface as an actionable error, not as a fresh ephemeral one that silently sees none of that state. `exec` and `run` stay the two unconditional escapes: `exec` when you want docker's own error, `run` when a fresh container is the point.
 
@@ -246,7 +246,7 @@ The two `exec-or-*` modes differ in exactly **one** observable state: the runnin
 
 `runner.mode` follows the same enum and same precedence rules as `runner.user`.
 
-> **If you write a `type: command` `check:`.** A step's `check:` is a full action dispatched through the same executor, so it can point at a user command of any type — including a `service_exec` one. Such a check inherits this default, which makes it container-*creating* rather than failing when the service is down, and a check is supposed to be a side-effect-free postcondition. Declare `mode: exec-or-fail` on any command you reference from a `check:`. No existing project is affected: across the workspaces surveyed for this change, every `check:` was a `builtin`, `shell` or `auto` action and none was a `type: command`.
+> **If you write a `type: command` `check:`.** A step's `check:` is a full action dispatched through the same executor, so it can point at a user command of any type — including a `service_exec` one. Such a check inherits this default, which makes it container-*creating* rather than failing when the service is down, and a check is supposed to be a side-effect-free postcondition. Declare `mode: exec-or-fail` on any command you reference from a `check:`.
 
 ### User resolution
 
