@@ -76,14 +76,18 @@ generated from commit subjects and stay on the
   A project whose `exports.env` already declares a rule with that name fails to
   load. → [Upgrading](docs/guides/upgrading.md#upgrading-to-060)
 
-- **A dot-path that does not resolve is now reported instead of silently
-  rendering empty.** `dwe validate` warns on an `exports.env` rule's `from:` or
-  `when:` and on a command's `params.<name>.default_from`,
-  `params.<name>.options.from` or `context.<name>.from`; `dwe render env` warns
-  on stderr at the moment it writes the empty value, leaving stdout
-  byte-identical. Until now `from: vars.db.passwrod` passed every check and
-  `DB_PASSWORD=` reached every container as if declared that way. These are
-  warnings, not errors — but `dwe validate --strict` treats warnings as errors.
+- **A dot-path that does not resolve is now reported instead of failing
+  silently.** `dwe validate` warns on an `exports.env` rule's `from:` or `when:`
+  and on a command's `params.<name>.default_from`,
+  `params.<name>.options.from` or `context.<name>.from`. Until now
+  `from: vars.db.passwrod` passed every check and `DB_PASSWORD=` reached every
+  container as if declared that way; `dwe render env` now warns on stderr at the
+  moment it writes that empty value, leaving stdout byte-identical. What an
+  unresolved path costs depends on the field — an `exports.env` `when:` is
+  falsy, so the rule is skipped and the variable is not written at all; a
+  `default_from` falls through to `default:`; an `options.from` yields an empty
+  option list. These are warnings, not errors — but `dwe validate --strict`
+  treats warnings as errors.
   → [Upgrading](docs/guides/upgrading.md#upgrading-to-060)
 
 ### Changed

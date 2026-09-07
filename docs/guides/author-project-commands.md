@@ -200,7 +200,7 @@ Resolution order, top to bottom:
 
 The `default_from` rule lets `local.yml` overrides reach commands without each developer rewriting the literal default. This is the same "config wins, code provides safety net" pattern used elsewhere in DWE.
 
-A `default_from` (or `options.from`, or `context.<name>.from`) that does not resolve renders empty and falls through to `default:` without a word — so `dwe validate` warns about it in the `commands` domain. Run it after adding one; `--strict` turns the warning into an error.
+A `default_from` that does not resolve falls through to `default:` without a word — and an unresolved `options.from` leaves a select form with no choices, while an unresolved `context.<name>.from` renders empty. `dwe validate` warns about all three in the `commands` domain; run it after adding one, and note that `--strict` turns the warning into an error.
 
 Use the resolved value with `${param.<name>}` in `cmd:`, `argv:`, `env:`, `workdir:`, `confirmation_text:`, and file paths.
 

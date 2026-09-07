@@ -20,7 +20,7 @@ DWE does not update itself. The `update:` block in `workspace.yml` is unrelated 
 
 Three things worth doing before you trust the new version in a project:
 
-1. **Run `dwe validate` first.** It reads the config and runs read-only probes — nothing is deployed or mutated — so a removed config key surfaces as a named diagnostic instead of a failed deploy. A project that no longer loads at all reports one error naming the key.
+1. **Run `dwe validate` first.** It deploys nothing and starts no service, so a removed config key surfaces as a named diagnostic instead of a failed deploy. A project that no longer loads at all reports one error naming the key. (It does execute the project's own `checks.*` entries, which may be `shell` or `script` commands; those are expected to be idempotent inspection, but the CLI cannot enforce it.)
 2. **Restart the host bridge, if the project uses one.** The bridge daemon runs the binary that started it, so after a host upgrade a containerized `dwe` keeps executing the *old* version until the daemon is replaced:
 
    ```bash
@@ -73,8 +73,7 @@ Nothing errors. Behaviour is different.
 
 | default | applies to | new behaviour |
 |---|---|---|
-| workdir | `service_exec`, `service_run`, `daemon` | With no `workdir:`, falls back to the service's `cli.workdir` → `work_dir_internal` → `dir_internal` — the chain `dwe shell` uses. `workdir: internal` opts out. |
-| user | `daemon` | A daemon with no `user:` inherits the service's `cli.user` instead of the image's `USER`. |
+| workdir and user | `service_exec`, `service_run`, `daemon` | With no `workdir:`, falls back to the service's `cli.workdir` → `work_dir_internal` → `dir_internal` — the chain `dwe shell` uses; `workdir: internal` opts out. A `daemon` with no `user:` inherits the service's `cli.user` instead of the image's `USER`. |
 | TTY | `service_exec`, `service_run` | A container terminal only when you launched the command yourself and DWE's streams are terminals, or the run is bridged. Everything else gets `-T`, with colour forced. |
 | exec mode | `service_exec` | `mode:` defaults to `exec-or-run` instead of `exec-or-fail`: a stopped service falls back to a one-off `docker compose run --rm` instead of refusing. |
 

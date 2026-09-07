@@ -49,7 +49,8 @@ Decryption happens once, in the config loader, so `${vars.*}`, `exports.env`,
 see plaintext.
 
 The format is [age](https://age-encryption.org). A marker payload is a
-base64-wrapped age file, so the `age` CLI opens it directly — see
+base64-wrapped age file: strip the `ENC[age:…]` wrapper and base64-decode the
+payload, and the `age` CLI reads it — see
 [`age` CLI interoperability](#age-cli-interoperability).
 
 ## Two shapes: scalars and whole files
@@ -297,8 +298,14 @@ dwe secrets init --replace-recipient [--yes]
 
 The exit from a **lost identity**. It mints a new key pair over the old
 `secrets.recipient`, and that is all: every existing `ENC[age:…]` marker and
-`*.age` source stays in place and becomes permanently unreadable. Those values
-come back only by being re-entered.
+`*.age` source stays in place, still encrypted to the **old** recipient. The new
+key pair cannot open them, so for the project they are gone and come back only
+by being re-entered.
+
+This is recovery, not revocation. The ciphertext is unchanged, so anyone who
+still holds the old identity can still read every one of those values. When the
+point is to take access away, the command is [`rekey`](#dwe-secrets-rekey),
+which re-encrypts the tree to a new key pair.
 
 The orphans are left on purpose — they are the record of *which* secrets have to
 be re-entered. `dwe secrets set <path>` overwrites each in place,
@@ -373,9 +380,12 @@ carries the override on its state cell:
 decrypted (shadowed by workspace/local.yml)
 ```
 
-An *unresolved* marker can be shadowed too. With the plaintext covering for it, a
-lost identity then surfaces nowhere in everyday use except
-[`dwe render config`](../render/index.md).
+An *unresolved* marker can be shadowed too — reported as
+`shadow_match: unknown` here and `secrets.shadowed:unknown` in
+`dwe validate secrets`. The plaintext covers for it everywhere else: the merged
+config resolves, so nothing else in everyday use notices the identity is gone
+until [`dwe render config`](../render/index.md), which has no plaintext layer to
+fall back on.
 
 In `--output json` a shadowed row carries two extra fields:
 
