@@ -57,7 +57,7 @@ func asCmdSlice(msg tea.Msg) ([]tea.Cmd, bool) {
 	}
 	cmds := make([]tea.Cmd, v.Len())
 	for i := range cmds {
-		cmds[i], _ = v.Index(i).Interface().(tea.Cmd)
+		cmds[i], _ = reflect.TypeAssert[tea.Cmd](v.Index(i))
 	}
 	return cmds, true
 }

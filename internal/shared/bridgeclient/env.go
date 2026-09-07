@@ -32,6 +32,41 @@ const (
 // allowlist plus the daemon env hardening).
 const EnvBridgeService = "DWE_BRIDGE_SERVICE"
 
+// EnvNestedRuntime marks a dwe process as spawned by another dwe process:
+// a `type: dwe` pipeline step, a `type: shell` / `type: script` step calling
+// back through the exported DWE_BIN, or any other descendant of a running
+// pipeline or command runtime. Its single consumer is RunContext.UserInvoked,
+// which gates container TTY allocation — a nested invocation must never hand
+// a container a terminal.
+//
+// It lives here, next to the other DWE_* env names, because it must join the
+// daemon's strip set: a marker set inside a container would otherwise cross
+// the bridge and kill the TTY on every bridged command (a bridged `dwe cmd`
+// IS a user invocation — that is the whole reason bridgedTTYChildIO exists).
+//
+// The marker is process-global, not per-spawn: it is set once via
+// MarkNestedRuntime by the process about to run a pipeline or dispatch a
+// command runtime, and every descendant inherits it however it was spawned.
+// A per-spawn list would keep missing spawn mechanisms — pipeline's
+// execShellAction never assigns cmd.Env at all.
+const EnvNestedRuntime = "DWE_NESTED_RUNTIME"
+
+// NestedRuntime reports whether this dwe process was spawned by another dwe
+// process. The predicate is "non-empty", not os.LookupEnv: tests clear the
+// marker with t.Setenv(EnvNestedRuntime, ""), which LookupEnv still reports
+// as set.
+func NestedRuntime() bool {
+	return os.Getenv(EnvNestedRuntime) != ""
+}
+
+// MarkNestedRuntime sets EnvNestedRuntime process-globally, so every process
+// this one spawns — by any mechanism — is classified as nested. It is never
+// cleared: once a dwe process is running a pipeline or a command runtime,
+// everything below it is nested for the rest of its life.
+func MarkNestedRuntime() {
+	_ = os.Setenv(EnvNestedRuntime, "1")
+}
+
 // InContainer reports whether this dwe process runs on behalf of a container
 // shim (the daemon force-sets EnvInvokedFrom on every bridged subprocess).
 func InContainer() bool {
@@ -48,12 +83,27 @@ func CallingService() string {
 // strippedEnvNames are bridge-internal variables the shim never forwards to
 // the host (design D7). The daemon re-filters the same set defense-in-depth
 // and force-sets the host-controlled DWE_INVOKED_FROM / DWE_NONINTERACTIVE.
+// EnvNestedRuntime joins for a different reason: a container that inherited
+// (or forged) the marker must not make the host-side dwe treat a bridged
+// user invocation as nested and drop its TTY.
+//
+// The two age-identity variables join for a third: DWE_AGE_KEY carries an
+// identity as text and DWE_AGE_KEY_FILE names a HOST path the forked dwe
+// reads and parses as one, so a forwarded value would let a container choose
+// which host file is opened (and see the parse outcome). The daemon drops the
+// client values and re-supplies its own from hostIdentityEnvNames, so a host
+// running with an env-only identity keeps working over the bridge.
 var strippedEnvNames = map[string]struct{}{
 	"DWE_BRIDGE_DIR":          {},
 	"DWE_HOST_WORKSPACE":      {},
 	"DWE_CONTAINER_WORKSPACE": {},
 	"DWE_BRIDGE_PROJECT":      {},
 	"DWE_BRIDGE_UNREACHABLE":  {},
+	EnvNestedRuntime:          {},
+	// Names duplicated from internal/shared/secrets on purpose: this leaf must
+	// stay free of the age dependency the shim would otherwise link in.
+	"DWE_AGE_KEY":      {},
+	"DWE_AGE_KEY_FILE": {},
 }
 
 // strippedEnvPrefix removes DWE_PROJECT_ROOT and any DWE_PROJECT_ROOT* variant

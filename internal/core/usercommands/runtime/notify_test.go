@@ -190,8 +190,7 @@ func TestRunCommand_NotifyTrue_PreRunFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from bogus type, got nil")
 	}
-	var bad *ErrUnsupportedType
-	if !errors.As(err, &bad) {
+	if _, ok := errors.AsType[*ErrUnsupportedType](err); !ok {
 		t.Fatalf("err type = %T, want *ErrUnsupportedType", err)
 	}
 	evs := rec.snapshot()
@@ -254,8 +253,7 @@ func TestRunCommand_NotifyTrue_CommandAborted_NoEvent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when user aborts")
 	}
-	var aborted *commandAbortedError
-	if !errors.As(err, &aborted) {
+	if _, ok := errors.AsType[*commandAbortedError](err); !ok {
 		t.Errorf("err type = %T, want *commandAbortedError", err)
 	}
 	if got := len(rec.snapshot()); got != 0 {

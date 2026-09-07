@@ -1,12 +1,12 @@
 package setup
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
-	"gopkg.in/yaml.v3"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 // LoadSetupYAML reads and parses workspace/setup.yml with strict field decoding.
@@ -27,11 +27,13 @@ func LoadSetupYAML(path string) (*Config, error) {
 	}
 
 	cfg := &Config{}
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-
-	if err := decoder.Decode(cfg); err != nil {
-		return nil, fmt.Errorf("load %s: %w", path, err)
+	// yamlstrict names the file itself, so no "load %s:" prefix on that error;
+	// io.EOF (an all-comment file) passes through bare and keeps its old wrap.
+	if err := yamlstrict.Decode(data, cfg, path); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("load %s: %w", path, err)
+		}
+		return nil, err
 	}
 
 	return cfg, nil

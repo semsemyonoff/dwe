@@ -45,14 +45,14 @@ Schema → `dwe docs show config/commands/index --lang en`.
 
 `type:` is one of `service_exec · service_run · shell · script · dwe · workflow · builtin · daemon`. One short example each below; full schema → `dwe docs show config/commands/types --lang en`.
 
-**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `mode:` + `workdir_from:` + `argv:`/`cmd:`. Example:
+**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `argv:`/`cmd:`; `mode:` defaults to `exec-or-run` and `workdir` falls back to the service's own (`cli.workdir` → `work_dir_internal` → `dir_internal`), so declare either only to override. Two more defaults the command no longer inherits from the caller: a `type: daemon` with no `user:` takes the service's `cli.user` rather than the image's `USER`, and a container TTY is granted **only** to a user-launched invocation whose streams are terminals (or a bridged run) — every pipeline step, `parallel:` sub-step and `check:` probe runs with `-T`, colour forced. Assume `-T` when writing a command whose output you intend to parse. Example:
 
 ```yaml
 db-seed:
   type: service_exec
   description: Run database seeders (php artisan db:seed [--class=<Seeder>])
   service: app-main
-  mode: exec-or-run                              # exec if up, else throwaway run
+  mode: exec-or-run                              # the default; spell it out only to override
   workdir_from: services.main.work_dir_internal
   params:
     class: { type: string, description: Seeder class, pattern: '^[A-Za-z][A-Za-z0-9_]*$' }
@@ -71,7 +71,9 @@ chown-src:
   argv: [sh, -c, "chown -R www-data:www-data ."]
 ```
 
-**`shell`** — host `sh -c` glue (inherits `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE`):
+**`shell`** — host `sh -c` glue (inherits `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE`;
+`COMPOSE_PROJECT_NAME` is the same value the generated `.env` carries as a reserved system
+variable):
 
 ```yaml
 auth-json:
@@ -145,6 +147,8 @@ Multi-instance: `dwe cmd services.main.queue.start --set name=emails`. Guide →
 `params:` is a map; each entry is `{type: string|int|bool|path, description, required, default, default_from: vars.x, pattern, widget: select, options: [...]}`.
 
 Resolution order at run time: caller **`--set k=v`** → **`default_from`** (a `vars.*` dot-path) → **`default`** → error if `required:`.
+
+`dwe validate` now warns (domain `commands`) on a `default_from`, `options.from` or `context.<name>.from` whose dot-path does not resolve in the merged config — a typo there used to render empty and silently fall through to `default:`. Run it after authoring these fields; note `--strict` turns the warning into a failure.
 
 Secrets do **not** go in params (params land in a docker label) — use `env:` (§6). Schema → `dwe docs show config/commands/validation --lang en`.
 

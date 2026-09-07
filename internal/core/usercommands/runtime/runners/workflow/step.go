@@ -113,6 +113,13 @@ func (r *Runner) runCommandStep(ctx context.Context, rc spec.RunContext, stepIdx
 		SkipConfirm:    rc.SkipConfirm,
 		NonInteractive: rc.NonInteractive,
 		UnderParallel:  rc.UnderParallel,
+		// A sequential sub-step of a user-invoked workflow still owns the
+		// terminal, so it inherits the parent's provenance; a sub-step under
+		// a parallel: block never does — its I/O is fanned into per-step
+		// writers, so it must not ask for a container TTY. Derived here from
+		// UnderParallel rather than stamped a second time in parallel.go, so
+		// there is one place to read and one place to reason about.
+		UserInvoked: rc.UserInvoked && !rc.UnderParallel,
 		// Transitive invocation: workflow sub-steps are never the
 		// user's top-level command, so suppress notifications even if
 		// the referenced CommandDef opted in via notify: true.

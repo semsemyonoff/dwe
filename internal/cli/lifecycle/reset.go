@@ -21,6 +21,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -55,6 +56,7 @@ func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd.AddCommand(newResetPlanCmd(flags))
 	cmd.AddCommand(newResetRunCmd(flags))
 	cmd.AddCommand(newResetStepCmd(flags))
+	cmd.AddCommand(newResetEjectCmd(flags))
 	return cmd
 }
 
@@ -98,8 +100,15 @@ func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var format string
 
 	cmd := &cobra.Command{
-		Use:          "plan",
-		Short:        "Show resolved reset plan",
+		Use:   "plan",
+		Short: "Show resolved reset plan",
+		Long: `Print all phases and steps from workspace/reset.yml as they would be executed.
+
+Use --format shell for a line-per-step preview of the same plan.
+
+Plan output is redacted: a step referencing a decrypted secret shows *** in
+place of the value, so the shell format is a preview of what will run, not a
+script to execute.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -660,7 +669,7 @@ func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command without executing")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command (secrets redacted) without executing")
 	return cmd
 }
 
@@ -720,6 +729,8 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 		render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
 	}
 
+	// Display only, and redacted — StepCommand works on a deep copy, so the
+	// real execution below still sees the step's own (plaintext) with: values.
 	resolved := pipeline.StepCommand(step, config.DweBin(cfg))
 	if dryRun {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
@@ -733,12 +744,28 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 	}
 	_ = reg.ApplyVisibility(cfg, workDir)
 	// Single-step execution: no --yes flag, so confirm prompts are shown.
+	// UserInvoked is what separates this from the same step inside a pipeline:
+	// this command calls ExecAction directly with the real os.Stdout, so a
+	// `type: command` step pointing at an interactive service_exec (a psql, a
+	// tinker) must still get a container terminal.
+	//
+	// Derived, not hardcoded true: `dwe reset step` is a plain subcommand and is
+	// therefore reachable from a `type: dwe` step or a `type: shell` snippet
+	// calling back through DWE_BIN, where the surrounding pipeline has already
+	// marked the environment. There childIO hands us the PTY fabricated for the
+	// PARENT step, so a bare "the streams are terminals" answer is exactly the
+	// false positive runio.WantContainerTTY's UserInvoked gate exists to catch.
+	// Same shape as runbyid.go: read the marker, then set it so everything this
+	// command spawns re-enters as nested.
+	userInvoked := !bridgeclient.NestedRuntime()
+	bridgeclient.MarkNestedRuntime()
 	actx := pipeline.ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
 		Reg:         reg,
 		LogWriter:   nil,
 		SkipConfirm: false,
+		UserInvoked: userInvoked,
 	}
 
 	if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {
@@ -758,7 +785,11 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 			}
 			check = *derived
 		}
-		if err := pipeline.ExecAction(cmd.Context(), check, actx); err != nil {
+		// A check: is a postcondition probe, never a user invocation — it must
+		// not acquire a container terminal even though the body just did.
+		checkActx := actx
+		checkActx.UserInvoked = false
+		if err := pipeline.ExecAction(cmd.Context(), check, checkActx); err != nil {
 			return fmt.Errorf("step %s: check failed: %w", address, err)
 		}
 	}

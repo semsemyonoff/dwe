@@ -197,7 +197,7 @@ func (s *Runner) execScript(ctx context.Context, rc spec.RunContext, shell, scri
 		c.Env = append(c.Env, k+"="+v)
 	}
 	c.Env = append(c.Env, contractEnv...)
-	for _, kv := range runio.ColorForceEnv(rc) {
+	for _, kv := range runio.ColorForceEnv(rc, false) { // host-side child: no container TTY to suppress
 		if eq := strings.IndexByte(kv, '='); eq > 0 {
 			if _, exists := envMap[kv[:eq]]; !exists {
 				c.Env = append(c.Env, kv)

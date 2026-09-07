@@ -101,7 +101,6 @@ runtime:
   use_https: false
   spx:
     path: ""
-state: ""
 `
 
 // sampleDefaultsYML enables redis_insight and mailpit; disables adminer.
@@ -118,7 +117,6 @@ runtime:
   use_https: false
   spx:
     path: ""
-state: ""
 `
 
 // writeServicesDir creates per-folder service files under <baseDir>/workspace/services/
@@ -278,7 +276,6 @@ runtime:
     mailpit: mail.localhost
   spx:
     path: ""
-state: ""
 `
 
 func TestLoadDweConfig(t *testing.T) {
@@ -318,7 +315,8 @@ func TestLoadConfig_mergesDefaultsAndUser(t *testing.T) {
 services:
   adminer:
     enabled: true
-state: staging
+runtime:
+  use_https: true
 `
 	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, userYML)
 	cfg, err := LoadConfig(path)
@@ -343,8 +341,8 @@ state: staging
 	if !cfg.Services["adminer"].Enabled {
 		t.Error("services.adminer.enabled should be true (overridden by user)")
 	}
-	if cfg.State != "staging" {
-		t.Errorf("state = %q, want staging (from user)", cfg.State)
+	if !cfg.Runtime.UseHTTPS {
+		t.Error("runtime.use_https should be true (overridden by user)")
 	}
 }
 
@@ -359,7 +357,6 @@ project:
   prefix: dwe
 runtime:
   use_https: false
-state: ""
 vars:
   db:
     user: root
@@ -444,6 +441,61 @@ func TestLoadConfig_strictRoot_unknownKeyRejected(t *testing.T) {
 				t.Errorf("error = %q, want layer file %q", err, tc.wantFile)
 			}
 		})
+	}
+}
+
+// TestLoadConfig_strictRoot_removedKeysRejected pins that keys dropped from
+// allowedRootKeys fall through to the generic strict-root error, in every
+// layer, naming the file. There is no deprecation branch: the removal IS the
+// migration message.
+func TestLoadConfig_strictRoot_removedKeysRejected(t *testing.T) {
+	removed := []struct {
+		name string
+		key  string
+		body string
+	}{
+		{name: "state", key: "state", body: "state: staging\n"},
+		{name: "ui/commands", key: "ui", body: "ui:\n  commands:\n    default_expanded_depth: 2\n"},
+		{name: "ui/empty-commands", key: "ui", body: "ui:\n  commands: {}\n"},
+	}
+	layers := []struct {
+		name     string
+		wantFile string
+	}{
+		{name: "workspace.yml", wantFile: "workspace.yml"},
+		{name: "defaults.yml", wantFile: "defaults.yml"},
+		{name: "local.yml", wantFile: "local.yml"},
+	}
+	for _, rk := range removed {
+		for _, layer := range layers {
+			t.Run(rk.name+"/"+layer.name, func(t *testing.T) {
+				ws, defaults, lc := sampleWorkspaceYML, "", ""
+				switch layer.name {
+				case "workspace.yml":
+					ws = sampleWorkspaceYML + "\n" + rk.body
+				case "defaults.yml":
+					defaults = "schema_version: \"1\"\n" + rk.body
+				case "local.yml":
+					lc = rk.body
+				}
+				path := writeFullFixture(t, ws, defaults, lc, "", noToolsYML)
+				_, err := LoadConfig(path)
+				if err == nil {
+					t.Fatalf("expected error for removed root key %q", rk.key)
+				}
+				// Assert the quoted form the formatter emits, not a bare
+				// substring: layer.Path is rooted at t.TempDir(), whose name
+				// embeds the sanitized subtest name — so a bare "state"/"ui"
+				// match would pass no matter which key the error named.
+				wantKey := fmt.Sprintf("unknown top-level key %q", rk.key)
+				if !strings.Contains(err.Error(), wantKey) {
+					t.Errorf("error = %q, want %q", err, wantKey)
+				}
+				if !strings.Contains(err.Error(), layer.wantFile) {
+					t.Errorf("error = %q, want layer file %q", err, layer.wantFile)
+				}
+			})
+		}
 	}
 }
 
@@ -718,14 +770,17 @@ func TestLoadConfig_noOptionalFiles(t *testing.T) {
 func TestLoadConfig_noDefaultsFile(t *testing.T) {
 	// local.yml present, defaults.yml absent. Skip tools.yml to avoid requiring
 	// a runtime block solely to satisfy tool host/port validation.
-	userYML := `state: demo`
+	userYML := `
+runtime:
+  use_https: true
+`
 	path := writeFullFixture(t, sampleWorkspaceYML, "", userYML, "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if cfg.State != "demo" {
-		t.Errorf("state = %q, want demo", cfg.State)
+	if !cfg.Runtime.UseHTTPS {
+		t.Error("runtime.use_https should be true (from local.yml)")
 	}
 }
 
@@ -809,8 +864,8 @@ func TestDeepMerge_recursiveMaps(t *testing.T) {
 // --- ResolvePath ---
 
 func TestResolvePath_topLevel(t *testing.T) {
-	m := map[string]any{"state": "staging"}
-	v, ok := ResolvePath(m, "state")
+	m := map[string]any{"docs": "staging"}
+	v, ok := ResolvePath(m, "docs")
 	if !ok || v != "staging" {
 		t.Errorf("got %v, %v", v, ok)
 	}
@@ -2341,8 +2396,8 @@ exports:
     - name: APP_PORT
       from: services.app.ports.http
       format: int
-    - name: STATE
-      from: state
+    - name: APP_NAME
+      from: project.name
 `
 	path := writeLayeredFixture(t, sampleWorkspaceYML, defaultsWithExports, "")
 	cfg, err := LoadConfig(path)
@@ -3771,7 +3826,6 @@ runtime:
   use_https: false
   spx:
     path: ""
-state: ""
 compose:
   base: compose.yaml
 `
@@ -5594,4 +5648,298 @@ func TestAllowedRootKeysSubsetOfKnownVarHeads(t *testing.T) {
 	}
 }
 
+// TestKnownVarHeadsCarryNoStaleRootKeys is the reverse direction of the subset
+// test above, and it is the one that catches a REMOVED root key. Dropping a key
+// from allowedRootKeys without dropping it from tpl.KnownVarHeads leaves the
+// head rewritable: `${state.foo}` still compiles to a lenient Raw lookup that
+// renders to "", silently blanking a pipeline cmd:, while template_refs cannot
+// warn about it either — that validator gates on config.IsAllowedRootKey, which
+// is false for the removed key. The subset assertion alone never fires on this.
+func TestKnownVarHeadsCarryNoStaleRootKeys(t *testing.T) {
+	// The special namespaces CompileVarSyntax switches on directly; they
+	// resolve from a RenderContext field rather than from a config root key,
+	// so they are legitimately absent from allowedRootKeys.
+	special := map[string]struct{}{
+		"files": {}, "host": {}, "param": {}, "context": {},
+		"snapshot": {}, "generated": {}, "args": {},
+	}
+	for _, h := range tpl.KnownVarHeads {
+		if _, ok := special[h]; ok {
+			continue
+		}
+		if _, ok := allowedRootKeySet[h]; !ok {
+			t.Errorf("tpl.KnownVarHeads contains %q, which is neither a special namespace nor a member of allowedRootKeys — "+
+				"drop it from KnownVarHeads, or add it to the special set if it is a new RenderContext namespace", h)
+		}
+	}
+}
+
+func TestServiceByContainer(t *testing.T) {
+	cfg := &DweConfig{Services: map[string]ServiceConfig{
+		"main":  {Container: "main", DirInternal: "/main"},
+		"queue": {Container: "app-queue", DirInternal: "/queue"},
+	}}
+
+	tests := []struct {
+		name      string
+		cfg       *DweConfig
+		container string
+		wantFound bool
+		wantDir   string
+	}{
+		{name: "match by container equal to key", cfg: cfg, container: "main", wantFound: true, wantDir: "/main"},
+		{name: "container differs from key", cfg: cfg, container: "app-queue", wantFound: true, wantDir: "/queue"},
+		{name: "map key is not a container", cfg: cfg, container: "queue"},
+		{name: "no match", cfg: cfg, container: "nope"},
+		{name: "nil config", cfg: nil, container: "main"},
+		{name: "empty container", cfg: cfg, container: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, ok := ServiceByContainer(tt.cfg, tt.container)
+			if ok != tt.wantFound {
+				t.Fatalf("found = %v, want %v", ok, tt.wantFound)
+			}
+			if svc.DirInternal != tt.wantDir {
+				t.Fatalf("dir_internal = %q, want %q", svc.DirInternal, tt.wantDir)
+			}
+		})
+	}
+}
+
+// TestServiceByContainer_CollisionIsStable pins the sorted-key iteration: two
+// services may legally declare the same container, and a map range would pick
+// a different winner between runs.
+func TestServiceByContainer_CollisionIsStable(t *testing.T) {
+	cfg := &DweConfig{Services: map[string]ServiceConfig{
+		"alpha": {Container: "shared", DirInternal: "/alpha"},
+		"beta":  {Container: "shared", DirInternal: "/beta"},
+		"gamma": {Container: "shared", DirInternal: "/gamma"},
+	}}
+	for i := range 200 {
+		svc, ok := ServiceByContainer(cfg, "shared")
+		if !ok {
+			t.Fatalf("iteration %d: not found", i)
+		}
+		if svc.DirInternal != "/alpha" {
+			t.Fatalf("iteration %d: dir_internal = %q, want /alpha", i, svc.DirInternal)
+		}
+	}
+}
+
+func TestContainerWorkdirFallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		svc       ServiceConfig
+		container string
+		want      string
+	}{
+		{
+			name:      "cli.workdir wins",
+			svc:       ServiceConfig{Container: "main", CLI: ServiceCLIConfig{WorkDir: "/cli"}, WorkDirInternal: "/work", DirInternal: "/dir"},
+			container: "main",
+			want:      "/cli",
+		},
+		{
+			name:      "work_dir_internal wins without cli.workdir",
+			svc:       ServiceConfig{Container: "main", WorkDirInternal: "/work", DirInternal: "/dir"},
+			container: "main",
+			want:      "/work",
+		},
+		{
+			name:      "dir_internal is the last rung",
+			svc:       ServiceConfig{Container: "main", DirInternal: "/dir"},
+			container: "main",
+			want:      "/dir",
+		},
+		{
+			name:      "all three empty",
+			svc:       ServiceConfig{Container: "main"},
+			container: "main",
+			want:      "",
+		},
+		{
+			name:      "container differs from map key",
+			svc:       ServiceConfig{Container: "app-main", WorkDirInternal: "/work"},
+			container: "app-main",
+			want:      "/work",
+		},
+		{
+			name:      "unknown container",
+			svc:       ServiceConfig{Container: "main", DirInternal: "/dir"},
+			container: "other",
+			want:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &DweConfig{Services: map[string]ServiceConfig{"main": tt.svc}}
+			if got := ContainerWorkdirFallback(cfg, tt.container); got != tt.want {
+				t.Fatalf("ContainerWorkdirFallback = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestContainerWorkdirFallback_NilConfig(t *testing.T) {
+	if got := ContainerWorkdirFallback(nil, "main"); got != "" {
+		t.Fatalf("ContainerWorkdirFallback = %q, want empty", got)
+	}
+}
+
 var _ = sampleToolsServicesYML
+
+// --- PipelineFileState: the *WithState loader siblings ---
+
+// pipelineStateName makes a failed comparison readable.
+func pipelineStateName(s PipelineFileState) string {
+	switch s {
+	case PipelineStateAuthored:
+		return "Authored"
+	case PipelineStateDefaultFallback:
+		return "DefaultFallback"
+	}
+	return fmt.Sprintf("PipelineFileState(%d)", int(s))
+}
+
+func TestPipelineLoadersWithState(t *testing.T) {
+	const allComment = "# only a comment\n#   name: nope\n\n"
+	const authoredDeploy = "phases:\n  - name: build\n    steps:\n      - name: noop\n        type: shell\n        cmd: \"true\"\n"
+	const authoredLifecycle = "run:\n  phases:\n    - name: start\n      steps:\n        - name: noop\n          type: shell\n          cmd: \"true\"\n"
+	const brokenYAML = "phases: [\n"
+
+	// Each loader is exercised through the same matrix so a future loader change
+	// cannot fix one state and silently break another.
+	loaders := []struct {
+		name     string
+		file     string
+		authored string
+		load     func(path string) (PipelineFileState, bool, error)
+	}{
+		{
+			name:     "ParseDeployConfigForValidationWithState",
+			file:     "deploy.yml",
+			authored: authoredDeploy,
+			load: func(path string) (PipelineFileState, bool, error) {
+				cfg, state, err := ParseDeployConfigForValidationWithState(path)
+				return state, cfg != nil && len(cfg.Phases) == 0, err
+			},
+		},
+		{
+			name:     "LoadResetConfigWithState",
+			file:     "reset.yml",
+			authored: authoredDeploy,
+			load: func(path string) (PipelineFileState, bool, error) {
+				cfg, state, err := LoadResetConfigWithState(path)
+				return state, cfg != nil && len(cfg.Phases) == 0, err
+			},
+		},
+		{
+			name:     "LoadLifecycleConfigWithState",
+			file:     "lifecycle.yml",
+			authored: authoredLifecycle,
+			load: func(path string) (PipelineFileState, bool, error) {
+				cfg, state, err := LoadLifecycleConfigWithState(path)
+				return state, cfg != nil && cfg.Run == nil && cfg.Stop == nil, err
+			},
+		},
+	}
+
+	for _, ld := range loaders {
+		t.Run(ld.name+"/absent", func(t *testing.T) {
+			_, _, err := ld.load(filepath.Join(t.TempDir(), ld.file))
+			if !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("err = %v, want os.ErrNotExist", err)
+			}
+		})
+
+		contents := map[string]string{"all-comment": allComment, "empty": ""}
+		for label, content := range contents {
+			t.Run(ld.name+"/"+label, func(t *testing.T) {
+				dir := t.TempDir()
+				path := filepath.Join(dir, ld.file)
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+					t.Fatalf("write %s: %v", ld.file, err)
+				}
+				state, zero, err := ld.load(path)
+				if err != nil {
+					t.Fatalf("load: %v", err)
+				}
+				if state != PipelineStateDefaultFallback {
+					t.Fatalf("state = %s, want DefaultFallback", pipelineStateName(state))
+				}
+				if !zero {
+					t.Fatal("expected a zero-valued config for an inert file")
+				}
+			})
+		}
+
+		t.Run(ld.name+"/authored", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ld.file)
+			if err := os.WriteFile(path, []byte(ld.authored), 0644); err != nil {
+				t.Fatalf("write %s: %v", ld.file, err)
+			}
+			state, zero, err := ld.load(path)
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if state != PipelineStateAuthored {
+				t.Fatalf("state = %s, want Authored", pipelineStateName(state))
+			}
+			if zero {
+				t.Fatal("expected a populated config for an authored file")
+			}
+		})
+
+		t.Run(ld.name+"/syntaxError", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ld.file)
+			if err := os.WriteFile(path, []byte(brokenYAML), 0644); err != nil {
+				t.Fatalf("write %s: %v", ld.file, err)
+			}
+			if _, _, err := ld.load(path); err == nil {
+				t.Fatal("expected a parse error")
+			}
+		})
+
+		t.Run(ld.name+"/unknownField", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ld.file)
+			if err := os.WriteFile(path, []byte("defaults: {}\n"), 0644); err != nil {
+				t.Fatalf("write %s: %v", ld.file, err)
+			}
+			if _, _, err := ld.load(path); err == nil {
+				t.Fatal("expected a strict-decode error for an unknown field")
+			}
+		})
+	}
+}
+
+// TestPipelineLoadersWithState_publicLoadersUnchanged pins that the state-less
+// public wrappers keep swallowing the io.EOF branch: an all-comment file is
+// still a nil error with a zero-valued config, exactly as before.
+func TestPipelineLoadersWithState_publicLoadersUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("# inert\n"), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		return path
+	}
+
+	if cfg, err := ParseDeployConfigForValidation(write("deploy.yml")); err != nil || cfg == nil || len(cfg.Phases) != 0 {
+		t.Fatalf("ParseDeployConfigForValidation = %+v, %v", cfg, err)
+	}
+	if cfg, err := LoadProjectDeployConfig(write("project-deploy.yml")); err != nil || cfg == nil || len(cfg.Phases) != 0 {
+		t.Fatalf("LoadProjectDeployConfig = %+v, %v", cfg, err)
+	}
+	if cfg, err := LoadResetConfig(write("reset.yml")); err != nil || cfg == nil || len(cfg.Phases) != 0 {
+		t.Fatalf("LoadResetConfig = %+v, %v", cfg, err)
+	}
+	if cfg, err := LoadLifecycleConfig(write("lifecycle.yml")); err != nil || cfg == nil || cfg.Run != nil || cfg.Stop != nil {
+		t.Fatalf("LoadLifecycleConfig = %+v, %v", cfg, err)
+	}
+}

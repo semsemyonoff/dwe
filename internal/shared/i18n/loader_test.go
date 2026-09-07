@@ -86,7 +86,7 @@ invalid: [
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseBundle(strings.NewReader(tt.input))
+			got, err := parseBundle([]byte(tt.input), "workspace/i18n/en.yml")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseBundle() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -94,6 +94,25 @@ invalid: [
 				t.Errorf("parseBundle() returned nil bundle but wanted one")
 			}
 		})
+	}
+}
+
+// TestParseBundleUnknownFieldMessage pins the yamlstrict shape: the bundle file,
+// the line, the rejected key and the fields actually accepted there.
+func TestParseBundleUnknownFieldMessage(t *testing.T) {
+	_, err := parseBundle([]byte("ui: {}\nunknown_field: x\n"), "workspace/i18n/ru.yml")
+	if err == nil {
+		t.Fatal("expected an unknown-field error, got nil")
+	}
+	for _, want := range []string{
+		"workspace/i18n/ru.yml:2:",
+		`unknown field "unknown_field"`,
+		"allowed here: commands, groups, ui",
+		"check `dwe version`",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err.Error(), want)
+		}
 	}
 }
 

@@ -45,18 +45,51 @@ func WriteLocalYAML(localPath string, local map[string]any) error {
 	return WriteLocalYAMLNode(localPath, doc)
 }
 
+// WritePolicy decides the on-disk mode of a node write. The two modes are
+// explicit on purpose: local.yml is gitignored developer state and is FORCED to
+// 0o600 (it may hold credentials), while the tracked layer files (workspace.yml,
+// workspace/defaults.yml) keep whatever mode the repo gave them — forcing 0o600
+// on a tracked file would surprise git and editors.
+type WritePolicy struct {
+	mode  os.FileMode
+	force bool
+}
+
+// ForceMode always writes the target with mode.
+func ForceMode(mode os.FileMode) WritePolicy {
+	return WritePolicy{mode: mode, force: true}
+}
+
+// PreserveOrDefault keeps an existing target's mode and uses mode for a file
+// that does not exist yet.
+func PreserveOrDefault(mode os.FileMode) WritePolicy {
+	return WritePolicy{mode: mode}
+}
+
+// resolve returns the mode to apply to the temp file before the rename.
+func (p WritePolicy) resolve(path string) os.FileMode {
+	if p.force {
+		return p.mode
+	}
+	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+		return info.Mode().Perm()
+	}
+	return p.mode
+}
+
 // writeFileAtomic writes data to localPath atomically via write-temp + rename.
 // Ensures the parent directory exists with mode 0o755 and the file ends up with
-// mode 0o600. Shared by WriteLocalYAML (map-based) and WriteLocalYAMLNode
-// (node-based).
-func writeFileAtomic(localPath string, data []byte) error {
+// the mode the policy resolves to. Shared by WriteLocalYAML (map-based) and
+// WriteYAMLNode (node-based).
+func writeFileAtomic(localPath string, data []byte, policy WritePolicy) error {
 	dir := filepath.Dir(localPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create directory for %s: %w", localPath, err)
 	}
 
-	// Write to temp file
-	tmpFile, err := os.CreateTemp(dir, ".local-*.yml")
+	// Write to temp file. The suffix stays off `.yml` so a leftover temp file
+	// from a crashed write is never picked up by a config-file glob.
+	tmpFile, err := os.CreateTemp(dir, ".dwe-yaml-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
@@ -80,7 +113,7 @@ func writeFileAtomic(localPath string, data []byte) error {
 	}
 
 	// Set file permissions
-	if err := os.Chmod(tmpPath, 0o600); err != nil {
+	if err := os.Chmod(tmpPath, policy.resolve(localPath)); err != nil {
 		return fmt.Errorf("set file permissions: %w", err)
 	}
 

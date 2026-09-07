@@ -3,14 +3,17 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
@@ -221,4 +224,177 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(b)
+}
+
+// writeSecretProject writes a minimal project whose vars carry age markers for
+// the given plaintexts (var name → plaintext) and installs the matching
+// identity in DWE_AGE_KEY, so config.LoadConfig decrypts them and registers the
+// plaintexts with the trace redactor. It returns the workspace.yml path.
+func writeSecretProject(t *testing.T, vars map[string]string) string {
+	t.Helper()
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+	t.Setenv(secrets.EnvKey, id.Export())
+
+	var b strings.Builder
+	b.WriteString("schema_version: \"1\"\nproject:\n  name: tracetest\n  prefix: dwe\nsecrets:\n  recipient: ")
+	b.WriteString(id.Recipient())
+	b.WriteString("\nvars:\n")
+	for _, name := range slices.Sorted(maps.Keys(vars)) {
+		marker, err := secrets.Encrypt(vars[name], id.Recipient())
+		if err != nil {
+			t.Fatalf("encrypt %s: %v", name, err)
+		}
+		b.WriteString("  " + name + ": \"" + marker + "\"\n")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	return path
+}
+
+// loadSecretProject loads a project written by writeSecretProject, asserting
+// the markers actually decrypted (a silently unresolved marker would make every
+// redaction assertion below vacuous).
+func loadSecretProject(t *testing.T, path string) *config.DweConfig {
+	t.Helper()
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(cfg.SecretsState.Unresolved) != 0 {
+		t.Fatalf("markers unresolved: %+v", cfg.SecretsState.Unresolved)
+	}
+	if len(cfg.SecretsState.Decrypted) == 0 {
+		t.Fatal("no marker decrypted — the fixture would not exercise redaction")
+	}
+	return cfg
+}
+
+// TestVerboseEcho_RedactsDecryptedSecret pins decision 10 end to end at the
+// executor: a resolved step command carrying a value LoadConfig decrypted is
+// echoed as *** at -v. The control half (after ResetRedaction the same echo
+// prints the plaintext) proves the assertion is not vacuous.
+func TestVerboseEcho_RedactsDecryptedSecret(t *testing.T) {
+	const plain = "s3cret-plaintext-value"
+	cfg := loadSecretProject(t, writeSecretProject(t, map[string]string{"token": plain}))
+
+	step, err := RenderStep(cfg, config.DeployStep{Name: "s", Type: "shell", Cmd: "true ${vars.token}"})
+	if err != nil {
+		t.Fatalf("RenderStep: %v", err)
+	}
+	if !strings.Contains(step.Cmd, plain) {
+		t.Fatalf("resolved cmd = %q, want the decrypted value substituted", step.Cmd)
+	}
+
+	var buf bytes.Buffer
+	trace.Configure(&buf, trace.LevelVerbose)
+	defer trace.Configure(nil, trace.LevelOff)
+
+	actx := ActionContext{WorkDir: t.TempDir(), Cfg: cfg}
+	if err := execShellAction(context.Background(), config.Action{Type: "shell", Cmd: step.Cmd}, actx); err != nil {
+		t.Fatalf("execShellAction: %v", err)
+	}
+	if got := buf.String(); strings.Contains(got, plain) {
+		t.Fatalf("echo leaked the decrypted value: %q", got)
+	} else if !strings.Contains(got, "$ sh -c 'true ***'") {
+		t.Fatalf("echo = %q, want the value replaced by ***", got)
+	}
+
+	// Control: without the registration the very same echo is plaintext.
+	trace.ResetRedaction()
+	buf.Reset()
+	if err := execShellAction(context.Background(), config.Action{Type: "shell", Cmd: step.Cmd}, actx); err != nil {
+		t.Fatalf("execShellAction (control): %v", err)
+	}
+	if got := buf.String(); !strings.Contains(got, plain) {
+		t.Fatalf("control echo = %q, want the plaintext after ResetRedaction", got)
+	}
+}
+
+// TestVerboseEcho_RedactsSecretWithApostrophe covers the per-argument pass in
+// trace.Command: quoteArg escapes an embedded apostrophe by breaking out of the
+// surrounding single quotes, so an emit-only pass would no longer find the
+// value as a substring. The context is pre-cancelled so the (deliberately
+// unbalanced) shell command never launches a child.
+func TestVerboseEcho_RedactsSecretWithApostrophe(t *testing.T) {
+	const plain = "pa'ss word-secret"
+	cfg := loadSecretProject(t, writeSecretProject(t, map[string]string{"quoted": plain}))
+
+	step, err := RenderStep(cfg, config.DeployStep{Name: "s", Type: "shell", Cmd: "true ${vars.quoted}"})
+	if err != nil {
+		t.Fatalf("RenderStep: %v", err)
+	}
+
+	var buf bytes.Buffer
+	trace.Configure(&buf, trace.LevelVerbose)
+	defer trace.Configure(nil, trace.LevelOff)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the child never launches; the echo already fired
+
+	actx := ActionContext{WorkDir: t.TempDir(), Cfg: cfg}
+	_ = execShellAction(ctx, config.Action{Type: "shell", Cmd: step.Cmd}, actx)
+
+	got := buf.String()
+	if strings.Contains(got, "pa") && strings.Contains(got, "ss word-secret") {
+		t.Fatalf("echo leaked the apostrophe-bearing value: %q", got)
+	}
+	if !strings.Contains(got, "$ sh -c 'true ***'") {
+		t.Fatalf("echo = %q, want the value replaced by ***", got)
+	}
+}
+
+// TestParallelGroup_SubStepLogsAreRedacted pins that the .dwe/logs mirrors of
+// parallel sub-step traces go through the same emit-level redaction as the
+// terminal echo — they are written by the ctx-attached printer, the one path
+// that bypasses both the global stack and the fallback writer.
+func TestParallelGroup_SubStepLogsAreRedacted(t *testing.T) {
+	const plain = "parallel-log-secret"
+	cfg := loadSecretProject(t, writeSecretProject(t, map[string]string{"token": plain}))
+
+	trace.Configure(nil, trace.LevelVerbose)
+	defer trace.Configure(nil, trace.LevelOff)
+
+	sub := make([]config.DeployStep, 0, 2)
+	for _, name := range []string{"alpha", "beta"} {
+		step, err := RenderStep(cfg, config.DeployStep{Name: name, Type: "shell", Cmd: "true ${vars.token}"})
+		if err != nil {
+			t.Fatalf("RenderStep %s: %v", name, err)
+		}
+		sub = append(sub, step)
+	}
+
+	tmp := t.TempDir()
+	phase := config.DeployPhase{Name: "p"}
+	opts := RunOptions{
+		Steps:       []ResolvedStep{buildParallelGroupStep(phase, "g", true, 0, sub)},
+		Reporter:    &mockReporter{},
+		Name:        "deploy",
+		Config:      cfg,
+		WorkDir:     tmp,
+		LogWriter:   &syncBuf{},
+		Recorder:    &mockRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+	}
+	if err := RunWithOptions(opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, name := range []string{"alpha", "beta"} {
+		log := readFile(t, filepath.Join(tmp, ".dwe", "logs", "parallel", "deploy", "g", name+".log"))
+		if strings.Contains(log, plain) {
+			t.Errorf("%s.log leaked the decrypted value: %q", name, log)
+		}
+		if !strings.Contains(log, "$ sh -c 'true ***'") {
+			t.Errorf("%s.log = %q, want the value replaced by ***", name, log)
+		}
+	}
 }

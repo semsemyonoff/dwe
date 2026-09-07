@@ -97,6 +97,12 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	for _, f := range config.ScanComposeIsolation(ctx.Cfg, ctx.ProjectRoot) {
+		// A volume the project declares shared: true in docker.yml is a
+		// deliberate cross-project resource dwe creates itself — warning about
+		// it every run would be permanent and unfixable noise.
+		if f.Shared {
+			continue
+		}
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityWarning,
 			Domain:   "tests",

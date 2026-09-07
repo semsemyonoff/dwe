@@ -20,9 +20,10 @@ import (
 // `-p` silently overrides any top-level `name:` in the compose files, so a
 // divergent `name:` is dead config: the container/network/volume labels and the
 // effective project name are NOT what the file appears to declare. This is
-// confusing when reading the compose file in isolation and a foot-gun for
-// anyone running raw `docker compose` (without dwe's `-p`), who would land on a
-// different project scope than dwe does.
+// confusing when reading the compose file in isolation, and it strands whatever
+// raw `docker compose` created under the declared name — since `.env` now
+// carries `COMPOSE_PROJECT_NAME` (which outranks a compose-file `name:`), even
+// a raw invocation without dwe's `-p` follows the resolved name.
 type composeProjectNameValidator struct{}
 
 var _ validate.Validator = (*composeProjectNameValidator)(nil)
@@ -103,7 +104,7 @@ func composeNameHint(declared, resolved string) string {
 		return fmt.Sprintf(
 			"align the two: set workspace/docker.yml `project_name: %s` to make dwe adopt the compose-declared name (recommended — leaves the compose file untouched), "+
 				"or change the compose top-level to `name: %s` to match the name dwe already uses. "+
-				"Otherwise raw `docker compose` without dwe's -p would scope this stack as %q while dwe uses %q.",
+				"Until then the declared %q is dead config: .env's COMPOSE_PROJECT_NAME outranks it, so even raw `docker compose` scopes this stack as %q.",
 			declared, resolved, declared, resolved,
 		)
 	}
@@ -111,8 +112,8 @@ func composeNameHint(declared, resolved string) string {
 		"align the two: change the compose top-level to `name: %s` to match the name dwe already uses (recommended), "+
 			"or lowercase it to `name: %s` and set workspace/docker.yml `project_name: %s` to keep that identity — "+
 			"compose project names must be lowercase, so %q cannot be pinned as-is. "+
-			"Otherwise raw `docker compose` without dwe's -p would scope this stack as %q while dwe uses %q.",
-		resolved, strings.ToLower(declared), strings.ToLower(declared), declared, declared, resolved,
+			"Until then the declared name is dead config: .env's COMPOSE_PROJECT_NAME outranks it, so even raw `docker compose` scopes this stack as %q.",
+		resolved, strings.ToLower(declared), strings.ToLower(declared), declared, resolved,
 	)
 }
 

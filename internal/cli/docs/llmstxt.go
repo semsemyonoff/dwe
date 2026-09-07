@@ -16,7 +16,7 @@ import (
 )
 
 type docsLlmsTxtFlags struct {
-	output           string
+	out              string
 	lang             string
 	includeInternals bool
 	noProject        bool
@@ -28,7 +28,7 @@ func newDocsLlmsTxtCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "llms-txt",
 		Short: "Emit an llms.txt project index for AI agents",
-		Long: `Emit a single llms.txt document to stdout (or --output PATH).
+		Long: `Emit a single llms.txt document to stdout (or --out PATH).
 
 The document follows the llms.txt spec: a dense briefing (project-agnostic part
 capped at 12KB) that gives an AI agent a complete picture of "what this dwe
@@ -41,7 +41,7 @@ and outside one (project-agnostic: generic dwe reference).
 
 Examples:
   dwe docs llms-txt
-  dwe docs llms-txt --output llms.txt
+  dwe docs llms-txt --out llms.txt
   dwe docs llms-txt --include-internals
   dwe docs llms-txt --no-project`,
 		Args:         cobra.NoArgs,
@@ -51,7 +51,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&df.output, "output", "", "Write output to PATH instead of stdout")
+	cmd.Flags().StringVar(&df.out, "out", "", "Write output to PATH instead of stdout")
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from userconfig / $LANG / en)")
 	cmd.Flags().BoolVar(&df.includeInternals, "include-internals", false, "Include internals architecture docs section")
 	cmd.Flags().BoolVar(&df.noProject, "no-project", false, "Force project-agnostic output even if workspace.yml exists")
@@ -108,17 +108,17 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 		return fmt.Errorf("generating llms.txt: %w", err)
 	}
 
-	if df.output == "" {
+	if df.out == "" {
 		_, err = fmt.Fprint(cmd.OutOrStdout(), out)
 		return err
 	}
 
 	// Write to file, creating parent dirs as needed.
-	if mkErr := os.MkdirAll(filepath.Dir(df.output), 0o755); mkErr != nil {
-		return cmdctx.ErrWrap("llms_txt_write_failed", mkErr).WithDetail("path", df.output)
+	if mkErr := os.MkdirAll(filepath.Dir(df.out), 0o755); mkErr != nil {
+		return cmdctx.ErrWrap("llms_txt_write_failed", mkErr).WithDetail("path", df.out)
 	}
-	if writeErr := os.WriteFile(df.output, []byte(out), 0o644); writeErr != nil {
-		return cmdctx.ErrWrap("llms_txt_write_failed", writeErr).WithDetail("path", df.output)
+	if writeErr := os.WriteFile(df.out, []byte(out), 0o644); writeErr != nil {
+		return cmdctx.ErrWrap("llms_txt_write_failed", writeErr).WithDetail("path", df.out)
 	}
 	return nil
 }

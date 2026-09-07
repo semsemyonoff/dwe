@@ -76,7 +76,7 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 		return nil, err
 	}
 	contractEnv := hostContractEnv(rc)
-	colorEnv := runio.ColorForceEnv(rc)
+	colorEnv := runio.ColorForceEnv(rc, false) // host-side child: no container TTY to suppress
 	if len(envMap) > 0 || len(contractEnv) > 0 || len(colorEnv) > 0 {
 		c.Env = os.Environ()
 		for k, v := range envMap {

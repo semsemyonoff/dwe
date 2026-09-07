@@ -20,7 +20,10 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"github.com/spf13/cobra"
 )
@@ -1845,4 +1848,172 @@ func TestResetRunFlags_ClearGeneratedExists(t *testing.T) {
 	if cmd.Flags().Lookup("clear-generated") == nil {
 		t.Error("missing --clear-generated flag on reset run")
 	}
+}
+
+// TestResetStepCmd_UserInvoked pins the two hand-written lines in resetStepCmd
+// that decide whether a `type: command` step gets a container terminal.
+//
+// The BODY is a user invocation: `dwe reset step` runs one step at the terminal
+// with confirm prompts on and the real os.Stdout, so an interactive
+// service_exec (a psql, a tinker) must keep its TTY — that is the whole reason
+// the flag is set here and nowhere else in the pipeline.
+//
+// The check: is a postcondition probe and must NOT, even though the body just
+// did. execCommandAction does not derive either value; without this test both
+// lines can be deleted with the suite still green.
+//
+// Nested is the other half: `dwe reset step` is reachable from a `type: dwe`
+// step or a DWE_BIN callback, where the surrounding pipeline has already marked
+// the environment and the "real os.Stdout" premise above is false — it is the
+// PTY childIO fabricated for the parent step. The marker must win there.
+func TestResetStepCmd_UserInvoked(t *testing.T) {
+	// runResetStepUserInvoked's own MarkNestedRuntime is process-global and
+	// never cleared, so both cases pin the marker with t.Setenv — which also
+	// keeps this test from poisoning the ~30 siblings that run steps.
+	t.Run("top level", func(t *testing.T) {
+		t.Setenv(bridgeclient.EnvNestedRuntime, "")
+		got := runResetStepUserInvoked(t)
+		want := map[string]bool{"noop.body": true, "noop.check": false}
+		assertUserInvoked(t, got, want)
+	})
+	t.Run("nested", func(t *testing.T) {
+		t.Setenv(bridgeclient.EnvNestedRuntime, "1")
+		got := runResetStepUserInvoked(t)
+		want := map[string]bool{"noop.body": false, "noop.check": false}
+		assertUserInvoked(t, got, want)
+	})
+}
+
+func assertUserInvoked(t *testing.T, got, want map[string]bool) {
+	t.Helper()
+	for id, wantInvoked := range want {
+		invoked, ran := got[id]
+		if !ran {
+			t.Fatalf("%s never ran (captured: %+v)", id, got)
+		}
+		if invoked != wantInvoked {
+			t.Errorf("%s: UserInvoked = %t, want %t", id, invoked, wantInvoked)
+		}
+	}
+}
+
+func runResetStepUserInvoked(t *testing.T) map[string]bool {
+	t.Helper()
+	dir := writeResetStepFixture(t, "",
+		"phases:\n  - name: probe\n    steps:\n      - name: act\n        type: command\n        cmd: noop.body\n"+
+			"        check:\n          type: command\n          cmd: noop.check\n",
+	)
+	commandsDir := filepath.Join(dir, "workspace", "commands")
+	if err := os.MkdirAll(commandsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(commandsDir, "noop.yml"), []byte(
+		"commands:\n  body:\n    type: shell\n    cmd: \"true\"\n  check:\n    type: shell\n    cmd: \"true\"\n"),
+		0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]bool{}
+	prev := runtime.TestSnapshotRC
+	runtime.TestSnapshotRC = func(rc runtime.RunContext) {
+		if rc.Cmd != nil {
+			got[rc.Cmd.ID] = rc.UserInvoked
+		}
+	}
+	t.Cleanup(func() { runtime.TestSnapshotRC = prev })
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := resetStepCmd(cmd, flags, "probe/act", false); err != nil {
+		t.Fatalf("resetStepCmd: %v", err)
+	}
+	return got
+}
+
+// TestResetPlanAndStep_RedactDecryptedSecret pins that neither `reset plan`
+// (table and shell) nor `reset step --dry-run` prints a decrypted value. The
+// plaintext is unique to this test: the redactor is process-global and
+// union-only, so a value shared with another test would be redacted anyway and
+// prove nothing.
+func TestResetPlanAndStep_RedactDecryptedSecret(t *testing.T) {
+	const plaintext = "r3s3t-plan-token-value"
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("Keygen: %v", err)
+	}
+	marker, err := secrets.Encrypt(plaintext, id.Recipient())
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+
+	dir := t.TempDir()
+	workspaceYAML := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n" +
+		"secrets:\n  recipient: " + id.Recipient() + "\n" +
+		"vars:\n  token: " + marker + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resetYAML := "phases:\n" +
+		"  - name: probe\n" +
+		"    steps:\n" +
+		"      - name: greet\n" +
+		"        type: shell\n" +
+		"        cmd: \"echo 'token is ${vars.token}'\"\n" +
+		"        check:\n" +
+		"          type: shell\n" +
+		"          cmd: \"grep -q '${vars.token}' /tmp/state\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(resetYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+
+	assertRedacted := func(t *testing.T, out string) {
+		t.Helper()
+		if strings.Contains(out, plaintext) {
+			t.Errorf("output carries the decrypted value:\n%s", out)
+		}
+		if !strings.Contains(out, "***") {
+			t.Errorf("output missing the *** placeholder:\n%s", out)
+		}
+	}
+
+	for _, format := range []string{"", "shell"} {
+		name := "plan table"
+		if format == "shell" {
+			name = "plan shell"
+		}
+		t.Run(name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			var outBuf bytes.Buffer
+			cmd.SetOut(&outBuf)
+			cmd.SetErr(io.Discard)
+			if err := runResetPlan(cmd, flags, resetPlanOpts{Format: format}); err != nil {
+				t.Fatalf("runResetPlan(%q): %v", format, err)
+			}
+			assertRedacted(t, outBuf.String())
+		})
+	}
+
+	t.Run("step dry-run", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(io.Discard)
+		if err := resetStepCmd(cmd, flags, "probe/greet", true); err != nil {
+			t.Fatalf("resetStepCmd: %v", err)
+		}
+		assertRedacted(t, outBuf.String())
+	})
 }

@@ -146,7 +146,7 @@ Five rules that follow from the design:
 - **Per-sub-step journaling.** The deploy journal records each sub-step under `(phase, sub-step.name)`. Reordering or adding sub-steps does not invalidate siblings, because `journal.StepHash` is computed from the sub-step alone.
 - **No PTY in sub-steps.** Granting a child a PTY when stdin is the empty reader makes `docker compose exec/run` fail. Use a sequential step when you need an interactive console.
 
-The reporter swaps the LiveLine footer for a LiveBlock during a parallel group, with one row per sub-step, the pipeline-wide `[N/M]` index per row, and a frame-aware parser that normalises `\r` progress lines into one frame per visible row. Full output goes to `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log`.
+The reporter swaps the LiveLine footer for a LiveBlock during a parallel group, with one row per sub-step, the pipeline-wide `[N/M]` index per row, and a frame-aware parser that normalises `\r` progress lines into one frame per visible row. That parser also feeds the log files on both routes — sequential and parallel — where a redraw run collapses to its last frame instead of one line per frame. Committed output goes to `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log`.
 
 Full schema, defaults, validation rules, and execution semantics: [`config/deploy/examples.md → Parallel step groups`](../config/deploy/examples.md#parallel-step-groups).
 

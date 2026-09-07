@@ -7,7 +7,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 )
 
-// PrintPlanShell emits shell commands for the reset plan.
+// PrintPlanShell emits one shell line per reset step: a preview, not an
+// artefact to execute — pipeline.StepCommand redacts registered secrets.
 // Unlike the deploy plan shell output, there is no implicit .env step.
 // dweBin is the configured binary name (e.g. "dwe")).
 func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, dweBin string) {

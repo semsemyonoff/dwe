@@ -8,6 +8,11 @@ import (
 )
 
 // makeEnvCfg builds a DweConfig with the given export rules and raw map.
+//
+// These tests pass an empty baseDir to BuildContent: that skips the docker.yml
+// read entirely, so COMPOSE_PROJECT_NAME falls back to the lowercased
+// FullName() and no test needs a project tree on disk. The docker.yml /
+// docker.local.yml precedence lives in compose_name_test.go.
 func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
 	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
@@ -18,7 +23,7 @@ func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig
 
 func TestBuildContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -33,21 +38,24 @@ func TestBuildContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 func TestBuildContent_silentlyDropsReservedRules(t *testing.T) {
 	// Defense-in-depth: a rule with a reserved name should be silently dropped
 	// even if it slips past LoadConfig validation, so the output never has
-	// duplicate lines for PROJECT/UID/GID.
+	// duplicate lines for PROJECT/UID/GID/COMPOSE_PROJECT_NAME.
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "PROJECT", From: "state"},
-		{Name: "UID", From: "state"},
-		{Name: "GID", From: "state"},
-		{Name: "MY_VAR", From: "state"},
-	}, map[string]any{"state": "shouldnotappear"})
+		{Name: "PROJECT", From: "env"},
+		{Name: "UID", From: "env"},
+		{Name: "GID", From: "env"},
+		{Name: "COMPOSE_PROJECT_NAME", From: "env"},
+		{Name: "MY_VAR", From: "env"},
+	}, map[string]any{"env": "shouldnotappear"})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, name := range config.ReservedExportNames {
-		if strings.Count(out, name+"=") != 1 {
-			t.Errorf("%s should appear exactly once in output, got:\n%s", name, out)
+		// Count whole lines, not substrings: "PROJECT=" is a substring of
+		// "COMPOSE_PROJECT_NAME=".
+		if got := countAssignments(out, name); got != 1 {
+			t.Errorf("%s should appear exactly once in output, got %d:\n%s", name, got, out)
 		}
 		if strings.Contains(out, name+"=shouldnotappear") {
 			t.Errorf("rule with reserved name %s leaked its From value into the output:\n%s", name, out)
@@ -60,10 +68,10 @@ func TestBuildContent_silentlyDropsReservedRules(t *testing.T) {
 
 func TestBuildContent_simpleStringRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -79,7 +87,7 @@ func TestBuildContent_boolFormatTrue(t *testing.T) {
 		"runtime": map[string]any{"use_https": true},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,7 +103,7 @@ func TestBuildContent_boolFormatFalse(t *testing.T) {
 		"runtime": map[string]any{"use_https": false},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -115,7 +123,7 @@ func TestBuildContent_intFormat(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,7 +137,7 @@ func TestBuildContent_defaultFallback(t *testing.T) {
 		{Name: "MISSING_VAR", From: "no.such.path", Default: "fallback"},
 	}, map[string]any{})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,7 +151,7 @@ func TestBuildContent_requiredMissingReturnsError(t *testing.T) {
 		{Name: "REQUIRED_VAR", From: "no.such.path", Required: true},
 	}, map[string]any{})
 
-	_, err := BuildContent(cfg)
+	_, err := BuildContent(cfg, "")
 	if err == nil {
 		t.Error("expected error for required missing path, got nil")
 	}
@@ -161,7 +169,7 @@ func TestBuildContent_whenFalsySkipsRule(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -179,7 +187,7 @@ func TestBuildContent_whenTruthyIncludesRule(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -190,14 +198,14 @@ func TestBuildContent_whenTruthyIncludesRule(t *testing.T) {
 
 func TestBuildContent_commentEmitted(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state", Comment: "Active state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env", Comment: "Active env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "# Active state") {
+	if !strings.Contains(out, "# Active env") {
 		t.Errorf("expected comment in output, got:\n%s", out)
 	}
 }
@@ -276,7 +284,7 @@ func TestBuildContent_toolPortResolution(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -297,7 +305,7 @@ func TestBuildContent_toolHostResolution(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -321,7 +329,7 @@ func TestBuildContent_multiPortService(t *testing.T) {
 		},
 	})
 
-	out, err := BuildContent(cfg)
+	out, err := BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -329,5 +337,100 @@ func TestBuildContent_multiPortService(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q, got:\n%s", want, out)
 		}
+	}
+}
+
+// TestUnresolvedRules covers the one shape that renders NAME= silently against
+// every neighbouring shape that does not: a default, required (BuildContent
+// fails instead), a falsy when: (no line at all) and a path that resolves.
+func TestUnresolvedRules(t *testing.T) {
+	raw := map[string]any{
+		"services": map[string]any{
+			"app": map[string]any{
+				"enabled": true,
+				"ports":   map[string]any{"http": 8080},
+			},
+			"off": map[string]any{"enabled": false},
+		},
+		"vars": map[string]any{"empty": nil},
+	}
+
+	tests := []struct {
+		name string
+		rule config.ExportRule
+		want bool // reported as rendering empty
+	}{
+		{"resolving path", config.ExportRule{Name: "APP_PORT", From: "services.app.ports.http"}, false},
+		{"missing path", config.ExportRule{Name: "APP_PORT", From: "services.app.ports.htpp"}, true},
+		{"missing path with default", config.ExportRule{Name: "APP_URL", From: "runtime.urls.app", Default: "http://localhost"}, false},
+		{"missing path required", config.ExportRule{Name: "TOKEN", From: "vars.tokn", Required: true}, false},
+		{"missing path skipped by falsy when", config.ExportRule{Name: "OFF_HOST", From: "services.off.hosts.web", When: "services.off.enabled"}, false},
+		{"missing path with truthy when", config.ExportRule{Name: "APP_HOST", From: "services.app.hosts.web", When: "services.app.enabled"}, true},
+		{"present key holding nil", config.ExportRule{Name: "EMPTY", From: "vars.empty"}, false},
+		// No from: at all renders NAME= on purpose. ResolvePath calls an empty
+		// path not-found, so without the guard this would warn `from ""` at an
+		// author who never wrote one — and config.exports stays silent here.
+		{"no from at all", config.ExportRule{Name: "FLAG"}, false},
+		{"no from with comment", config.ExportRule{Name: "FLAG", Comment: "left blank on purpose"}, false},
+		{"reserved name", config.ExportRule{Name: "PROJECT", From: "vars.nope"}, false},
+		{"missing path with bool format", config.ExportRule{Name: "FLAG", From: "services.app.enabld", Format: "bool"}, true},
+		{"missing path with int format", config.ExportRule{Name: "PORT", From: "services.app.ports.htp", Format: "int"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UnresolvedRules(makeEnvCfg([]config.ExportRule{tt.rule}, raw))
+			if tt.want {
+				if len(got) != 1 || got[0].Name != tt.rule.Name || got[0].From != tt.rule.From {
+					t.Fatalf("UnresolvedRules = %+v, want one entry for %s/%s", got, tt.rule.Name, tt.rule.From)
+				}
+				return
+			}
+			if len(got) != 0 {
+				t.Fatalf("UnresolvedRules = %+v, want none", got)
+			}
+		})
+	}
+}
+
+// TestUnresolvedRules_orderAndNilConfig pins source order (the order the empty
+// lines appear in .env) and the nil-config guard.
+func TestUnresolvedRules_orderAndNilConfig(t *testing.T) {
+	if got := UnresolvedRules(nil); got != nil {
+		t.Errorf("UnresolvedRules(nil) = %+v, want nil", got)
+	}
+
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "FIRST", From: "vars.a"},
+		{Name: "OK", From: "vars.here"},
+		{Name: "SECOND", From: "vars.b"},
+	}, map[string]any{"vars": map[string]any{"here": "yes"}})
+
+	got := UnresolvedRules(cfg)
+	if len(got) != 2 || got[0].Name != "FIRST" || got[1].Name != "SECOND" {
+		t.Fatalf("UnresolvedRules = %+v, want FIRST then SECOND", got)
+	}
+}
+
+// TestUnresolvedRules_matchesBuildContent ties the report to the rendered
+// output: every reported rule must actually appear as a bare NAME= line, and
+// no unreported rule may.
+func TestUnresolvedRules_matchesBuildContent(t *testing.T) {
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "EMPTY_ONE", From: "vars.typo"},
+		{Name: "WITH_DEFAULT", From: "vars.typo", Default: "fallback"},
+		{Name: "RESOLVED", From: "vars.here"},
+	}, map[string]any{"vars": map[string]any{"here": "yes"}})
+
+	out, err := BuildContent(cfg, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "\nEMPTY_ONE=\n") {
+		t.Errorf("expected a bare EMPTY_ONE= line, got:\n%s", out)
+	}
+	got := UnresolvedRules(cfg)
+	if len(got) != 1 || got[0].Name != "EMPTY_ONE" {
+		t.Fatalf("UnresolvedRules = %+v, want only EMPTY_ONE", got)
 	}
 }

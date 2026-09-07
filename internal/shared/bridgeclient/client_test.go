@@ -466,6 +466,10 @@ func TestStripEnv(t *testing.T) {
 		"DWE_CONTAINER_WORKSPACE=/workspace",
 		"DWE_BRIDGE_PROJECT=my-proj",
 		"DWE_BRIDGE_UNREACHABLE=warn",
+		// A container that inherited (or forged) the nested-runtime marker
+		// must not make the host-side dwe treat a bridged user invocation as
+		// nested and drop its container TTY.
+		"DWE_NESTED_RUNTIME=1",
 		"DWE_PROJECT_ROOT=/elsewhere",
 		"DWE_PROJECT_ROOT_OVERRIDE=/elsewhere2",
 		"DWE_DEBUG=1",

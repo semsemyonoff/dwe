@@ -79,7 +79,7 @@ func (m *MmdcRenderer) Render(ctx context.Context, src string, theme Theme, widt
 		"--scale", "3",
 		"--quiet")
 
-	// Platform-specific setup (see mmdc_unix.go / mmdc_windows.go).
+	// Platform-specific setup (see mmdc_unix.go).
 	configureCommand(cmd)
 
 	var stderr bytes.Buffer

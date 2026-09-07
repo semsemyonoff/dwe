@@ -17,6 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 var errNotExist = os.ErrNotExist
@@ -1093,7 +1094,7 @@ func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	lifecyclePath := filepath.Join(ctx.ProjectRoot, "workspace", "lifecycle.yml")
 
-	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
+	lifecycleCfg, state, err := config.LoadLifecycleConfigWithState(lifecyclePath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			diags = append(diags, validate.Diagnostic{
@@ -1101,7 +1102,7 @@ func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.lifecycle",
 				File:     relPath(ctx.ProjectRoot, lifecyclePath),
-				Message:  "no lifecycle.yml",
+				Message:  "no lifecycle.yml — built-in default pipeline is active",
 			})
 		} else {
 			diags = append(diags, validate.Diagnostic{
@@ -1115,14 +1116,47 @@ func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.lifecycle",
-		File:     relPath(ctx.ProjectRoot, lifecyclePath),
-	})
-
-	_ = lifecycleCfg // Unused; just checking that it loads cleanly
+	// An all-comment file must NOT read as OK: the built-in default pipeline is
+	// what runs, and an agent that sees SeverityOK has no reason to look further.
+	// The same holds section-by-section — EnsureRunConfig/EnsureStopConfig
+	// substitute the built-in default whenever their section is absent, so a
+	// file declaring only stop: runs the default run: pipeline.
+	switch {
+	case state == config.PipelineStateDefaultFallback:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.lifecycle",
+			File:     relPath(ctx.ProjectRoot, lifecyclePath),
+			Message:  "lifecycle.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		})
+	case lifecycleCfg.Run == nil || lifecycleCfg.Stop == nil:
+		for _, section := range []string{"run", "stop"} {
+			if section == "run" && lifecycleCfg.Run != nil {
+				continue
+			}
+			if section == "stop" && lifecycleCfg.Stop != nil {
+				continue
+			}
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.lifecycle",
+				File:     relPath(ctx.ProjectRoot, lifecyclePath),
+				Message: fmt.Sprintf(
+					"lifecycle.yml declares no %s: section — built-in default %s pipeline is active",
+					section, section,
+				),
+			})
+		}
+	default:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.lifecycle",
+			File:     relPath(ctx.ProjectRoot, lifecyclePath),
+		})
+	}
 
 	return diags
 }
@@ -1137,11 +1171,31 @@ func (v *deployValidator) Domain() string {
 	return "config"
 }
 
+// projectDeployStrictError narrows an unknown-field error raised while parsing
+// the project-wide workspace/deploy.yml so its "allowed here:" list matches the
+// runtime loader.
+//
+// The parse deliberately goes through config.DeployConfig, the union of the
+// project and per-service shapes, so deployAfterValidator can read an `after:`
+// that lands here and answer with its own precise message. yamlstrict derives
+// the allowed set by reflecting the decode target, so without this the row
+// would offer `after` — which LoadProjectDeployConfig rejects structurally, and
+// which config.workspace reports on the very same file without it. Two rows
+// naming one file must not describe two different schemas.
+//
+// A non-yamlstrict error (a type mismatch, an unreadable file) passes through.
+func projectDeployStrictError(err error) error {
+	if strictErr, ok := errors.AsType[*yamlstrict.Error](err); ok {
+		return strictErr.WithoutAllowed("after")
+	}
+	return err
+}
+
 func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 
-	deployCfg, err := config.ParseDeployConfigForValidation(deployPath)
+	deployCfg, state, err := config.ParseDeployConfigForValidationWithState(deployPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			diags = append(diags, validate.Diagnostic{
@@ -1149,7 +1203,7 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.deploy",
 				File:     relPath(ctx.ProjectRoot, deployPath),
-				Message:  "no deploy.yml",
+				Message:  "no deploy.yml — built-in default pipeline is active",
 			})
 		} else {
 			diags = append(diags, validate.Diagnostic{
@@ -1157,20 +1211,46 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.deploy",
 				File:     relPath(ctx.ProjectRoot, deployPath),
-				Message:  err.Error(),
+				Message:  projectDeployStrictError(err).Error(),
 			})
 		}
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.deploy",
-		File:     relPath(ctx.ProjectRoot, deployPath),
-	})
-
-	_ = deployCfg
+	// The scaffold ships an all-comment deploy.yml; reporting OK for it would
+	// claim the user's pipeline is in force when the built-in default is what
+	// actually runs. The ResolvePlan cross-check below still runs — the plan
+	// resolves from the default, which is exactly what deploy executes.
+	//
+	// A phase-less file is the same case wearing different clothes:
+	// EnsureDeployConfig substitutes the built-in default whenever Phases is
+	// empty, so `phases: []` or a file carrying only `log: false` is every bit
+	// as inert as an all-comment one.
+	switch {
+	case state == config.PipelineStateDefaultFallback:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.deploy",
+			File:     relPath(ctx.ProjectRoot, deployPath),
+			Message:  "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		})
+	case len(deployCfg.Phases) == 0:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.deploy",
+			File:     relPath(ctx.ProjectRoot, deployPath),
+			Message:  "deploy.yml declares no phases — built-in default pipeline is active",
+		})
+	default:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.deploy",
+			File:     relPath(ctx.ProjectRoot, deployPath),
+		})
+	}
 
 	// Cross-reference: resolve the plan to catch step-level errors.
 	// Pass nil registry so files_gate validation is skipped here — the dedicated
@@ -1213,7 +1293,7 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	resetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 
-	resetCfg, err := config.LoadResetConfig(resetPath)
+	resetCfg, state, err := config.LoadResetConfigWithState(resetPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			// Unlike deploy.yml/lifecycle.yml, reset.yml is never shipped by the
@@ -1232,14 +1312,35 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.reset",
-		File:     relPath(ctx.ProjectRoot, resetPath),
-	})
-
-	_ = resetCfg
+	// Absence is silent (see above), but a present all-comment file is a
+	// deliberate authoring state the user can see and misread as active — as is
+	// a file that parses but declares no phases, which EnsureResetConfig
+	// replaces with the built-in default just the same.
+	switch {
+	case state == config.PipelineStateDefaultFallback:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.reset",
+			File:     relPath(ctx.ProjectRoot, resetPath),
+			Message:  "reset.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		})
+	case len(resetCfg.Phases) == 0:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.reset",
+			File:     relPath(ctx.ProjectRoot, resetPath),
+			Message:  "reset.yml declares no phases — built-in default pipeline is active",
+		})
+	default:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.reset",
+			File:     relPath(ctx.ProjectRoot, resetPath),
+		})
+	}
 
 	// Cross-reference: resolve the plan to catch step-level errors.
 	// Pass nil registry so files_gate validation is skipped here — the dedicated

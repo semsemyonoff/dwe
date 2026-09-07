@@ -118,6 +118,30 @@ func TestResolveLayeredPath_rejectsLayerLoadConfigRejects(t *testing.T) {
 	}
 }
 
+// TestValidateLayerRoots_unknownKeyMessage pins the whole root-key message: the
+// vars: advice (correct for a home-made key), the allowed set, and the
+// newer-version hint that yamlstrict prints for a nested unknown field — the two
+// surfaces must give an author the same two explanations for the same mistake.
+func TestValidateLayerRoots_unknownKeyMessage(t *testing.T) {
+	err := validateLayerRoots([]Layer{{
+		Path: "workspace.yml",
+		Data: map[string]any{"db": map[string]any{"host": "localhost"}},
+	}})
+	if err == nil {
+		t.Fatal("want error for unknown top-level key, got nil")
+	}
+	for _, want := range []string{
+		`workspace.yml: unknown top-level key "db"`,
+		`move custom values under "vars:" (e.g. vars.db.*)`,
+		"allowed top-level keys: " + strings.Join(allowedRootKeys, ", "),
+		"a key you did not invent may come from a newer dwe version — check `dwe version`",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want substring %q", err.Error(), want)
+		}
+	}
+}
+
 func TestResolveLayeredPath(t *testing.T) {
 	tests := []struct {
 		name      string

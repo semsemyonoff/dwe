@@ -112,8 +112,8 @@ func TestGenerate_WithDocTopics(t *testing.T) {
 		if strings.Contains(got, "internals/packages") {
 			t.Errorf("internals topic should be excluded when IncludeIntern=false")
 		}
-		if !strings.Contains(got, "dwe-docs://reference/config/services") {
-			t.Errorf("expected reference topic link in output")
+		if !strings.Contains(got, "\n- reference/config/services\n") {
+			t.Errorf("expected reference topic path in output")
 		}
 	})
 
@@ -152,7 +152,7 @@ func stubBriefingOpts() llmstxt.Opts {
 		Conditions: []llmstxt.ConditionSummary{
 			{Name: "dir-empty", Args: "<path>", Summary: "path is missing or is an empty directory"},
 		},
-		ReservedEnvNames: []string{"PROJECT", "UID", "GID"},
+		ReservedEnvNames: []string{"PROJECT", "UID", "GID", "COMPOSE_PROJECT_NAME"},
 	}
 }
 

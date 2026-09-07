@@ -12,6 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/scaffold"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 
 	"github.com/stretchr/testify/require"
 )
@@ -1375,4 +1376,243 @@ func TestValidateFilterHint_SuppressedInJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Greater(t, len(got.Diagnostics), filterHintThreshold,
 		"fixture must exceed the threshold or the JSON suppression is untested")
+}
+
+// writeSecretsFixture creates a project whose single var is an ENC[age:…]
+// marker for a recipient no identity is available for.
+func writeSecretsFixture(t *testing.T) (workspacePath string, recipient string) {
+	t.Helper()
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	t.Setenv(secrets.EnvKey, "")
+	t.Setenv(secrets.EnvKeyFile, "")
+	t.Setenv("HOME", t.TempDir())
+
+	workspacePath = filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n"), 0o644))
+	return workspacePath, id.Recipient()
+}
+
+func TestValidateSecretsSubcommand(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{})
+	secretsCmd, _, _ := cmd.Find([]string{"secrets"})
+	require.NotNil(t, secretsCmd)
+	require.Equal(t, "secrets", secretsCmd.Name())
+	require.NotNil(t, secretsCmd.Args)
+	require.True(t, secretsCmd.SilenceUsage)
+}
+
+// A keyless project still LOADS; `dwe validate` must therefore report the
+// unreadable secret as diagnostics-as-data, not as a config load failure.
+func TestValidateSecretsScopedReportsUnresolved(t *testing.T) {
+	workspacePath, _ := writeSecretsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 1, got.Summary.Error)
+	// The fixture's recipient is valid and its marker is not shadowed, so both
+	// content validators affirm next to the readiness error; diagnostics sort
+	// severity-descending, so the error stays first.
+	require.Len(t, got.Diagnostics, 3)
+	require.Equal(t, "secrets/secrets.unresolved:no_identity", got.Diagnostics[0].Scope)
+	require.Contains(t, got.Diagnostics[0].Message, "vars.token")
+	require.Equal(t, "ok", got.Diagnostics[1].Severity)
+	require.Equal(t, "secrets/secrets.recipient", got.Diagnostics[1].Scope)
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "main config did not load")
+}
+
+func TestValidateFullRunIncludesSecretsDomain(t *testing.T) {
+	workspacePath, _ := writeSecretsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath)
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	var scopes []string
+	for _, d := range got.Diagnostics {
+		if strings.HasPrefix(d.Scope, "secrets/") {
+			scopes = append(scopes, d.Scope)
+		}
+	}
+	require.Equal(t, []string{
+		"secrets/secrets.unresolved:no_identity",
+		"secrets/secrets.recipient",
+		"secrets/secrets.shadowed",
+	}, scopes)
+}
+
+// writeHealthySecretsFixture creates a project whose marker decrypts with the
+// identity published through DWE_AGE_KEY — the state a developer lands in right
+// after onboarding, and the one `dwe validate secrets` has to confirm.
+func writeHealthySecretsFixture(t *testing.T) (workspacePath string, recipient string) {
+	t.Helper()
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+	t.Setenv("HOME", t.TempDir())
+
+	workspacePath = filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n"), 0o644))
+	return workspacePath, id.Recipient()
+}
+
+// Without the OK rows a healthy project renders as "validation skipped (no
+// files found)" — indistinguishable from the domain never running, on the one
+// command a developer uses to check themselves after onboarding.
+func TestValidateSecretsScopedHealthyEmitsOKRows(t *testing.T) {
+	workspacePath, recipient := writeHealthySecretsFixture(t)
+
+	stdout, _ := runValidateTextCmd(t, workspacePath, "secrets")
+
+	require.Contains(t, stdout, "secrets.recipient")
+	require.Contains(t, stdout, "secrets.unresolved")
+	// The table wraps long messages, so the counter line is asserted in
+	// fragments; the exact string is pinned on the JSON side.
+	require.Contains(t, stdout, "secrets.shadowed")
+	require.Contains(t, stdout, "1 encrypted value(s)")
+	require.Contains(t, stdout, "readable via env")
+	require.Contains(t, stdout, "validation result: 3 checks")
+	require.NotContains(t, stdout, "validation skipped")
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "AGE-SECRET-KEY-")
+	require.NotContains(t, stdout, recipient+".key")
+}
+
+func TestValidateSecretsScopedHealthyJSON(t *testing.T) {
+	workspacePath, recipient := writeHealthySecretsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 3, got.Summary.Ok)
+	require.Zero(t, got.Summary.Error)
+	require.Zero(t, got.Summary.Warning)
+	require.Len(t, got.Diagnostics, 3)
+
+	byScope := map[string]diagnosticJSON{}
+	for _, d := range got.Diagnostics {
+		byScope[d.Scope] = d
+	}
+	recipientRow, ok := byScope["secrets/secrets.recipient"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "ok", recipientRow.Severity)
+	require.Empty(t, recipientRow.Message)
+	require.Equal(t, "workspace.yml", recipientRow.File)
+
+	unresolvedRow, ok := byScope["secrets/secrets.unresolved"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "ok", unresolvedRow.Severity)
+	require.Equal(t, "1 encrypted value(s) and 0 config-pack source(s) readable via env", unresolvedRow.Message)
+
+	shadowedRow, ok := byScope["secrets/secrets.shadowed"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "ok", shadowedRow.Severity)
+	require.Equal(t, "1 encrypted value(s), none shadowed by a plaintext override", shadowedRow.Message)
+
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "AGE-SECRET-KEY-")
+	require.NotContains(t, stdout, recipient+".key")
+}
+
+// A marker a higher layer overrides with plaintext decrypts fine, so every other
+// row in this domain stays green about a value the project never reads. The
+// warning is what closes that gap — and it stays a WARNING, because overriding
+// a shared secret locally is a legitimate move.
+func TestValidateSecretsScopedReportsShadowedMarker(t *testing.T) {
+	root := t.TempDir()
+	id, err := secrets.Keygen()
+	require.NoError(t, err)
+	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())
+	require.NoError(t, err)
+
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+	t.Setenv("HOME", t.TempDir())
+
+	workspacePath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: "+id.Recipient()+
+			"\nvars:\n  token: "+marker+"\n  other: "+marker+"\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	// token: the migration leftover (same value). other: a deliberate override.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(
+		"vars:\n  token: s3cr3t-value\n  other: something-else\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Zero(t, got.Summary.Error)
+	require.Equal(t, 2, got.Summary.Warning)
+
+	byScope := map[string]diagnosticJSON{}
+	for _, d := range got.Diagnostics {
+		byScope[d.Scope] = d
+	}
+	identical, ok := byScope["secrets/secrets.shadowed:identical"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "warning", identical.Severity)
+	require.Equal(t, filepath.Join("workspace", "local.yml"), identical.File)
+	require.Contains(t, identical.Message, "identical plaintext value")
+	require.Contains(t, identical.Message, "vars.token")
+	require.Contains(t, identical.Hint, "already holds the same content")
+
+	different, ok := byScope["secrets/secrets.shadowed:different"]
+	require.True(t, ok, stdout)
+	require.Equal(t, "warning", different.Severity)
+	require.Contains(t, different.Message, "different plaintext value")
+	require.Contains(t, different.Message, "vars.other")
+	require.Contains(t, different.Hint, "local override")
+
+	// The report names paths and verdicts, never either side of the comparison.
+	require.NotContains(t, stdout, "s3cr3t-value")
+	require.NotContains(t, stdout, "something-else")
+}
+
+// A malformed recipient makes LoadConfig fail; the scoped run must still name
+// the problem rather than going blind on a nil cfg.
+func TestValidateSecretsScopedMalformedRecipientWithFailedLoad(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte(
+		"project:\n  name: test\nsecrets:\n  recipient: age1-not-a-real-key\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 1, got.Summary.Error)
+	require.Equal(t, "secrets/secrets.recipient", got.Diagnostics[0].Scope)
+	require.Contains(t, got.Diagnostics[0].Message, "not a valid age recipient")
+}
+
+// A project with no secrets: block and no markers must add no secrets rows.
+func TestValidateSecretsSilentWithoutSecrets(t *testing.T) {
+	root := t.TempDir()
+	workspacePath := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("project:\n  name: test\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "secrets")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 0, got.Summary.Error)
+	require.Empty(t, got.Diagnostics)
 }

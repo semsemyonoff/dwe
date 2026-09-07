@@ -21,11 +21,17 @@ Settings cover preferences that are inherently personal — preferred language, 
 
 Two files are read in this precedence order (lower → higher), then env vars on top:
 
-1. **Global user config** at `~/.config/dwe/config` on every OS (Linux, macOS, Windows). One path everywhere — no platform-native location, no XDG fallback. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
+1. **Global user config** at `~/.config/dwe/config` on every supported OS (macOS and Linux; on Windows run dwe inside WSL2, where the path is the distro's). One path everywhere — no platform-native location, no XDG fallback. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
 
 2. **Per-project override** at `<project>/.dwe/config`. The `.dwe/` directory is already gitignored by DWE; this file is meant for a developer to pin overrides for a single project without touching the global file. Missing file is silently treated as empty.
 
 3. **Environment variables** override both files.
+
+The same `~/.config/dwe/` directory also holds `keys/<recipient>.key` — the
+private age identity for one project, mode `0600` in a `0700` directory,
+written by `dwe secrets init` / `key import` / `rekey` and overridable with
+`DWE_AGE_KEY` / `DWE_AGE_KEY_FILE`. It is not part of this file's schema; see
+[secrets](secrets.md#keys-where-the-identity-lives).
 
 A parser error in either file bubbles up as a warning (notifications get disabled for that run, locale and theme fall back to defaults). The operation itself is never blocked by a malformed user config.
 

@@ -3,10 +3,15 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
 // Layer is one source file in the merged 3-layer project config
@@ -19,13 +24,30 @@ type Layer struct {
 	Data map[string]any
 }
 
-// LoadLayers reads the project config layers in precedence order (lowest
+// LoadLayers reads the project config layers and decrypts every ENC[age:…]
+// marker it can. It is the historical entry point and keeps its signature:
+// callers that do not care where a secret came from (ResolveLayeredPath, the
+// `dwe vars` browsers) keep using it and go through exactly the same decrypt
+// pass as LoadConfig, so the two cannot drift.
+//
+// Use LoadRawLayers when the ciphertext as written is what you need (the
+// `dwe secrets` CLI), and LoadLayersWithSecrets when you also need to know
+// which markers resolved and which did not.
+func LoadLayers(workspacePath string) ([]Layer, error) {
+	layers, _, err := LoadLayersWithSecrets(workspacePath)
+	return layers, err
+}
+
+// LoadRawLayers reads the project config layers in precedence order (lowest
 // first): workspace.yml (required) then the optional workspace/defaults.yml and
 // workspace/local.yml. Absent optional layers are skipped; a present-but-empty
 // file yields an empty (non-nil) Data map. The returned slice always begins
 // with the workspace.yml layer. Error wording matches LoadConfig's historical
 // reads so the two stay byte-identical.
-func LoadLayers(workspacePath string) ([]Layer, error) {
+//
+// Encrypted scalars are returned as the ENC[age:…] markers written on disk —
+// no decryption happens here. This is what the `dwe secrets` commands read.
+func LoadRawLayers(workspacePath string) ([]Layer, error) {
 	baseDir := filepath.Dir(workspacePath)
 	var layers []Layer
 
@@ -55,6 +77,402 @@ func LoadLayers(workspacePath string) ([]Layer, error) {
 	return layers, nil
 }
 
+// LoadLayersWithSecrets reads the raw layers, validates their roots and
+// decrypts every ENC[age:…] marker on a deep copy, reporting what resolved and
+// what did not.
+//
+// The recipient comes from the FIRST layer only (workspace.yml), which
+// ValidateLayerRoots has just pinned as the single legal home of the secrets:
+// block — so the recipient the decrypt pass uses and the one
+// cfg.SecretsState.Recipient reports are the same value by construction.
+//
+// A project without secrets never touches the filesystem for an identity: with
+// no markers present the identity lookup is skipped entirely.
+func LoadLayersWithSecrets(workspacePath string) ([]Layer, SecretsState, error) {
+	raw, err := LoadRawLayers(workspacePath)
+	if err != nil {
+		return nil, SecretsState{}, err
+	}
+	if err := ValidateLayerRoots(raw); err != nil {
+		return nil, SecretsState{}, err
+	}
+
+	state := SecretsState{Recipient: recipientFromLayers(raw)}
+
+	// Deep-copy before decrypting: the caller's raw view must stay ciphertext
+	// (LoadRawLayers is the documented way to read it back), and nothing may
+	// mutate a map another loader still holds.
+	layers := make([]Layer, len(raw))
+	for i, l := range raw {
+		data, _ := deepCopyValue(l.Data).(map[string]any)
+		if data == nil {
+			data = make(map[string]any)
+		}
+		layers[i] = Layer{Path: l.Path, Data: data}
+	}
+
+	if !layersHaveMarker(layers) {
+		return layers, state, nil
+	}
+
+	// Load the identity once for the whole pass. A failure is not fatal: every
+	// marker is recorded as unresolved with the reason, the project still
+	// loads, and the secrets.unresolved validator blocks the commands that
+	// would act on a missing value.
+	var (
+		id     secrets.Identity
+		idErr  error
+		source secrets.Source
+	)
+	id, source, idErr = secrets.LoadIdentity(state.Recipient)
+	// The CONSULTED source, recorded on failure too: "invalid_identity" only
+	// becomes actionable once the reader knows which source is the broken one.
+	state.IdentitySource = string(source)
+
+	for _, layer := range layers {
+		decryptLayer(layer, id, idErr, &state)
+	}
+	return layers, state, nil
+}
+
+// Marker is one encrypted scalar as written on disk: where it lives plus the
+// ENC[age:…] text itself.
+type Marker struct {
+	SecretRef
+	Value string
+}
+
+// CollectMarkers returns every encrypted scalar in the given layers, ordered by
+// layer then by path — the same order SecretsState uses. It is meant for raw
+// layers (LoadRawLayers): on decrypted layers only unresolved markers remain.
+//
+// This is the single marker inventory: the secrets validators, `dwe secrets
+// status` and `rekey` all read the tree through it rather than re-rolling a
+// walk that could disagree about sequence indices or key order.
+func CollectMarkers(layers []Layer) []Marker {
+	var out []Marker
+	for _, layer := range layers {
+		walkScalars(layer.Data, "", func(path, s string) (string, bool) {
+			if secrets.IsMarker(s) {
+				out = append(out, Marker{SecretRef: SecretRef{Layer: layer.Path, Path: path}, Value: s})
+			}
+			return s, false
+		})
+	}
+	return out
+}
+
+// ShadowedMarker is an ENC[age:…] scalar whose value never reaches the merged
+// config: a higher-precedence layer supplies a plaintext value at the same path,
+// so the age round-trip is not what the project actually runs on.
+//
+// It is the difference between the two questions every secrets report is read
+// as answering — "does this marker decrypt?" (yes) and "is this secret actually
+// shared through the key pair?" (no) — which otherwise diverge silently.
+type ShadowedMarker struct {
+	SecretRef          // the marker itself
+	ShadowLayer string `json:"shadow_layer"` // layer file supplying the effective value
+	Match       string `json:"match"`
+}
+
+// CollectShadowedMarkers reports every marker a higher layer overrides with a
+// plaintext value, in CollectMarkers order.
+//
+// layers must be the RAW set (LoadRawLayers): the markers are read as written,
+// and the effective value is computed with deepMerge — the merge LoadConfig
+// itself performs — so the answer is what the project actually uses rather than
+// a second reading of the precedence rules.
+//
+// A marker overridden by ANOTHER marker is not reported: the value that wins is
+// still encrypted at rest, which is the question this inventory answers.
+//
+// decrypt opens a marker for the identical/different verdict and may be nil; a
+// marker it cannot open is reported as ShadowUnknown rather than dropped — a
+// shadow over a value this machine cannot read is the case most worth naming,
+// not the one to go quiet about.
+func CollectShadowedMarkers(layers []Layer, decrypt func(marker string) (string, bool)) []ShadowedMarker {
+	markers := CollectMarkers(layers)
+	if len(markers) == 0 {
+		return nil
+	}
+
+	// scalars[j] is every string scalar of layers[0..j] merged, keyed by dot-path.
+	// Snapshotting per prefix is what lets the report NAME the layer that wins:
+	// the effective value alone cannot say where it came from once a higher layer
+	// replaced the marker's whole parent subtree.
+	scalars := make([]map[string]string, len(layers))
+	index := make(map[string]int, len(layers))
+	merged := make(map[string]any)
+	for j, l := range layers {
+		index[l.Path] = j
+		merged = deepMergeCopy(merged, l.Data)
+		snapshot := make(map[string]string)
+		walkScalars(merged, "", func(path, s string) (string, bool) {
+			snapshot[path] = s
+			return s, false
+		})
+		scalars[j] = snapshot
+	}
+	top := scalars[len(layers)-1]
+
+	var out []ShadowedMarker
+	for _, m := range markers {
+		i, ok := index[m.Layer]
+		if !ok {
+			continue
+		}
+		effective, isString := top[m.Path]
+		if isString && (effective == m.Value || secrets.IsMarker(effective)) {
+			continue
+		}
+		layer := shadowingLayer(layers, scalars, i, m.Path)
+		if layer == "" {
+			continue
+		}
+		out = append(out, ShadowedMarker{
+			SecretRef:   m.SecretRef,
+			ShadowLayer: layer,
+			Match:       shadowMatch(m.Value, effective, isString, decrypt),
+		})
+	}
+	return out
+}
+
+// shadowingLayer names the highest-precedence layer above idx that changed the
+// value at path — the file the effective value comes from. It compares the
+// merged snapshots rather than the layers' own data so a wholesale subtree
+// replacement (a scalar, a list or a non-string-keyed mapping where the marker's
+// parent map was) names the right file instead of going quiet: deepMerge only
+// merges map[string]any into map[string]any and REPLACES everything else.
+func shadowingLayer(layers []Layer, scalars []map[string]string, idx int, path string) string {
+	for j := len(layers) - 1; j > idx; j-- {
+		prev, prevOK := scalars[j-1][path]
+		cur, curOK := scalars[j][path]
+		if prevOK != curOK || prev != cur {
+			return layers[j].Path
+		}
+	}
+	return ""
+}
+
+// shadowMatch compares the marker's plaintext with the value that wins. Neither
+// value is kept or returned — the verdict is the whole output, because a report
+// that printed the two values to justify itself would leak the secret it is
+// warning about.
+func shadowMatch(marker, effective string, isString bool, decrypt func(string) (string, bool)) string {
+	if !isString {
+		// The winning value is not a string at all (a number, a list, a mapping
+		// that replaced the marker's parent), so it cannot be the leftover copy of
+		// a plaintext that was migrated into the marker.
+		return ShadowDifferent
+	}
+	if decrypt == nil {
+		return ShadowUnknown
+	}
+	plain, ok := decrypt(marker)
+	if !ok {
+		return ShadowUnknown
+	}
+	if plain == effective {
+		return ShadowIdentical
+	}
+	return ShadowDifferent
+}
+
+// RecipientFromLayers reads secrets.recipient out of a raw layer set. Exported
+// for callers that work before (or without) a merged config — the secrets
+// validators diagnose a malformed recipient precisely when LoadConfig refused
+// to produce a *DweConfig. The value is returned as written; validity is the
+// caller's question.
+func RecipientFromLayers(layers []Layer) string { return recipientFromLayers(layers) }
+
+// recipientFromLayers reads secrets.recipient from the workspace.yml layer.
+// ValidateLayerRoots has already rejected the block anywhere else and rejected
+// a malformed value, so a non-empty result here always parses.
+func recipientFromLayers(layers []Layer) string {
+	if len(layers) == 0 {
+		return ""
+	}
+	block, ok := layers[0].Data["secrets"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	recipient, _ := block["recipient"].(string)
+	return strings.TrimSpace(recipient)
+}
+
+func layersHaveMarker(layers []Layer) bool {
+	found := false
+	for _, layer := range layers {
+		walkScalars(layer.Data, "", func(_ string, s string) (string, bool) {
+			if secrets.IsMarker(s) {
+				found = true
+			}
+			return s, false
+		})
+		if found {
+			return true
+		}
+	}
+	return false
+}
+
+// decryptLayer replaces every marker in one layer's data in place, recording
+// each path in state. idErr is the (possibly nil) identity-load failure: when
+// it is non-nil every marker is unresolved with the mapped reason, and the
+// filesystem is not touched again.
+func decryptLayer(layer Layer, id secrets.Identity, idErr error, state *SecretsState) {
+	walkScalars(layer.Data, "", func(path, s string) (string, bool) {
+		if !secrets.IsMarker(s) {
+			return s, false
+		}
+		ref := SecretRef{Layer: layer.Path, Path: path}
+		if idErr != nil {
+			state.Unresolved = append(state.Unresolved, UnresolvedSecret{SecretRef: ref, Reason: identityReason(idErr)})
+			return s, false
+		}
+		plain, err := secrets.Decrypt(s, id)
+		if err != nil {
+			state.Unresolved = append(state.Unresolved, UnresolvedSecret{SecretRef: ref, Reason: unresolvedReason(err)})
+			return s, false
+		}
+		state.Decrypted = append(state.Decrypted, ref)
+		return plain, true
+	})
+}
+
+// collectDecryptedValues re-walks the decrypted layers and returns the
+// plaintext at every path SecretsState recorded as decrypted. It exists so the
+// plaintexts never have to travel on SecretsState itself (which is handed to
+// JSON output and to renderers), and it uses the same walk as the decrypt pass
+// so sequence elements (`vars.tokens.0`) resolve too — ResolvePath does not
+// index sequences.
+func collectDecryptedValues(layers []Layer, state SecretsState) []string {
+	if len(state.Decrypted) == 0 {
+		return nil
+	}
+	want := make(map[SecretRef]struct{}, len(state.Decrypted))
+	for _, ref := range state.Decrypted {
+		want[ref] = struct{}{}
+	}
+	var values []string
+	for _, layer := range layers {
+		walkScalars(layer.Data, "", func(path, s string) (string, bool) {
+			if _, ok := want[SecretRef{Layer: layer.Path, Path: path}]; ok && s != "" {
+				values = append(values, s)
+			}
+			return s, false
+		})
+	}
+	return values
+}
+
+// unresolvedReason maps a per-marker decryption failure onto the stable reason
+// string reported by SecretsState, `dwe secrets status` and the validators.
+// Its default is ReasonCorrupt because secrets.Decrypt only ever fails for one
+// of the three sentinels — use identityReason instead for an identity-load
+// failure, whose "other" errors are nothing of the sort.
+func unresolvedReason(err error) string {
+	switch {
+	case errors.Is(err, secrets.ErrNoIdentity):
+		return ReasonNoIdentity
+	case errors.Is(err, secrets.ErrWrongIdentity):
+		return ReasonWrongIdentity
+	default:
+		return ReasonCorrupt
+	}
+}
+
+// identityReason maps an identity-LOAD failure onto the same reason strings.
+// It must not share unresolvedReason's default: LoadIdentity deliberately
+// returns a keyfile permission error unwrapped (pinned by its own test), which
+// would then be reported as "the encrypted payload is damaged" for every marker
+// in the project — sending the developer to `dwe secrets rekey` over what is a
+// local key problem. A source that WAS present but holds no age key is
+// invalid_identity, because the fix is repairing that source rather than
+// obtaining a key; anything else short of a recipient mismatch is no_identity,
+// which is also what `dwe secrets status` reports for it.
+func identityReason(err error) string {
+	switch {
+	case errors.Is(err, secrets.ErrWrongIdentity):
+		return ReasonWrongIdentity
+	case errors.Is(err, secrets.ErrInvalidIdentity):
+		return ReasonInvalidIdentity
+	default:
+		return ReasonNoIdentity
+	}
+}
+
+// walkScalars visits every string scalar reachable from v, depth-first, with
+// map keys sorted so the emitted paths (and therefore the SecretsState order
+// and every golden built from it) are deterministic. fn returns the
+// replacement value and whether to apply it; a sequence element's path carries
+// its index (`vars.tokens.0`).
+//
+// Both map shapes yaml.v3 produces must be walked: a mapping whose keys are all
+// strings decodes to map[string]any, but ONE non-string key (`vars: {8080: …}`,
+// legal in the free-form vars: sandbox) demotes the whole mapping to
+// map[any]any. Skipping that shape would hide a marker from the decrypt pass,
+// from SecretsState and from both validators — while `local.ReplaceScalars`,
+// which walks nodes and does not care about key kind, still rewrites it. That
+// disagreement makes `dwe secrets rekey` abort in its write phase with "an
+// encrypted value appeared after the read-only pass" on every run, after the
+// new keyfile is already on disk.
+func walkScalars(v any, path string, fn func(path, s string) (string, bool)) {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(t)) {
+			child := k
+			if path != "" {
+				child = path + "." + k
+			}
+			if s, ok := t[k].(string); ok {
+				if replacement, replace := fn(child, s); replace {
+					t[k] = replacement
+				}
+				continue
+			}
+			walkScalars(t[k], child, fn)
+		}
+	case map[any]any:
+		keys := slices.SortedStableFunc(maps.Keys(t), func(a, b any) int {
+			return strings.Compare(fmt.Sprint(a), fmt.Sprint(b))
+		})
+		for _, k := range keys {
+			child := fmt.Sprint(k)
+			if path != "" {
+				child = path + "." + child
+			}
+			if s, ok := t[k].(string); ok {
+				if replacement, replace := fn(child, s); replace {
+					t[k] = replacement
+				}
+				continue
+			}
+			walkScalars(t[k], child, fn)
+		}
+	case []any:
+		for i, item := range t {
+			child := path + "." + strconv.Itoa(i)
+			if path == "" {
+				child = strconv.Itoa(i)
+			}
+			if s, ok := item.(string); ok {
+				if replacement, replace := fn(child, s); replace {
+					t[i] = replacement
+				}
+				continue
+			}
+			walkScalars(item, child, fn)
+		}
+	}
+}
+
+// ValidateLayerRoots is the exported form of validateLayerRoots, for callers
+// that stage a modified layer set before persisting it (`dwe secrets set`) and
+// need the same acceptance rules the runtime loader applies.
+func ValidateLayerRoots(layers []Layer) error { return validateLayerRoots(layers) }
+
 // validateLayerRoots runs the strict-root + legacy-block rejection per layer,
 // naming the source file in each error. deepMerge drops nil values, so a layer
 // carrying ONLY a binaries:/tools: key never reaches the merged map — this
@@ -82,8 +500,54 @@ func validateLayerRoots(layers []Layer) error {
 			if _, ok := allowedRootKeySet[key]; ok {
 				continue
 			}
-			return fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
+			// The hint mirrors yamlstrict's: a key the author did not invent is
+			// far more likely a forward-compat schema than a typo, and the
+			// "move it under vars:" advice would be wrong advice for it.
+			return fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s; a key you did not invent may come from a newer dwe version — check `dwe version`",
 				layer.Path, key, key, strings.Join(allowedRootKeys, ", "))
+		}
+	}
+	return validateSecretsBlock(layers)
+}
+
+// validateSecretsBlock pins the secrets: block to workspace.yml (the first
+// layer) and validates its shape there, naming the offending file.
+//
+// The single-layer rule mirrors compose.extra's inverse restriction: the
+// recipient identifies the project's key pair, so a per-developer local.yml
+// override would silently decrypt a different half of the tree than the one
+// `dwe secrets status` reports. Validating here rather than in LoadConfig
+// means LoadConfig, ResolveLayeredPath (dwe vars inspect) and the staged-write
+// check in `dwe secrets set` all reject the same files.
+func validateSecretsBlock(layers []Layer) error {
+	for i, layer := range layers {
+		raw, ok := layer.Data["secrets"]
+		if !ok {
+			continue
+		}
+		if i != 0 {
+			return fmt.Errorf("%s: secrets: is only valid in workspace.yml — the recipient identifies the project key pair and cannot be overridden per layer", layer.Path)
+		}
+		if raw == nil {
+			continue
+		}
+		block, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: secrets: must be a mapping", layer.Path)
+		}
+		rawRecipient, present := block["recipient"]
+		if !present || rawRecipient == nil {
+			continue
+		}
+		recipient, ok := rawRecipient.(string)
+		if !ok {
+			return fmt.Errorf("%s: secrets.recipient must be a string (an age1… public recipient)", layer.Path)
+		}
+		if recipient = strings.TrimSpace(recipient); recipient == "" {
+			continue
+		}
+		if err := secrets.ParseRecipient(recipient); err != nil {
+			return fmt.Errorf("%s: secrets.recipient is malformed: %w", layer.Path, err)
 		}
 	}
 	return nil
@@ -182,10 +646,21 @@ func deepMergeCopy(dst, src map[string]any) map[string]any {
 // deepCopyValue returns a structural deep copy of a yaml-decoded value (maps and
 // sequences cloned recursively; scalars returned as-is since they are
 // immutable). A typed-nil map yields an empty map.
+//
+// map[any]any (yaml.v3's shape for a mapping with a non-string key) is cloned
+// too: walkScalars descends into it, so leaving it aliased would let the decrypt
+// pass write plaintext into the raw layer set LoadRawLayers hands out as
+// ciphertext.
 func deepCopyValue(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
 		m := make(map[string]any, len(t))
+		for k, val := range t {
+			m[k] = deepCopyValue(val)
+		}
+		return m
+	case map[any]any:
+		m := make(map[any]any, len(t))
 		for k, val := range t {
 			m[k] = deepCopyValue(val)
 		}

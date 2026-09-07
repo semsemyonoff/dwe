@@ -159,32 +159,33 @@ Emit a single [llms.txt](https://llmstxt.org/) document — a dense briefing tha
 **Usage:**
 ```bash
 dwe docs llms-txt                          # print to stdout
-dwe docs llms-txt --output llms.txt        # write to file
+dwe docs llms-txt --out llms.txt           # write to file
 dwe docs llms-txt --include-internals      # include internals/* topics
 dwe docs llms-txt --no-project             # force project-agnostic output
 dwe docs llms-txt --lang ru                # localize command descriptions
 ```
 
 **Flags:**
-- `--output PATH` — write to PATH instead of stdout. Parent directories are created as needed.
+- `--out PATH` — write to PATH instead of stdout. Parent directories are created as needed. Named `--out` (like `dwe docs generate`) so it does not shadow the global `--output`/`-o` format flag.
 - `--lang CODE` — language for command descriptions. Defaults to user config / `$LANG` / `en`.
 - `--include-internals` — include the `internals/` architecture docs in the Documentation section.
 - `--no-project` — force the project-agnostic shape even when run inside a DWE project.
 
 **Output shapes:**
-- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), the briefing sections below, `## Documentation` (topic links as `dwe-docs://path`), and `## Quick start`.
+- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), the briefing sections below, `## Documentation` (bare topic paths), and `## Quick start`.
 - *Outside a project* (or with `--no-project`): generic DWE reference — H1 "dwe", blockquote, the briefing sections, `## Documentation`, `## Quick start`. No project-specific sections.
 
 **Briefing sections** (identical in both shapes — they describe DWE itself):
 - `## Builtins` — every registered step builtin (`name — kind — purpose`, including `internal` ones), then the disjoint `when:` predicate registry. The two registries share the word "builtin" and accept nothing from each other; the section says so explicitly.
 - `## Template syntax by site` — which of `${...}` / `{{ ... }}` is evaluated where, and which `${...}` namespaces are unavailable in pipeline fields.
 - `## Diagnostics and machine-readable output` — `--quiet`, `--level`, `-v`/`--debug`, `docs show --toc`/`--anchors`, and the `-o json` exceptions.
-- `## Reserved env names` — the names `dwe render env` always emits itself (`PROJECT`, `UID`, `GID`), which `exports.env` rules may not redeclare.
+- `## Reserved env names` — the names `dwe render env` emits itself (`PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME`), which `exports.env` rules may not redeclare.
 
 **Details:**
 - Read-only. Acquires no project lock and runs no preflight; works without `workspace.yml`.
+- The global `--output text|json` (`-o`) flag is accepted but has no effect here — like `dwe docs show`, this command always emits markdown. Use `--out PATH` to write it to a file.
 - Disabled services and private commands are excluded.
-- The `dwe-docs://<path>` link scheme corresponds to topic paths consumable by `dwe docs show <path>`.
+- `## Documentation` lists bare topic paths, each consumable by `dwe docs show <path>`, under a lead line saying so. They used to be emitted as `[<name>.md](dwe-docs://<path>)`; that scheme had no resolver, so an agent translated it back to the same command, while the visible label only repeated the tail of the URI — 2 KB of the capped document spent on ceremony.
 
 ## `dwe docs cache clear`
 

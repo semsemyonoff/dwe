@@ -59,8 +59,10 @@ type Opts struct {
 	// core/docs must not import internal/core/execution.
 	Builtins   []BuiltinSummary
 	Conditions []ConditionSummary
-	// ReservedEnvNames are the env variable names the renderer always emits
-	// itself (config.ReservedExportNames), likewise passed in from the CLI.
+	// ReservedEnvNames are the env variable names the renderer emits itself
+	// (config.ReservedExportNames), likewise passed in from the CLI. Not every
+	// one is unconditional — COMPOSE_PROJECT_NAME is omitted when it resolves
+	// empty — but all of them are reserved against an exports.env rule.
 	ReservedEnvNames []string
 }
 
@@ -199,21 +201,33 @@ func writeCommandsSection(b *strings.Builder, cmds []CommandSummary) {
 	writeSection(b, "Commands", items)
 }
 
+// writeDocumentationSection lists the readable topics as bare topic paths.
+//
+// The paths are emitted verbatim rather than as `[name.md](dwe-docs://path)`
+// links: that scheme has no resolver anywhere — an agent always had to translate
+// it back into `dwe docs show <topic>` — and the visible label only repeated the
+// tail of the URI. The list is the largest section of the document and the
+// document is capped (llmsTxtNoProjectBudget), so the ceremony cost real budget
+// that topic coverage needs. One lead line carries what the scheme implied.
 func writeDocumentationSection(b *strings.Builder, topics []coredocs.TopicEntry, includeInternals bool) {
-	items := make([]sectionItem, 0, len(topics))
+	paths := make([]string, 0, len(topics))
 	for _, t := range topics {
 		if strings.HasPrefix(t.Path, "internals/") && !includeInternals {
 			continue
 		}
-		items = append(items, sectionItem{
-			Label: t.DisplayName,
-			URL:   "dwe-docs://" + t.Path,
-		})
+		paths = append(paths, t.Path)
 	}
-	if len(items) == 0 {
+	if len(paths) == 0 {
 		return
 	}
-	writeSection(b, "Documentation", items)
+	writeHeading(b, "Documentation")
+	writeParagraph(b, "Read any topic below with `dwe docs show <topic>`; `dwe docs search <query>` searches across all of them.")
+	for _, p := range paths {
+		b.WriteString("- ")
+		b.WriteString(p)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 }
 
 // writeBriefingSections writes the static knowledge sections — the parts an
@@ -313,7 +327,7 @@ func writeDiagnosticsSection(b *strings.Builder) {
 		"`-v` / `--debug` — echo executed commands, skip decisions, timings and exit codes to **stderr**; stdout (including `-o json`) stays clean, so `dwe run --debug 2>debug.log` captures them",
 		"`dwe docs show <topic> --toc` / `--anchors` — headings or anchor ids instead of the whole document; use these instead of piping through `head`/`sed`",
 		"`dwe docs search <query> -o json` — search hits with `source`, `path`, `anchor`, `count`, `snippet`. Every word of the query must appear in the same section (or, failing that, the same document); `--literal` matches the whole query as one substring",
-		"`-o json` (+ `--pretty`) — every read-only command. Two exceptions: `dwe docs show` always emits markdown and ignores `-o json`; on `dwe docs llms-txt` the local `--output` is a file PATH (`--output json` writes a file called `json`) and `-o` is not accepted there at all",
+		"`-o json` (+ `--pretty`) — every read-only command. Two exceptions: `dwe docs show` and `dwe docs llms-txt` always emit markdown and ignore `-o json`; to write llms-txt to a file use its own `--out PATH`",
 	}
 	writeLines(b, lines)
 }
@@ -325,7 +339,7 @@ func writeReservedEnvSection(b *strings.Builder, names []string) {
 		return
 	}
 	writeHeading(b, "Reserved env names")
-	writeParagraph(b, "`dwe render env` always emits these itself, before any `exports.env` rule: `"+
+	writeParagraph(b, "`dwe render env` emits these itself, before any `exports.env` rule: `"+
 		strings.Join(names, "`, `")+"`. "+
 		"They are available in `compose.yaml` without being declared, and an `exports.env` rule may not redeclare them.")
 }

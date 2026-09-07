@@ -533,9 +533,10 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 
 // scanComposeIsolationGate best-effort loads the copy's own config and scans
 // its raw compose files for constructs that bypass Docker-Compose
-// project-name scoping (config.ScanComposeIsolation). Every finding is
-// printed as a warning; it reports true (block the scenario) only when at
-// least one finding is Blocking and skipIsolationCheck is false. If the copy
+// project-name scoping (config.ScanComposeIsolation). Every finding not
+// acknowledged by a docker.yml shared: true volume is printed as a warning;
+// it reports true (block the scenario) only when at least one such finding is
+// Blocking and skipIsolationCheck is false. If the copy
 // config fails to load, the scan is skipped entirely — the subsequent `dwe
 // validate` subprocess surfaces the real config error.
 func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn func(string)) bool {
@@ -551,6 +552,11 @@ func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn fun
 
 	var blocking []config.IsolationFinding
 	for _, f := range findings {
+		// Acknowledged by docker.yml resources.volumes shared: true — the
+		// cross-project scope is the point, not a hazard.
+		if f.Shared {
+			continue
+		}
 		warn(fmt.Sprintf("compose isolation: %s", f.Message))
 		if f.Blocking {
 			blocking = append(blocking, f)

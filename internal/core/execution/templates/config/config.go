@@ -15,8 +15,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packcommon"
@@ -24,6 +26,7 @@ import (
 	projectconfig "github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -212,9 +215,11 @@ func RenderConfigs(projectRoot string, cfg *projectconfig.DweConfig, serviceName
 		Host:      tpl.CurrentHostInfo(),
 	}
 
+	ident := loadPackIdentity(m, cfg)
+
 	res := Result{Service: serviceName, Pack: packName, Found: true}
 	for _, entry := range m.Render {
-		fromOverride, err := renderTemplateFile(absRoot, packName, entry.From, ctx, entry.To, absHubDir)
+		fromOverride, err := renderTemplateFile(absRoot, packName, entry.From, ctx, entry.To, absHubDir, ident)
 		if err != nil {
 			return Result{}, err
 		}
@@ -227,12 +232,53 @@ func RenderConfigs(projectRoot string, cfg *projectconfig.DweConfig, serviceName
 	return res, nil
 }
 
+// packIdentity carries the age identity a pack needs for its .age sources,
+// loaded once per RenderConfigs call. The load failure travels with it instead
+// of aborting the pass early so the error can name the source file that
+// actually needs the identity.
+type packIdentity struct {
+	recipient string
+	id        secrets.Identity
+	err       error
+}
+
+// isEncryptedSource reports whether a manifest `from:` is a native age file.
+func isEncryptedSource(from string) bool { return strings.HasSuffix(from, ".age") }
+
+// loadPackIdentity loads the project identity when — and only when — the
+// manifest declares at least one .age source, so a pack without encrypted
+// sources never touches ~/.config.
+func loadPackIdentity(m *Manifest, cfg *projectconfig.DweConfig) packIdentity {
+	encrypted := false
+	for _, entry := range m.Render {
+		if isEncryptedSource(entry.From) {
+			encrypted = true
+			break
+		}
+	}
+	if !encrypted {
+		return packIdentity{}
+	}
+	ident := packIdentity{recipient: projectconfig.SecretsRecipient(cfg)}
+	if ident.recipient == "" {
+		ident.err = errors.New("no secrets.recipient is configured")
+		return ident
+	}
+	ident.id, _, ident.err = secrets.LoadIdentity(ident.recipient)
+	return ident
+}
+
 // renderTemplateFile resolves rel via packroot (override first, canonical
 // fallback), renders it with the ${...} substrate against ctx, and writes the
 // result to dest under absHubDir (mode replace). It enforces that dest stays
 // inside absHubDir and that absHubDir stays inside absRoot via the same
 // pathsafe discipline used by the ide/ai renderers.
-func renderTemplateFile(absRoot, packName, rel string, ctx *tpl.RenderContext, dest, absHubDir string) (bool, error) {
+//
+// A source whose name ends in .age is a native age file: it is decrypted with
+// ident before the ${...} render, and its output is written 0600 (explicitly
+// chmoded, so a pre-existing 0644 target is tightened). `to:` is never
+// auto-stripped — authors write `from: creds.json.age`, `to: src/creds.json`.
+func renderTemplateFile(absRoot, packName, rel string, ctx *tpl.RenderContext, dest, absHubDir string, ident packIdentity) (bool, error) {
 	sourcePath, fromOverride, err := packroot.Resolve(absRoot, kind, packName, rel)
 	if err != nil {
 		return false, fmt.Errorf("resolve template %s: %w", rel, err)
@@ -243,9 +289,28 @@ func renderTemplateFile(absRoot, packName, rel string, ctx *tpl.RenderContext, d
 		return false, fmt.Errorf("read template %s: %w", sourcePath, err)
 	}
 
+	encryptedSource := isEncryptedSource(rel)
+	if encryptedSource {
+		tplBytes, err = decryptSource(rel, tplBytes, ident)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	out, err := tpl.RenderCommand(string(tplBytes), ctx)
 	if err != nil {
+		// tpl.RenderCommand embeds the whole template text in its error, which
+		// for an .age source is the decrypted credential — never wrap it.
+		if encryptedSource {
+			return false, fmt.Errorf("render template %s: the decrypted source is not a valid ${...} template (details withheld — the source is a secret)", rel)
+		}
 		return false, fmt.Errorf("render template %s: %w", rel, err)
+	}
+	// A ${...} substitution of a value that is still an undecrypted marker
+	// would write ciphertext into the hub dir, where the container would read
+	// it as the credential. Refuse instead of materializing it.
+	if secrets.ContainsMarker(out) {
+		return false, fmt.Errorf("render template %s: %s would contain an undecrypted secret — see 'dwe secrets status'", rel, dest)
 	}
 
 	absDest, err := filepath.Abs(filepath.Join(absHubDir, dest))
@@ -284,8 +349,38 @@ func renderTemplateFile(absRoot, packName, rel string, ctx *tpl.RenderContext, d
 		return false, fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
 	}
 
-	if err := os.WriteFile(absDest, []byte(out), 0o644); err != nil {
+	mode := os.FileMode(0o644)
+	if encryptedSource {
+		mode = 0o600
+	}
+	if encryptedSource {
+		// os.WriteFile keeps the mode of a pre-existing file; an output whose
+		// source was encrypted must not stay world-readable. Tighten BEFORE the
+		// write, or the plaintext sits at the old 0644 for the length of it.
+		// A not-yet-existing target is fine — WriteFile creates it at 0600.
+		if err := os.Chmod(absDest, mode); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return false, fmt.Errorf("chmod %s: %w", dest, err)
+		}
+	}
+	if err := os.WriteFile(absDest, []byte(out), mode); err != nil {
 		return false, fmt.Errorf("write %s: %w", dest, err)
 	}
 	return fromOverride, nil
+}
+
+// decryptSource opens a native age pack source. The error names the source
+// path and the fix, because the identity is loaded once per pack but only some
+// sources need it.
+func decryptSource(rel string, ciphertext []byte, ident packIdentity) ([]byte, error) {
+	if ident.err != nil {
+		if ident.recipient == "" {
+			return nil, fmt.Errorf("render template %s: encrypted source needs a project identity, but %v — add a secrets: block to workspace.yml (see 'dwe secrets init')", rel, ident.err)
+		}
+		return nil, fmt.Errorf("render template %s: encrypted source needs the project identity for %s (%v) — see 'dwe secrets key import'", rel, ident.recipient, ident.err)
+	}
+	plain, err := secrets.DecryptBytes(ciphertext, ident.id)
+	if err != nil {
+		return nil, fmt.Errorf("render template %s: decrypt encrypted source: %w", rel, err)
+	}
+	return plain, nil
 }

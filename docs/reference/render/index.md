@@ -50,7 +50,8 @@ Each subcommand:
 1. Loads the merged config. A missing or invalid project config is a hard error.
 2. Selects targets:
    - `env` — single artifact, no selection.
-   - `ide` / `ai` / `git` / `config` — iterates services, applies a selection policy, and optionally narrows to one service via the `[service]` argument.
+   - `ide` / `ai` / `git` — iterate services, apply a selection policy, and optionally narrow to one service via the `[service]` argument. Without the argument each walks **every** service and honours its per-service opt-in field (`render.<pack>.enabled`), so a pipeline should carry one argument-less step (e.g. `cmd: "render ai"`) rather than one step per service; the `[service]` argument is for ad-hoc, single-hub runs.
+   - `config` — also iterates services and accepts `[service]`, but its selection is different: app services only, resolved through the config pack rather than a per-service opt-in field.
 3. Writes output files. Where they go depends on the subcommand:
    - `render ide` and `render ai` write inside each service's hub directory, anchored to the project root (the directory containing `workspace.yml`), and enforce path-safety boundaries.
    - `render git` writes inside `<svc.Dir>/src/.git/hooks/` for each service whose `src/.git` is a real directory; the destination is never tracked by git.

@@ -184,8 +184,7 @@ func TestVarsEditSpec_CommitLockHeld(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected lock-held error, got nil")
 	}
-	var phe *lock.ProjectLockHeldError
-	if !errors.As(err, &phe) {
+	if _, ok := errors.AsType[*lock.ProjectLockHeldError](err); !ok {
 		t.Fatalf("err = %T(%v), want *lock.ProjectLockHeldError", err, err)
 	}
 	// local.yml must be untouched — the write never ran.

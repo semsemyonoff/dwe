@@ -9,7 +9,6 @@ func All() []validate.Validator {
 	return []validate.Validator{
 		&workspaceValidator{},
 		&validateYmlValidator{},
-		&uiValidator{},
 		&servicesValidator{},
 		&dockerValidator{},
 		&infoValidator{},
@@ -35,5 +34,6 @@ func All() []validate.Validator {
 		&formalBlocksValidator{},
 		&templateRefsValidator{},
 		&portsExportsValidator{},
+		&exportsValidator{},
 	}
 }

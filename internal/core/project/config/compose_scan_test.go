@@ -332,6 +332,224 @@ func TestScanComposeIsolation_NamedEntityLastWins(t *testing.T) {
 	require.Contains(t, findings[0].Message, "later-vol")
 }
 
+// scanChainWithDocker is scanChain plus a workspace/docker.yml (skipped when
+// dockerYML is empty), so the scan can resolve `shared: true` acknowledgements.
+func scanChainWithDocker(t *testing.T, dockerYML string, docs ...string) []IsolationFinding {
+	t.Helper()
+	root := t.TempDir()
+	if dockerYML != "" {
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "docker.yml"), []byte(dockerYML), 0o644))
+	}
+	paths := make([]string, 0, len(docs))
+	for i, doc := range docs {
+		p := filepath.Join(root, "compose-"+strconv.Itoa(i)+".yml")
+		require.NoError(t, os.WriteFile(p, []byte(doc), 0o644))
+		paths = append(paths, p)
+	}
+	cfg := &DweConfig{Compose: ComposeConfig{Base: paths[0], Extra: paths[1:]}}
+	return ScanComposeIsolation(cfg, root)
+}
+
+// TestScanComposeIsolation_SharedVolumes pins the docker.yml acknowledgement:
+// the documented cross-project cache recipe (a `shared: true` resources.volumes
+// entry plus the matching raw compose declaration) is a deliberate choice dwe
+// itself implements, so the scanner marks it rather than leaving the author a
+// warning they can never clear. The match is on the volume's EFFECTIVE name —
+// the surviving explicit `name:`, else the compose map key.
+func TestScanComposeIsolation_SharedVolumes(t *testing.T) {
+	t.Parallel()
+
+	const sharedDocker = "resources:\n  volumes:\n    npm:\n      name: dwe_npm_cache\n      shared: true\n"
+
+	tests := []struct {
+		name       string
+		dockerYML  string
+		docs       []string
+		kind       IsolationKind
+		resource   string
+		wantShared bool
+	}{
+		{
+			name:       "explicit name matches",
+			dockerYML:  sharedDocker,
+			docs:       []string{"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n"},
+			kind:       KindNamedVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		{
+			name:       "external finding of the same volume is marked too",
+			dockerYML:  sharedDocker,
+			docs:       []string{"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		{
+			name:       "map key matches when compose declares no name",
+			dockerYML:  "resources:\n  volumes:\n    composer:\n      name: composer-cache\n      shared: true\n",
+			docs:       []string{"volumes:\n  composer-cache:\n    external: true\n"},
+			kind:       KindExternalVolume,
+			resource:   "composer-cache",
+			wantShared: true,
+		},
+		{
+			name:      "explicit name mismatch",
+			dockerYML: sharedDocker,
+			docs:      []string{"volumes:\n  npm_cache:\n    external: true\n    name: other_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		// Compose's deprecated long form names the same real volume, so it has
+		// to be acknowledgeable too — otherwise a project spelling the cache
+		// this way keeps a warning it can never clear.
+		{
+			name:       "legacy external long form matches",
+			dockerYML:  sharedDocker,
+			docs:       []string{"volumes:\n  npm_cache:\n    external:\n      name: dwe_npm_cache\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		{
+			name:      "legacy external long form mismatch",
+			dockerYML: sharedDocker,
+			docs:      []string{"volumes:\n  npm_cache:\n    external:\n      name: other_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		// Compose lets a top-level name: override the long form; so must the
+		// effective name the acknowledgement matches on.
+		{
+			name:      "top-level name outranks the long form",
+			dockerYML: sharedDocker,
+			docs:      []string{"volumes:\n  npm_cache:\n    external:\n      name: dwe_npm_cache\n    name: other_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		{
+			name:       "top-level name outranks the long form the other way",
+			dockerYML:  sharedDocker,
+			docs:       []string{"volumes:\n  npm_cache:\n    external:\n      name: other_cache\n    name: dwe_npm_cache\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		// A bare `external: true` carries no name, so the map key stays the
+		// effective name — the pre-existing fallback must survive.
+		{
+			name:       "long form absent falls back to the map key",
+			dockerYML:  "resources:\n  volumes:\n    npm:\n      name: npm_cache\n      shared: true\n",
+			docs:       []string{"volumes:\n  npm_cache:\n    external: true\n"},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+		{
+			name:      "networks are never acknowledged via the long form either",
+			dockerYML: sharedDocker,
+			docs:      []string{"networks:\n  npm_cache:\n    external:\n      name: dwe_npm_cache\n"},
+			kind:      KindExternalNetwork,
+			resource:  "npm_cache",
+		},
+		{
+			name:      "shared false is not an acknowledgement",
+			dockerYML: "resources:\n  volumes:\n    npm:\n      name: dwe_npm_cache\n      shared: false\n",
+			docs:      []string{"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		{
+			name:      "no docker.yml at all",
+			dockerYML: "",
+			docs:      []string{"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n"},
+			kind:      KindExternalVolume,
+			resource:  "npm_cache",
+		},
+		{
+			name:      "networks are never acknowledged",
+			dockerYML: sharedDocker,
+			docs:      []string{"networks:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n"},
+			kind:      KindExternalNetwork,
+			resource:  "npm_cache",
+		},
+		{
+			name:      "overlay reset of name falls back to the map key",
+			dockerYML: sharedDocker,
+			docs: []string{
+				"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n",
+				"volumes:\n  npm_cache:\n    name: !reset null\n",
+			},
+			kind:     KindExternalVolume,
+			resource: "npm_cache",
+		},
+		{
+			name:      "overlay reset of name matches the map key",
+			dockerYML: "resources:\n  volumes:\n    npm:\n      name: npm_cache\n      shared: true\n",
+			docs: []string{
+				"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n",
+				"volumes:\n  npm_cache:\n    name: !reset null\n",
+			},
+			kind:       KindExternalVolume,
+			resource:   "npm_cache",
+			wantShared: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			findings := scanChainWithDocker(t, tc.dockerYML, tc.docs...)
+			f, ok := findByResource(findings, tc.kind, tc.resource)
+			require.True(t, ok, "expected a %s finding for %s", tc.kind, tc.resource)
+			require.Equal(t, tc.wantShared, f.Shared)
+		})
+	}
+}
+
+// TestScanComposeIsolation_SharedLeavesBlockingAndMessage pins that the
+// acknowledgement is purely additive: Shared is a separate fact, so a caller
+// that ignores it sees byte-identical output to before.
+func TestScanComposeIsolation_SharedLeavesBlockingAndMessage(t *testing.T) {
+	t.Parallel()
+
+	const doc = "services:\n  app:\n    image: busybox\n    container_name: fixed-name\n" +
+		"volumes:\n  npm_cache:\n    external: true\n    name: dwe_npm_cache\n"
+	const dockerYML = "resources:\n  volumes:\n    npm:\n      name: dwe_npm_cache\n      shared: true\n"
+
+	plain := scanChainWithDocker(t, "", doc)
+	acknowledged := scanChainWithDocker(t, dockerYML, doc)
+	require.Len(t, acknowledged, len(plain))
+
+	for i, f := range acknowledged {
+		require.Equal(t, plain[i].Kind, f.Kind)
+		require.Equal(t, plain[i].Blocking, f.Blocking, "%s: Blocking must not depend on docker.yml", f.Kind)
+		require.Equal(t, plain[i].Message, f.Message, "%s: Message must not depend on docker.yml", f.Kind)
+	}
+
+	// The blocking container_name finding is never acknowledged.
+	container, ok := findByResource(acknowledged, KindContainerName, "app")
+	require.True(t, ok)
+	require.False(t, container.Shared)
+}
+
+// TestScanComposeIsolation_NamedEntityValue pins that the named_* finding
+// carries its explicit name: in Value. markSharedVolumes reads it to derive the
+// volume's effective name after the `-f` collapse.
+func TestScanComposeIsolation_NamedEntityValue(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t, "volumes:\n  data:\n    name: my-vol\nnetworks:\n  net:\n    name: my-net\n")
+
+	vol, ok := findByResource(findings, KindNamedVolume, "data")
+	require.True(t, ok)
+	require.Equal(t, "my-vol", vol.Value)
+
+	net, ok := findByResource(findings, KindNamedNetwork, "net")
+	require.True(t, ok)
+	require.Equal(t, "my-net", net.Value)
+}
+
 // TestScanComposeIsolation_PartialDecodeKeepsFindings pins that one field this
 // scanner's narrow shape cannot read does not blind it to the rest of the file:
 // yaml.v3 reports a *yaml.TypeError after decoding everything else, and

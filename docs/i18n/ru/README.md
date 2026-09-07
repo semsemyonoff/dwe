@@ -1,4 +1,4 @@
-> Translated from: README.md @ a0c2b70df743
+> Translated from: README.md @ 1e328aa5e19f
 
 # DWE — Dev Workspace Engine
 
@@ -22,6 +22,8 @@ CLI в виде одного бинарника для декларативно�
 ## Установка
 
 DWE поставляется как один статический Go-бинарник. Выбирайте удобный канал.
+
+**Поддерживаемые платформы:** macOS (Intel + Apple Silicon) и Linux (x86_64 + arm64). Сборки под Windows нет — под Windows запускайте DWE внутри WSL2, установив его в дистрибутив.
 
 ### Через Homebrew
 
@@ -211,7 +213,7 @@ my-project/
 Справочная документация живёт в `docs/reference/` и также встроена в бинарник. Просматривайте её офлайн через `dwe docs` (интерактивный TUI) или `dwe docs show <topic>` (обычный текст).
 
 - [Концепции](../../reference/concepts/index.md) — высокоуровневая ориентация: начало работы, архитектура, раскладка проекта, интеграция с Docker, интеграция с Git, пайплайны, состояние и блокировки.
-- [Конфигурация](../../reference/config/index.md) — справочник по полям для `workspace.yml`, сервисов, команд, пайплайнов deploy/reset/lifecycle, snapshot, info, validate, setup, styles, UI, state, i18n, нотификаций, docker.
+- [Конфигурация](../../reference/config/index.md) — справочник по полям для `workspace.yml`, сервисов, команд, vars, зашифрованных секретов, пайплайнов deploy/reset/lifecycle, snapshot, info, validate, setup, styles, UI, state, i18n, нотификаций, docker.
 - [Render-паки](../../reference/render/index.md) — `dwe render env / ide / ai / git / config` — схема манифеста, политики коллизий, локальные оверрайды.
 - [Подсистема документации](../../reference/docs/index.md) — браузер `dwe docs`, неинтерактивные подкоманды, переводы, проверка свежести через хэш контента.
 - [Шаблоны](../../reference/templates.md) — общий шаблонизатор: `{{ ... }}` против `${ ... }`, реестры sprout, контекст рендеринга по местам использования.

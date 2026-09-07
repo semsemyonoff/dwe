@@ -562,6 +562,61 @@ services:
 	}
 }
 
+// TestScenariosValidator_SharedVolumeNotWarned pins the acknowledgement path:
+// a volume declared shared: true in docker.yml is a deliberate cross-project
+// cache dwe creates itself, so tests.isolation must stay silent about it while
+// still reporting an unacknowledged one from the same compose file.
+func TestScenariosValidator_SharedVolumeNotWarned(t *testing.T) {
+	root := t.TempDir()
+	writeScenario(t, root, "smoke.yml", `
+steps:
+  - name: ping
+    type: shell
+    cmd: echo hi
+`)
+	composePath := filepath.Join(root, "docker-compose.yml")
+	if err := os.WriteFile(composePath, []byte(`
+volumes:
+  npm_cache:
+    external: true
+    name: dwe_npm_cache
+  build_cache:
+    external: true
+    name: dwe_build_cache
+`), 0o644); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace", "docker.yml"), []byte(`
+resources:
+  volumes:
+    npm_cache:
+      name: dwe_npm_cache
+      shared: true
+`), 0o644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
+	cfg := baseCfg()
+	cfg.Compose.Base = composePath
+
+	diags := warningDiags(runFor(root, cfg))
+	var unacknowledged int
+	for _, d := range diags {
+		if strings.Contains(d.Message, "npm_cache") {
+			t.Errorf("shared volume must not warn, got %+v", d)
+		}
+		if d.Target == "tests.isolation" && strings.Contains(d.Message, "build_cache") {
+			unacknowledged++
+		}
+	}
+	// external_volume + named_volume for the one unacknowledged volume.
+	if unacknowledged != 2 {
+		t.Errorf("unacknowledged volume: want 2 warnings, got %d in %+v", unacknowledged, diags)
+	}
+}
+
 func TestScenariosValidator_MultipleFilesSorted(t *testing.T) {
 	root := t.TempDir()
 	writeScenario(t, root, "b.yml", `

@@ -91,7 +91,9 @@ func Validate(cfg *config.DweConfig, reg *registry.Registry, ref filesgate.StepR
 		}
 		// Check if default_from resolves to a non-empty value (mirrors resolve.Params logic).
 		if paramDef.DefaultFrom != "" && cfg != nil {
-			if v, found := config.ResolvePath(cfg.Raw, paramDef.DefaultFrom); found {
+			// found && v != nil mirrors resolve.Params: a YAML null resolves,
+			// but %v would render it "<nil>" and pass for a real value.
+			if v, found := config.ResolvePath(cfg.Raw, paramDef.DefaultFrom); found && v != nil {
 				if s := fmt.Sprintf("%v", v); s != "" {
 					continue // default_from resolves to a non-empty value.
 				}

@@ -59,8 +59,46 @@ func TestLoad_UnknownField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown field")
 	}
-	if !strings.Contains(err.Error(), "manifest.yml") {
-		t.Errorf("error should contain file path: %v", err)
+	// yamlstrict shape: file, line, rejected field, allowed set, version hint.
+	for _, want := range []string{
+		path + ":3:",
+		`unknown field "bogus"`,
+		"allowed here: render, symlinks",
+		"check `dwe version`",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err.Error(), want)
+		}
+	}
+}
+
+func TestLoad_UnknownNestedField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "manifest.yml")
+	writeFile(t, path, "render:\n  - {from: a.tmpl, too: a}\n")
+
+	_, err := manifest.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown nested field")
+	}
+	for _, want := range []string{`unknown field "too"`, "allowed here: from, to"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err.Error(), want)
+		}
+	}
+}
+
+func TestLoad_EmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "manifest.yml")
+	writeFile(t, path, "# only a comment\n")
+
+	_, err := manifest.Load(path)
+	if err == nil {
+		t.Fatal("expected error for empty manifest")
+	}
+	if !strings.Contains(err.Error(), "manifest is empty") {
+		t.Errorf("error %q does not report an empty manifest", err.Error())
 	}
 }
 

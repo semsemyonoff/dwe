@@ -569,3 +569,30 @@ func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 		t.Logf("version command result: %v", err)
 	}
 }
+
+// TestAllowedWithoutProject_KeyHousekeeping pins the allowlist for the two
+// machine-wide `secrets key` subcommands: the keys directory holds identities
+// for every project on this machine, so listing or removing one must work from
+// anywhere — while every other `secrets` subcommand still requires a project.
+func TestAllowedWithoutProject_KeyHousekeeping(t *testing.T) {
+	root := NewRootCmd()
+	cases := map[string]bool{
+		"secrets key list":   true,
+		"secrets key remove": true,
+		"secrets key import": false,
+		"secrets key export": false,
+		"secrets status":     false,
+	}
+	for path, want := range cases {
+		cmd, _, err := root.Find(strings.Fields(path))
+		if err != nil {
+			t.Fatalf("finding %q: %v", path, err)
+		}
+		if got := cmd.CommandPath(); got != "dwe "+path {
+			t.Fatalf("resolved %q to %q", path, got)
+		}
+		if got := allowedWithoutProject(cmd); got != want {
+			t.Errorf("allowedWithoutProject(%q) = %v, want %v", path, got, want)
+		}
+	}
+}

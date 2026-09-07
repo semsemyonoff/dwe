@@ -14,13 +14,13 @@ The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Te
 - **`internal/core/`** — domain logic, subclustered into `project/` (what is a DWE project), `execution/` (pipeline engine), `workflow/` (deploy / lifecycle / reset / snapshot / setup), `usercommands/` (declarative command system), `validate/` (static project validation), `docs/` (embedded docs subsystem), `ui/` (domain-aware renderers — sink layer, imported only by `cli/`), and `notify/` (desktop notifications).
 - **`internal/shared/`** — leaf infrastructure (`docker/`, `git/`, `daemon/`, `lock/`, `pathsafe/`, `envfile/`, `render/`, `liveui/`, `tpl/`, `i18n/`, `version/`, `prompt/`, `promptcache/`).
 
-**Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering, cross-cutting CLI patterns like JSON output mode and display-string localization) that are expensive to re-derive from the code.
+**Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering, cross-cutting CLI patterns) that are expensive to re-derive from the code.
 
 ## Configuration Documentation
 
 Keep behavior and docs aligned. DWE user-facing documentation lives in `docs/reference/` (schemas) and `docs/guides/` (task-oriented recipes):
 
-- `docs/reference/config/` — project config files (`workspace.md`, `services/`, `docker.md`, `info.md`, `styles.md`), pipelines (`deploy/`, `lifecycle.md`, `reset.md`, `conditions.md`, `state/`), user commands (`commands/`), user-level notifications and i18n (`notifications.md`, `i18n.md`), snapshot workflows (`snapshot.md`), project readiness checks (`validate.md`), setup wizard (`setup.md`), and command browser settings (`ui.md`).
+- `docs/reference/config/` — project config files (`workspace.md`, `services/`, `docker.md`, `info.md`, `styles.md`), pipelines (`deploy/`, `lifecycle.md`, `reset.md`, `conditions.md`, `state/`), user commands (`commands/`), user-level notifications and i18n (`notifications.md`, `i18n.md`), snapshot workflows (`snapshot.md`), project readiness checks (`validate.md`), and setup wizard (`setup.md`).
 - `docs/reference/render/` — render subcommands (env / ide / ai / git) and template-pack mechanics (manifest schema, local overrides, collision policies).
 - `docs/guides/` — task-oriented recipes and integrations (e.g. Starship prompt). Each page solves a concrete user-facing problem that cuts across the reference. Translations live in `docs/i18n/<lang>/guides/`.
 
@@ -32,7 +32,7 @@ For AI agent orientation, `dwe docs llms-txt` emits a compact llms.txt index (pr
 
 ### Documentation site (`web/`)
 
-`web/` holds an Astro Starlight site published to GitHub Pages (`https://semsemyonoff.github.io/dwe/`) by `.github/workflows/docs.yml` on every push to `main` that touches `docs/**` or `web/**`. It is a **build-time mirror** of `docs/reference/` + `docs/guides/` (and the `docs/i18n/ru/` mirror); `docs/internals/` and `docs/plans/` are excluded. The canonical `docs/*.md` stay byte-identical — **edit `docs/` (and the root `README.md`), never the generated tree.** `web/scripts/sync-docs.mjs` transforms `docs/` → the gitignored `web/src/content/docs/` (title-from-H1, link rewriting to base-aware slugs / GitHub blobs for internals & non-docs repo files, i18n remap), derives the sidebar from each `index.md`'s ordered TOC, and builds the per-locale root landing pages from `README.md` / `docs/i18n/ru/README.md` (images they reference are copied into the gitignored `web/public/`). Preview with `cd web && npm run dev`; `npm test` covers the transform. Dangling `.md` links in `docs/` are degraded to plain text with a build warning (not a hard failure). No Go code is involved.
+`web/` holds an Astro Starlight site published to GitHub Pages (`https://semsemyonoff.github.io/dwe/`) by `.github/workflows/docs.yml` on every push to `main` that touches `docs/**` or `web/**`. It is a **build-time mirror** of `docs/reference/` + `docs/guides/` (and the `docs/i18n/ru/` mirror); `docs/internals/` and `docs/plans/` are excluded. The canonical `docs/*.md` stay byte-identical — **edit `docs/` (and the root `README.md`), never the generated tree.** `web/scripts/sync-docs.mjs` transforms `docs/` → the gitignored `web/src/content/docs/` (title-from-H1, link rewriting to base-aware slugs / GitHub blobs for internals & non-docs repo files, i18n remap), derives the sidebar from each `index.md`'s ordered TOC, and builds the per-locale root landing pages from `README.md` / `docs/i18n/ru/README.md`. Preview with `cd web && npm run dev`; `npm test` covers the transform. Dangling `.md` links in `docs/` are degraded to plain text with a build warning (not a hard failure). No Go code is involved.
 
 ## Build, Test, and Development Commands
 
@@ -56,6 +56,8 @@ Prefer table-driven tests for command parsing, config resolution, Docker orchest
 
 Recent history uses conventional-style commits such as `feat(commands): ...`, `fix(commands): ...`, `docs(config): ...`, and `refactor(commands)!: ...`. Keep the scope tied to the package or user-facing area, and use `!` only for breaking changes. Pull requests should include a summary, verification commands, linked issues when applicable, and screenshots or terminal output when changing CLI presentation.
 
+A PR that changes anything a user can observe — a new or renamed flag, a changed default, a removed config key, a different message — also adds an entry under `## [Unreleased]` in `CHANGELOG.md`. Release notes are cut from that file by `scripts/changelog-release-notes.sh`, which fails the release when the tagged version has no section, so a missing entry surfaces at tag time rather than in the published notes.
+
 ## Critical Patterns
 
 Recurring traps and load-bearing contracts.
@@ -76,15 +78,15 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Foundation (`project/config/`).
 
 - **YAML loader strictness** — pipeline / command-file / manifest / scenario / service-folder loaders are strict `KnownFields(true)`; info, styles, docker, local.yml and topology are lenient. Match the surface you join, or you swallow the typo strictness exists to catch, or hard-fail a file authors treat as free-form.
-  Exactly four strict *pipeline* loaders also tolerate `io.EOF` so an all-comment file reads as absent and the built-in default survives — that is what makes `dwe init`'s inert scaffold overrides load; mirror it in any new strict pipeline loader.
-  See § Core — Foundation (`project/config/`).
+  Every strict decode goes through `yamlstrict.Decode` (file, line, key, allowed set); the four pipeline loaders' `io.EOF` tolerance (all-comment file ⇒ built-in default) surfaces as `PipelineFileState`.
+  See § Core — Foundation (`project/config/`) and § `internal/shared/yamlstrict/`.
 
 - **Strict root + `vars:` sandbox + top-level `update:`** — `LoadConfig` rejects any top-level key outside `allowedRootKeys`, per layer so the error names the file; a new formalized top-level field MUST be added there or every project declaring it fails to load.
   Arbitrary free-form values have exactly one home, `vars:`; self-update is the top-level `update: {mode: on|off}`, which **replaced** `lifecycle.yml`'s `run.update`.
   See § Core — Foundation (`project/config/`) and § `internal/shared/git/`.
 
 - **Validation framework** — domains register via an `All()` constructor collected by `buildRegistry`; validators are per-file and independent, so `dwe validate` proceeds past a failed config load instead of going blind on every other file.
-  Only `env/` + `checks/` (plus the cherry-picked `config.validate` validator) run in preflight — a content mistake in any other domain must never block a lifecycle command.
+  Only `env/` + `checks/` (plus the cherry-picked `config.validate` and `secrets.unresolved`) run in preflight — a content mistake in any other domain must never block a lifecycle command.
   See § Core — Validation.
 
 - **Preflight + locks ordering** — lifecycle commands call `preflight.Run` before any side effect *including the locks*, so a `type: command` check never runs under an operation lock; only then the project locks (deploy.lock → snapshot.lock, released in reverse).
@@ -132,17 +134,22 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   A new per-service file type must also join `knownServiceFiles` in the `services-folder` validator, or `dwe validate` warns in every project that adopts it.
   See § Core — Foundation (`project/config/`) and § Core — Validation.
 
+- **Service workdir chain + exec-mode default** — a container command with no `workdir:` inherits the service's `cli.workdir` → `work_dir_internal` → `dir_internal` (the chain `dwe shell` uses); `workdir: internal` is the opt-out sentinel and the ONE value that outranks `workdir_from`.
+  Resolve a service with `config.ServiceByContainer` (by the `container:` field, sorted keys — never `range cfg.Services` on the map key) and its fallback with `config.ContainerWorkdirFallback`; `docker_daemon_start` runs the same chain.
+  `mode:` defaults to `exec-or-run`, so a `type: command` `check:` over a mode-less `service_exec` command CREATES a container — such a check must declare `mode: exec-or-fail`.
+  See § Service Workdir & Exec Mode Contract.
+
 - **Snapshot template scope gate** — `${snapshot.*}` resolves only inside snapshot workflow blocks; `tpl.RenderCommand` calls `validateSnapshotScope` BEFORE `CompileVarSyntax`.
   Never add scope logic to `CompileVarSyntax` — it has no error path and must stay pure-syntactic.
   See § `internal/shared/tpl/`.
 
 - **`${...}` known-head whitelist** — `CompileVarSyntax` rewrites `${X}` only when the head is in `tpl.KnownVarHeads` AND `X` carries a tail (`${args}` excepted); anything else stays a **literal**, because rewriting a head-only `${host}`/`${files}` — a shell variable colliding with a namespace name, common in `cmd:` — silently erased it to `""` or dumped a `Raw` sub-map as `map[...]` text.
   It is a correctness control, not a security boundary; ask `tpl.IsVarNamespaceRef`/`IsKnownVarHead` rather than re-indexing the slice or re-deriving the tail rule elsewhere.
-  The pipeline context is Raw + Host only, so `tpl.ValidateRawScope` runs FIRST on every string and rejects `param`/`context`/`files`/`generated`/`args` — their lenient resolvers would render `git checkout ${param.branch}` down to `git checkout` plus a trailing space, invisible to both detectors. Do NOT extend it to `usercommands.buildRunContext` or workflow sub-steps, where `${param.*}` is legitimate.
+  The pipeline context is Raw + Host only, so `tpl.ValidateRawScope` runs FIRST on every string and rejects `param`/`context`/`files`/`generated`/`args` — their lenient resolvers render `git checkout ${param.branch}` down to `git checkout `, invisible to both detectors. Do NOT extend it to `usercommands.buildRunContext` or workflow sub-steps.
   See § `internal/shared/tpl/`, § Core — Execution (`pipeline/`), § Core — Validation and § Core — Foundation (`project/config/`, for the one `docker.yml project_name` exception).
 
 - **Resolve-time pipeline rendering** — `cmd`, `with:` leaves, `check`, `files_gate`, `timeout` and shell `when:` render **once** at resolve time into a deep copy; a render error fails the step, and `dwe reset step` must call `RenderStep`/`RenderWhen` itself.
-  Rendering is NOT idempotent, so a resolved `with:` must go through `usercommands.BuildPreRenderedRunContext` — `BuildRunContext`'s ungated second pass re-parses a resolved literal `{{` as a Go template and double-expands a `${vars.*}` value.
+  Rendering is NOT idempotent, so a resolved `with:` must go through `usercommands.BuildPreRenderedRunContext` — `BuildRunContext`'s ungated second pass double-expands a resolved `${vars.*}` value.
   The wider `with:` gate never applies to a `type: builtin` map, whose `{{ }}` belongs to the builtin's own template space — widening it aborts the whole plan.
   Plan renderers read `ResolvedStep.DisplayPhaseWhen()`, not `rs.Phase.When`; the whole `vars:` block is hashed into BOTH config hashes, or `already up-to-date` skips a step whose rendered command changed.
   See § Core — Execution (`pipeline/`), § `internal/shared/tpl/` and § Core — Workflow (`deploy/journal/`).
@@ -172,7 +179,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Foundation (`project/config/`).
 
 - **Config render + generated-once values** — service configs materialize through `execution/templates/config/` on the `${...}` substrate, not the deprecated `service_configs_copy`; pair `service_configs_render_check` as the render step's `check:`, or template edits and store clears stop applying because the journal hash cannot see either.
-  DWE **harvests, never mints**, and `HarvestGenerated` MUST skip a field the store already holds *without reading its file*: `dwe reset run` keeps the store while wiping the hub, so an unconditional re-read fails the whole deploy over a value it already has (found by a control run) — do not "fix" that with a second `generated-missing` gate.
+  DWE **harvests, never mints**, and `HarvestGenerated` MUST skip a field the store already holds *without reading its file*: `dwe reset run` keeps the store while wiping the hub, so an unconditional re-read fails the whole deploy over a value it already has — do not "fix" that with a second `generated-missing` gate.
   `renderConfigsForRun` runs after the deploy gate but before phases; the `missingGeneratedKeys` and `config.SharesExtendsParentHub` skips are what stop `dwe run` blanking secrets.
   See § Core — Execution (`templates/config/`, `builtin/`), § `internal/shared/generatedstore/` and § `internal/core/workflow/lifecycle/`.
 
@@ -191,10 +198,15 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   The `.dwe/compose.bridge.yml` overlay step ALWAYS runs (regenerate or delete).
   See § CLI (container command policy), § Core — Bridge and § Core — User Commands.
 
+- **Container TTY** — a service command keeps a container terminal only when `RunContext.UserInvoked` is true and its own streams are terminals (or it is bridged); pipeline steps, `parallel:` sub-steps, `check:` probes and piped output all get `-T`.
+  `UserInvoked` has ONE derivation, never a literal `true` — `!bridgeclient.NestedRuntime()` read BEFORE the same call writes the process-global `DWE_NESTED_RUNTIME` marker (`runCommandByID`; `resetStepCmd` bypasses it), which MUST stay in `bridgeclient.StripEnv` or a container-set one kills the TTY on every bridged `dwe cmd`.
+  Injecting `-T` also forces colour via `ColorForceEnv(rc, ttySuppressed && !detached)`; dropping the `!detached` guard bakes ANSI into the Docker logs permanently.
+  See § Container TTY Contract.
+
 - **`dwe vars` + comment-preserving `local.yml` writer** — `local/local_node.go` is the SINGLE `local.yml` write path, and `ApplyOverlayToNode` derives `Tag`/`Style` from the coerced NEW value, not the old node — keeping the old `DoubleQuoted` style would make `vars set x true` write a quoted string forever.
   `vars set` coerces through the PINNED `varsusage.CoerceScalar` grammar, and per-layer resolution goes through `config.LoadLayers`/`ResolveLayeredPath` so `LoadConfig` and `vars inspect` cannot drift.
-  The usage scanner is field-aware, not a grep: `templatedKeys` must list every field the resolver renders (incl. `timeout`, `files_gate.command`, `argv_append_from`), or a `${vars.typo}` there renders to `""` silently and `config.template_refs` never sees it.
-  `bridge.vars_writable` is a deny-by-default dot-boundary container-write allowlist enforced at RUNTIME inside `vars set`, because the command allowlist is prefix-wide and cannot see the var argument.
+  The usage scanner is field-aware, not a grep: `templatedKeys` must list every field the resolver renders, or a `${vars.typo}` there renders to `""` and `config.template_refs` never sees it.
+  `bridge.vars_writable` is a deny-by-default container-write allowlist enforced at RUNTIME inside `vars set`, because the command allowlist is prefix-wide and cannot see the var argument.
   See § `internal/core/project/local/`, § `internal/core/project/varsusage/`, § `internal/cli/vars/`, § Core — Foundation (`project/config/`) and § `internal/core/ui/cmdbrowser/`.
 
 - **Forms unification (`ask`/`widgets`)** — `widgets.RunHuhForm` is the single executor for every huh form, and hooks must fire **exactly once per prompt**, so a wrapper whose default seam calls it must not fire hooks itself.
@@ -209,13 +221,12 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **TUI mouse, wheel and overlay routing** — mouse, focus, overlay-close and wheel reach a plugin ONLY as `PanelClickMsg`/`FocusChangedMsg`/`OverlayClosedMsg`/`WheelMsg`, never raw, and a wheel must never move focus.
   `WheelMsg.Delta` is the NET **coalesced** notch count (±N, including a capturing overlay's own wheel): `tea.WithFilter` trailing-debounces it because bubbletea v2's unbuffered FIFO plus one `View()` per message froze the UI behind a momentum flood, and a leading-edge variant scrolled the wrong way.
-  `Overlay.ReleaseMouse` + `FullScreen` trade click/wheel away for native selection — the terminal cannot clip selection to a sub-rectangle, so the whole screen must become overlay text.
+  `Overlay.ReleaseMouse` + `FullScreen` trade click/wheel for native selection — the terminal cannot clip selection to a sub-rectangle, so the whole screen must become overlay text.
   See § `internal/core/ui/tui/` and § `internal/core/ui/docstui/`.
 
 - **In-TUI form overlays + generic tree engine** — an embedded huh form returns NO Submit/Cancel cmd and completes **asynchronously**: poll `FormOverlay.State()` after every forwarded `Update` AND return huh's cmds, or the form silently never finishes; `MaxHeight` is a CAP measured from a once-captured natural height, never a fixed height.
   A capturing top overlay must be `ReplaceTop`'d, never `Push`ed, and a self-close travels as `tui.CloseOverlayMsg{Token}` — a plugin that can open more than one overlay MUST stamp a unique non-zero `CloseToken`, or a deferred close pops whatever modal is on top by then.
-  `cmdbrowser.Options.Edit`/`RunForm` are opt-in: nil keeps the old exit-and-return flows byte-identical (goldens).
-  In `tui/tree.Engine[N]` rendering stays in the consumer, expansion is keyed by stable `Key` so it survives a `SetRoots` node-graph rebuild, and `RebuildVisible` must never re-park the cursor (that flips a cmdbrowser golden).
+  In `tui/tree.Engine[N]` rendering stays in the consumer, expansion is keyed by stable `Key` so it survives a `SetRoots` rebuild, and `RebuildVisible` must never re-park the cursor (that flips a cmdbrowser golden).
   See § `internal/core/ui/tui/`, § `internal/core/ui/tui/tree/`, § `internal/core/ui/cmdbrowser/` and § `internal/cli/command/`.
 
 - **Compose project name: one resolver, lowercased** — use `config.ResolveComposeProjectName(baseDir, cfg)` or its in-memory sibling `config.ComposeProjectName(dockerCfg, cfg)`; never re-derive the `dockerCfg.ProjectName ?: cfg.Project.FullName()` precedence inline.
@@ -231,16 +242,14 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   `envtest.ScrubComposeEnv()` runs before any flock, goroutine, UI or subprocess, and every runner test must stub the `execDweFunc` seam or the test binary re-execs itself.
   See § `internal/core/workflow/envtest/` and § `internal/cli/test/`.
 
-- **`dwe test` isolation & cleanup** — the runner takes a per-scenario flock only (never `lock.AcquireProjectLocks` on the original project), writes the manifest before touching Docker so a half-dead run stays sweepable, tears down strictly by the manifest's recorded identity and never appends `-v`, and remaps every enabled service's host port from one `AllocatePorts` batch so `ports_free` preflight and the actual compose bind move together.
-  Failure reports are collected only for a failed non-`--keep` run, BEFORE teardown, under a fresh context, and both captures take `BuildInternalArgs` + `ps --all` + combined stdout/stderr — otherwise a project's `args.logs: ["-f"]` or a hidden stderr stream silently guts the report.
-  `dwe test clean` sweeps only what `validateManifestIdentity` re-derives from `(baseDir, scenario, runID)` — canonical symlink-free paths, and a `compose_project` pinned to the COPY's stamped identity rather than the current root config, or a run kept across a `project.name` rename is stranded.
-  At `--parallel`, goroutines never return errors into the errgroup (siblings must not cancel each other) and the aggregated display engages only at effective N>1 (N=1 stays byte-identical).
-  Per-step `timeout:` bounds the step **body** only, never its `check:`.
+- **`dwe test` isolation & cleanup** — the runner takes a per-scenario flock only, never `lock.AcquireProjectLocks` on the original project, and writes its manifest before touching Docker so a half-dead run stays sweepable.
+  Teardown goes strictly by the manifest's recorded identity and never appends `-v`; `dwe test clean` sweeps only what `validateManifestIdentity` re-derives, with `compose_project` pinned to the COPY's stamped identity, or a run kept across a `project.name` rename is stranded.
+  Host ports come from one `AllocatePorts` batch so `ports_free` preflight and the compose bind move together; failure reports capture BEFORE teardown; at `--parallel` goroutines never return errors into the errgroup; per-step `timeout:` bounds the step **body** only, never its `check:`.
   See § `internal/core/workflow/envtest/`, § `internal/cli/test/`, § `internal/core/project/config/compose_scan.go`, § `internal/core/validate/tests/` and § Core — Execution (`pipeline/`).
 
-- **Pipeline primitives: `argv_append_from` / `check: auto` / `source_clone`** — `argv_append_from` is argv-only host program text rendered ONLY via `runio.RenderArgvAppendFrom`, and its shared `withoutArgs` helper stays unexported — hiding `${args}` is only a consistency rule *here*, but in `RenderShellCommand` it is what keeps caller bytes out of program text; output is DATA, one element per line, and empty output skips via `spec.ErrArgvAppendEmpty` while the step still **journals as success**, so it needs a `files_gate`/`check:`.
-  `check: auto` decodes to the `config.AutoCheckType` sentinel at LOAD time (ask `config.IsAutoCheck`) — a resolve-time-only rewrite would silently stop the step forcing re-runs; `pipeline.ResolveAutoCheck` is the single derivation, the rewrite takes a FRESH pointer (else a second resolve yields `! ( ! ( … ) )`), and plan renderers read `ResolvedStep.DisplayCheck()`.
-  `source_clone` gates itself, so it replaces the caller's `when:`/`check:` pair, and sets `GIT_ASKPASS`/`SSH_ASKPASS` **empty** on purpose (a dummy program would not defeat an inherited GUI helper) — do not "fix" that.
+- **Pipeline primitives: `argv_append_from` / `check: auto` / `source_clone`** — `argv_append_from` is argv-only host program text rendered ONLY via `runio.RenderArgvAppendFrom`, its shared `withoutArgs` helper stays unexported, and empty output skips via `spec.ErrArgvAppendEmpty` while the step still **journals as success**, so it needs a `files_gate`/`check:`.
+  `check: auto` decodes to the `config.AutoCheckType` sentinel at LOAD time (ask `config.IsAutoCheck`) — a resolve-time-only rewrite would silently stop the step forcing re-runs; `pipeline.ResolveAutoCheck` is the single derivation and takes a FRESH pointer, else a second resolve yields `! ( ! ( … ) )`.
+  `source_clone` gates itself, so it replaces the caller's `when:`/`check:` pair, and sets `GIT_ASKPASS`/`SSH_ASKPASS` **empty** on purpose (a dummy program would not defeat an inherited GUI helper).
   See § Core — Execution (`pipeline/`, `builtin/`), § Core — Foundation (`project/config/`), § Core — User Commands and § `internal/cli/lifecycle/`.
 
 - **Two disjoint builtin registries** — `builtin.Inventory()` (step bodies and `check:`) and `condition.Predicates()` (`when:`) share the word "builtin" and accept nothing from each other; never document them as interchangeable.
@@ -248,9 +257,9 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Execution (`builtin/`, `condition/`).
 
 - **`llms-txt` budget + `docs search` ranking** — `cli/docs` is the only layer that may import `execution/`: builtin and condition data reach `core/docs/llmstxt` through `Opts`, never an import.
-  `dwe docs llms-txt --no-project` is capped at 12 KB by a test, and that number is duplicated in four places; its `--output` is a file path, not a format.
-  `docs search` (see also § `internal/cli/docs/`) ANDs tokens ranked by MIN per-token count (a sum lets the commonest word win), with the per-document tier a tie-break BELOW the count — ordering tiers outright buried the strongest answer, invisibly at a narrowed `--limit`; substring matching is deliberate, and the snippet is sanitized (non-printables dropped, whitespace collapsed) and capped *including* the ellipsis so the 4th TSV column can never become a fifth field.
-  See § Core — Docs.
+  `dwe docs llms-txt --no-project` is capped at 12 KB by a test, a number duplicated in four places; its file flag is `--out PATH` — a local `--output` would shadow the root's and make `-o` unresolvable.
+  `docs search` ranks by MIN per-token count, tier a tie-break BELOW it, and caps the snippet *including* its ellipsis.
+  See § Core — Docs and § `internal/cli/docs/`.
 
 - **`dwe test list` cost profile** — `cost_profile` reports facts, never a cheap/expensive verdict; that rule lives in `skills/dwe/SKILL.md` so it changes without a release.
   It is built **only** in JSON mode and every failure path returns nil, so it cannot weaken `list`'s no-Docker / no-locks / works-with-an-unloadable-config contract.
@@ -258,20 +267,28 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § `internal/cli/test/`.
 
 - **Scaffold starter artefacts** — `applyServicePlan` drops `workspace/services/<name>/` **plus** every path in `serviceScopedOutputs` when `--service ""`, pinned against the rendered plan so a template rename cannot make the rule a silent no-op; the ai pack's `manifest.yml` and `workspace/tests/smoke.yml` are the only inert-mirror files that ship ACTIVE.
-  The per-service `deploy.yml` skeleton must stay commented — not because it fails to resolve (a test uncomments it and resolves green) but because an active skeleton makes `dwe deploy run` clone its placeholder repo on every fresh project; its `bootstrap` step is `type: dwe` + `docker run`, never a bare `docker compose` in a `type: shell` step, which resolves a different compose project.
+  The per-service `deploy.yml` skeleton must stay commented (it resolves fine — but active, it makes `dwe deploy run` clone its placeholder repo on every fresh project); its `bootstrap` step is `type: dwe` + `docker run`, never a bare `docker compose` in a `type: shell` step, which resolves a different compose project.
   Any template edit requires regenerating `testdata/golden_default.txt`.
   See § Core — Workflow (`scaffold/`).
 
 - **Anchor derivation + long-doc hint** — `parseHeadingSlugLabel` is the single derivation for every anchor surface, with the **slug from the RAW heading text and the label from the stripped one**.
   Never write `Slugify(stripInlineMarkdown(x))` and never re-slug `Heading.Text`: `stripEmphasis` ate `_` as an emphasis marker, so three surfaces advertised `servicedirsensure` while the resolver answered only to `service_dirs_ensure` — on every builtin name and snake_case key.
-  `emitLongDocHint` writes its one line to **stderr** because the target case is `docs show <topic> | head`, which truncates stdout only; its silence gates keep it from becoming a banner.
+  `emitLongDocHint` writes to **stderr** because the target case is `docs show <topic> | head`, which truncates stdout only; its silence gates keep it from becoming a banner.
   See § Core — Docs.
 
 - **Responsive tables: three traps** — every renderer in `internal/core/ui/render/` degrades shrink → wrap → records through one shared `tableView.Render(budget)`, and a new table inherits that for free by being a `tableView`, but:
-  (1) a non-TTY sink gives budget 0, which disables shrinking *and* the record fallback but NOT wrapping, and the goldens hold only because `TestMain` pins the `termWidthFn` seam — check that seam before "fixing" a golden by touching budget logic;
-  (2) the budget follows the **sink**, so `DiagnosticsTable` probes stderr while its twin `DiagnosticsByDomain` probes stdout — backwards, it shrinks `dwe validate > report.txt` and leaves `2>/dev/null` unbounded; `width=0` means unbounded, never "probe the sink", so ship an `…At(width)` sibling with every sink-probing entry point and thread the same width into `stack.wrapSection` → `render.SectionTitleAt`;
-  (3) `fitRows` must raise each natural width back up to its `columnFloors` value before distributing the deficit, because a `Max` cap can clamp a column below an unbreakable token that the wrap helpers will never split — skip the floor-raise and `distributeDeficit` sees negative headroom, *widens* the column, and the table overflows while still reporting `ok=true`.
+  (1) a non-TTY sink gives budget 0, disabling shrinking *and* the record fallback but NOT wrapping, and the goldens hold only because `TestMain` pins the `termWidthFn` seam — check it before "fixing" a golden via budget logic;
+  (2) the budget follows the **sink**, so a stderr renderer must probe stderr and its stdout twin stdout; `width=0` means unbounded, never "probe the sink", so ship an `…At(width)` sibling with every sink-probing entry point;
+  (3) `fitRows` must raise each natural width back to its `columnFloors` value before distributing the deficit, or `distributeDeficit` sees negative headroom, *widens* the column and overflows while still reporting `ok=true`.
   See § `internal/core/ui/render/`, § `internal/core/ui/styles/` and § `internal/core/project/stack/`.
+
+- **Encrypted secrets** — decryption happens ONCE in `LoadConfig`, so merged-config consumers stay crypto-unaware; `LoadConfigSanitized` is what ide/ai/git load, so a tracked output can only carry the marker.
+  `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext (age is non-deterministic), and `LoadConfig` SOLELY installs `trace.RegisterRedaction`.
+  `secrets init`/`set`/`rekey` use the `local` Splicer, not the node writer; `StepCommand`/`FormatAction`/`FormatCondition` redact every plan surface.
+  `keygate.Ensure` offers the missing identity on raw layers pre-`LoadConfig`; json/`--yes`/non-TTY/`DWE_NONINTERACTIVE`/nil hooks skip it.
+  `render env`/`config` run no preflight and refuse a marker; `ResolveComposeProjectName` refuses one too; `secrets.unresolved` is preflight's 2nd cherry-pick.
+  Only `shared/secrets/` imports `filippo.io/age`; `dwe secrets` is not in `bridgeAllowedTopLevel`, but container READS stay open.
+  See § Core — Foundation (`project/config/`), § `internal/shared/secrets/` and § `internal/cli/secrets/`.
 
 ## Agent-Specific Instructions
 

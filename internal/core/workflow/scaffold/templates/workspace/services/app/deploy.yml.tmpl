@@ -10,7 +10,23 @@
 #   source     — materialise the hub (clone once, never touch it again)
 #   image      — build the container image
 #   bootstrap  — first-run setup inside the container
-#   render     — write hub-level artefacts (agent docs, IDE config)
+#
+# Hub-level artefacts (agent docs, IDE config) are deliberately absent: they
+# belong in the PROJECT pipeline, not here. `dwe render ai` with no service
+# argument walks every service and honours each `render.ai.enabled`, so one
+# step in workspace/deploy.yml keeps every hub up to date and needs no edit
+# when services come and go. A per-service `render ai [[ .Service ]]` step just
+# repeats that work. Rendering stays opt-in — the built-in default pipeline has
+# no render phase. To wire it up, uncomment workspace/deploy.yml (which replaces
+# the whole built-in pipeline — copy every phase you still want) and add there:
+#
+#     - name: render
+#       description: "Render hub-level artefacts"
+#       steps:
+#         - name: agent-docs
+#           type: dwe
+#           cmd: "render ai"
+#           description: "Render AGENTS.md into every service hub"
 #
 # Schema and field reference: `dwe docs show config/deploy/index`
 # Builtin inventory (name, kind, purpose): `dwe docs llms-txt --lang en`
@@ -61,11 +77,3 @@
 #           type: shell
 #           cmd: "test ! -d services/[[ .Service ]]/src/node_modules"
 #         check: auto
-#
-#   - name: render
-#     description: "Render hub-level artefacts"
-#     steps:
-#       - name: agent-docs
-#         type: dwe
-#         cmd: "render ai [[ .Service ]]"
-#         description: "Render AGENTS.md into the service hub"

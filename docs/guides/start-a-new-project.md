@@ -119,7 +119,7 @@ dwe deploy run   # bring the configured stack up
 
 Two pairings the scaffold documents in comments but no validator can check for you:
 
-- **A port is display-only until it is exported.** `ports:` in `service.yml` feeds `dwe status` and info blocks; nothing binds it. Uncomment it together with the matching `exports.env` rule in `workspace/defaults.yml`, which is what turns it into an environment variable `compose.yaml` can reference. `PROJECT`, `UID` and `GID` are injected automatically and must not be redeclared there.
+- **A port is display-only until it is exported.** `ports:` in `service.yml` feeds `dwe status` and info blocks; nothing binds it. Uncomment it together with the matching `exports.env` rule in `workspace/defaults.yml`, which is what turns it into an environment variable `compose.yaml` can reference. `PROJECT`, `UID`, `GID` and `COMPOSE_PROJECT_NAME` are injected automatically and must not be redeclared there.
 - **Mount the whole hub, not just the sources.** `dir` is the host directory holding the checkout *and* everything next to it (build artefacts, caches, tooling state); `dir_internal` is where that whole directory lands in the container, and `work_dir_internal` is where commands run inside it.
 
 From there the usual authoring path applies: [add a service](add-a-service.md), [author project commands](author-project-commands.md), [brand the dashboard](brand-your-project.md), and uncomment an override file when you genuinely need to reshape a pipeline. For an orientation pass in a fresh project — services, commands, pipeline builtins, diagnostic flags — run `dwe docs llms-txt --lang en`.

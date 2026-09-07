@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image/color"
 	"io"
 	"os"
@@ -54,6 +55,31 @@ func sentenceCaseFirstRune(s string) string {
 	return s
 }
 
+// writeHint prints a CodedError's fix instruction under fang's error block.
+//
+// Without it a hint reaches `--output json` ONLY: CodedError.Error() returns the
+// message alone, so fang never sees the hint — which is backwards, since the
+// hint exists for the person reading the error and the JSON envelope is the
+// secondary surface. Every `WithHint` in the tree depends on this one call.
+//
+// It borrows the error block's width and margins so a long instruction wraps
+// under the message rather than beside it, with the transform unset — that one
+// belongs to the message, and a hint routinely opens with a flag or a command
+// name. No terminal probe here on purpose: fang hands the handler a
+// `colorprofile.Writer` (not an `*os.File`), which downsamples the styling it is
+// given — including dropping it entirely on a pipe — so the same call is
+// correct on both, and fang's own block goes through exactly the same writer.
+func writeHint(w io.Writer, fangStyles fang.Styles, err error) {
+	var ce *cmdctx.CodedError
+	if !errors.As(err, &ce) || ce.Hint == "" {
+		return
+	}
+	style := fangStyles.ErrorText.UnsetTransform().
+		Foreground(lipglossv2.Color(styles.ColorMuted()))
+	_, _ = fmt.Fprintln(w, style.Render("hint: "+ce.Hint))
+	_, _ = fmt.Fprintln(w)
+}
+
 func main() {
 	if isPromptInvocation(os.Args) {
 		os.Exit(prompt.Run(os.Stdout, os.Args[2:]))
@@ -80,6 +106,7 @@ func main() {
 		}
 		fangStyles.ErrorText = fangStyles.ErrorText.Transform(sentenceCaseFirstRune)
 		fang.DefaultErrorHandler(w, fangStyles, err)
+		writeHint(w, fangStyles, err)
 	}
 
 	opts := []fang.Option{

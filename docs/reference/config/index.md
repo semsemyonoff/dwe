@@ -16,9 +16,9 @@ Overview of all configuration files in the DWE system.
 
 | File | Tracked | Loader | Purpose |
 |------|---------|--------|---------|
-| `workspace.yml` | yes | layer 1 | Project identity and service structure |
+| `workspace.yml` | yes | layer 1 | Project identity, service structure, and the `secrets:` recipient |
 | `workspace/defaults.yml` | yes | layer 2 | Versioned defaults: runtime, exports, service enabled toggles |
-| `workspace/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, service enabled toggles |
+| `workspace/local.yml` | no (gitignored) | layer 3 | Per-user overrides: service enabled toggles, personal vars |
 | `workspace/services/<name>/service.yml` | yes | standalone | Per-service declaration (dirs, cli, configs, ports) |
 | `workspace/deploy.yml` | yes | standalone | Orchestrator deploy pipeline (phases + steps) |
 | `workspace/services/<name>/deploy.yml` | yes | standalone | Per-service deploy pipelines |
@@ -102,6 +102,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 
 - [workspace / defaults / local](workspace.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
 - [vars](vars.md) — the `dwe vars` command: enumerate/read/edit/trace the `vars:` sandbox, comment-preserving writes, static usage scan, `bridge.vars_writable` container-write allowlist
+- [secrets](secrets.md) — encrypted-at-rest values committed to the repository: the `secrets:` recipient, `ENC[age:…]` markers, `.age` pack sources, keys and env overrides, `dwe secrets` subcommands, render guards and preflight
 - [services/<name>/service.yml](services/index.md) — per-service declarations, extends, dirs, cli config
 - [deploy.yml / reset.yml](deploy/index.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
 - [state.yml](state/index.md) — deploy state tracking, skip-decision table, hashing, lock file, recovery from crashes
@@ -117,11 +118,11 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - [Localization (i18n)](i18n.md) — user command and UI string translations: locale resolution, file format, key reference, validation
 - [User config](userconfig.md) — user-level preferences: file location, syntax, binary overrides, language, mermaid theme
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
-- [UI](ui.md) — interactive command browser configuration: depth, collapse, badges, hotkeys, fallback ladder
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)
 
 ## Related commands
 
+- `dwe secrets status` — report every encrypted value and whether it can be read here
 - `dwe render env` — generate `.env` from the merged config export rules
 - `dwe render ide` — generate IDE configs
 - `dwe render ai` — generate hub-level AGENTS.md and CLAUDE.md symlinks

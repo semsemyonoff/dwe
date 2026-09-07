@@ -23,9 +23,9 @@ import (
 
 // ExecRunner executes type=service_exec commands via `docker compose exec`.
 // The behaviour when the target container is not running depends on Mode:
-//   - exec-or-fail (default): refuses with a clear dwe error.
-//   - exec-or-run: silently falls back to `docker compose run --rm` (with a
-//     warning written to stderr so the ephemeral-container behaviour is visible).
+//   - exec-or-run (default): falls back to `docker compose run --rm`, with a
+//     warning written to stderr so the ephemeral-container behaviour is visible.
+//   - exec-or-fail: refuses with a clear dwe error.
 //   - exec / run: forced; exec lets compose emit its own error if the container
 //     is missing.
 type ExecRunner struct{}
@@ -54,13 +54,13 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 	case model.ExecModeExecOrFail:
 		// Pre-check so that "service not running" surfaces as a clean dwe
 		// error rather than a raw compose stderr trace.
-		running, checkErr := isContainerRunning(compose, svc)
+		running, checkErr := containerRunningFn(compose, svc)
 		if checkErr == nil && !running {
-			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `dwe docker up %s`, or set `mode: exec-or-run` if a one-off ephemeral container is acceptable", svc, svc)
+			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `dwe docker up %s`, or drop `mode: exec-or-fail` if a one-off ephemeral container is acceptable", svc, svc)
 		}
 		// On probe error we proceed; compose will fail with its own error if needed.
 	case model.ExecModeExecOrRun:
-		running, checkErr := isContainerRunning(compose, svc)
+		running, checkErr := containerRunningFn(compose, svc)
 		if checkErr != nil {
 			running = true
 		}
@@ -99,8 +99,28 @@ func (e *ExecRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	return c.Run()
 }
 
+// workdirInternal is the workdir opt-out sentinel, mirroring
+// model.UserModeInternal: emit no --workdir flag AND skip the service fallback,
+// so the image's own WORKDIR applies.
+const workdirInternal = "internal"
+
 // resolveServiceFields returns the effective service, user, workdir, and mode
 // for the command, applying runner overrides when present.
+//
+// The workdir chain, first non-empty wins:
+//
+//  1. workdir (or runner.workdir) == "internal" — no flag, fallback skipped, stop
+//  2. runner.workdir_from → workdir_from
+//  3. runner.workdir → workdir
+//  4. services.<svc>.cli.workdir
+//  5. services.<svc>.work_dir_internal
+//  6. services.<svc>.dir_internal
+//  7. no --workdir flag — the image's WORKDIR applies
+//
+// Rungs 4-6 are config.ContainerWorkdirFallback, the same chain `dwe shell`
+// applies, so a shell session and a command into one service land together.
+// The sentinel outranks workdir_from because opting out cannot be expressed
+// any other way — for that one value the "workdir_from wins" rule inverts.
 //
 // The string-valued fields (service, workdir, workdir_from) are rendered as
 // command-template expressions so they can reference ${param.*}, ${context.*},
@@ -133,16 +153,21 @@ func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode,
 		return
 	}
 
-	if wdFrom != "" {
-		var resolved string
-		resolved, err = resolveWorkdirFrom(wdFrom, ctx)
-		if err != nil {
-			return
+	if wdLiteral != workdirInternal {
+		if wdFrom != "" {
+			var resolved string
+			resolved, err = resolveWorkdirFrom(wdFrom, ctx)
+			if err != nil {
+				return
+			}
+			workdir = resolved
 		}
-		workdir = resolved
-	}
-	if workdir == "" {
-		workdir = wdLiteral
+		if workdir == "" {
+			workdir = wdLiteral
+		}
+		if workdir == "" {
+			workdir = config.ContainerWorkdirFallback(ctx.Config, svc)
+		}
 	}
 
 	if user == "" {
@@ -161,15 +186,11 @@ func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode,
 // Container field matches the given compose service name, or "" when no match
 // is found (or the matched entry has no cli.user set).
 func lookupServiceCLIUser(cfg *config.DweConfig, container string) string {
-	if cfg == nil || container == "" {
+	svc, ok := config.ServiceByContainer(cfg, container)
+	if !ok {
 		return ""
 	}
-	for _, s := range cfg.Services {
-		if s.Container == container {
-			return s.CLI.User
-		}
-	}
-	return ""
+	return svc.CLI.User
 }
 
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns
@@ -230,6 +251,99 @@ func buildServiceArgv(ctx context.Context, rc spec.RunContext) ([]string, error)
 	return runio.AppendArgvFrom(ctx, rc, argv)
 }
 
+// flagNamePart returns the name part of a command-line argument: everything
+// before the first "=" ("--no-tty=false" → "--no-tty"). Arguments that are not
+// flags come back unchanged and simply match nothing.
+func flagNamePart(arg string) string {
+	if eq := strings.IndexByte(arg, '='); eq > 0 {
+		return arg[:eq]
+	}
+	return arg
+}
+
+// hasTTYFlag reports whether the flag vector already carries an explicit TTY
+// decision: `-T`, `-T=<value>`, `--no-tty` in any case with or without a value,
+// or `T` inside a short-flag bundle such as `-dT` (see shortFlagLetters). Both
+// forms are boolean flags, so `-T=false`, `--no-tty=false` and `--no-tty=true`
+// are all things a project can legitimately have written.
+//
+// `--no-tty` is compared case-INSENSITIVELY on purpose. The compose flag is
+// spelled lowercase (`-T, --no-tty` on both `exec` and `run`) and pflag is
+// case-sensitive, so an uppercase-only matcher would recognise nothing a
+// project can actually have written — while a case-insensitive one still
+// catches an author who typed `--no-TTY` and would otherwise be silently
+// overridden.
+func hasTTYFlag(args []string) bool {
+	for _, a := range args {
+		if strings.EqualFold(flagNamePart(a), "--no-tty") {
+			return true
+		}
+		if strings.IndexByte(shortFlagLetters(a), 'T') >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// composeBoolShorthands are the boolean short flags docker compose accepts on
+// exec and run. Only these can sit in the middle of a bundle.
+const composeBoolShorthands = "dTiqP"
+
+// composeValueShorthands take a value, so they TERMINATE a bundle: pflag reads
+// everything after one as that flag's value, not as further flags.
+const composeValueShorthands = "euwlpv"
+
+// shortFlagLetters returns the boolean short flags packed into a single
+// argument, or "" when the argument is not a short-flag group we can read.
+//
+// pflag lets short flags bundle, so `-dT` means `-d -T` and is valid on both
+// `exec` and `run`. Comparing whole tokens missed that: a `compose_args:
+// ["-dT"]` step read as neither detached nor TTY-flagged, which appended a
+// redundant `-T` (harmless) but also forced colour into a DETACHED container,
+// baking ANSI escapes into its Docker logs permanently — exactly what the
+// !detached guard exists to prevent.
+//
+// Decomposition stops at the first value-taking shorthand and refuses entirely
+// on an unknown letter, because a bundle cannot be told from a shorthand with
+// an attached value by shape alone: `-uTest` is `--user Test`, not a `-T`.
+// Refusing there keeps the old whole-token behaviour, which is the safe
+// direction — the auto-detect stays on and appends its own flag.
+func shortFlagLetters(arg string) string {
+	name := flagNamePart(arg)
+	if len(name) < 2 || name[0] != '-' || name[1] == '-' {
+		return ""
+	}
+	var out []byte
+	for i := 1; i < len(name); i++ {
+		switch c := name[i]; {
+		case strings.IndexByte(composeBoolShorthands, c) >= 0:
+			out = append(out, c)
+		case strings.IndexByte(composeValueShorthands, c) >= 0:
+			return string(out)
+		default:
+			return ""
+		}
+	}
+	return string(out)
+}
+
+// hasDetachFlag reports whether the flag vector asks for a detached container
+// (`-d` / `--detach`, valid on both `exec` and `run`). Any occurrence counts,
+// including `-d=false`: the only consumer is the colour-forcing gate, where
+// staying quiet is the safe direction — a false positive costs one uncoloured
+// run, a false negative bakes ANSI escapes into the Docker logs.
+func hasDetachFlag(args []string) bool {
+	for _, a := range args {
+		if strings.EqualFold(flagNamePart(a), "--detach") {
+			return true
+		}
+		if strings.IndexByte(shortFlagLetters(a), 'd') >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // buildDockerComposeCmd assembles the full docker compose exec/run command.
 func buildDockerComposeCmd(
 	ctx context.Context,
@@ -254,20 +368,41 @@ func buildDockerComposeCmd(
 
 	args = append(args, compose.GlobalArgs...)
 
+	var commandDefaults []string
 	if useExec {
 		args = append(args, "exec")
-		if defaults, ok := compose.CommandArgs["exec"]; ok {
-			args = append(args, defaults...)
-		}
+		commandDefaults = compose.CommandArgs["exec"]
+		args = append(args, commandDefaults...)
 	} else {
 		args = append(args, "run")
-		if defaults, ok := compose.CommandArgs["run"]; ok {
-			args = append(args, defaults...)
-		}
+		commandDefaults = compose.CommandArgs["run"]
+		args = append(args, commandDefaults...)
 		args = append(args, "--no-deps", "--entrypoint", "")
 	}
 
 	args = append(args, composeArgs...)
+
+	// Decide the container TTY here rather than leaving it to whoever wired the
+	// stdio: unless this is a run the user launched themselves with terminals on
+	// both ends, the container process gets `-T` (no TTY).
+	//
+	// The classifier runs over the EFFECTIVE flag vector — docker.yml's
+	// `args.exec` / `args.run` defaults plus the command's own rendered
+	// compose_args — because a `--no-tty=false` declared in docker.yml is
+	// otherwise invisible here. Any occurrence of a TTY flag, whatever its
+	// value, hands the decision back to the author; `--no-tty=false` is the
+	// deliberate force-a-TTY escape hatch. Only TTY flags suppress the
+	// auto-detect: `-d`, `--name`, `--rm` and friends stay orthogonal on
+	// purpose, since none of them says anything about the terminal.
+	effectiveFlags := make([]string, 0, len(commandDefaults)+len(composeArgs))
+	effectiveFlags = append(effectiveFlags, commandDefaults...)
+	effectiveFlags = append(effectiveFlags, composeArgs...)
+
+	ttySuppressed := false
+	if !hasTTYFlag(effectiveFlags) && !runio.WantContainerTTY(rc) {
+		args = append(args, "-T")
+		ttySuppressed = true
+	}
 
 	switch user {
 	case model.UserModeCurrent:
@@ -291,10 +426,17 @@ func buildDockerComposeCmd(
 	// sub-steps (LineTee failure dumps + always_show_output) and color-forced
 	// bridge runs alike. The child keeps its colours even though docker
 	// compose attaches a pipe rather than a TTY.
+	//
+	// The `-T` injected above is the third such case, and the runner is the only
+	// place that knows about it — hence the explicit flag. `!detached` is
+	// load-bearing: `-d` is valid on both exec and run, a detached child's
+	// output never reaches rc.Stdout, and forcing colour there would write ANSI
+	// escapes into the Docker logs permanently.
+	detached := hasDetachFlag(effectiveFlags)
 	if envVars == nil {
 		envVars = make(map[string]string)
 	}
-	for _, kv := range runio.ColorForceEnv(rc) {
+	for _, kv := range runio.ColorForceEnv(rc, ttySuppressed && !detached) {
 		// kv is "KEY=VALUE"; split once.
 		if eq := strings.IndexByte(kv, '='); eq > 0 {
 			k, v := kv[:eq], kv[eq+1:]
@@ -320,6 +462,12 @@ func buildDockerComposeCmd(
 	cmd.Env = docker.MergeEnv(combined)
 	return cmd
 }
+
+// containerRunningFn is the container-probe seam. The real implementation
+// shells out to `docker compose ps`, which is why tests that need to reach a
+// probing mode (exec-or-run — the default — or exec-or-fail) replace it and
+// restore it with t.Cleanup rather than staging a fake docker binary.
+var containerRunningFn = isContainerRunning
 
 // isContainerRunning checks whether the named service container is running.
 func isContainerRunning(compose *docker.Compose, service string) (bool, error) {

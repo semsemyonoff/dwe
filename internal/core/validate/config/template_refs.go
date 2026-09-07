@@ -22,7 +22,7 @@ import (
 // ${HOME}, a stray dollar sign) and the special namespaces that never live
 // in Raw (param, context, files, host, snapshot, args, generated) are not
 // this validator's concern. Both exclusions come from gating on
-// config.IsAllowedRootKey. A head-only ${state} / ${vars} is excluded too,
+// config.IsAllowedRootKey. A head-only ${update} / ${vars} is excluded too,
 // by tpl.IsVarNamespaceRef — see the gate.
 //
 // The gate is the root-key ALLOWLIST, not "head present in cfg.Raw": the
@@ -52,7 +52,7 @@ func (v *templateRefsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	var diags []validate.Diagnostic
 	for _, u := range usages {
 		// A known head is only a reference when it carries a tail:
-		// CompileVarSyntax leaves a head-only ${state} / ${update} / ${vars}
+		// CompileVarSyntax leaves a head-only ${stop} / ${update} / ${vars}
 		// literal (it is a lowercase shell variable colliding with a namespace
 		// name, rife in pipeline cmd: strings), so warning that it "does not
 		// resolve" would flag exactly what the whitelist deliberately keeps

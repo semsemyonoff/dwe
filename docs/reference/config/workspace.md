@@ -9,15 +9,16 @@ The three layers of the merged DWE config.
 - [Dot-path resolution](#dot-path-resolution)
   - [Where service fields come from](#where-service-fields-come-from)
 - [Strict root + the `vars:` sandbox](#strict-root--the-vars-sandbox)
+  - [Unknown field errors](#unknown-field-errors)
 - [workspace.yml](#workspaceyml)
   - [Field reference](#field-reference)
+  - [The `secrets:` block](#the-secrets-block)
   - [The `update:` block](#the-update-block)
   - [The `stop:` block](#the-stop-block)
 - [Recommended file-layout convention](#recommended-file-layout-convention)
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [`services` overlay](#services-overlay)
   - [`runtime`](#runtime)
-  - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
 - [workspace/local.yml](#workspacelocalyml)
@@ -59,9 +60,10 @@ The three files share a single namespace — the same key in different layers is
 | Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
 | Export rules (`exports.env`) | `defaults.yml` |
 | `vars.db.*` block defaults | `defaults.yml` |
-| Active state | `local.yml` |
 | Service port / host values | [`workspace/services/<name>/service.yml`](services/index.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
 | Personal credentials (`vars.db.user`, `vars.db.password`) | `local.yml` |
+| Team-shared credentials (a bot token, a service-account JSON) | `defaults.yml`, encrypted — see [`secrets.md`](secrets.md) |
+| The project's age recipient (`secrets.recipient`) | `workspace.yml` only — rejected with an error in all other layers |
 | Enabling debug / optional services | `local.yml` |
 | Per-developer Docker Compose overlay files (`compose.extra`) | `local.yml` only — rejected with an error in all other layers |
 | Wizard-generated configuration | `local.yml` (written by `dwe deploy` when answering setup questions or port conflicts) |
@@ -98,16 +100,27 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop
+project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
 
 ```text
-workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
 ```
 
 This makes typos in formalized keys (`runtim:`, `exprots:`) fail loudly instead of being silently swallowed, and lets the schema tighten without colliding with project-specific values. The same error is surfaced as a `dwe validate` error diagnostic.
+
+### Unknown field errors
+
+The same treatment applies *inside* a file. Every strictly decoded config file — the pipelines (`deploy.yml`, `lifecycle.yml`, `reset.yml`), `service.yml`, `snapshot.yml`, `validate.yml`, command files, template-pack manifests, test scenarios, `setup.yml` and translation bundles — reports an unknown key with the file, the line, the key and the fields actually accepted at that position:
+
+```text
+workspace/deploy.yml:12: unknown field "defaults" — allowed here: log, phases
+(a field you did not invent may come from a newer dwe version — check `dwe version`)
+```
+
+Several unknown fields in one file are listed one per line, with the hint printed once at the end.
 
 ### `vars:` — the home for free-form values
 
@@ -133,6 +146,8 @@ vars:
 `vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`.
 
 The [`dwe vars`](vars.md) command enumerates, reads, edits, and traces every value under this block — see [`vars.md`](vars.md) for the subcommands, the author/local/effective layer model, comment-preserving `local.yml` writes, the static usage scan, and the `bridge.vars_writable` container-write allowlist.
+
+A `vars.*` value may also be an **encrypted `ENC[age:…]` marker** committed to a tracked layer, decrypted in memory at load time. That is how a team-shared credential lives in git without sitting there in the open; see [`secrets.md`](secrets.md).
 
 ### `bridge.vars_writable` — container-write allowlist
 
@@ -179,6 +194,23 @@ project:
 | `project.prefix` | string | Prefix for Docker project name and container labels |
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
+
+### The `secrets:` block
+
+The optional top-level `secrets:` block declares the project's public age recipient — the key that `ENC[age:…]` markers and `*.age` config-pack sources are encrypted to.
+
+```yaml
+secrets:
+  recipient: age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `secrets.recipient` | string | The project's public age recipient (`age1…`), written by `dwe secrets init`. Commit it. |
+
+Unlike every other formalized block, `secrets:` is legal in **`workspace.yml` only**. Declaring it in `defaults.yml` or `local.yml` is a hard load error naming the file: a per-developer recipient would silently split the team into groups that cannot read each other's secrets. A `secrets:` value that is not a mapping, or a `recipient` that is not a valid `age1…`, is likewise a load error.
+
+The matching private identity is never in git — it lives in `~/.config/dwe/keys/<recipient>.key` or in `DWE_AGE_KEY` / `DWE_AGE_KEY_FILE`. Encryption needs only the recipient, so anyone with the repository can add a secret; reading one back needs the identity. See [`secrets.md`](secrets.md) for the full model and the `dwe secrets` command surface.
 
 ### The `update:` block
 
@@ -251,9 +283,9 @@ All three layers share the same strict key set, so any block *can* appear in any
 
 | Layer | Holds | Why |
 |-------|-------|-----|
-| `workspace.yml` | Compact formalized blocks: `project`, `ui`, `update` | Small, structural, rarely changes |
+| `workspace.yml` | Compact formalized blocks: `project`, `update` | Small, structural, rarely changes |
 | `defaults.yml` | The bulky blocks: `vars`, `exports`, `services` overlay, `runtime`, `bridge.vars_writable` | Versioned team defaults; the biggest content. `bridge.vars_writable` is a team-shared security policy — keep it here, not in `local.yml` (see [the allowlist note above](#bridgevars_writable--container-write-allowlist)) |
-| `local.yml` | Personal overrides: `state`, `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
+| `local.yml` | Personal overrides: `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
 
 For example, a project author enables update policy in `workspace.yml` (`update: { mode: on }`) and a developer who wants to skip the probe locally overrides it in `local.yml` (`update: { mode: off }`).
 
@@ -301,14 +333,6 @@ runtime:
 | `runtime.use_https` | Whether URLs use HTTPS (exported as `USE_HTTPS`). |
 | `runtime.spx.path` | SPX profiler URL path (empty = disabled). |
 
-### `state`
-
-```yaml
-state: ""
-```
-
-Active state name. Empty string means no state. Exported as `STATE` in `.env`. Override in `local.yml` (e.g. `state: staging`).
-
 ### `exports.env`
 
 Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name. All per-service fields — `container`, `enabled`, `ports.<name>`, `hosts.<name>` — live under `services.<name>.*`.
@@ -343,15 +367,20 @@ exports:
 
 #### Implicit system variables
 
-`dwe render env` always emits three variables before any rule runs, regardless of `exports.env`:
+`dwe render env` emits four variables before any rule runs, regardless of `exports.env`:
 
 | Variable | Source | Notes |
 |----------|--------|-------|
-| `PROJECT` | `project.name` | Used by Docker labels and Make targets |
+| `PROJECT` | `project.name` | The name verbatim, including uppercase. Used by Make targets |
 | `UID` | host UID | Hard-coded to `1000` on macOS, real UID on Linux/WSL — keeps container builds deterministic across hosts |
 | `GID` | host GID | Same logic as `UID` |
+| `COMPOSE_PROJECT_NAME` | the compose project name `dwe` passes as `-p` | `project_name` from [`docker.yml`](docker.md#project_name) / `docker.local.yml`, else `<project.prefix>-<project.name>`, always lowercased. Omitted when it resolves empty; a resolution error fails the render |
 
-These are managed by the CLI; do not redeclare them as export rules.
+The first three are always present; `COMPOSE_PROJECT_NAME` is emitted whenever the name resolves to a non-empty value. All four are managed by the CLI; do not redeclare them as export rules — a rule using one of these names is a hard config-load error.
+
+#### Single-line values only
+
+Values are written unquoted, so a resolved value containing a line break cannot be represented: compose would parse the second and later lines as further `.env` entries, truncating the value and possibly defining variables nobody declared. `dwe render env` refuses such a value and names the rule and its source path. Deliver multi-line material — a PEM key, a service-account JSON — through a [`render config`](../render/config.md) pack file instead, which has no such constraint and which [encrypted secrets](secrets.md) support natively via `*.age` sources.
 
 ### `compose`
 
@@ -379,8 +408,6 @@ Service-specific overlays live under `services.<name>.compose` (a list of file p
 
 **Example overrides**:
 ```yaml
-state: staging
-
 services:
   main-debug:
     enabled: true
@@ -473,16 +500,12 @@ Commits made inside the `dev` container now use the developer's project-specific
 
 - **Editing `defaults.yml` for personal settings** — changes are tracked and affect every team member. Personal overrides always go in `local.yml`.
 - **Committing `local.yml`** — it is gitignored for a reason (may contain credentials).
-- **Setting `state:` in `defaults.yml`** — state is inherently per-user, put it in `local.yml`.
-- **Scalar collision** — if `defaults.yml` sets `state: ""` and `local.yml` sets `state: staging`, the effective value is `staging`. If `local.yml` omits `state`, the `defaults.yml` value wins.
+- **Scalar collision** — if `defaults.yml` sets `runtime.use_https: false` and `local.yml` sets `runtime.use_https: true`, the effective value is `true`. If `local.yml` omits the key, the `defaults.yml` value wins.
 - **Lists replace, maps merge** — maps are deep-merged: redeclaring `services` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `bridge.vars_writable: ["vars.db.*"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
-
-## Optional `ui:` block
-
-`workspace.yml` may carry an optional top-level `ui:` block that configures the interactive command browser. See [`ui.md`](ui.md) for the schema, defaults, and the `*bool` omit-vs-`false` semantics. Behaviour is unchanged for projects that omit the block.
 
 ## Related commands
 
+- `dwe secrets status` — report every encrypted value in the layers and whether it can be read here
 - `dwe render env --out .env` — regenerate `.env` from the merged config
 - `dwe render ide` / `dwe render ai` / `dwe render git` — pack-based renderers; see [render reference](../render/index.md)
 - `dwe info` — show dashboard (uses merged config + `info.yml`)

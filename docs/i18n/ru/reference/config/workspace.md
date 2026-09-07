@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 695578a24636
+> Translated from: reference/config/workspace.md @ b15113fe33a5
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -11,15 +11,16 @@
 - [Разрешение dot-path](#разрешение-dot-path)
   - [Откуда берутся поля сервисов](#откуда-берутся-поля-сервисов)
 - [Строгий корень + песочница `vars:`](#строгий-корень--песочница-vars)
+  - [Ошибки о неизвестных полях](#ошибки-о-неизвестных-полях)
 - [workspace.yml](#workspaceyml)
   - [Справочник полей](#справочник-полей)
+  - [Блок `secrets:`](#блок-secrets)
   - [Блок `update:`](#блок-update)
   - [Блок `stop:`](#блок-stop)
 - [Рекомендуемое соглашение о раскладке файлов](#рекомендуемое-соглашение-о-раскладке-файлов)
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [Оверлей `services`](#оверлей-services)
   - [`runtime`](#runtime)
-  - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
 - [workspace/local.yml](#workspacelocalyml)
@@ -61,9 +62,10 @@ flowchart TB
 | Опциональное состояние enabled для сервисов (для всех типов) | `defaults.yml` (переопределяемо в `local.yml`) |
 | Правила экспорта (`exports.env`) | `defaults.yml` |
 | Дефолты блока `vars.db.*` | `defaults.yml` |
-| Активное состояние | `local.yml` |
 | Значения портов / хостов сервисов | [`workspace/services/<name>/service.yml`](services/index.md) (проектные определения) и `local.yml` (переопределения на разработчика, deep-merge по имени записи) |
 | Личные креды (`vars.db.user`, `vars.db.password`) | `local.yml` |
+| Общекомандные креды (токен бота, JSON сервис-аккаунта) | `defaults.yml`, в зашифрованном виде — см. [`secrets.md`](secrets.md) |
+| Age-recipient проекта (`secrets.recipient`) | только `workspace.yml` — во всех остальных слоях отклоняется с ошибкой |
 | Включение debug / опциональных сервисов | `local.yml` |
 | Конфигурация, сгенерированная мастером | `local.yml` (пишется `dwe deploy` при ответе на вопросы setup или конфликты портов) |
 
@@ -99,16 +101,27 @@ Dot-path'ы используются:
 **Корень** смерженного трёхслойного конфига строгий. После слияния трёх слоёв DWE проверяет ключи верхнего уровня по фиксированному allowlist'у:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop
+project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
 
 ```text
-workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
 ```
 
 Так опечатки в формализованных ключах (`runtim:`, `exprots:`) падают громко, а не проглатываются молча, и схему можно ужесточать, не конфликтуя со специфичными для проекта значениями. Та же ошибка выводится как error-диагностика `dwe validate`.
+
+### Ошибки о неизвестных полях
+
+То же самое действует и *внутри* файла. Каждый строго декодируемый конфиг — пайплайны (`deploy.yml`, `lifecycle.yml`, `reset.yml`), `service.yml`, `snapshot.yml`, `validate.yml`, файлы команд, манифесты template-паков, сценарии тестов, `setup.yml` и бандлы переводов — сообщает о неизвестном ключе с файлом, строкой, ключом и набором полей, которые допустимы в этом месте:
+
+```text
+workspace/deploy.yml:12: unknown field "defaults" — allowed here: log, phases
+(a field you did not invent may come from a newer dwe version — check `dwe version`)
+```
+
+Несколько неизвестных полей в одном файле перечисляются по строке на каждое, подсказка печатается один раз в конце.
 
 ### `vars:` — дом для свободных значений
 
@@ -134,6 +147,8 @@ vars:
 `vars.*` резолвится через `DweConfig.Raw` по dot-path так же, как `services.*`.
 
 Команда [`dwe vars`](vars.md) перечисляет, читает, редактирует и трассирует каждое значение под этим блоком — см. [`vars.md`](vars.md) про подкоманды, модель слоёв author/local/effective, запись в `local.yml` с сохранением комментариев, статическое сканирование использований и allowlist контейнерной записи `bridge.vars_writable`.
+
+Значение `vars.*` также может быть **зашифрованным маркером `ENC[age:…]`**, закоммиченным в отслеживаемый слой и расшифровываемым в памяти при загрузке. Именно так общекомандные учётные данные живут в git, не лёжа там открытым текстом; см. [`secrets.md`](secrets.md).
 
 ### `bridge.vars_writable` — allowlist контейнерной записи
 
@@ -180,6 +195,23 @@ project:
 | `project.prefix` | string | Префикс для имени Docker Compose-проекта и меток контейнеров |
 
 `project.prefix` и `project.name` комбинируются, образуя имя Docker Compose-проекта через шаблон в `docker.yml` (`${project.prefix}-${project.name}`).
+
+### Блок `secrets:`
+
+Опциональный верхнеуровневый блок `secrets:` объявляет публичный age-recipient проекта — ключ, на который зашифрованы маркеры `ENC[age:…]` и источники конфиг-паков `*.age`.
+
+```yaml
+secrets:
+  recipient: age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs3fgh2p
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `secrets.recipient` | string | Публичный age-recipient проекта (`age1…`), записывается командой `dwe secrets init`. Коммитьте его. |
+
+В отличие от всех остальных формализованных блоков, `secrets:` легален **только в `workspace.yml`**. Объявление его в `defaults.yml` или `local.yml` — жёсткая ошибка загрузки с именем файла: recipient «на разработчика» молча разбил бы команду на группы, которые не могут читать секреты друг друга. Значение `secrets:`, не являющееся мапой, или `recipient`, не являющийся корректным `age1…`, — тоже ошибка загрузки.
+
+Соответствующий приватный identity никогда не попадает в git — он живёт в `~/.config/dwe/keys/<recipient>.key` либо в `DWE_AGE_KEY` / `DWE_AGE_KEY_FILE`. Для шифрования нужен только recipient, поэтому любой, у кого есть репозиторий, может добавить секрет; чтобы прочитать его обратно, нужен identity. Полная модель и вся поверхность команды `dwe secrets` — в [`secrets.md`](secrets.md).
 
 ### Блок `update:`
 
@@ -252,9 +284,9 @@ docs:
 
 | Слой | Содержит | Зачем |
 |-------|-------|-----|
-| `workspace.yml` | Компактные формализованные блоки: `project`, `ui`, `update` | Маленькие, структурные, редко меняются |
+| `workspace.yml` | Компактные формализованные блоки: `project`, `update` | Маленькие, структурные, редко меняются |
 | `defaults.yml` | Объёмные блоки: `vars`, `exports`, оверлей `services`, `runtime`, `bridge.vars_writable` | Версионированные командные дефолты; самый большой контент. `bridge.vars_writable` — общекомандная политика безопасности, держите её здесь, а не в `local.yml` (см. [замечание про allowlist выше](#bridgevars_writable--allowlist-контейнерной-записи)) |
-| `local.yml` | Личные переопределения: `state`, `vars.db.password`, тогглы сервисов, `compose.extra`, `update.mode` | На разработчика, gitignored |
+| `local.yml` | Личные переопределения: `vars.db.password`, тогглы сервисов, `compose.extra`, `update.mode` | На разработчика, gitignored |
 
 Например, автор проекта включает политику обновления в `workspace.yml` (`update: { mode: on }`), а разработчик, который хочет локально пропустить пробу, переопределяет её в `local.yml` (`update: { mode: off }`).
 
@@ -302,14 +334,6 @@ runtime:
 | `runtime.use_https` | Используют ли URL'ы HTTPS (экспортируется как `USE_HTTPS`). |
 | `runtime.spx.path` | URL-путь профайлера SPX (пусто = выключено). |
 
-### `state`
-
-```yaml
-state: ""
-```
-
-Имя активного состояния. Пустая строка означает отсутствие состояния. Экспортируется как `STATE` в `.env`. Переопределяйте в `local.yml` (например, `state: staging`).
-
 ### `exports.env`
 
 Декларативные правила экспорта, управляющие генерацией `.env`. Каждое правило сопоставляет dot-path в смерженном конфиге имени env-переменной. Все поля сервисов — `container`, `enabled`, `ports.<name>`, `hosts.<name>` — находятся под `services.<name>.*`.
@@ -344,15 +368,20 @@ exports:
 
 #### Неявные системные переменные
 
-`dwe render env` всегда выводит три переменные до выполнения любого правила, независимо от `exports.env`:
+`dwe render env` выводит четыре переменные до выполнения любого правила, независимо от `exports.env`:
 
 | Переменная | Источник | Заметки |
 |----------|--------|-------|
-| `PROJECT` | `project.name` | Используется Docker labels и Make-таргетами |
+| `PROJECT` | `project.name` | Имя как есть, включая верхний регистр. Используется Make-таргетами |
 | `UID` | хостовый UID | Жёстко зафиксирован в `1000` на macOS, реальный UID на Linux/WSL — сборки контейнеров остаются детерминированными между хостами |
 | `GID` | хостовый GID | Та же логика, что для `UID` |
+| `COMPOSE_PROJECT_NAME` | имя compose-проекта, которое `dwe` передаёт в `-p` | `project_name` из [`docker.yml`](docker.md#project_name) / `docker.local.yml`, иначе `<project.prefix>-<project.name>`, всегда в нижнем регистре. Опускается, если разрешается в пустое значение; ошибка разрешения валит рендер |
 
-Они управляются CLI; не декларируйте их повторно как правила экспорта.
+Первые три есть всегда; `COMPOSE_PROJECT_NAME` выводится, когда имя разрешается в непустое значение. Все четыре управляются CLI; не декларируйте их повторно как правила экспорта — правило с таким именем даёт жёсткую ошибку загрузки конфигурации.
+
+#### Только однострочные значения
+
+Значения пишутся без кавычек, поэтому значение с переводом строки представить невозможно: compose разобрал бы вторую и последующие строки как отдельные записи `.env` — значение обрезалось бы до первой строки, а строка вида `NAME=…` внутри него объявила бы переменную, которую никто не декларировал. `dwe render env` отклоняет такое значение и называет правило и его исходный путь. Многострочный материал — PEM-ключ, JSON сервис-аккаунта — доставляйте через файл пака [`render config`](../render/config.md): там такого ограничения нет, и [зашифрованные секреты](secrets.md) поддерживают его нативно через источники `*.age`.
 
 ### `compose`
 
@@ -380,8 +409,6 @@ compose:
 
 **Пример переопределений**:
 ```yaml
-state: staging
-
 services:
   main-debug:
     enabled: true
@@ -474,16 +501,12 @@ services:
 
 - **Редактирование `defaults.yml` для личных настроек** — изменения отслеживаются и влияют на каждого члена команды. Личные переопределения всегда кладутся в `local.yml`.
 - **Коммит `local.yml`** — он gitignored не просто так (может содержать креды).
-- **Указание `state:` в `defaults.yml`** — состояние по своей природе индивидуальное, кладите его в `local.yml`.
-- **Коллизия скаляров** — если `defaults.yml` выставляет `state: ""`, а `local.yml` выставляет `state: staging`, эффективное значение — `staging`. Если `local.yml` опускает `state`, выигрывает значение из `defaults.yml`.
+- **Коллизия скаляров** — если `defaults.yml` выставляет `runtime.use_https: false`, а `local.yml` выставляет `runtime.use_https: true`, эффективное значение — `true`. Если `local.yml` опускает ключ, выигрывает значение из `defaults.yml`.
 - **Списки заменяют, карты мерджатся** — карты deep-merge'атся: повторная декларация `services` в `local.yml` переопределяет только перечисленные ключи, остальные проваливаются из `defaults.yml`. Списки же заменяются целиком: выставление `bridge.vars_writable: ["vars.db.*"]` в `local.yml` отбрасывает каждую запись, которую имели нижние слои, поэтому включайте полный нужный список.
-
-## Опциональный блок `ui:`
-
-`workspace.yml` может нести опциональный верхнеуровневый блок `ui:`, конфигурирующий интерактивный браузер команд. См. [`ui.md`](ui.md) для схемы, дефолтов и семантики omit-vs-`false` для `*bool`. Поведение не меняется для проектов, опускающих блок.
 
 ## Связанные команды
 
+- `dwe secrets status` — сообщает про каждое зашифрованное значение в слоях и можно ли его прочитать здесь
 - `dwe render env --out .env` — перегенерировать `.env` из смерженного конфига
 - `dwe render ide` / `dwe render ai` / `dwe render git` — pack-based рендереры; см. [справочник render](../render/index.md)
 - `dwe info` — показать дашборд (использует смерженный конфиг + `info.yml`)

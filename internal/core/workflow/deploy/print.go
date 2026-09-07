@@ -7,7 +7,10 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 )
 
-// PrintPlanShell emits executable shell commands for each step.
+// PrintPlanShell emits one shell line per step: a preview of the plan in
+// shell shape, NOT an artefact to execute. pipeline.StepCommand and
+// FormatCondition redact registered secrets, so a step referencing one prints
+// *** where the value would be.
 // Prepends "set -e" so the pipeline aborts on any step failure.
 // After the implicit .env generation step, ". .env" is emitted so variables
 // are available to all subsequent steps in the generated script.

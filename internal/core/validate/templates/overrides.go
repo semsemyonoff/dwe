@@ -6,8 +6,29 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
+
+// sanitizedCfg returns the config the ide/ai/git dry-run renders must see.
+//
+// Those three renderers load LoadConfigSanitized at run time (their outputs are
+// git-tracked, so a secret must reach a template as its ENC[age:…] marker, never
+// as plaintext). The validator dry-runs the very same templates, so it loads the
+// same shape — otherwise `dwe validate` would exercise data the renderer never
+// produces. A failed sanitized load falls back to ctx.Cfg: the validator's job
+// is to report template problems, not to re-report a config load the caller has
+// already handled.
+func sanitizedCfg(ctx validate.Context) *config.DweConfig {
+	if ctx.ConfigPath == "" {
+		return ctx.Cfg
+	}
+	cfg, err := config.LoadConfigSanitized(ctx.ConfigPath)
+	if err != nil || cfg == nil {
+		return ctx.Cfg
+	}
+	return cfg
+}
 
 // overrideSink returns a sink and a getter that collects rels with fromOverride=true.
 func overrideSink() (sink func(rel string, fromOverride bool), get func() []string) {

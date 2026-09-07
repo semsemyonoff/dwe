@@ -15,6 +15,7 @@ are pure render outputs derived from the merged config plus the store.
 - [Harvest, not mint](#harvest-not-mint)
 - [Template pack resolution](#template-pack-resolution)
 - [Manifest schema](#manifest-schema)
+- [Encrypted `.age` sources](#encrypted-age-sources)
 - [CLI usage](#cli-usage)
 - [Pipeline builtins](#pipeline-builtins)
 - [Deploy flow](#deploy-flow)
@@ -208,6 +209,54 @@ into the container) by writing `to: src/...`. Destinations are path-safety
 guarded — a `to` that escapes the hub dir, or resolves outside it via a symlink,
 is rejected.
 
+## Encrypted `.age` sources
+
+A pack source whose `from:` ends in **`.age`** is a native
+[age](https://age-encryption.org)-encrypted file, committed to the repository.
+`render config` decrypts it with the project identity and then runs the usual
+`${...}` render over the plaintext:
+
+```yaml
+# workspace/templates/config/bot/manifest.yml
+render:
+  - from: google-credentials.json.age
+    to:   config/google-credentials.json
+```
+
+Create one with [`dwe secrets encrypt`](../config/secrets.md#dwe-secrets-encrypt--decrypt);
+`dwe secrets status` reports whether each `.age` source is readable on this
+machine.
+
+Rules worth knowing:
+
+- **`to:` is never derived from the source.** Authors write
+  `from: creds.json.age`, `to: src/creds.json` — the `.age` suffix is not
+  auto-stripped, so the output is named whatever the service expects.
+- **The identity is loaded once per render**, and only when the manifest
+  actually has an `.age` entry — a pack without encrypted sources never touches
+  `~/.config`.
+- **`.age`-sourced outputs are written `0600`** and explicitly `chmod`ed, so a
+  pre-existing `0644` target is tightened. Other outputs keep `0644`. The
+  container reads a `0600` file fine, because it runs as the host UID/GID that
+  `exports.env` already publishes.
+- **A missing or wrong identity is a hard error** naming the source file and the
+  fix (`dwe secrets key import`). An `.age` source with no `secrets.recipient`
+  configured at all points at `dwe secrets init` instead.
+
+### The marker guard
+
+Independently of `.age` files, a **scalar** secret substituted through
+`${vars.*}` can also reach a pack output. `render config` runs no preflight, so
+it enforces the policy itself: if a rendered output still contains an
+`ENC[age:…]` marker — i.e. a `${...}` substitution resolved to an undecrypted
+value — the render **fails**, naming the entry's `to:` path and pointing at
+`dwe secrets status`. Ciphertext is never written into the hub dir where the
+container would read it as the credential.
+
+A scalar secret that *did* decrypt is substituted normally and lands in the
+gitignored hub dir at the pack's usual `0644`. See
+[`secrets.md` → Where plaintext goes](../config/secrets.md#where-plaintext-goes).
+
 ## CLI usage
 
 ```bash
@@ -359,5 +408,6 @@ per copy step. To migrate:
 - [deploy builtins](../config/deploy/builtins.md) — `service_configs_render`, `service_configs_render_check`, `service_generated_harvest`
 - [conditions](../config/conditions.md) — the `generated-missing` predicate
 - [render index](index.md) — shared manifest schema, local overrides, pack resolution
+- [secrets](../config/secrets.md) — `.age` sources, `ENC[age:…]` markers, keys and the `dwe secrets` command surface
 - [Templates](../templates.md) — Go template syntax and render contexts
 - Run `dwe render config --help` for the live CLI surface

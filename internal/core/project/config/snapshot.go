@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 )
 
 // SnapshotConfigFileName is the filename of the project-level snapshot.yml,
@@ -148,10 +148,14 @@ func LoadSnapshotConfig(path string) (*SnapshotConfig, error) {
 
 	var cfg SnapshotConfig
 	if len(bytes.TrimSpace(data)) > 0 {
-		dec := yaml.NewDecoder(bytes.NewReader(data))
-		dec.KnownFields(true)
-		if err := dec.Decode(&cfg); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+		// yamlstrict names the file itself, so no "parse %s:" prefix on that
+		// error; io.EOF (an all-comment file) passes through bare and keeps its
+		// old wrap, or the user sees the three letters "EOF" and nothing else.
+		if err := yamlstrict.Decode(data, &cfg, path); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, fmt.Errorf("parse %s: %w", path, err)
+			}
+			return nil, err
 		}
 	}
 

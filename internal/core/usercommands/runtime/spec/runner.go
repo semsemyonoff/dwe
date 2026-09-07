@@ -90,6 +90,22 @@ type RunContext struct {
 	// (false), enabling notification when Cmd.Notify is true.
 	SkipNotify bool
 
+	// UserInvoked marks an invocation the user launched themselves, as
+	// opposed to one runtime invoking another (workflow sub-steps, pipeline
+	// action dispatch, any nested call site). It gates container TTY
+	// allocation only — nothing else reads it.
+	//
+	// The zero value (false) suppresses the TTY, so a new entry point that
+	// forgets to set it can only be conservative: output stays pipe-shaped
+	// and no terminal is allocated inside the container.
+	//
+	// SkipNotify answers the same "is this the top-level invocation?"
+	// question today, but it is deliberately not reused: notifications and
+	// terminal allocation are unrelated concerns, and the next caller that
+	// flips SkipNotify for a notification reason must not silently move the
+	// container TTY with it.
+	UserInvoked bool
+
 	// StepObserver, when non-nil, receives lifecycle events for top-level
 	// sequential workflow steps (start / end / skip / fail). Parallel
 	// sub-step events are not surfaced; the parallel block as a whole is one

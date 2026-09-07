@@ -256,6 +256,35 @@ func TestResolveComposeProjectName(t *testing.T) {
 		}
 	})
 
+	// The marker check must run BEFORE the lowercasing, or it can never fire:
+	// normalizeComposeProjectName turns ENC[age:…] into enc[age:…], which
+	// secrets.ContainsMarker does not match. Both precedence branches are
+	// covered — docker.yml's project_name and the FullName() fallback.
+	t.Run("undecrypted_marker_in_project_name_returns_error", func(t *testing.T) {
+		baseDir := writeDockerFixture(t, "project_name: \"dwe-${vars.scope}\"\n", "")
+		c := cfg()
+		c.Raw["vars"] = map[string]any{"scope": "ENC[age:YWdlLWVuY3J5cHRpb24ub3JnL3Yx]"}
+		_, err := ResolveComposeProjectName(baseDir, c)
+		if err == nil {
+			t.Fatal("expected an error for a project_name carrying an undecrypted marker")
+		}
+		if !strings.Contains(err.Error(), "undecrypted secret") {
+			t.Errorf("error = %q, want it to name the undecrypted secret", err)
+		}
+	})
+
+	t.Run("undecrypted_marker_in_project_prefix_returns_error", func(t *testing.T) {
+		c := cfg()
+		c.Project.Prefix = "ENC[age:YWdlLWVuY3J5cHRpb24ub3JnL3Yx]"
+		_, err := ResolveComposeProjectName("", c)
+		if err == nil {
+			t.Fatal("expected an error for a FullName() carrying an undecrypted marker")
+		}
+		if !strings.Contains(err.Error(), "undecrypted secret") {
+			t.Errorf("error = %q, want it to name the undecrypted secret", err)
+		}
+	})
+
 	// Regression: malformed schema in unrelated fields (e.g. args.up given a
 	// string instead of a sequence) must NOT prevent project_name resolution.
 	// Per-service stop/restart/logs only need project_name and should not

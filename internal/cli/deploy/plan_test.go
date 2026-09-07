@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/shared/secrets"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"github.com/spf13/cobra"
 )
@@ -606,4 +609,127 @@ func TestRunDeployPlan_JSONMode_ParallelGroup(t *testing.T) {
 			t.Errorf("nested step %d = {%q, %q}, want {%q, %q}", i, got.Name, got.Cmd, want.name, want.cmd)
 		}
 	}
+}
+
+// TestRunDeployPlan_RedactsDecryptedSecret pins that no plan surface prints a
+// decrypted value: the plan is what gets pasted into tickets and PRs. The
+// plaintext is unique to this test — the redactor is process-global and
+// union-only, so `s3cr3t-value` (registered by menu_test.go) would be redacted
+// here regardless and prove nothing.
+func TestRunDeployPlan_RedactsDecryptedSecret(t *testing.T) {
+	const plaintext = "d3pl0y-plan-token-value"
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+
+	id, err := secrets.Keygen()
+	if err != nil {
+		t.Fatalf("Keygen: %v", err)
+	}
+	marker, err := secrets.Encrypt(plaintext, id.Recipient())
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	t.Setenv(secrets.EnvKey, id.Export())
+	t.Setenv(secrets.EnvKeyFile, "")
+
+	dir := t.TempDir()
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n" +
+		"secrets:\n  recipient: " + id.Recipient() + "\n" +
+		"vars:\n  token: " + marker + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n" +
+		"  - name: custom\n" +
+		"    steps:\n" +
+		"      - name: step1\n" +
+		"        type: shell\n" +
+		"        cmd: \"echo 'token is ${vars.token}'\"\n" +
+		"        check:\n" +
+		"          type: shell\n" +
+		"          cmd: \"grep -q '${vars.token}' /tmp/state\"\n" +
+		"        when:\n" +
+		"          type: shell\n" +
+		"          cmd: \"test -n '${vars.token}'\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	assertRedacted := func(t *testing.T, out string) {
+		t.Helper()
+		if strings.Contains(out, plaintext) {
+			t.Errorf("plan output carries the decrypted value:\n%s", out)
+		}
+		if !strings.Contains(out, "***") {
+			t.Errorf("plan output missing the *** placeholder:\n%s", out)
+		}
+	}
+
+	t.Run("table", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(io.Discard)
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+			t.Fatalf("runDeployPlan: %v", err)
+		}
+		assertRedacted(t, outBuf.String())
+	})
+
+	t.Run("shell", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(io.Discard)
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{Format: "shell"}); err != nil {
+			t.Fatalf("runDeployPlan(shell): %v", err)
+		}
+		assertRedacted(t, outBuf.String())
+	})
+
+	t.Run("json", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+		cmd := &cobra.Command{}
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(io.Discard)
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+			t.Fatalf("runDeployPlan(json): %v", err)
+		}
+		assertRedacted(t, outBuf.String())
+
+		var payload planJSON
+		if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+			t.Fatalf("stdout is not valid JSON: %v", err)
+		}
+		var found *planStepJSON
+		for i := range payload.Phases {
+			for j := range payload.Phases[i].Steps {
+				if payload.Phases[i].Steps[j].Name == "step1" {
+					found = &payload.Phases[i].Steps[j]
+				}
+			}
+		}
+		if found == nil {
+			t.Fatalf("step1 not found in payload: %+v", payload)
+		}
+		if !strings.Contains(found.Cmd, "***") || strings.Contains(found.Cmd, plaintext) {
+			t.Errorf("cmd = %q, want it redacted", found.Cmd)
+		}
+		if !strings.Contains(found.Check, "***") || strings.Contains(found.Check, plaintext) {
+			t.Errorf("check = %q, want it redacted", found.Check)
+		}
+		if !strings.Contains(found.When, "***") || strings.Contains(found.When, plaintext) {
+			t.Errorf("when = %q, want it redacted", found.When)
+		}
+		if len(found.Unresolved) != 0 {
+			t.Errorf("unresolved = %v, want none", found.Unresolved)
+		}
+	})
 }

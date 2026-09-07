@@ -638,10 +638,24 @@ func readProjectName(root string) (string, bool) {
 	if err := yaml.Unmarshal(data, &stub); err != nil {
 		return "", false
 	}
+	if isEncryptedMarker(stub.Project.Name) {
+		// The hot path never loads the full config, so it cannot decrypt. An
+		// encrypted project name is nonsensical anyway; treat it as unset
+		// rather than painting ENC[age:…] into the shell prompt.
+		return filepath.Base(root), true
+	}
 	if stub.Project.Name == "" {
 		return filepath.Base(root), true
 	}
 	return stub.Project.Name, true
+}
+
+// isEncryptedMarker reports whether s is an ENC[age:…] scalar marker. The hot
+// path reads a stub, never the full config, so it can only ever check the
+// shape — a prefix/suffix test is all that is available here, and the shape is
+// a stable part of the on-disk format.
+func isEncryptedMarker(s string) bool {
+	return strings.HasPrefix(s, "ENC[age:") && strings.HasSuffix(s, "]")
 }
 
 // readComposeProjectName returns the Docker Compose project name used to label
@@ -670,6 +684,12 @@ func readComposeProjectName(root, displayName string) string {
 	}
 	var stub workspaceStub
 	if err := yaml.Unmarshal(data, &stub); err != nil {
+		return strings.ToLower(displayName)
+	}
+	// An encrypted prefix or name cannot be resolved here (see readProjectName);
+	// fall back to the display name rather than building a label filter that
+	// matches no container.
+	if isEncryptedMarker(stub.Project.Prefix) || isEncryptedMarker(stub.Project.Name) {
 		return strings.ToLower(displayName)
 	}
 	if stub.Project.Prefix != "" && stub.Project.Name != "" {

@@ -909,8 +909,7 @@ func TestRunRun_GateFails_DoesNotBlankConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected deployment gate error, got nil")
 	}
-	var gate *deploymentGateError
-	if !errors.As(err, &gate) {
+	if _, ok := errors.AsType[*deploymentGateError](err); !ok {
 		t.Fatalf("expected deploymentGateError, got %T: %v", err, err)
 	}
 

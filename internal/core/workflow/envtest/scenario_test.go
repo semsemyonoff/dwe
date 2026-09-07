@@ -87,6 +87,29 @@ func TestLoadScenario_Errors(t *testing.T) {
 	}
 }
 
+// TestLoadScenario_UnknownFieldMessage pins the yamlstrict shape. The scenario
+// loader passes an empty file name to yamlstrict on purpose — its own
+// "scenario file is empty or invalid (<path>)" wrap already names the file — so
+// the rewritten error carries the bare "line N:" prefix.
+func TestLoadScenario_UnknownFieldMessage(t *testing.T) {
+	path := filepath.Join("testdata", "unknown_top_field.yml")
+	_, err := LoadScenario(path)
+	if err == nil {
+		t.Fatal("expected an unknown-field error, got nil")
+	}
+	for _, want := range []string{
+		path,
+		"line 2:",
+		`unknown field "bogus"`,
+		"allowed here: description, env, steps, timeout",
+		"check `dwe version`",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err.Error(), want)
+		}
+	}
+}
+
 func TestLoadScenario_InvalidFilename(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "Bad_Name.yml")

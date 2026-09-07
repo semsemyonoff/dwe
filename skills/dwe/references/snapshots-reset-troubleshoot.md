@@ -2,7 +2,7 @@
 
 Load this file when a service won't come up, a port conflicts, the journal looks stale, or the user wants to snapshot / reset the project. The triage trio is all-read and lock-free; snapshots and reset are mutating — edit yml yourself, hand the user the exact command, wait.
 
-These rules from `recipes.md` apply here too: read commands run freely; mutating commands are a handoff; `--lang en` on every `dwe docs …`; `--output json` only on data commands (and never on `docs show` / `docs llms-txt`).
+These rules from `recipes.md` apply here too: read commands run freely; mutating commands are a handoff; `--lang en` on every `dwe docs …`; `--output json` only on data commands (never on `docs show` / `docs llms-txt` — both always emit markdown and ignore it).
 
 ## Triage trio (all read, lock-free)
 

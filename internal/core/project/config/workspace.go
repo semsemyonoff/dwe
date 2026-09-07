@@ -2,7 +2,6 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +20,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
+	"github.com/semsemyonoff/dwe/internal/shared/yamlstrict"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,16 +41,15 @@ var allowedRootKeys = []string{
 	"schema_version",
 	"project",
 	"runtime",
-	"state",
 	"exports",
 	"compose",
-	"ui",
 	"docs",
 	"services",
 	"vars",
 	"update",
 	"bridge",
 	"stop",
+	"secrets",
 }
 
 // allowedRootKeySet is the membership index over allowedRootKeys.
@@ -115,11 +115,9 @@ func MmdcBin(cfg *DweConfig) string { return binOverride(cfg, "mmdc", "mmdc") }
 type DweConfig struct {
 	Project ProjectConfig        `yaml:"project"`
 	Runtime RuntimeConfig        `yaml:"runtime"`
-	State   string               `yaml:"state"`
 	Exports ExportsConfig        `yaml:"exports"`
 	Compose ComposeConfig        `yaml:"compose"`
 	Deploy  *ProjectDeployConfig `yaml:"-"`
-	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
 
 	// Update is the formalized top-level self-update policy. It participates in
@@ -146,6 +144,18 @@ type DweConfig struct {
 	// author sets it in workspace.yml and a developer overrides in local.yml.
 	// See StopConfig and StopPortReleaseTimeout.
 	Stop *StopConfig `yaml:"stop"`
+
+	// Secrets is the formalized top-level encrypted-secrets block. It carries
+	// the project's committed age recipient (public key); the matching private
+	// identity never lives in the repository and is never carried on the
+	// config. Legal in workspace.yml only — see validateSecretsBlock.
+	Secrets *SecretsConfig `yaml:"secrets"`
+
+	// SecretsState reports what the load-time decrypt pass did: the recipient
+	// in force, where the identity came from, and which markers resolved or did
+	// not. Populated by LoadConfig; empty after LoadConfigSanitized (which does
+	// not decrypt at all). Not part of the file format.
+	SecretsState SecretsState `yaml:"-"`
 
 	// Vars is the single legal home for arbitrary, free-form project values.
 	// The root of the merged config is strict (see allowedRootKeys), but the
@@ -507,9 +517,10 @@ var deployStepLeafOnlyFields = []string{
 // in allowed. It compensates for yaml.v3 bypassing KnownFields(true) inside
 // custom UnmarshalYAML implementations. mappingDesc names the mapping in the
 // wrong-kind error ("<mappingDesc> must be a mapping, got kind N"); typeName is
-// the Go type named in the unknown-field error ("field X not found in type
-// <typeName>"). The returned map records which allowed keys were seen so callers
-// can run follow-up cross-field checks.
+// the Go type named in the unknown-field error ("line N: field X not found in
+// type <typeName>" — the same shape yaml.v3 itself emits, so yamlstrict.Decode
+// rewrites both through one code path). The returned map records which allowed
+// keys were seen so callers can run follow-up cross-field checks.
 func checkKnownFields(value *yaml.Node, mappingDesc, typeName string, allowed map[string]bool) (map[string]bool, error) {
 	if value.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("%s must be a mapping, got kind %d", mappingDesc, value.Kind)
@@ -518,7 +529,7 @@ func checkKnownFields(value *yaml.Node, mappingDesc, typeName string, allowed ma
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i].Value
 		if !allowed[key] {
-			return nil, fmt.Errorf("field %s not found in type %s", key, typeName)
+			return nil, fmt.Errorf("line %d: field %s not found in type %s", value.Content[i].Line, key, typeName)
 		}
 		seen[key] = true
 	}
@@ -1457,6 +1468,50 @@ func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// ServiceByContainer returns the service whose Container field equals the given
+// compose service name. The match is on Container and NOT on the services map
+// key: the folder `main` may declare `container: app-main`, and every runtime
+// caller (a command's `service:`, `docker compose exec <name>`) speaks the
+// compose service name, so a key-based lookup would miss it.
+//
+// Keys are iterated sorted because two services may legally share one Container
+// value and cfg.Services is a map — first-match-wins must not depend on
+// randomized map order.
+func ServiceByContainer(cfg *DweConfig, container string) (ServiceConfig, bool) {
+	if cfg == nil || container == "" {
+		return ServiceConfig{}, false
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
+		if svc := cfg.Services[name]; svc.Container == container {
+			return svc, true
+		}
+	}
+	return ServiceConfig{}, false
+}
+
+// ContainerWorkdirFallback resolves the directory a container command should
+// land in when the command declares no workdir of its own:
+// cli.workdir → work_dir_internal → dir_internal, first non-empty wins, "" when
+// none is set or the container is unknown.
+//
+// This is the chain `dwe shell` already applies (resolveShellOptions), which is
+// what makes a service command and a shell session into the same service agree
+// on where they land. The lookup is by Container, not by map key — see
+// ServiceByContainer.
+func ContainerWorkdirFallback(cfg *DweConfig, container string) string {
+	svc, ok := ServiceByContainer(cfg, container)
+	if !ok {
+		return ""
+	}
+	if svc.CLI.WorkDir != "" {
+		return svc.CLI.WorkDir
+	}
+	if svc.WorkDirInternal != "" {
+		return svc.WorkDirInternal
+	}
+	return svc.DirInternal
+}
+
 // RuntimeConfig describes runtime settings that are not service-specific.
 // Per-service host/port have moved to ServiceConfig.Hosts/Ports.
 type RuntimeConfig struct {
@@ -1474,12 +1529,17 @@ type ExportsConfig struct {
 	Env []ExportRule `yaml:"env"`
 }
 
-// ReservedExportNames lists env variable names that the renderer always emits
-// itself before any user-defined export rule runs. User rules are forbidden
-// from redeclaring them: the rendering layer reads the system values from the
-// project config and host environment, and a duplicate line in the output
-// .env would have parser-defined precedence.
-var ReservedExportNames = []string{"PROJECT", "UID", "GID"}
+// ReservedExportNames lists env variable names that the renderer emits itself,
+// in this order, before any user-defined export rule runs. Slice order is the
+// emission order of the system block in the generated .env. User rules are
+// forbidden from redeclaring them: the rendering layer reads the system values
+// from the project config and host environment, and a duplicate line in the
+// output .env would have parser-defined precedence.
+//
+// A name is emitted whenever its value resolves. PROJECT, UID and GID always
+// do; COMPOSE_PROJECT_NAME (ResolveComposeProjectName) is omitted when it
+// resolves empty, mirroring the compose wrapper omitting -p.
+var ReservedExportNames = []string{"PROJECT", "UID", "GID", "COMPOSE_PROJECT_NAME"}
 
 // IsReservedExportName reports whether name is reserved by the system and
 // therefore cannot be used as an ExportRule.Name.
@@ -1581,11 +1641,42 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 // the prefix stays consistent. Use this instead of hand-wrapping; the typed
 // project_invalid_config contract (cmdctx.ErrWrap) is a separate path.
 func LoadConfigOrWrap(workspacePath string) (*DweConfig, error) {
-	cfg, err := LoadConfig(workspacePath)
+	return wrapConfigLoad(LoadConfig(workspacePath))
+}
+
+// LoadConfigSanitizedOrWrap is LoadConfigSanitized behind LoadConfigOrWrap's
+// canonical "loading config: %w" prefix. CLI sites that render tracked outputs
+// (render ide / ai / git) use this one.
+func LoadConfigSanitizedOrWrap(workspacePath string) (*DweConfig, error) {
+	return wrapConfigLoad(LoadConfigSanitized(workspacePath))
+}
+
+func wrapConfigLoad(cfg *DweConfig, err error) (*DweConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 	return cfg, nil
+}
+
+// LoadConfigSanitized assembles the config exactly as LoadConfig does but over
+// the RAW layers: no decrypt pass at all, and nothing registered with the trace
+// redactor. Every field a template can reach (Raw, Vars, Project, Runtime,
+// Services, ServiceCfg) therefore carries the ENC[age:…] marker where the real
+// config carries plaintext.
+//
+// This is what the ide / ai / git render commands and their dry-run validators
+// load, because those packs write git-TRACKED outputs: a template that reads a
+// secret emits the already-committed ciphertext, never the plaintext. The
+// config-pack renderer (gitignored hub dir) keeps the real config.
+//
+// cfg.SecretsState is empty on purpose — nothing was decrypted, so there is no
+// resolution to report.
+func LoadConfigSanitized(workspacePath string) (*DweConfig, error) {
+	layers, err := LoadRawLayers(workspacePath)
+	if err != nil {
+		return nil, err
+	}
+	return assembleConfig(workspacePath, layers, SecretsState{})
 }
 
 // LoadConfig loads the merged DweConfig by layering:
@@ -1604,17 +1695,55 @@ func LoadConfigOrWrap(workspacePath string) (*DweConfig, error) {
 //  3. Merge the raw YAML layers.
 //  4. Resolve per-service Enabled from the merged overlay.
 //  5. Inject services into Raw for dot-path resolution.
+//
+// Encrypted scalars (ENC[age:…] markers) are decrypted in memory before the
+// merge, so every consumer of the merged config — ${vars.*}, exports.env, dwe
+// vars, the deployment hash — sees plaintext and needs no crypto awareness. A
+// marker that cannot be decrypted stays literal and is reported in
+// cfg.SecretsState; the secrets.unresolved validator blocks the commands that
+// would act on it.
 func LoadConfig(workspacePath string) (*DweConfig, error) {
-	baseDir := filepath.Dir(workspacePath)
-
 	// Read each layer separately so the cross-layer overlay validator can
-	// attribute errors to a specific source file. LoadLayers is the shared
-	// loader (also used by ResolveLayeredPath for `dwe vars inspect`), so the two
-	// cannot drift on file set / optional handling / error wording.
-	configLayers, err := LoadLayers(workspacePath)
+	// attribute errors to a specific source file. LoadLayersWithSecrets is the
+	// shared loader (LoadLayers, used by ResolveLayeredPath for `dwe vars
+	// inspect`, wraps it), so the two cannot drift on file set / optional
+	// handling / error wording / decryption.
+	configLayers, state, err := LoadLayersWithSecrets(workspacePath)
 	if err != nil {
 		return nil, err
 	}
+	// Harvest the plaintexts BEFORE assembleConfig: deepMerge stores the first
+	// layer's nested maps into the merged map by reference and then mutates them
+	// in place while merging the higher layers, so afterwards a lower layer's
+	// decrypted scalar reads back as whatever shadowed it. Registering that
+	// would redact an unrelated override value everywhere and leave the secret
+	// itself unregistered.
+	redactValues := collectDecryptedValues(configLayers, state)
+	cfg, err := assembleConfig(workspacePath, configLayers, state)
+	if err != nil {
+		return nil, err
+	}
+	// Decision 10: LoadConfig is the SINGLE installer of the trace redactor.
+	// ~60 call sites load the config and the root PersistentPreRunE does not,
+	// so registering here is what makes `dwe … -v` echo *** instead of a
+	// decrypted value regardless of which command ran. LoadConfigSanitized
+	// registers nothing — it never held plaintext.
+	registerSecretRedaction(redactValues)
+	return cfg, nil
+}
+
+// registerSecretRedaction feeds every decrypted plaintext to the process-global
+// trace redactor. Values shorter than secrets.MinRedactRunes are dropped by the
+// redactor itself.
+func registerSecretRedaction(values []string) {
+	if len(values) > 0 {
+		trace.RegisterRedaction(values)
+	}
+}
+
+func assembleConfig(workspacePath string, configLayers []Layer, state SecretsState) (*DweConfig, error) {
+	baseDir := filepath.Dir(workspacePath)
+
 	type rawLayer struct {
 		path string
 		data map[string]any
@@ -1673,6 +1802,7 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
+	cfg.SecretsState = state
 
 	// Strict root + legacy-block rejection, iterated per layer so the error names
 	// the source file. Shared with ResolveLayeredPath (dwe vars inspect) via
@@ -1843,7 +1973,9 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	if deployCfg, err := LoadProjectDeployConfig(deployPath); err == nil {
 		cfg.Deploy = deployCfg
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", deployPath, err)
+		// No file prefix here: os.ReadFile errors and yamlstrict.Decode errors
+		// both already name the file, so wrapping would print it twice.
+		return nil, err
 	}
 	// Ensure cfg.Deploy is always non-nil (empty by default if deploy.yml is absent)
 	if cfg.Deploy == nil {
@@ -1979,7 +2111,7 @@ func validateOverlayCompose(layerPath, svcName string, raw any) error {
 
 // validateLocalCompose validates the SHAPE of `raw["compose"]` in
 // workspace/local.yml. It does NOT whitelist other top-level keys: local.yml
-// legitimately carries `state:`, `runtime:`, etc. so rejecting unknown
+// legitimately carries `runtime:`, `vars:`, etc. so rejecting unknown
 // top-level keys would break existing files. Under `compose` it accepts only
 // `extra: [<string>, ...]` — `compose.base` belongs in workspace.yml and
 // must not be overridden per-developer.
@@ -2243,10 +2375,9 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 
 	// Second pass: strict typed decode.
 	var svc ServiceConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&svc); err != nil {
-		return nil, fmt.Errorf("loading service %q definition: parse: %w", name, err)
+	relFile := filepath.ToSlash(filepath.Join("workspace", "services", name, "service.yml"))
+	if err := yamlstrict.Decode(data, &svc, relFile); err != nil {
+		return nil, fmt.Errorf("loading service %q definition: %w", name, err)
 	}
 
 	// Post-decode validation for fields whose allowed-values contract isn't
@@ -2960,28 +3091,55 @@ func (cfg *LifecycleStopConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
 }
 
+// PipelineFileState says which of the two shapes a pipeline file (deploy.yml,
+// lifecycle.yml, reset.yml) resolved through, so a caller can tell an authored
+// pipeline from one that is silently running on the built-in default. It is the
+// pipeline counterpart of InfoConfigState; `dwe validate` reports the two
+// differently.
+type PipelineFileState int
+
+const (
+	// PipelineStateAuthored is a file that decoded at least one top-level key.
+	PipelineStateAuthored PipelineFileState = iota
+	// PipelineStateDefaultFallback is an empty or all-comment file: the decoder
+	// hit io.EOF, the returned cfg is zero-valued and the caller's Ensure*Config
+	// substitutes the built-in default. An absent file is not this state — the
+	// loaders return os.ErrNotExist for that and callers branch on it.
+	PipelineStateDefaultFallback
+)
+
 // LoadLifecycleConfig loads the lifecycle pipeline from workspace/lifecycle.yml.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
 // Lifecycle pipelines must not use deploy_services phases.
 func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
+	cfg, _, err := LoadLifecycleConfigWithState(path)
+	return cfg, err
+}
+
+// LoadLifecycleConfigWithState is LoadLifecycleConfig plus the state that
+// produced the result, so a validator can report an all-comment file instead of
+// silently accepting the built-in default behind it.
+func LoadLifecycleConfigWithState(path string) (*LifecycleConfig, PipelineFileState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, PipelineStateAuthored, err
 	}
 	var cfg LifecycleConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
+	state := PipelineStateAuthored
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil {
+		if !errors.Is(err, io.EOF) {
+			return nil, PipelineStateAuthored, err
+		}
+		state = PipelineStateDefaultFallback
 	}
 	if cfg.Run != nil {
 		if err := validatePhaseSteps(cfg.Run.Phases, false); err != nil {
-			return nil, fmt.Errorf("lifecycle run: %w", err)
+			return nil, PipelineStateAuthored, fmt.Errorf("lifecycle run: %w", err)
 		}
 		if cfg.Run.FinalMessage == "" {
 			cfg.Run.FinalMessage = "Project is ready for work!"
@@ -2993,7 +3151,7 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 	}
 	if cfg.Stop != nil {
 		if err := validatePhaseSteps(cfg.Stop.Phases, false); err != nil {
-			return nil, fmt.Errorf("lifecycle stop: %w", err)
+			return nil, PipelineStateAuthored, fmt.Errorf("lifecycle stop: %w", err)
 		}
 		if cfg.Stop.FinalMessage == "" {
 			cfg.Stop.FinalMessage = "Project is stopped. Have a nice day!"
@@ -3003,7 +3161,7 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 			cfg.Stop.Log = &f
 		}
 	}
-	return &cfg, nil
+	return &cfg, state, nil
 }
 
 // ValidUpdateMode reports whether s is one of the allowed update mode values.
@@ -3019,29 +3177,31 @@ func ValidUpdateMode(s string) bool {
 // for pipeline files using the ProjectDeployConfig shape: workspace/deploy.yml,
 // workspace/reset.yml and per-service reset.yml. That shape carries no After
 // field, so KnownFields(true) rejects `after:` structurally.
-func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeployConfig, error) {
+func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeployConfig, PipelineFileState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, PipelineStateAuthored, err
 	}
 	var cfg ProjectDeployConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
+	state := PipelineStateAuthored
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil {
+		if !errors.Is(err, io.EOF) {
+			return nil, PipelineStateAuthored, err
+		}
+		state = PipelineStateDefaultFallback
 	}
 	if err := validatePhaseSteps(cfg.Phases, true); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, PipelineStateAuthored, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.Log == nil {
 		v := defaultLog
 		cfg.Log = &v
 	}
-	return &cfg, nil
+	return &cfg, state, nil
 }
 
 func loadServiceDeployConfigDecode(path string, defaultLog bool) (*ServiceDeployConfig, error) {
@@ -3050,14 +3210,12 @@ func loadServiceDeployConfigDecode(path string, defaultLog bool) (*ServiceDeploy
 		return nil, err
 	}
 	var cfg ServiceDeployConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
 	}
 	if err := validatePhaseSteps(cfg.Phases, false); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -3069,29 +3227,31 @@ func loadServiceDeployConfigDecode(path string, defaultLog bool) (*ServiceDeploy
 	return &cfg, nil
 }
 
-func loadDeployConfigDecode(path string, allowDeployServices bool, defaultLog bool) (*DeployConfig, error) {
+func loadDeployConfigDecode(path string, allowDeployServices bool, defaultLog bool) (*DeployConfig, PipelineFileState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, PipelineStateAuthored, err
 	}
 	var cfg DeployConfig
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
+	state := PipelineStateAuthored
 	// An empty document (a file that is entirely blank lines / comments, like a
 	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
 	// cfg. Treat that exactly like an absent file: callers already default the
 	// pipeline, so the built-in default stays active until the user uncomments.
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := yamlstrict.Decode(data, &cfg, path); err != nil {
+		if !errors.Is(err, io.EOF) {
+			return nil, PipelineStateAuthored, err
+		}
+		state = PipelineStateDefaultFallback
 	}
 	if err := validatePhaseSteps(cfg.Phases, allowDeployServices); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, PipelineStateAuthored, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.Log == nil {
 		v := defaultLog
 		cfg.Log = &v
 	}
-	return &cfg, nil
+	return &cfg, state, nil
 }
 
 // ParseDeployConfigForValidation parses any pipeline file without enforcing
@@ -3100,6 +3260,14 @@ func loadDeployConfigDecode(path string, allowDeployServices bool, defaultLog bo
 // and emit per-file diagnostics. Runtime callers must use the context-specific
 // loaders (LoadProjectDeployConfig, LoadServiceDeployConfig, LoadResetConfig).
 func ParseDeployConfigForValidation(path string) (*DeployConfig, error) {
+	cfg, _, err := ParseDeployConfigForValidationWithState(path)
+	return cfg, err
+}
+
+// ParseDeployConfigForValidationWithState is ParseDeployConfigForValidation plus
+// the state that produced the result, so a validator can tell an authored
+// pipeline from an all-comment file running on the built-in default.
+func ParseDeployConfigForValidationWithState(path string) (*DeployConfig, PipelineFileState, error) {
 	return loadDeployConfigDecode(path, true, true)
 }
 
@@ -3111,6 +3279,19 @@ func ParseDeployConfigForValidation(path string) (*DeployConfig, error) {
 // File logging defaults to enabled (Log=true) when unset. Override with
 // `log: false` at the top of deploy.yml.
 func LoadProjectDeployConfig(deployPath string) (*ProjectDeployConfig, error) {
+	cfg, _, err := loadProjectDeployConfigDecode(deployPath, true)
+	return cfg, err
+}
+
+// LoadProjectDeployConfigWithState is LoadProjectDeployConfig plus the state
+// that produced the result, so a caller can tell an authored deploy.yml from an
+// all-comment file silently running on the built-in default. It is the deploy
+// sibling of LoadResetConfigWithState.
+//
+// Not to be confused with ParseDeployConfigForValidationWithState: that one
+// returns the lenient *DeployConfig shape that tolerates after:, which is the
+// validator's shape and not the one workspace/deploy.yml loads through.
+func LoadProjectDeployConfigWithState(deployPath string) (*ProjectDeployConfig, PipelineFileState, error) {
 	return loadProjectDeployConfigDecode(deployPath, true)
 }
 
@@ -3127,10 +3308,22 @@ func LoadServiceDeployConfig(deployPath string) (*ServiceDeployConfig, error) {
 // LoadResetConfig loads the reset pipeline from a reset.yml file.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
-// Reset pipelines must not contain deploy_services phases or after: fields.
+// Reset pipelines carry no after: field — ProjectDeployConfig does not declare
+// one and the decode is strict. A deploy_services phase is NOT rejected here,
+// despite what this comment used to claim: loadProjectDeployConfigDecode passes
+// allowDeployServices=true for reset as well as for deploy, so the only real
+// difference between this loader and LoadProjectDeployConfig is defaultLog.
 //
 // File logging defaults to disabled (Log=false). Enable with `log: true` at the top.
 func LoadResetConfig(resetPath string) (*ProjectDeployConfig, error) {
+	cfg, _, err := loadProjectDeployConfigDecode(resetPath, false)
+	return cfg, err
+}
+
+// LoadResetConfigWithState is LoadResetConfig plus the state that produced the
+// result, so a validator can report an all-comment reset.yml instead of
+// silently accepting the built-in default behind it.
+func LoadResetConfigWithState(resetPath string) (*ProjectDeployConfig, PipelineFileState, error) {
 	return loadProjectDeployConfigDecode(resetPath, false)
 }
 
@@ -3318,7 +3511,7 @@ func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig)
 // do not support the after: field (reset is per-service or full, not ordered).
 func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) {
 	path := filepath.Join(baseDir, "workspace", "services", name, "reset.yml")
-	cfg, err := loadProjectDeployConfigDecode(path, false)
+	cfg, _, err := loadProjectDeployConfigDecode(path, false)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil

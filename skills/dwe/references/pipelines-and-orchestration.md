@@ -8,9 +8,11 @@ You edit the yml yourself, show the diff, tell the user the exact mutating comma
 
 `workspace/deploy.yml`, `workspace/lifecycle.yml`, and `workspace/reset.yml` are **optional**. When absent, the built-in default pipeline runs (reported `ⓘ`, not an error). When present, an active override **replaces the entire pipeline section — it does NOT merge.** A half-edited override silently drops every phase you didn't copy.
 
-That is why `dwe init` ships these as **inert, fully-commented mirrors**: the defaults stay active until you uncomment. To customize:
+That is why `dwe init` ships these as **inert, fully-commented mirrors**: the defaults stay active until you uncomment. `dwe validate` names that state rather than reporting OK — an absent file reports `no deploy.yml — built-in default pipeline is active`, a present-but-inert one `has no active content (all comments or empty) — built-in default pipeline is active`, and one that parses but declares nothing `declares no phases`. All three are `ⓘ`, not errors.
 
-1. Uncomment the section.
+To customize:
+
+1. Uncomment the section — or replace the mirror wholesale with `dwe deploy eject --out workspace/deploy.yml --force` (`dwe reset eject` for reset), which writes the built-in default as a commented, editable document instead of you hand-copying it from the source. It emits the built-in default only: no rendering, no per-service inlining. Both are mutating (they write a file) — hand them over.
 2. Copy **every** phase you still want (not just the one you're changing).
 3. Preview the resolved pipeline before handing off:
 
@@ -55,7 +57,7 @@ Optional per-step keys: `name`, `description`, `when:`, `check:`, `continue_on_e
 
 Engine **builtins** (as a step `cmd:`): `service_dirs_ensure` · `service_configs_render` · `service_configs_render_check` · `service_generated_harvest` · `source_clone` (clone a git repo into a project-relative `dir:`, **idempotent by construction** — needs no `when:`/`check:` pair; see the skeleton below) · `containers_running` · `docker_wait_healthy` · `docker_remove_project_volumes` · `docker_stop_remove_container` · `daemons_reap` · `message` · `http_check` (assert an HTTP endpoint returns an expected status / body substring, with retries — complements a `tcp_reachable` check for web stacks).
 
-**Predicate builtins as step bodies = assertions.** A predicate builtin (`file_exists`, `executable_in_path`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` predicate) may be used directly as a step **body**, not only inside `check:`/`when:`. As a body it is an **assertion**: `false` fails the step with the predicate's own message, `true` succeeds — and such a step **always re-runs** (exempt from deploy's up-to-date/action-hash skip, same as a `check:` step). General across deploy/reset/lifecycle. `dwe docs show config/deploy/builtins#predicate-builtins-as-step-bodies-assertion-semantics --lang en`.
+**Predicate builtins as step bodies = assertions.** A predicate builtin (`file_exists`, `executable_in_path`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` predicate) may be used directly as a step **body**, not only inside `check:` (`when:` takes the *other* registry — see the disjoint-registries note above). As a body it is an **assertion**: `false` fails the step with the predicate's own message, `true` succeeds — and such a step **always re-runs** (exempt from deploy's up-to-date/action-hash skip, same as a `check:` step). General across deploy/reset/lifecycle. `dwe docs show config/deploy/builtins#predicate-builtins-as-step-bodies-assertion-semantics --lang en`.
 
 This same step schema powers isolated integration-test scenarios (`workspace/tests/*.yml`) — see `integration-tests.md` and `dwe docs show config/tests --lang en`.
 

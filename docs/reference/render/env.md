@@ -9,8 +9,10 @@ Generate `.env` content from the merged config. Output goes to stdout by default
 - [Export rules](#export-rules)
   - [Rule fields](#rule-fields)
   - [Evaluation order](#evaluation-order)
+  - [Unresolvable paths](#unresolvable-paths)
 - [Value resolution](#value-resolution)
 - [Truthiness](#truthiness)
+- [Encrypted values and the marker guard](#encrypted-values-and-the-marker-guard)
 - [Output format](#output-format)
 - [Worked example](#worked-example)
 - [Common pitfalls](#common-pitfalls)
@@ -22,7 +24,7 @@ Generate `.env` content from the merged config. Output goes to stdout by default
 
 ```mermaid
 flowchart TD
-  M["Merged config"] --> SYS["Emit system vars<br/>PROJECT, UID, GID"]
+  M["Merged config"] --> SYS["Emit system vars<br/>PROJECT, UID, GID,<br/>COMPOSE_PROJECT_NAME"]
   SYS --> R{"For each rule in<br/>exports.env"}
   R --> W["Evaluate when"]
   W -- falsy --> R
@@ -37,15 +39,20 @@ The export rule list lives under `exports.env` in `workspace/defaults.yml` (see 
 
 ## System variables
 
-Three variables are always emitted before any rule, regardless of `exports.env`:
+Four variables are emitted before any rule, regardless of `exports.env`. The first three are always present; `COMPOSE_PROJECT_NAME` is emitted whenever it resolves to a non-empty value:
 
 | Variable | Source | Notes |
 |----------|--------|-------|
-| `PROJECT` | `project.name` from `workspace.yml` | Used by Docker labels, Compose project name, and Make targets |
+| `PROJECT` | `project.name` from `workspace.yml` | The project name **verbatim**, including any uppercase. Used by Make targets and project-scoped naming |
 | `UID` | host UID — `1000` on macOS, the real host UID on Linux/WSL | Hard-coded `1000` on macOS because Docker Desktop runs containers in a Linux VM where host UIDs do not map directly |
 | `GID` | host GID — same platform logic as `UID` | Same rationale as `UID` |
+| `COMPOSE_PROJECT_NAME` | the compose project name `dwe` passes as `-p` | `project_name` from [`workspace/docker.yml`](../config/docker.md#project_name) (or `docker.local.yml`), otherwise `<project.prefix>-<project.name>`, **always lowercased**. Omitted when it resolves empty — `dwe` omits `-p` in that case too. A resolution error (a broken `${...}` in `project_name`) fails the render |
 
-The names `PROJECT`, `UID`, and `GID` are **reserved**: any export rule that tries to use one of them as `name` is rejected at config-load time with a clear error. This applies to every command that loads the project config, not only `dwe render env` — so a typo is caught the first time you run any command after editing `defaults.yml`.
+**`COMPOSE_PROJECT_NAME` is not `PROJECT`.** `PROJECT` is the raw `project.name`; `COMPOSE_PROJECT_NAME` is the resolved, lowercased compose project name, which `docker.yml` can override outright. For `project.name: cueBreaker` with the default prefix the two read `PROJECT=cueBreaker` and `COMPOSE_PROJECT_NAME=dwe-cuebreaker`. It is the same value the [`type: shell` command contract](../config/commands/types.md#shell-env-contract) exports into a host command's environment — one resolver, two delivery paths.
+
+Because `.env` sits in the compose project directory, a raw `docker compose …` run from the project root now scopes to the same project as `dwe`, above any top-level `name:` in your compose file — see [`docker.md` → `project_name`](../config/docker.md#project_name). Compose reads the value out of that file, so the alignment holds only from the project root and only while `.env` is current: with no generated `.env`, or with one written before a `project_name` change, compose falls back to its own naming and can pick a different project. `dwe run` regenerates it; `dwe render env` writes the file only with `--out .env` (bare, it prints to stdout).
+
+The names `PROJECT`, `UID`, `GID`, and `COMPOSE_PROJECT_NAME` are **reserved**: any export rule that tries to use one of them as `name` is rejected at config-load time with a clear error. This applies to every command that loads the project config, not only `dwe render env` — so a typo is caught the first time you run any command after editing `defaults.yml`.
 
 ## Export rules
 
@@ -103,6 +110,16 @@ For each rule, in source order:
 5. **Comment** — if `comment` is set, emit `# <comment>` on its own line.
 6. **Emit** — write `<name>=<value>`.
 
+### Unresolvable paths
+
+A rule whose `from:` does not resolve, with no `default:` and no `required: true`, renders as a bare `NAME=` — an empty value that reaches every container as if it had been declared that way. `dwe render env` says so, once per rule, on **stderr**, before writing the content:
+
+```text
+warning: exports.env[DB_PASSWORD]: from "vars.db.passwrod" does not resolve — rendered empty
+```
+
+stderr keeps `dwe render env > .env` byte-identical, and `--output json` suppresses the warning. The other two shapes are not warned about here: with a `default:` the rendered value is the author's own fallback, and `required: true` fails the render outright. `dwe validate` reports all three shapes as `config.exports` warnings (see [`validate.md`](../config/validate.md)), including an unresolvable `when:`, which this warning cannot cover — such a rule is skipped, so it renders no line at all.
+
 ## Value resolution
 
 The picked value depends on three things: whether `from` resolved, the `format` hint, and the truthiness of the resolved value.
@@ -150,6 +167,38 @@ Example: `when: services.adminer.enabled` skips the rule whenever the service is
 
 **Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Per-service values live under `services.<name>.*` for every type — e.g. `from: services.adminer.ports.http`, `from: services.mailpit.hosts.web`, `from: services.main.container`, `when: services.adminer.enabled`.
 
+## Encrypted values and the marker guard
+
+The `.env` file is the one plaintext sink the container reads, and it is
+gitignored and written `0600` (an existing looser file is tightened on every
+write). A rule may therefore export an
+[encrypted `vars.*` value](../config/secrets.md) — the config loader decrypts it
+in memory, so `from: vars.telegram.token` emits the plaintext exactly like any
+other value.
+
+When the value **cannot** be decrypted on this machine, `render env` **fails**
+rather than publishing ciphertext as if it were the credential:
+
+```text
+exports.env[TELEGRAM_TOKEN]: value at vars.telegram.token is an undecrypted secret — see 'dwe secrets status'
+```
+
+The check covers every emitted value — the system variables (`PROJECT` comes
+from `project.name`, `COMPOSE_PROJECT_NAME` from the compose project name)
+**and** every export rule, including a value that
+came from a rule's `default:` rather than its `from:`. The guard lives here
+rather than in preflight because none of the `.env` write paths run preflight:
+
+- `dwe render env`
+- the automatic regeneration before `dwe docker up` / `run` / `exec` /
+  `restart` / `build`
+- `dwe services enable` / `disable`
+- the `.env` render `dwe run` performs **before** its own preflight — so on a
+  keyless machine this is the first thing `dwe run` reports
+
+All four fail identically and name the fix. See
+[`secrets.md` → Output guards](../config/secrets.md#output-guards-no-marker-ever-reaches-a-rendered-file).
+
 ## Output format
 
 ```text
@@ -158,12 +207,15 @@ Example: `when: services.adminer.enabled` skips the rule whenever the service is
 PROJECT=<project.name>
 UID=<host UID or 1000>
 GID=<host GID or 1000>
+COMPOSE_PROJECT_NAME=<lowercased compose project name>
 # <comment from rule, if any>
 <NAME>=<value>
 ...
 ```
 
-A blank line follows the header banner, then system variables, then rules.
+A blank line follows the header banner, then system variables, then rules. The
+system block is emitted in that fixed order; `COMPOSE_PROJECT_NAME` is dropped
+from it when the name resolves empty.
 
 When `--out <path>` is supplied:
 
@@ -235,6 +287,7 @@ project:
 PROJECT=demo
 UID=1000
 GID=1000
+COMPOSE_PROJECT_NAME=demo
 APP_PORT=8080
 APP_URL=http://localhost
 TOOL_ADMINER=true
@@ -242,6 +295,7 @@ TOOL_ADMINER=true
 
 Walk-through:
 
+- `COMPOSE_PROJECT_NAME` — no `workspace/docker.yml` and no `project.prefix`, so the compose name falls back to `project.name`, lowercased. With `project: {prefix: dwe, name: Demo}` the two lines would read `PROJECT=Demo` and `COMPOSE_PROJECT_NAME=dwe-demo`.
 - `APP_PORT` — `format: int`, value `8080`, emitted directly.
 - `APP_URL` — `from` resolves to empty string (falsy under `format: string`), so `default` is used.
 - `TOOL_ADMINER` — `when` resolves truthy, value `true` rendered as literal `true`.
@@ -254,10 +308,12 @@ Walk-through:
 - **`required: true` without `default`** — produces a hard error if the path is absent. Use it for variables your runtime cannot start without; otherwise rely on `default` to keep the file complete.
 - **Editing `.env` by hand** — the file is regenerated by `dwe render env --out .env` and by lifecycle hooks. Edit `workspace/defaults.yml` exports or `workspace/local.yml` overrides instead.
 - **`--out` has no short form.** The flag is spelled `--out`; there is no `-o` alias. Use `dwe render env --out .env`.
-- **Redeclaring `PROJECT`/`UID`/`GID`** — these names are reserved and validated at config load. An export rule that uses one of them produces a hard error when any command loads the project config; remove the rule and reach the same value via the system variable instead.
+- **A value spanning multiple lines is refused.** Values are written unquoted, so compose would read the second and later lines as further `.env` entries: the value arrives truncated, and a line shaped like `NAME=…` defines a variable nobody declared. `dwe render env` fails and names the source path instead. Deliver a PEM key or a service-account blob through a [`render config`](config.md) pack file, which supports `.age` sources natively. See [Single-line values only](../config/workspace.md#single-line-values-only).
+- **Redeclaring `PROJECT`/`UID`/`GID`/`COMPOSE_PROJECT_NAME`** — these names are reserved and validated at config load. An export rule that uses one of them produces a hard error when any command loads the project config; remove the rule and reach the same value via the system variable instead. Set the compose project name through `project_name` in [`workspace/docker.yml`](../config/docker.md#project_name), which is what the emitted line follows.
 
 ## Related references
 
 - [`exports.env` rule schema](../config/workspace.md#exportsenv) — full field reference, formats
 - [Dot-path resolution](../config/workspace.md#dot-path-resolution) — how `from` and `when` paths navigate the merged config
+- [secrets](../config/secrets.md) — encrypted `vars.*` values, keys, and why an undecrypted one is a hard error here
 - Run `dwe render env --help` for the live CLI surface

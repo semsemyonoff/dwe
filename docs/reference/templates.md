@@ -8,6 +8,7 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 - [Two syntaxes: shorthand and full templates](#two-syntaxes-shorthand-and-full-templates)
   - [Quoting templates inside YAML](#quoting-templates-inside-yaml)
 - [Render context per site](#render-context-per-site)
+  - [ide / ai / git packs never see a decrypted secret](#ide--ai--git-packs-never-see-a-decrypted-secret)
 - [Built-in `text/template` functions](#built-in-texttemplate-functions)
 - [Domain helper: appURL](#domain-helper-appurl)
 - [Sprout registries](#sprout-registries)
@@ -61,7 +62,7 @@ Rule of thumb: use `${...}` for plain lookups; reach for `{{ ... }}` whenever yo
 | `${host.uid}` / `${host.gid}` | Effective UID/GID (1000:1000 on macOS, real values on Linux) |
 | `${generated.<name>}` | Per-service value harvested into `.dwe/generated.yml` (config render packs only; absent → `""`). See [render/config.md](render/config.md) |
 
-Anything whose head is a merged-config root key (`project`, `services`, `vars`, `exports`, `compose`, `update`, `bridge`, `state`, `schema_version`, …) is treated as a dot-path lookup against `Raw`. **This is a whitelist, not "anything not otherwise matched"**: an unrecognized head — a shell-style `${HOME}`/`${PATH}`, a stray dollar sign, a typo, or a stale pre-strict-root bare dot-path like `${databases.main}` — is left as a **literal** `${...}` instead of silently collapsing to `""`. This matters most in pipeline `cmd:`, which now renders (see the table above): a shell variable such as `${CONTAINER}` in a `docker inspect` command reaches `sh` unchanged rather than being swallowed. **Prefer `${vars.*}` for user-defined config values** stored under the `vars:` block in YAML — the strict root rejects free-form top-level keys, so `vars:` is their single home. A known head whose remaining path does not resolve (e.g. a typo under `vars:`) renders to `""` — `dwe validate` catches this case for pipeline steps (see [`config.template_refs`](config/validate.md#validation-domains)). A literal `$$` passes through unchanged.
+Anything whose head is a merged-config root key (`project`, `services`, `vars`, `exports`, `compose`, `update`, `bridge`, `schema_version`, …) is treated as a dot-path lookup against `Raw`. **This is a whitelist, not "anything not otherwise matched"**: an unrecognized head — a shell-style `${HOME}`/`${PATH}`, a stray dollar sign, a typo, or a stale pre-strict-root bare dot-path like `${databases.main}` — is left as a **literal** `${...}` instead of silently collapsing to `""`. This matters most in pipeline `cmd:`, which now renders (see the table above): a shell variable such as `${CONTAINER}` in a `docker inspect` command reaches `sh` unchanged rather than being swallowed. **Prefer `${vars.*}` for user-defined config values** stored under the `vars:` block in YAML — the strict root rejects free-form top-level keys, so `vars:` is their single home. A known head whose remaining path does not resolve (e.g. a typo under `vars:`) renders to `""` — `dwe validate` catches this case for pipeline steps (see [`config.template_refs`](config/validate.md#validation-domains)). A literal `$$` passes through unchanged.
 
 **A reference must carry a dot-path to count as one.** Every namespace form above is dotted (`${vars.db.host}`, `${project.name}`, `${host.uid}`, `${files.<id>.path}`), so a head-only `${host}` / `${files}` / `${services}` is treated as a shell variable that happens to collide with a namespace name and is left literal, exactly like `${HOME}`. `${args}` is the single bare form the syntax defines and keeps its meaning (see [commands/directives.md](config/commands/directives.md)).
 
@@ -114,6 +115,14 @@ The data exposed to a template depends on the site. Field access uses dot syntax
 | `.Cfg` | the merged project config (advanced). `.Cfg.Raw` is the post-merge config tree (`services.*` is injected from per-service `service.yml` files). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
 
 IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
+
+### ide / ai / git packs never see a decrypted secret
+
+Because their outputs are usually tracked by git, those three renderers load a **sanitized** config: the same three-layer assembly, but with **no decrypt pass at all**. Every field a template can reach — `.Raw`, `.Cfg`, `.Project`, `.Runtime`, `.Services`, `.ServiceCfg` — carries the committed `ENC[age:…]` marker where the real runtime config carries plaintext.
+
+So a template that reads an [encrypted value](config/secrets.md) emits the ciphertext (already committed, harmless), never the plaintext — no path bookkeeping, no ambiguity for sequences or dotted keys. It is a structural guarantee rather than an allowlist, which is why the "avoid secret keys here" advice above is about *diff noise*, not about leaking.
+
+Config packs (`render config`) are the opposite case: they render into the gitignored service hub dir with the **real** config, and additionally support whole-file `.age` sources — see [`render config`](render/config.md#encrypted-age-sources).
 
 ## Built-in `text/template` functions
 

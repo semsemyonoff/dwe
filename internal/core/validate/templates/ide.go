@@ -42,7 +42,8 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// render.ide.enabled: true. SelectServices honors the same gating that
 	// `dwe render ide` uses, so the validator scope matches what would be
 	// rendered.
-	services := ctx.Cfg.Services
+	cfg := sanitizedCfg(ctx)
+	services := cfg.Services
 	selected, skipped := ide.SelectServices(services)
 
 	// Emit info diagnostics for skipped services with actionable reasons
@@ -75,7 +76,7 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// Validate each selected service's template pack
 	for _, name := range selected {
 		svc := services[name]
-		diags = append(diags, v.validateService(name, svc, ctx.Cfg, ctx.ProjectRoot)...)
+		diags = append(diags, v.validateService(name, svc, cfg, ctx.ProjectRoot)...)
 	}
 
 	// If no errors/infos, emit a single OK diagnostic

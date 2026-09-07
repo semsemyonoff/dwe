@@ -942,10 +942,269 @@ func TestResetValidator_NoFileIsSilent(t *testing.T) {
 func TestResetValidator_FileExistsStillReportsOK(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "reset.yml"), []byte(`phases: []
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "reset.yml"), []byte(`phases:
+  - name: wipe
+    steps:
+      - type: shell
+        cmd: "true"
 `), 0o644))
 	diags := (&resetValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityOK, "")
+}
+
+// TestDeployValidator_AllowedSetMatchesTheRuntimeShape pins that the two rows
+// naming workspace/deploy.yml describe ONE schema. The validator parses through
+// the permissive union shape so deployAfterValidator can read an `after:` that
+// lands here, but yamlstrict derives "allowed here:" by reflecting the decode
+// target — so without narrowing, config.deploy would offer a field the runtime
+// loader (and the config.workspace row on the very same file) rejects, sending
+// the author from one error straight into another.
+func TestDeployValidator_AllowedSetMatchesTheRuntimeShape(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	deployPath := filepath.Join(root, "workspace", "deploy.yml")
+	require.NoError(t, os.WriteFile(deployPath, []byte("bogus: 1\n"), 0o644))
+
+	diags := (&deployValidator{}).Run(validate.Context{ProjectRoot: root})
+	require.NotEmpty(t, diags)
+	msg := diags[0].Message
+	require.Equal(t, validate.SeverityError, diags[0].Severity)
+	require.Contains(t, msg, `unknown field "bogus"`)
+	require.Contains(t, msg, "allowed here: log, phases")
+	require.NotContains(t, msg, "after")
+
+	// The runtime loader for this file is the authority the row now matches.
+	_, runtimeErr := devconfig.LoadProjectDeployConfig(deployPath)
+	require.ErrorContains(t, runtimeErr, "allowed here: log, phases")
+}
+
+// A project-wide `after:` keeps deployAfterValidator's precise message and does
+// not regress into a bare unknown-field row: the permissive parse is what lets
+// that validator see the field at all.
+func TestDeployValidator_AfterKeepsThePreciseMessage(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "deploy.yml"),
+		[]byte("after: [db]\nphases:\n  - name: p\n    steps:\n      - type: shell\n        cmd: \"true\"\n"), 0o644))
+
+	for _, d := range (&deployValidator{}).Run(validate.Context{ProjectRoot: root}) {
+		require.NotContains(t, d.Message, `unknown field "after"`)
+	}
+}
+
+// TestPipelineValidators_ThreeStates pins the absent / all-comment /
+// parses-but-inert / authored matrix for the three pipeline files. The two
+// inactive states are the load-bearing ones: `dwe init` scaffolds an inert
+// deploy.yml, and a file that parses without reaching the engine (no phases, a
+// missing lifecycle section) is defaulted just the same — reporting OK for
+// either would claim the user's pipeline is in force while the built-in default
+// is what runs.
+func TestPipelineValidators_ThreeStates(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, file, body string) []validate.Diagnostic {
+		t.Helper()
+		root := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+		if body != "" {
+			require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", file), []byte(body), 0o644))
+		}
+		ctx := validate.Context{ProjectRoot: root}
+		switch file {
+		case "deploy.yml":
+			return (&deployValidator{}).Run(ctx)
+		case "lifecycle.yml":
+			return (&lifecycleValidator{}).Run(ctx)
+		default:
+			return (&resetValidator{}).Run(ctx)
+		}
+	}
+
+	const allComment = "# nothing active here\n#phases: []\n"
+	const onePhase = "phases:\n  - name: build\n    steps:\n      - type: shell\n        cmd: \"true\"\n"
+	const runSection = "run:\n  phases:\n    - name: build\n      steps:\n        - type: shell\n          cmd: \"true\"\n"
+	const stopSection = "stop:\n  phases:\n    - name: teardown\n      steps:\n        - type: shell\n          cmd: \"true\"\n"
+
+	tests := []struct {
+		name    string
+		file    string
+		body    string
+		wantSev validate.Severity
+		wantMsg string
+		silent  bool
+	}{
+		{
+			name:    "deploy absent",
+			file:    "deploy.yml",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "no deploy.yml — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy all-comment",
+			file:    "deploy.yml",
+			body:    allComment,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy empty",
+			file:    "deploy.yml",
+			body:    "\n\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			// EnsureDeployConfig defaults on len(Phases) == 0, so an explicitly
+			// empty phase list is as inert as an all-comment file.
+			name:    "deploy empty phase list",
+			file:    "deploy.yml",
+			body:    "phases: []\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml declares no phases — built-in default pipeline is active",
+		},
+		{
+			// The shape io.EOF cannot see: the file parses, carries a real key,
+			// and still runs the built-in default.
+			name:    "deploy parses without phases",
+			file:    "deploy.yml",
+			body:    "log: false\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "deploy.yml declares no phases — built-in default pipeline is active",
+		},
+		{
+			name:    "deploy authored",
+			file:    "deploy.yml",
+			body:    onePhase,
+			wantSev: validate.SeverityOK,
+		},
+		{
+			name:    "lifecycle absent",
+			file:    "lifecycle.yml",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "no lifecycle.yml — built-in default pipeline is active",
+		},
+		{
+			name:    "lifecycle all-comment",
+			file:    "lifecycle.yml",
+			body:    allComment,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "lifecycle.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			// run: and stop: default independently, so a file declaring only
+			// one of them still runs the built-in default for the other.
+			name:    "lifecycle without stop section",
+			file:    "lifecycle.yml",
+			body:    runSection,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "lifecycle.yml declares no stop: section — built-in default stop pipeline is active",
+		},
+		{
+			name:    "lifecycle without run section",
+			file:    "lifecycle.yml",
+			body:    stopSection,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "lifecycle.yml declares no run: section — built-in default run pipeline is active",
+		},
+		{
+			name:    "lifecycle authored",
+			file:    "lifecycle.yml",
+			body:    runSection + stopSection,
+			wantSev: validate.SeverityOK,
+		},
+		{
+			name:   "reset absent stays silent",
+			file:   "reset.yml",
+			silent: true,
+		},
+		{
+			name:    "reset all-comment",
+			file:    "reset.yml",
+			body:    allComment,
+			wantSev: validate.SeverityInfo,
+			wantMsg: "reset.yml has no active content (all comments or empty) — built-in default pipeline is active",
+		},
+		{
+			name:    "reset parses without phases",
+			file:    "reset.yml",
+			body:    "log: true\n",
+			wantSev: validate.SeverityInfo,
+			wantMsg: "reset.yml declares no phases — built-in default pipeline is active",
+		},
+		{
+			name:    "reset authored",
+			file:    "reset.yml",
+			body:    onePhase,
+			wantSev: validate.SeverityOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			diags := run(t, tt.file, tt.body)
+			if tt.silent {
+				require.Empty(t, diags, "expected no diagnostic; got %+v", diags)
+				return
+			}
+			hasDiag(t, diags, tt.wantSev, tt.wantMsg)
+			if tt.wantSev == validate.SeverityInfo {
+				for _, d := range diags {
+					require.NotEqual(t, validate.SeverityOK, d.Severity,
+						"an inactive pipeline file must not report OK: %+v", d)
+				}
+			}
+		})
+	}
+}
+
+// TestPipelineValidators_UnparseableFile pins the fourth state the *WithState
+// signature change left untested: a file that fails to decode is an error, not
+// an info row claiming the built-in default is quietly in force.
+func TestPipelineValidators_UnparseableFile(t *testing.T) {
+	t.Parallel()
+
+	// An unknown top-level key: strictly decoded, so every pipeline loader
+	// rejects it with the yamlstrict message.
+	const bad = "defaults:\n  nope: 1\n"
+
+	tests := []struct {
+		name   string
+		file   string
+		target string
+		run    func(validate.Context) []validate.Diagnostic
+	}{
+		{"deploy", "deploy.yml", "config.deploy", (&deployValidator{}).Run},
+		{"lifecycle", "lifecycle.yml", "config.lifecycle", (&lifecycleValidator{}).Run},
+		{"reset", "reset.yml", "config.reset", (&resetValidator{}).Run},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+			require.NoError(t, os.WriteFile(
+				filepath.Join(root, "workspace", tt.file), []byte(bad), 0o644))
+
+			diags := tt.run(validate.Context{ProjectRoot: root})
+
+			var found bool
+			for _, d := range diags {
+				require.NotEqual(t, validate.SeverityOK, d.Severity,
+					"an unparseable pipeline file must not report OK: %+v", d)
+				if d.Severity == validate.SeverityError && d.Target == tt.target {
+					require.Contains(t, d.Message, `unknown field "defaults"`)
+					found = true
+				}
+			}
+			require.True(t, found, "expected a decode error diagnostic; got %+v", diags)
+		})
+	}
 }
 
 func TestServicesValidator_InfoTitleWithControlChars(t *testing.T) {

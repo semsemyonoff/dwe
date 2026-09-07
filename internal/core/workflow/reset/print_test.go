@@ -8,6 +8,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestPrintPlanShell_Empty(t *testing.T) {
@@ -137,5 +138,31 @@ func TestPrintPlanShell_NoEnvSourceStep(t *testing.T) {
 	out := buf.String()
 	if strings.Contains(out, ". .env") {
 		t.Errorf("reset plan should not source .env, got:\n%s", out)
+	}
+}
+
+// TestPrintPlanShell_redactsSecret is the reset twin of the deploy printer
+// pin: the shell preview shows *** where a step references a secret.
+func TestPrintPlanShell_redactsSecret(t *testing.T) {
+	const plaintext = "w0rkflow-reset-print-secret"
+	trace.ResetRedaction()
+	t.Cleanup(trace.ResetRedaction)
+	trace.RegisterRedaction([]string{plaintext})
+
+	var buf bytes.Buffer
+	steps := []pipeline.ResolvedStep{
+		{
+			Phase: phaseWith("probe"),
+			Step:  cmdStep("greet", "echo "+plaintext),
+		},
+	}
+	reset.PrintPlanShell(steps, &buf, "dwe")
+
+	out := buf.String()
+	if strings.Contains(out, plaintext) {
+		t.Errorf("shell plan carries the plaintext:\n%s", out)
+	}
+	if !strings.Contains(out, "echo ***") {
+		t.Errorf("shell plan = %q, want the cmd redacted", out)
 	}
 }

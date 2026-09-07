@@ -22,9 +22,7 @@ import (
 //	tui.help.action.<actionID>  → a binding description (fallback: Binding.Desc)
 //
 // Every lookup carries a code-level English fallback, so an unregistered key
-// still renders. (Note: the ui: unknown-key validator at
-// internal/core/validate/config/ui.go only warns on ui.commands keys in
-// workspace.yml and is unrelated to this tui.help.* namespace.)
+// still renders.
 const (
 	helpKeyTitle       = "tui.help.title"
 	helpKeySectionPfx  = "tui.help.section."

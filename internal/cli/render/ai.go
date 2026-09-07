@@ -52,7 +52,9 @@ parent 'main' identity for the shared hub.`,
 		SilenceUsage:      true,
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
+			// Sanitized: agent-docs outputs are git-tracked, so their templates
+			// must see the ENC[age:…] marker, never the plaintext.
+			cfg, err := config.LoadConfigSanitizedOrWrap(flags.ConfigPath)
 			if err != nil {
 				return err
 			}

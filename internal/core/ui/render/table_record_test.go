@@ -77,7 +77,7 @@ func TestTableView_RenderRecords_SkipsEmptyCellsAndDashTitles(t *testing.T) {
 	v := diagnosticStyleRecordView([][]string{row})
 
 	got := stripANSI(v.renderRecords(80))
-	header := strings.SplitN(got, "\n", 2)[0]
+	header, _, _ := strings.Cut(got, "\n")
 	if header != "✗ hadolint" {
 		t.Errorf("header = %q, want %q (FILE=\"—\" must be skipped)", header, "✗ hadolint")
 	}

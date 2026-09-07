@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ 17fd5364137d
+> Translated from: reference/docs/commands.md @ 11eda182ca6a
 
 # Неинтерактивные команды документации
 
@@ -161,32 +161,33 @@ dwe docs export ./docs-latest/ --force
 **Использование:**
 ```bash
 dwe docs llms-txt                          # печать в stdout
-dwe docs llms-txt --output llms.txt        # запись в файл
+dwe docs llms-txt --out llms.txt           # запись в файл
 dwe docs llms-txt --include-internals      # включить темы internals/*
 dwe docs llms-txt --no-project             # принудительно сгенерировать project-agnostic вывод
 dwe docs llms-txt --lang ru                # локализовать описания команд
 ```
 
 **Флаги:**
-- `--output PATH` — записать в PATH вместо stdout. Родительские каталоги создаются по необходимости.
+- `--out PATH` — записать в PATH вместо stdout. Родительские каталоги создаются по необходимости. Назван `--out` (как у `dwe docs generate`), чтобы не перекрывать глобальный флаг формата `--output`/`-o`.
 - `--lang CODE` — язык описаний команд. По умолчанию — пользовательская конфигурация / `$LANG` / `en`.
 - `--include-internals` — включить архитектурные доки `internals/` в раздел Documentation.
 - `--no-project` — принудительно вывести project-agnostic форму даже внутри dwe-проекта.
 
 **Формы вывода:**
-- *Внутри проекта*: H1 с именем проекта, summary-блок, далее `## Project` (сервисы, URL, хосты), `## Commands` (пользовательские команды), секции брифинга (ниже), `## Documentation` (ссылки на темы как `dwe-docs://path`) и `## Quick start`.
+- *Внутри проекта*: H1 с именем проекта, summary-блок, далее `## Project` (сервисы, URL, хосты), `## Commands` (пользовательские команды), секции брифинга (ниже), `## Documentation` (голые пути тем) и `## Quick start`.
 - *Вне проекта* (или с `--no-project`): обобщённый DWE-справочник — H1 «dwe», summary-блок, секции брифинга, `## Documentation`, `## Quick start`. Без секций, специфичных для проекта.
 
 **Секции брифинга** (одинаковы в обеих формах — они описывают сам DWE):
 - `## Builtins` — все зарегистрированные step-билтины (`имя — вид — назначение`, включая `internal`), затем непересекающийся реестр предикатов `when:`. Оба реестра называются «builtin», но не принимают имена друг друга — секция говорит об этом прямо.
 - `## Template syntax by site` — где вычисляется `${...}`, а где `{{ ... }}`, и какие пространства имён `${...}` недоступны в полях пайплайна.
 - `## Diagnostics and machine-readable output` — `--quiet`, `--level`, `-v`/`--debug`, `docs show --toc`/`--anchors` и исключения для `-o json`.
-- `## Reserved env names` — имена, которые `dwe render env` всегда выводит сам (`PROJECT`, `UID`, `GID`) и которые нельзя переобъявить правилом `exports.env`.
+- `## Reserved env names` — имена, которые `dwe render env` выводит сам (`PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME`) и которые нельзя переобъявить правилом `exports.env`.
 
 **Подробности:**
 - Только чтение. Не берёт проектную блокировку и не запускает preflight; работает без `workspace.yml`.
+- Глобальный флаг `--output text|json` (`-o`) принимается, но ни на что не влияет — как и `dwe docs show`, эта команда всегда выводит markdown. Для записи в файл используйте `--out PATH`.
 - Отключённые сервисы и приватные команды исключаются.
-- Схема ссылок `dwe-docs://<path>` соответствует путям тем, потребляемым `dwe docs show <path>`.
+- `## Documentation` перечисляет голые пути тем, каждый из которых открывается через `dwe docs show <path>`, под вводной строкой, которая об этом и говорит. Раньше они выводились как `[<name>.md](dwe-docs://<path>)`; у этой схемы не было резолвера, так что агент всё равно переводил её в ту же команду, а видимая подпись лишь повторяла хвост URI — 2 КБ ограниченного по размеру документа уходили на церемонию.
 
 ## `dwe docs cache clear`
 

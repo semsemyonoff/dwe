@@ -90,7 +90,7 @@ func TestTemplateRefsValidator_NegativeCases(t *testing.T) {
 `,
 		},
 		{
-			// A head-only ${state} / ${vars} / ${stop} is a lowercase shell
+			// A head-only ${item} / ${vars} / ${stop} is a lowercase shell
 			// variable that happens to collide with a root-key name;
 			// CompileVarSyntax leaves it literal (tpl.IsVarNamespaceRef needs a
 			// tail), so warning that it "does not resolve" would flag exactly
@@ -104,7 +104,7 @@ func TestTemplateRefsValidator_NegativeCases(t *testing.T) {
     steps:
       - name: step
         type: shell
-        cmd: "for state in a b; do echo ${state} ${vars} ${stop}; done"
+        cmd: "for item in a b; do echo ${item} ${vars} ${stop}; done"
 `,
 		},
 		{

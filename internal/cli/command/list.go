@@ -165,8 +165,8 @@ func writeCommandsList(cmd *cobra.Command, flags *cmdctx.RootFlags, reg *usercom
 type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string, error)
 
 // makeBrowserSelector returns a selectCommandFn that drives the cmdbrowser
-// TUI. The returned closure captures cfg (for resolving ui.commands.*
-// defaults via the nil-safe accessors), mode, the includePrivate flag, the
+// TUI. The returned closure captures cfg (for the per-item inspect renderer
+// and the param-form spec), mode, the includePrivate flag, the
 // raw --set flags (parsed lazily inside the param-form closures — see below),
 // and (run-site only) pointers to bools that receive Result.SkipConfirm and
 // Result.ForceParamForm plus a prefilledOut pointer that receives the params
@@ -202,16 +202,12 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 				},
 			}
 		}
-		opts := cmdbrowser.Options{
-			DefaultExpandedDepth: config.UICommandsDefaultDepth(cfg),
-			AutoCollapseEmpty:    config.UICommandsAutoCollapseEmpty(cfg),
-			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
-			IncludePrivate:       includePrivate,
-			Mode:                 mode,
-			RunForm:              makeRunFormSpec(cfg, mode, defs, setFlags, translator, locale),
-			Translator:           translator,
-			Locale:               locale,
-		}
+		opts := cmdbrowser.DefaultOptions()
+		opts.IncludePrivate = includePrivate
+		opts.Mode = mode
+		opts.RunForm = makeRunFormSpec(cfg, mode, defs, setFlags, translator, locale)
+		opts.Translator = translator
+		opts.Locale = locale
 		res, err := cmdbrowser.Run(title, items, opts)
 		if err != nil {
 			return "", err

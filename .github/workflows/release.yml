@@ -15,8 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          # GoReleaser needs the full history to produce the changelog from
-          # commits since the previous tag.
+          # GoReleaser needs the full history to resolve the previous tag.
           fetch-depth: 0
 
       - name: Set up Go
@@ -25,12 +24,18 @@ jobs:
           go-version: '1.26'
           check-latest: true
 
+      # Fails the release when CHANGELOG.md carries no section for the tag being
+      # pushed. That failure is the gate: without it, keep-a-changelog discipline
+      # lasts until the first pull request that forgets an entry.
+      - name: Extract release notes from CHANGELOG.md
+        run: scripts/changelog-release-notes.sh "${GITHUB_REF_NAME}" "${RUNNER_TEMP}/release-notes.md"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean
+          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
         env:
           # Default token — uploads release assets to this repo.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

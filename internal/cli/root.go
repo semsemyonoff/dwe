@@ -25,6 +25,7 @@ import (
 	cmdPrompt "github.com/semsemyonoff/dwe/internal/cli/prompt"
 	cmdRender "github.com/semsemyonoff/dwe/internal/cli/render"
 	cmdScaffold "github.com/semsemyonoff/dwe/internal/cli/scaffold"
+	cmdSecrets "github.com/semsemyonoff/dwe/internal/cli/secrets"
 	cmdService "github.com/semsemyonoff/dwe/internal/cli/service"
 	cmdShell "github.com/semsemyonoff/dwe/internal/cli/shell"
 	cmdSnapshot "github.com/semsemyonoff/dwe/internal/cli/snapshot"
@@ -98,6 +99,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	root.AddCommand(cmdRender.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdValidate.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdVars.NewCmd(groupConfiguration, flags))
+	root.AddCommand(cmdSecrets.NewCmd(groupConfiguration, flags))
 
 	// Pipelines group: deploy, reset, snapshot.
 	root.AddCommand(cmdDeploy.NewCmd(groupPipelines, flags))
@@ -402,6 +404,11 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 		// The daemon takes everything from --project-root; cwd-based
 		// discovery must not gate it (it is spawned detached).
 		path == "dwe bridge daemon" ||
+		// Keyfile housekeeping is machine-wide, not project-scoped: the keys
+		// directory holds identities for every project on this machine, and
+		// listing or removing one must work from anywhere.
+		path == "dwe secrets key list" ||
+		path == "dwe secrets key remove" ||
 		strings.HasPrefix(path, "dwe completion") ||
 		strings.HasPrefix(path, "dwe docs")
 }

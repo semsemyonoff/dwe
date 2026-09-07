@@ -284,9 +284,8 @@ live translation consumer yet. The namespace is reserved and confirmed in Stage 
 | `tui.help.action.<actionID>`   | `Binding.Desc`        |
 
 No YAML translation keys are added yet — the rationale is the missing consumer, not
-a hard error from the `ui:` validator (which only warns on `ui.commands` keys in
-`workspace.yml` and is unrelated to the `tui.help.*` namespace). Real keys land in
-the i18n translation store and its known-key list during the migration stages.
+any validation rule. Real keys land in the i18n translation store and its
+known-key list during the migration stages.
 
 ---
 

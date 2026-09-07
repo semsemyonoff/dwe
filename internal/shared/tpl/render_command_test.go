@@ -35,7 +35,7 @@ func TestCompileVarSyntax_headOnlyIsLiteral(t *testing.T) {
 		"${host}",
 		"${files}",
 		"${param}",
-		"${state}",
+		"${update}",
 		"for f in ${files}; do echo $f; done",
 	} {
 		if got := CompileVarSyntax(in); got != in {
@@ -151,6 +151,10 @@ func TestCompileVarSyntax_knownHeadsCompile(t *testing.T) {
 		"${vars.x}":                  `{{ resolve .Raw "vars.x" }}`,
 		"${services.app.ports.http}": `{{ resolve .Raw "services.app.ports.http" }}`,
 		"${project.name}":            `{{ resolve .Raw "project.name" }}`,
+		// secrets: is a formalized root key, so it resolves from Raw like any
+		// other — harmless (the recipient is public) but it must not survive
+		// as a literal, which would silently print "${secrets.recipient}".
+		"${secrets.recipient}": `{{ resolve .Raw "secrets.recipient" }}`,
 	}
 	for in, want := range cases {
 		if got := CompileVarSyntax(in); got != want {
@@ -320,6 +324,43 @@ func TestRenderCommand_nilContext(t *testing.T) {
 	}
 	if got != "" {
 		t.Errorf("got %q, want empty string for nil context", got)
+	}
+}
+
+// A key that is PRESENT but holds nil is the shape resolve.Context produces for
+// a declared, non-required context whose from: does not resolve. Without the
+// guard text/template prints a nil interface as the literal "<no value>", so
+// `docker exec ${context.container}` ran against a container named <no value>.
+func TestRenderCommand_presentNilValuesRenderEmpty(t *testing.T) {
+	cases := []struct {
+		name string
+		ctx  *RenderContext
+		expr string
+		want string
+	}{
+		{
+			name: "context",
+			ctx:  &RenderContext{Context: map[string]any{"container": nil}},
+			expr: "docker exec ${context.container}",
+			want: "docker exec ",
+		},
+		{
+			name: "param",
+			ctx:  &RenderContext{Params: map[string]any{"branch": nil}},
+			expr: "git checkout ${param.branch}",
+			want: "git checkout ",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RenderCommand(tc.expr, tc.ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

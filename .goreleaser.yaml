@@ -141,17 +141,12 @@ checksum:
 snapshot:
   version_template: '{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}'
 
+# Release notes come from CHANGELOG.md, not from commit subjects: the release
+# workflow extracts the tagged version's section and passes it via
+# `--release-notes`. Leaving auto-generation on would append a second,
+# differently-worded account of the same changes below the curated one.
 changelog:
-  sort: asc
-  use: github
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
-      - '^ci:'
-      - Merge pull request
-      - Merge branch
+  disable: true
 
 release:
   github:

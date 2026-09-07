@@ -22,6 +22,7 @@ import (
 	valenv "github.com/semsemyonoff/dwe/internal/core/validate/env"
 	vali18n "github.com/semsemyonoff/dwe/internal/core/validate/i18n"
 	vallinters "github.com/semsemyonoff/dwe/internal/core/validate/linters"
+	valsecrets "github.com/semsemyonoff/dwe/internal/core/validate/secrets"
 	valsetup "github.com/semsemyonoff/dwe/internal/core/validate/setup"
 	valsnap "github.com/semsemyonoff/dwe/internal/core/validate/snapshot"
 	valtmpl "github.com/semsemyonoff/dwe/internal/core/validate/templates"
@@ -441,6 +442,12 @@ Scope targets:
 		`Check per-service bridge: blocks in workspace/services/<name>/service.yml — the on_unreachable policy, shim_path, and the workspace mapping bridged services need for working-directory translation.`,
 		"bridge"))
 
+	// Encrypted secrets (secrets domain).
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "secrets",
+		"Validate the encrypted-secrets setup",
+		`Check secrets.recipient in workspace.yml against the ENC[age:…] markers and the .age config-pack sources the project carries, and report every secret this machine cannot decrypt.`,
+		"secrets"))
+
 	// Integration-test scenarios (tests domain).
 	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "tests",
 		"Validate workspace/tests/ scenario files",
@@ -698,7 +705,7 @@ func validateHeader(scope []string, stage string) string {
 // validateScopeLabel produces a human label for the scope being validated.
 func validateScopeLabel(scope []string) string {
 	if len(scope) == 0 {
-		return "your project (config, templates, commands, environment, project checks, linters, translations, snapshots, host-bridge settings, and integration-test scenarios)"
+		return "your project (config, templates, commands, environment, project checks, linters, translations, snapshots, host-bridge settings, encrypted secrets, and integration-test scenarios)"
 	}
 	switch scope[0] {
 	case "config":
@@ -738,6 +745,8 @@ func validateScopeLabel(scope []string) string {
 		return "your host-bridge service settings (bridge: blocks in service.yml)"
 	case "tests":
 		return "your integration-test scenarios (workspace/tests/)"
+	case "secrets":
+		return "your encrypted secrets (secrets.recipient, ENC[age:…] markers, .age pack sources)"
 	}
 	return strings.Join(scope, " ")
 }
@@ -820,6 +829,11 @@ func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, va
 		reg.Register(v)
 	}
 	for _, v := range valtests.All() {
+		reg.Register(v)
+	}
+	// The whole secrets domain runs here; preflight cherry-picks only
+	// secrets.unresolved (readiness) out of it.
+	for _, v := range valsecrets.All() {
 		reg.Register(v)
 	}
 	return reg

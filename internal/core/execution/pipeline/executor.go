@@ -24,6 +24,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -53,10 +54,11 @@ var stdoutIsTTY = func() bool {
 //   - SEQUENTIAL (parallel=false): the LiveLine footer has been paused
 //     (SuspendForExec) so the child can write to the host terminal directly.
 //     stepWriter is expected to include os.Stdout (typically as
-//     io.MultiWriter(os.Stdout, logSanitizer{logFile})) so the user sees
-//     the child output with colors / cursor positioning intact while an
-//     ANSI-stripped copy lands in the on-disk log. When stdoutIsTTY a PTY
-//     is allocated and ptmx → stepWriter so the child sees a real TTY.
+//     io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile})) so the user
+//     sees the child output with colors / cursor positioning intact while an
+//     ANSI-stripped, frame-collapsed copy lands in the on-disk log. When
+//     stdoutIsTTY a PTY is allocated and ptmx → stepWriter so the child sees a
+//     real TTY.
 //     If stepWriter is nil (ad-hoc callers outside RunWithOptions, e.g.
 //     `dwe deploy run`), childIO falls back to os.Stdout/os.Stderr.
 //
@@ -109,10 +111,11 @@ type ActionContext struct {
 	// StepWriter is the per-step destination for child output, populated by
 	// executeStepBody. Its shape depends on Parallel:
 	//
-	//   - sequential: typically io.MultiWriter(os.Stdout, logSanitizer{logFile})
-	//     so the user sees colored / TTY output on the host terminal while a
-	//     sanitized copy lands in the pipeline log. The LiveLine footer is
-	//     paused for the duration of the step.
+	//   - sequential: typically io.MultiWriter(os.Stdout,
+	//     liveui.FrameLogWriter{logFile}) so the user sees colored / TTY output
+	//     on the host terminal while a sanitized, frame-collapsed copy lands in
+	//     the pipeline log. The LiveLine footer is paused for the duration of
+	//     the step.
 	//   - parallel: a lineTee + per-sub-step-log joinWriters target wrapped
 	//     in ansiOnlyStripper. Child output flows ONLY through this writer —
 	//     never to os.Stdout — so the LiveLine block remains intact.
@@ -131,6 +134,16 @@ type ActionContext struct {
 	// pipeline steps. When nil, NopTranslator is used (English fallback).
 	Translator i18n.Translator
 	Locale     string
+	// UserInvoked marks an action the user launched directly rather than one a
+	// pipeline dispatched. It exists for exactly one caller — `dwe reset step`,
+	// which runs a single step at the terminal with confirm prompts enabled and
+	// the real os.Stdout — and it reaches spec.RunContext.UserInvoked, which
+	// gates container TTY allocation.
+	//
+	// The zero value (false) is what every pipeline path wants, so a new caller
+	// that forgets it can only be conservative. Never set it on a check: — a
+	// postcondition is a probe, not a user invocation.
+	UserInvoked bool
 	// Parallel indicates the action is running as a sub-step of a parallel
 	// group. In that mode all child output is routed through StepWriter
 	// (never directly to os.Stdout / os.Stderr), no PTY is allocated, and
@@ -153,7 +166,8 @@ type ActionContext struct {
 //
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
-// as a pipe rather than a TTY). The log tee via logSanitizer is unaffected.
+// as a pipe rather than a TTY). The log tee via liveui.FrameLogWriter is
+// unaffected.
 // When skipConfirm is true, DWE_NONINTERACTIVE=1 is added so that nested
 // dwe subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
@@ -174,7 +188,29 @@ func buildDweCmd(ctx context.Context, dweArg, workDir, shell, dweBin string, ski
 // Does NOT handle reporter calls, when evaluation, hooks, or check orchestration —
 // those stay in Run. The supplied ctx propagates cancellation into child processes
 // via exec.CommandContext.
+//
+// It marks the process as a nested dwe runtime (see
+// bridgeclient.EnvNestedRuntime) before dispatching: every child a step spawns
+// — `sh -c` for type: shell, a re-execed dwe for type: dwe, a project script
+// calling back through DWE_BIN — inherits the marker and re-enters
+// runCommandByID as a nested, non-user invocation, so it never hands a
+// container a TTY. The mark sits here rather than in RunWithOptions because
+// `dwe reset step` calls ExecAction directly; ExecAction is strictly wider and
+// costs nothing. Marking the process does not decide the step's own TTY —
+// execCommandAction reads ActionContext.UserInvoked for that, which is false
+// for every pipeline caller and true only for `dwe reset step`'s body (see
+// TestExecCommandAction_LeavesUserInvokedFalse and
+// TestExecCommandAction_UserInvokedPropagates).
+//
+// Deliberate gap: files_gate commands and shell when: predicates evaluated
+// BEFORE the first ExecAction of the process run unmarked, so a `dwe cmd`
+// re-entry from one of those is classified user-invoked. Later ones ARE marked
+// — the marker is process-global and never cleared, and evalFilesGate runs per
+// step. Accepted: the failure mode is today's behaviour (no -T), i.e.
+// conservative. Do not pin a test on "gates are always unmarked".
 func ExecAction(ctx context.Context, a config.Action, actx ActionContext) error {
+	bridgeclient.MarkNestedRuntime()
+
 	switch a.Type {
 	case "builtin":
 		return execBuiltinAction(ctx, a, actx)
@@ -241,9 +277,11 @@ func execDweAction(ctx context.Context, a config.Action, actx ActionContext) err
 
 // execBuiltinAction executes a builtin action. Builtin output is routed
 // through actx.StepWriter, which in sequential mode is
-// io.MultiWriter(os.Stdout, logSanitizer{logFile}) — so the user sees the
-// colored builtin messages on the host terminal while a sanitized copy
-// lands in the on-disk log. In parallel mode StepWriter is the
+// io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile}) — so the user sees
+// the colored builtin messages on the host terminal while a sanitized,
+// frame-collapsed copy lands in the on-disk log. That copy is buffered until
+// the step's flushTee runs, so a builtin's last un-terminated line reaches the
+// file at step end rather than per write. In parallel mode StepWriter is the
 // lineTee → live-block routing. When nil (ad-hoc external callers),
 // output falls back to os.Stdout directly.
 func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext) error {
@@ -300,6 +338,9 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
 	rctx.UnderParallel = actx.Parallel
+	// Almost always false: only `dwe reset step` sets it, and only for the
+	// step body. See ActionContext.UserInvoked.
+	rctx.UserInvoked = actx.UserInvoked && !actx.Parallel
 	if actx.Translator != nil {
 		rctx.Translator = actx.Translator
 		rctx.Locale = actx.Locale
@@ -781,15 +822,20 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	//
 	//   - SEQUENTIAL: pause the LiveLine footer so the child can write to
 	//     the host terminal directly. stepWriter becomes
-	//     io.MultiWriter(os.Stdout, logSanitizer{logFile}) — colored output
-	//     reaches the user verbatim while an ANSI-stripped copy lands in
-	//     the on-disk log. No lineTee is needed because nothing is fed
-	//     back to the reporter (the footer just shows the step name).
+	//     io.MultiWriter(os.Stdout, liveui.FrameLogWriter{logFile}) — colored
+	//     output reaches the user verbatim while an ANSI-stripped copy lands in
+	//     the on-disk log. Nothing is fed back to the reporter (the footer just
+	//     shows the step name), but the log writer is nonetheless frame-aware
+	//     and therefore stateful: it collapses a `\r` redraw run to the frame
+	//     the terminal actually left on screen instead of recording every
+	//     redraw as its own line. State means a lifecycle, which is why
+	//     flushTee is set on this path too.
 	//
 	//   - PARALLEL: route everything through a lineTee → Reporter.StepOutput
 	//     so the LiveLine block row can display the latest \n-terminated
 	//     frame, plus a side-write to the per-sub-step log file inside the
-	//     lineTee callback. The host terminal is owned by the LiveLine
+	//     lineTee callback — gated on final, so the per-sub-step file records
+	//     committed lines only. The host terminal is owned by the LiveLine
 	//     block; child output MUST NOT go to os.Stdout.
 	var (
 		stepWriter io.Writer
@@ -802,11 +848,26 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		tee := liveui.NewLineTee(func(frame string, final bool) {
 			opts.Reporter.StepOutput(stepAddr, frame, final)
 			// Write the assembled, ANSI-clean frame to the per-sub-step log
-			// file. Routing through the lineTee ensures OSC/CSI sequences
-			// split across PTY read boundaries are reassembled and double-
-			// stripped before reaching disk (a stateless per-Write
-			// logSanitizer cannot handle split sequences).
-			if subLog != nil {
+			// file, but only once it is committed by a `\n`. Routing through
+			// the lineTee ensures OSC/CSI sequences split across PTY read
+			// boundaries are reassembled and double-stripped before reaching
+			// disk (a stateless per-Write logSanitizer cannot handle split
+			// sequences); the final gate keeps a `\r` redraw run from landing
+			// one line per frame. Precedent:
+			// usercommands/runtime/runners/workflow/parallel.go:216-234 applies
+			// the same guard to the workflow runner's sub-step logs.
+			//
+			// What the guard costs: lineTee.Flush delivers an un-terminated
+			// tail as final=false (liveui/output.go:225), so ANY tail the child
+			// left without a closing newline — `\r`-terminated or not — never
+			// reaches this file, in both implementations alike.
+			// Here it is not lost, because the same frame also reaches
+			// Reporter.StepOutput → entry.inProgress → commitTrailingTail →
+			// the global pipeline log (plain.go:659-668, :700-718).
+			// parallel.go has no such second sink. Do NOT give this callback
+			// pending-frame state to "fix" that: it would be a new composite
+			// flush hook on a path that already has one.
+			if subLog != nil && final {
 				_, _ = fmt.Fprintln(subLog, frame)
 			}
 		})
@@ -833,7 +894,23 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		opts.Reporter.SuspendForExec()
 		closeStep = func() { opts.Reporter.ResumeAfterExec() }
 		if opts.LogWriter != nil {
-			stepWriter = io.MultiWriter(os.Stdout, &liveui.LogSanitizer{W: opts.LogWriter})
+			// FrameLogWriter carries state, so it joins the existing flushTee
+			// discipline (the defer below plus the eager calls before every
+			// end-of-step reporter event) rather than introducing a second
+			// flush contract. That ordering is also what keeps this buffered
+			// writer in sequence with PlainReporter's own unbuffered
+			// LogSanitizer on the same file handle.
+			frameLog := liveui.NewFrameLogWriter(opts.LogWriter)
+			stepWriter = io.MultiWriter(os.Stdout, frameLog)
+			// A flush-time write failure is the one log error the step cannot
+			// see: everything else surfaces through the MultiWriter above. It
+			// is reported, not escalated — a broken log sink must not fail a
+			// step whose work succeeded.
+			flushTee = func() {
+				if err := frameLog.Flush(); err != nil {
+					trace.Debugf(ctx, "log write failed while flushing step %q: %v", rs.Step.Name, err)
+				}
+			}
 		} else {
 			stepWriter = os.Stdout
 		}
@@ -1077,8 +1154,11 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 
 	// Per-sub-step log file is passed as a raw io.Writer to executeStepBody.
 	// The lineTee callback in executeStepBody writes each assembled, ANSI-clean
-	// frame (both final and non-final) to this writer via fmt.Fprintln, so the
-	// file receives clean line-separated output without needing a logSanitizer
+	// frame to this writer via fmt.Fprintln — but only the COMMITTED (final)
+	// ones, so a `\r` redraw run does not land one line per frame and any tail
+	// the child left un-terminated reaches the global log instead (see the gate
+	// and its rationale in executeStepBody). The file therefore receives clean
+	// line-separated output without needing a logSanitizer
 	// wrapper. This approach also handles OSC/CSI sequences split across PTY
 	// read boundaries — the double-strip inside lineTee reassembles them before
 	// the callback fires. The global pipeline log is fed via PlainReporter's
@@ -1095,28 +1175,36 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 }
 
 // FormatCondition returns a short human-readable form of a typed condition for display.
+//
+// DISPLAY ONLY, and REDACTED: conditions are rendered at resolve time, so Cmd
+// and Expr carry substituted ${vars.*} values — secrets included. Every caller
+// prints the result (plan printers, skip reasons, the trace decision line); the
+// one non-print consumer, Recorder.OnStepSkip's reason, never persists it, so
+// journal bytes and the deployment hash are unaffected.
 func FormatCondition(c *condition.Condition) string {
 	if c == nil {
 		return ""
 	}
 	switch c.Type {
 	case condition.TypeBuiltin:
-		return "builtin " + c.Cmd
+		return trace.Redact("builtin " + c.Cmd)
 	case condition.TypeShell:
-		return "shell " + c.Cmd
+		return trace.Redact("shell " + c.Cmd)
 	case condition.TypeTemplate:
-		return "template " + c.Expr
+		return trace.Redact("template " + c.Expr)
 	default:
 		return string(c.Type)
 	}
 }
 
-// FormatAction returns a short human-readable form of a typed action for display.
+// FormatAction returns a short human-readable form of a typed action for
+// display. DISPLAY ONLY, and REDACTED, for the same reason as FormatCondition:
+// its sole caller is ResolvedStep.DisplayCheck, which feeds plan output.
 func FormatAction(a *config.Action) string {
 	if a == nil {
 		return ""
 	}
-	return a.Type + " " + a.Cmd
+	return trace.Redact(a.Type + " " + a.Cmd)
 }
 
 // FormatRequireSpec returns a human-readable form of a RequireSpec.

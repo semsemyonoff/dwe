@@ -41,7 +41,8 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// render.git.enabled: true. SelectServices honors the same gating that
 	// `dwe render git` uses, so the validator scope matches what would be
 	// rendered.
-	services := ctx.Cfg.Services
+	cfg := sanitizedCfg(ctx)
+	services := cfg.Services
 	selected, skipped := git.SelectServices(services)
 
 	for _, skip := range skipped {
@@ -70,7 +71,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	for _, name := range selected {
 		svc := services[name]
-		serviceDiags := v.validateService(name, svc, ctx.Cfg, ctx.ProjectRoot)
+		serviceDiags := v.validateService(name, svc, cfg, ctx.ProjectRoot)
 		diags = append(diags, serviceDiags...)
 	}
 

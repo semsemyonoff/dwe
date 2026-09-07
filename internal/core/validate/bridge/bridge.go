@@ -72,10 +72,10 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				"use on_unreachable: fail (hooks block when the host daemon is down) or warn (exit 0 with a warning)")
 		}
 
-		// shim_path is a container path (always slash-separated), so the
-		// check uses path.IsAbs, not filepath.IsAbs — a Windows host must not
-		// reject "/usr/local/bin/dwe". A relative target is invalid in a
-		// compose bind mount.
+		// shim_path is a container path (always slash-separated), so the check
+		// uses path.IsAbs, not filepath.IsAbs — the value describes the
+		// container's filesystem and must never be judged by the host's path
+		// rules. A relative target is invalid in a compose bind mount.
 		if sp := svc.Bridge.ShimPath; sp != "" && !path.IsAbs(sp) {
 			emit(validate.SeverityError,
 				fmt.Sprintf("service %q bridge.shim_path: %q must be an absolute container path", name, sp),

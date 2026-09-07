@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,9 +10,16 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/envfile"
+
+	"github.com/spf13/cobra"
 )
 
 // makeEnvCfg builds a DweConfig with the given export rules and raw map.
+//
+// The BuildContent calls below pass an empty baseDir, which skips the
+// docker.yml read: COMPOSE_PROJECT_NAME then falls back to the lowercased
+// FullName(). The resolver's own precedence rules are covered in
+// internal/shared/envfile.
 func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
 	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
@@ -22,7 +30,7 @@ func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig
 
 func TestBuildEnvContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -36,10 +44,10 @@ func TestBuildEnvContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 
 func TestBuildEnvContent_simpleStringRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +63,7 @@ func TestBuildEnvContent_boolFormatTrue(t *testing.T) {
 		"runtime": map[string]any{"use_https": true},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +79,7 @@ func TestBuildEnvContent_boolFormatFalse(t *testing.T) {
 		"runtime": map[string]any{"use_https": false},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -91,7 +99,7 @@ func TestBuildEnvContent_intFormat(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +113,7 @@ func TestBuildEnvContent_defaultFallback(t *testing.T) {
 		{Name: "MISSING_VAR", From: "no.such.path", Default: "fallback"},
 	}, map[string]any{})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,7 +127,7 @@ func TestBuildEnvContent_requiredMissingReturnsError(t *testing.T) {
 		{Name: "REQUIRED_VAR", From: "no.such.path", Required: true},
 	}, map[string]any{})
 
-	_, err := envfile.BuildContent(cfg)
+	_, err := envfile.BuildContent(cfg, "")
 	if err == nil {
 		t.Error("expected error for required missing path, got nil")
 	}
@@ -137,7 +145,7 @@ func TestBuildEnvContent_whenFalsySkipsRule(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +163,7 @@ func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,14 +174,14 @@ func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
 
 func TestBuildEnvContent_commentEmitted(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "MY_VAR", From: "state", Comment: "Active state"},
-	}, map[string]any{"state": "staging"})
+		{Name: "MY_VAR", From: "env", Comment: "Active env"},
+	}, map[string]any{"env": "staging"})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := envfile.BuildContent(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "# Active state") {
+	if !strings.Contains(out, "# Active env") {
 		t.Errorf("expected comment in output, got:\n%s", out)
 	}
 }
@@ -249,7 +257,7 @@ func TestRunRenderEnv_ToFile(t *testing.T) {
 	}
 
 	out := filepath.Join(dir, ".env")
-	if err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+	if err := runRenderEnv(newTestEnvCmd(), &cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
 		t.Fatalf("runRenderEnv: %v", err)
 	}
 
@@ -262,14 +270,193 @@ func TestRunRenderEnv_ToFile(t *testing.T) {
 	}
 }
 
+// TestRunRenderEnv_ComposeProjectNameFromDockerYML pins the baseDir this
+// command threads into envfile. The parameter is the only thing that makes
+// COMPOSE_PROJECT_NAME follow workspace/docker.yml, and a wrong value fails
+// silently: envfile.BuildContent(cfg, "") returns <prefix>-<name> with no
+// error, so .env would carry a different project than the -p dwe passes —
+// exactly the split-brain the export exists to remove. Asserting only
+// PROJECT= (as the sibling test does) cannot see that.
+func TestRunRenderEnv_ComposeProjectNameFromDockerYML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
+	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wsDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(wsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wsDir, "docker.yml"), []byte("project_name: Custom_Scope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := filepath.Join(dir, ".env")
+	if err := runRenderEnv(newTestEnvCmd(), &cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+
+	body, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if !strings.Contains(string(body), "COMPOSE_PROJECT_NAME=custom_scope\n") {
+		t.Errorf("expected COMPOSE_PROJECT_NAME=custom_scope (lowercased docker.yml project_name), got:\n%s", body)
+	}
+}
+
 // TestRunRenderEnv_InvalidConfig verifies that a config-load failure is
 // surfaced as an error (not silently dropped).
 func TestRunRenderEnv_InvalidConfig(t *testing.T) {
-	err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"}, "/tmp/whatever.env")
+	err := runRenderEnv(newTestEnvCmd(), &cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"}, "/tmp/whatever.env")
 	if err == nil {
 		t.Fatal("expected error for missing config, got nil")
 	}
 	if !strings.Contains(err.Error(), "loading config") {
 		t.Errorf("err = %v, want one wrapping 'loading config'", err)
+	}
+}
+
+// newTestEnvCmd returns a cobra command whose streams are captured, so a test
+// can assert on what `dwe render env` writes where. The warning path exists
+// only because the command threads its own streams — a bare fmt.Print would be
+// invisible here.
+func newTestEnvCmd() *cobra.Command { cmd, _, _ := newCapturingEnvCmd(); return cmd }
+
+func newCapturingEnvCmd() (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
+	var out, errBuf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	return cmd, &out, &errBuf
+}
+
+// writeUnresolvedExportProject lays down a project whose exports.env has one
+// resolving rule and one whose from: is a typo.
+func writeUnresolvedExportProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	yml := `schema_version: "2"
+project:
+  name: testproject
+  prefix: dwe
+vars:
+  here: yes
+exports:
+  env:
+    - name: OK_VAR
+      from: vars.here
+    - name: MISSING_VAR
+      from: vars.typo
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestRunRenderEnv_WarnsOnUnresolvedRule pins the split: the warning goes to
+// stderr and the content to stdout, so `dwe render env > .env` stays byte-
+// identical to BuildContent while the user still sees why MISSING_VAR is empty.
+func TestRunRenderEnv_WarnsOnUnresolvedRule(t *testing.T) {
+	dir := writeUnresolvedExportProject(t)
+	cfgPath := filepath.Join(dir, "workspace.yml")
+
+	cmd, out, errBuf := newCapturingEnvCmd()
+	if err := runRenderEnv(cmd, &cmdctx.RootFlags{ConfigPath: cfgPath}, ""); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+
+	wantWarn := `warning: exports.env[MISSING_VAR]: from "vars.typo" does not resolve — rendered empty` + "\n"
+	if errBuf.String() != wantWarn {
+		t.Errorf("stderr = %q, want %q", errBuf.String(), wantWarn)
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	want, err := envfile.BuildContent(cfg, dir)
+	if err != nil {
+		t.Fatalf("BuildContent: %v", err)
+	}
+	if out.String() != want {
+		t.Errorf("stdout = %q, want it byte-identical to BuildContent %q", out.String(), want)
+	}
+	if !strings.Contains(out.String(), "MISSING_VAR=\n") {
+		t.Errorf("expected a bare MISSING_VAR= line, got:\n%s", out.String())
+	}
+}
+
+// TestRunRenderEnv_WarnsOnUnresolvedRuleToFile: the warning is about the
+// content, not the sink, so --out gets it too.
+func TestRunRenderEnv_WarnsOnUnresolvedRuleToFile(t *testing.T) {
+	dir := writeUnresolvedExportProject(t)
+	cmd, out, errBuf := newCapturingEnvCmd()
+
+	target := filepath.Join(dir, ".env")
+	if err := runRenderEnv(cmd, &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}, target); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "exports.env[MISSING_VAR]") {
+		t.Errorf("stderr = %q, want the MISSING_VAR warning", errBuf.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout = %q, want empty on the --out path", out.String())
+	}
+	body, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if !strings.Contains(string(body), "MISSING_VAR=\n") {
+		t.Errorf("expected MISSING_VAR= in the written file, got:\n%s", body)
+	}
+}
+
+// TestRunRenderEnv_NoWarningInJSONMode holds the output-mode contract: JSON
+// consumers get no stray text on either stream.
+func TestRunRenderEnv_NoWarningInJSONMode(t *testing.T) {
+	dir := writeUnresolvedExportProject(t)
+	cmd, _, errBuf := newCapturingEnvCmd()
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+	if err := runRenderEnv(cmd, flags, ""); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("stderr = %q, want empty under --output json", errBuf.String())
+	}
+}
+
+// TestRunRenderEnv_SilentWhenEverythingResolves guards against a warning that
+// fires on a healthy project.
+func TestRunRenderEnv_SilentWhenEverythingResolves(t *testing.T) {
+	dir := t.TempDir()
+	yml := `schema_version: "2"
+project:
+  name: testproject
+  prefix: dwe
+vars:
+  here: yes
+exports:
+  env:
+    - name: OK_VAR
+      from: vars.here
+    - name: WITH_DEFAULT
+      from: vars.typo
+      default: fallback
+`
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, _, errBuf := newCapturingEnvCmd()
+	if err := runRenderEnv(cmd, &cmdctx.RootFlags{ConfigPath: cfgPath}, ""); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", errBuf.String())
 	}
 }

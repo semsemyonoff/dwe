@@ -12,11 +12,15 @@ import (
 )
 
 // varInspectJSON is the JSON shape for `dwe vars inspect --output json`.
+// Encrypted and Secret are omitted for a var that is not an encrypted secret,
+// so a project without secrets emits the historical shape unchanged.
 type varInspectJSON struct {
-	Var    string            `json:"var"`
-	Layers varInspectLayers  `json:"layers"`
-	Origin string            `json:"origin"`
-	Usages []varInspectUsage `json:"usages"`
+	Var       string            `json:"var"`
+	Layers    varInspectLayers  `json:"layers"`
+	Origin    string            `json:"origin"`
+	Encrypted bool              `json:"encrypted,omitempty"`
+	Secret    string            `json:"secret,omitempty"`
+	Usages    []varInspectUsage `json:"usages"`
 }
 
 // varInspectLayers carries the per-layer resolved values. Each *Set flag
@@ -94,6 +98,10 @@ func runVarsInspect(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) er
 	}
 
 	origin := originDisplay(flags, layered.Origin)
+	// The `secret:` note needs the load-time state (which identity opened the
+	// value, or why none did); the per-layer values carry the marker itself and
+	// are masked below, in both text and JSON.
+	note := secretNote(secretsStateFor(flags), layered.Origin, path)
 	inspect := uirender.VarInspect{
 		Path:      path,
 		Default:   layered.Default,
@@ -103,17 +111,21 @@ func runVarsInspect(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) er
 		Current:   layered.Current,
 		CurrentOK: layered.CurrentOK,
 		Origin:    origin,
+		Secret:    note,
 		Usages:    scan.Usages,
 	}
 
-	data := buildInspectJSON(path, layered, origin, scan.Usages)
+	data := buildInspectJSON(path, layered, origin, note, scan.Usages)
 	return cmdctx.WriteData(flags, cmd, data, func(varInspectJSON) string {
 		return uirender.VarInspectView(inspect, 0)
 	})
 }
 
 // buildInspectJSON maps the resolved layers and usages to the JSON envelope.
-func buildInspectJSON(path string, layered config.LayeredValue, origin string, usages []varsusage.Usage) varInspectJSON {
+// Every per-layer value is masked, so an undecrypted marker never reaches the
+// JSON consumer either — `encrypted` plus the `secret` note is the machine
+// form of "this one needs a key".
+func buildInspectJSON(path string, layered config.LayeredValue, origin, secret string, usages []varsusage.Usage) varInspectJSON {
 	entries := make([]varInspectUsage, 0, len(usages))
 	for _, u := range usages {
 		entries = append(entries, varInspectUsage{
@@ -123,18 +135,23 @@ func buildInspectJSON(path string, layered config.LayeredValue, origin string, u
 			Text: u.Text,
 		})
 	}
+	def, defEnc := uirender.MaskSecretValue(layered.Default)
+	local, localEnc := uirender.MaskSecretValue(layered.Local)
+	current, currentEnc := uirender.MaskSecretValue(layered.Current)
 	return varInspectJSON{
 		Var: path,
 		Layers: varInspectLayers{
-			Default:    layered.Default,
+			Default:    def,
 			DefaultSet: layered.DefaultOK,
-			Local:      layered.Local,
+			Local:      local,
 			LocalSet:   layered.LocalOK,
-			Current:    layered.Current,
+			Current:    current,
 			CurrentSet: layered.CurrentOK,
 		},
-		Origin: origin,
-		Usages: entries,
+		Origin:    origin,
+		Encrypted: defEnc || localEnc || currentEnc,
+		Secret:    secret,
+		Usages:    entries,
 	}
 }
 

@@ -9,8 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/creack/pty"
+
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -724,5 +727,78 @@ func TestRunner_Workdir_Empty_FallsBackToProjectRoot(t *testing.T) {
 	outResolved, _ := filepath.EvalSymlinks(out)
 	if outResolved != expected {
 		t.Errorf("expected pwd=%q (project root); got %q", expected, outResolved)
+	}
+}
+
+// clearColorEnv guarantees the colour-control vars are absent for one test, so
+// nothing but the runner's own decision can force colours.
+func clearColorEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE", bridgeclient.EnvBridgeStdinTTY} {
+		t.Setenv(name, "x")
+		_ = os.Unsetenv(name)
+	}
+}
+
+// openPTY returns a pty slave usable as a terminal-backed stdio stream.
+func openPTY(t *testing.T) *os.File {
+	t.Helper()
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("pty.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = tty.Close(); _ = ptmx.Close() })
+	return tty
+}
+
+// TestRunner_ColorForceEnv pins that the script runner's colour behaviour is
+// unchanged by the ColorForceEnv signature change: it passes
+// forceOnSuppressedTTY=false, because a host-side child has no container TTY to
+// suppress. The terminal-stdout row is the one that would flip if somebody
+// "helpfully" derived a value for it.
+func TestRunner_ColorForceEnv(t *testing.T) {
+	tests := []struct {
+		name          string
+		underParallel bool
+		terminalOut   bool
+		want          string
+	}{
+		{"parallel sub-step forces colour", true, false, "[1]"},
+		{"sequential on a buffer stays auto", false, false, "[]"},
+		{"sequential on a terminal stays auto", false, true, "[]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearColorEnv(t)
+			dir := t.TempDir()
+			out := filepath.Join(dir, "color.txt")
+			scriptPath := writeScript(t, dir, "color.sh", "#!/bin/sh\nprintf '[%s]' \"${CLICOLOR_FORCE}\" > "+out+"\n")
+
+			rc := RunContext{
+				Cmd: &CommandDef{
+					Type:   CommandTypeScript,
+					ID:     "test.color",
+					Script: &ScriptDef{Path: scriptPath},
+				},
+				Render:        &tpl.RenderContext{},
+				ProjectRoot:   dir,
+				UnderParallel: tt.underParallel,
+				Stdout:        &bytes.Buffer{},
+				Stderr:        &bytes.Buffer{},
+			}
+			if tt.terminalOut {
+				rc.Stdout = openPTY(t)
+			}
+			if err := (&Runner{}).Run(context.Background(), rc); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got, err := os.ReadFile(out)
+			if err != nil {
+				t.Fatalf("read probe output: %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("CLICOLOR_FORCE in child = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }

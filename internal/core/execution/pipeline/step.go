@@ -11,6 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // ResolvedStep holds a pipeline step together with the phase it belongs to,
@@ -118,30 +119,89 @@ func stepBadge(step config.DeployStep) string {
 //   - shell: steps   — raw shell command
 //
 // dweBin is the configured binary name (e.g. "dwe")).
-// It is used only for display — actual execution uses os.Executable() with this as fallback.
+//
+// DISPLAY ONLY, and REDACTED: the result is never fed to execution (every
+// caller prints it — see the plan printers, buildPlanStepJSON and
+// `reset step --dry-run`). Steps are resolved before display, so cmd and with:
+// carry the substituted ${vars.*} values, decrypted secrets included. Redaction
+// happens on step.Cmd and on the string leaves of a DEEP COPY of step.With
+// BEFORE builtin.Describe / the --set formatting run: a value that Describe
+// quotes with %q, or that gains escapes on the way, is no longer a substring of
+// the registered plaintext and a final pass would miss it. The final
+// trace.Redact on the assembled line is the belt-and-braces catch for anything
+// reached by another route. The deep copy is load-bearing — With is the same
+// map the executor hands to ExecAction (config.DeployStep.Action), and
+// cli/lifecycle/reset.go calls StepCommand before the --dry-run branch, so an
+// in-place redaction would make a real `dwe reset step <addr>` execute with
+// "***" as every secret param.
 func StepCommand(step config.DeployStep, dweBin string) string {
+	cmd := trace.Redact(step.Cmd)
+	with := redactWithValues(step.With)
 	switch step.Type {
 	case "command":
-		parts := []string{dweBin, "commands", "run", strings.TrimSpace(step.Cmd)}
-		if len(step.With) > 0 {
-			keys := make([]string, 0, len(step.With))
-			for k := range step.With {
+		parts := []string{dweBin, "commands", "run", strings.TrimSpace(cmd)}
+		if len(with) > 0 {
+			keys := make([]string, 0, len(with))
+			for k := range with {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
 			for _, k := range keys {
-				parts = append(parts, "--set", k+"="+fmt.Sprintf("%v", step.With[k]))
+				parts = append(parts, "--set", k+"="+fmt.Sprintf("%v", with[k]))
 			}
 		}
-		return strings.Join(parts, " ")
+		return trace.Redact(strings.Join(parts, " "))
 	case "builtin":
-		return builtin.Describe(step.Cmd, step.With)
+		return trace.Redact(builtin.Describe(cmd, with))
 	case "dwe":
-		return dweBin + " " + strings.TrimSpace(step.Cmd)
+		return trace.Redact(dweBin + " " + strings.TrimSpace(cmd))
 	case "shell":
-		return strings.TrimSpace(step.Cmd)
+		return trace.Redact(strings.TrimSpace(cmd))
 	default:
-		return step.Type + ": " + strings.TrimSpace(step.Cmd)
+		return trace.Redact(step.Type + ": " + strings.TrimSpace(cmd))
+	}
+}
+
+// redactWithValues returns a deep copy of a step's with: map with every string
+// leaf redacted. Nested maps and slices are copied too, so no part of the
+// caller's map is shared with (or mutated by) the display copy.
+func redactWithValues(with map[string]any) map[string]any {
+	if with == nil {
+		return nil
+	}
+	out := make(map[string]any, len(with))
+	for k, v := range with {
+		out[k] = redactWithValue(v)
+	}
+	return out
+}
+
+func redactWithValue(v any) any {
+	switch t := v.(type) {
+	case string:
+		return trace.Redact(t)
+	case map[string]any:
+		return redactWithValues(t)
+	case map[any]any:
+		out := make(map[any]any, len(t))
+		for k, e := range t {
+			out[k] = redactWithValue(e)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = redactWithValue(e)
+		}
+		return out
+	case []string:
+		out := make([]string, len(t))
+		for i, e := range t {
+			out[i] = trace.Redact(e)
+		}
+		return out
+	default:
+		return v
 	}
 }
 

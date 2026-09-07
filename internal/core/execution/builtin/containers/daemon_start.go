@@ -52,7 +52,7 @@ func buildStartExtraArgs(in startArgsInput) []string {
 		extraArgs = append(extraArgs, "--user", h.UID+":"+h.GID)
 	case "root":
 		extraArgs = append(extraArgs, "--user", "root")
-	case "", "internal":
+	case "", daemonInternal:
 		// no flag
 	default:
 		extraArgs = append(extraArgs, "--user", in.User)
@@ -70,6 +70,67 @@ func buildStartExtraArgs(in startArgsInput) []string {
 	extraArgs = append(extraArgs, in.Service)
 	extraArgs = append(extraArgs, in.Argv...)
 	return extraArgs
+}
+
+// daemonInternal is the opt-out sentinel shared by the daemon's workdir and
+// user fields, mirroring model.UserModeInternal on the service runners: emit no
+// flag AND skip the service fallback, so the image's own WORKDIR / USER applies.
+const daemonInternal = "internal"
+
+// resolveDaemonWorkdirUser resolves the effective --workdir and --user values
+// for a daemon from its pre-rendered with: fields plus the target service's
+// configuration. Pure (no docker, no I/O beyond the in-memory config) so the
+// resolution is testable apart from Run.
+//
+// The workdir chain, first non-empty wins — identical to the service runners'
+// resolveServiceFields:
+//
+//  1. workdir == "internal" — no flag, fallback skipped, stop
+//  2. workdir_from (a dot-path into the config)
+//  3. workdir
+//  4. services.<svc>.cli.workdir
+//  5. services.<svc>.work_dir_internal
+//  6. services.<svc>.dir_internal
+//  7. no --workdir flag — the image's WORKDIR applies
+//
+// Rungs 4-6 are config.ContainerWorkdirFallback, the chain `dwe shell` applies.
+// workdir_from outranks the literal workdir, and the sentinel outranks both
+// because opting out cannot be expressed any other way. A dot-path resolving to
+// nil yields "" and falls through to the next rung rather than failing the step.
+//
+// The user chain is: user → services.<svc>.cli.user → no --user flag, with
+// "internal" as the same opt-out sentinel (non-empty, so it stops at rung one
+// and buildStartExtraArgs emits no flag).
+func resolveDaemonWorkdirUser(cfg *config.DweConfig, service, user, workdir, workdirFrom string) (resolvedWorkdir, resolvedUser string, err error) {
+	if workdir != daemonInternal {
+		if workdirFrom != "" {
+			v, lerr := config.LookupDotPath(cfg, workdirFrom)
+			if lerr != nil {
+				return "", "", fmt.Errorf("docker_daemon_start: workdir_from %q: %w", workdirFrom, lerr)
+			}
+			if v != nil {
+				s, ok := v.(string)
+				if !ok {
+					return "", "", fmt.Errorf("docker_daemon_start: workdir_from %q: resolved value is not a string", workdirFrom)
+				}
+				resolvedWorkdir = s
+			}
+		}
+		if resolvedWorkdir == "" {
+			resolvedWorkdir = workdir
+		}
+		if resolvedWorkdir == "" {
+			resolvedWorkdir = config.ContainerWorkdirFallback(cfg, service)
+		}
+	}
+
+	resolvedUser = user
+	if resolvedUser == "" {
+		if svc, ok := config.ServiceByContainer(cfg, service); ok {
+			resolvedUser = svc.CLI.User
+		}
+	}
+	return resolvedWorkdir, resolvedUser, nil
 }
 
 // DaemonStart implements docker_daemon_start.
@@ -121,19 +182,9 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 	onAlreadyRunning := spec.GetStringParam(with, "on_already_running", "error")
 	daemonID := spec.GetStringParam(with, "daemon_id", "")
 
-	if workdir == "" && workdirFrom != "" {
-		v, err := config.LookupDotPath(ectx.Config, workdirFrom)
-		if err != nil {
-			return fmt.Errorf("docker_daemon_start: workdir_from %q: %w", workdirFrom, err)
-		}
-		if v == nil {
-			return fmt.Errorf("docker_daemon_start: workdir_from %q: path not found in config", workdirFrom)
-		}
-		s, ok := v.(string)
-		if !ok {
-			return fmt.Errorf("docker_daemon_start: workdir_from %q: resolved value is not a string", workdirFrom)
-		}
-		workdir = s
+	workdir, user, err = resolveDaemonWorkdirUser(ectx.Config, service, user, workdir, workdirFrom)
+	if err != nil {
+		return err
 	}
 
 	argv, err := spec.GetStringSlice(with, "argv")

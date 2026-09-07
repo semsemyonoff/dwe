@@ -258,7 +258,7 @@ func TestLoadValidateConfig_errors(t *testing.T) {
 		fixture   string
 		substring string
 	}{
-		{"unknownField", "unknown_field.yml", "field bogus not found"},
+		{"unknownField", "unknown_field.yml", `unknown field "bogus" — allowed here: cmd, description, hint, id, services, severity, stages, type, with`},
 		{"missingID", "missing_id.yml", "id is required"},
 		{"missingDescription", "missing_description.yml", "description is required"},
 		{"missingStages", "missing_stages.yml", "stages is required"},
@@ -471,7 +471,7 @@ func TestLoadValidateConfig_lintersValidationErrors(t *testing.T) {
 		substring string
 	}{
 		{"unknownType", "linters:\n  l: { type: bogus }\n", "unknown type"},
-		{"unknownField", "linters:\n  l: { wat: yes }\n", "field wat not found"},
+		{"unknownField", "linters:\n  l: { wat: yes }\n", `unknown field "wat" — allowed here: bin, enabled, extensions, filenames, flags, paths, severity, type`},
 		{"binWithSlash", "linters:\n  l: { bin: /usr/bin/shellcheck }\n", "bare command name"},
 		{"binWithRelPath", "linters:\n  l: { bin: ./tool }\n", "bare command name"},
 		{"pathTraversal", "linters:\n  l: { paths: [../escape] }\n", "traverse outside"},

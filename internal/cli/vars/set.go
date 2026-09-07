@@ -121,6 +121,8 @@ func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue stri
 		return false, err
 	}
 
+	warnShadowedSecret(cmd, flags, path)
+
 	// The write is persisted from here on, so committed is true even if emitting
 	// the confirmation fails.
 	effective, _ := varsusage.ResolveVar(newCfg, path)
@@ -315,11 +317,39 @@ func varSetFormDescription(flags *cmdctx.RootFlags, path string) string {
 	return b.String()
 }
 
+// warnShadowedSecret prints a one-line stderr note when the just-written
+// plaintext override shadows an encrypted secret in a lower layer. The write
+// is legal and wins locally — but silently overriding a team secret with a
+// plaintext local value is worth saying out loud once. Suppressed in JSON mode
+// (stdout must stay the only channel a parser reads) and best-effort: a raw
+// layer read failure means no note, never a failed set.
+func warnShadowedSecret(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) {
+	if flags.Output == "json" {
+		return
+	}
+	layers, err := config.LoadRawLayers(flags.ConfigPath)
+	if err != nil {
+		return
+	}
+	localPath := config.LocalLayerPath(flags.ConfigPath)
+	for _, m := range config.CollectMarkers(layers) {
+		if m.Path != path || m.Layer == localPath {
+			continue
+		}
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "note: %s is an encrypted secret in %s; this plaintext override wins locally\n",
+			path, filepath.Base(m.Layer))
+		return
+	}
+}
+
 // inlineFormValue renders a scalar value compactly for the form description.
+// An undecrypted secret shows as <encrypted>, matching every other vars
+// surface, so the form never offers the marker as an editable-looking value.
 func inlineFormValue(v any) string {
 	if v == nil {
 		return "null"
 	}
+	v, _ = uirender.MaskSecretValue(v)
 	rendered, err := uirender.VarValue(v)
 	if err != nil {
 		return fmt.Sprintf("%v", v)

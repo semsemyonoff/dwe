@@ -111,6 +111,9 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 	badge := stepBadge(rs.Step)
 	name := rs.Step.Name
 	desc := rs.Step.Description
+	// Redacted display string; UnresolvedTemplateRefs below deliberately scans
+	// it rather than the raw command, so a secret whose value contains ${…}
+	// cannot resurface through the [unresolved: …] line.
 	cmd := StepCommand(rs.Step, dweBin)
 
 	if desc != "" {

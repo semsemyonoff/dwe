@@ -15,6 +15,7 @@ For developers bootstrapping a new project or getting productive in an existing 
 - [Daily workflow](daily-workflow.md) — the small handful of commands you reach for every day: status, services, shell, commands, logs, stop/restart.
 - [Troubleshooting](troubleshooting.md) — your stack misbehaves; a triage map from `dwe validate` and `dwe logs` down to `dwe compose raw`.
 - [Switching tasks with snapshots](switching-tasks-with-snapshots.md) — save your current environment, switch to other work, and restore it later; the snapshot create/restore cookbook.
+- [Upgrading DWE](upgrading.md) — you installed a new DWE version; what breaks in each release and what to edit in response.
 
 ### Authoring and maintaining a project
 

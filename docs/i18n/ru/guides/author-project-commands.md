@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ 97608a86a125
+> Translated from: guides/author-project-commands.md @ f568b0f4673c
 
 # Авторство проектных команд
 
@@ -85,7 +85,7 @@ commands:
       "$DWE_BIN" shell app -c "php artisan cache:warm"
 ```
 
-`COMPOSE_PROJECT_NAME` и `COMPOSE_FILE` позволяют вызовам `docker compose ...` внутри `cmd:` подхватывать оверлеи DWE без флагов `-p` / `-f`.
+`COMPOSE_PROJECT_NAME` и `COMPOSE_FILE` позволяют вызовам `docker compose ...` внутри `cmd:` подхватывать оверлеи DWE без флагов `-p` / `-f`. `COMPOSE_PROJECT_NAME` — то же значение, которое DWE пишет в сгенерированный `.env` как [зарезервированную системную переменную](../reference/render/env.md#system-variables): один резолвер, два способа доставки.
 
 ## `type: service_exec` — запуск внутри контейнера
 
@@ -97,7 +97,7 @@ commands:
     type: service_exec
     description: Create a database in the db container
     service: db
-    mode: exec-or-run
+    mode: exec-or-fail   # база — персистентное состояние, одноразовую создавать нельзя
     params:
       database:
         type: string
@@ -112,12 +112,12 @@ commands:
 
 - **`service:`** — имя compose-сервиса.
 - **`mode:`** — что делать, если контейнер не запущен:
-  - `exec-or-fail` (по умолчанию) — отказ с действенной ошибкой и подсказкой `dwe docker up <svc>`.
-  - `exec-or-run` — фолбэк на свежий `docker compose run --rm`-контейнер с предупреждением об эфемерном запуске.
+  - `exec-or-run` (по умолчанию) — фолбэк на свежий `docker compose run --rm`-контейнер с предупреждением об эфемерном запуске.
+  - `exec-or-fail` — отказ с действенной ошибкой и подсказкой `dwe docker up <svc>`.
   - `exec` — голый `docker compose exec`; docker эмитит свою ошибку, если контейнер лёг.
   - `run` — всегда поднимать свежий контейнер.
 
-  Берите `exec-or-fail` для инструментов, зависящих от постоянного состояния (БД, app-серверы); `exec-or-run` — только когда инструмент честно работает one-off (composer install на свежем чек-ауте и т.п.).
+  Не пишите `mode:` вовсе, если инструмент честно работает и как one-off (composer install на свежем чек-ауте и т.п.). Объявляйте `mode: exec-or-fail` для инструментов, зависящих от постоянного состояния контейнера (БД, app-серверы), — тех, которым нельзя молча поднять контейнер за вашей спиной.
 - **`user:`** — `current` запускает от UID:GID хоста (для команд, пишущих в bind-mount); `root` — для привилегированных контейнерных операций; либо литерал `name` / `1000` / `1000:1000`. Опустите — наследуется `cli.user` сервиса.
 - **`workdir_from:`** — dot-путь в собранный конфиг (например, `services.main.work_dir_internal`). Предпочтительнее жёсткого `workdir:`, потому что это позволяет оверрайдам из `local.yml` доходить до команд.
 
@@ -201,6 +201,8 @@ commands:
 4. Если всё ещё пусто и `required: true` — ошибка.
 
 Правило `default_from` позволяет оверрайдам из `local.yml` доходить до команд без того, чтобы каждый разработчик переписывал литеральный default. Это тот же паттерн «конфиг побеждает, код даёт safety net», что и в других местах DWE.
+
+`default_from`, который не резолвится, молча уходит в `default:`; неразрешимый `options.from` оставляет форму выбора без вариантов, а неразрешимый `context.<name>.from` рендерится пустым. `dwe validate` предупреждает обо всех трёх в домене `commands` — запускайте его после добавления такого пути; `--strict` превращает предупреждение в ошибку.
 
 Используйте разрешённое значение как `${param.<name>}` в `cmd:`, `argv:`, `env:`, `workdir:`, `confirmation_text:` и путях к файлам.
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/reset.md @ 702ea8f95a98
+> Translated from: reference/config/reset.md @ eb8339e9a185
 
 # Reset
 
@@ -81,3 +81,16 @@ phases:
 | `dwe reset run --service <name>` | Удаляет `state.services.<name>`, пишет `PendingDeploy` для `<name>` |
 | `dwe deploy run --service <name>` | Очищает `PendingDeploy` для `<name>` при успехе |
 | `dwe reset run` (полный проект) | Удаляет весь файл состояния (`journal.Remove`) |
+
+## Связанные команды
+
+- `dwe reset plan` — показать разрешённый пайплайн сброса
+- `dwe reset run [--yes]` — выполнить его (см. [Reset всего проекта](#reset-всего-проекта))
+- `dwe reset eject [--out PATH] [--force]` — выдать **встроенный дефолтный** пайплайн сброса в виде закомментированного, готового к правке `reset.yml`. Это константа, а не эффективный план проекта: ничего не рендерится, файлы `workspace/services/<name>/reset.yml` не встраиваются, фильтра `--service` нет (для разрешённого экземпляра используйте `dwe reset plan`). Без `--out` (или с `--out -`) документ уходит в stdout и ничего не записывается; с `--out PATH` он пишется в этот файл и **отказывается перезаписывать существующий без `--force`**. Выданный файл объявляет `log: false` явно — как и встроенный дефолт. Неявного пути по умолчанию нет: канонический адресат `workspace/reset.yml` передаётся явно, а активный файл **заменяет** встроенный пайплайн целиком.
+- `dwe validate` — когда он репортит `reset.yml has no active content (all comments or empty) — built-in default pipeline is active` (или `declares no phases`), ответом на это служит `dwe reset eject`: файл на диске ни на что не влияет, поэтому выдайте поверх него встроенный пайплайн через `--force` и правьте уже его. Отказ самого `eject` называет те же два условия, так что обе команды одинаково понимают, какие файлы инертны. См. [validate.md](validate.md).
+- `dwe deploy eject` — двойник со стороны деплоя; см. [deploy/index.md](deploy/index.md).
+
+Команды `lifecycle eject` намеренно **нет**. Эффективный пайплайн `stop` всегда
+несёт синтетическую фазу движка `_auto_reap_daemons`, а пользовательская фаза с
+именем на `_` отвергается при загрузке — выданный `lifecycle.yml` был бы файлом,
+который сам dwe отказывается загружать.

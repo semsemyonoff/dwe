@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/pipelines.md @ b4123213519e
+> Translated from: reference/concepts/pipelines.md @ 90f4492272d4
 
 # Пайплайны
 
@@ -148,7 +148,7 @@ steps:
 - **Журналирование по каждому sub-step.** Журнал deploy записывает каждый sub-step под `(phase, sub-step.name)`. Перестановка или добавление sub-step'ов не инвалидирует соседей, потому что `journal.StepHash` вычисляется только по самому sub-step.
 - **Никакого PTY в sub-step'ах.** Передача PTY потомку, когда stdin — пустой reader, ломает `docker compose exec/run`. Используйте последовательный шаг, когда нужна интерактивная консоль.
 
-Репортёр заменяет подвал LiveLine на LiveBlock на время параллельной группы, по одной строке на sub-step, с пайплайн-индексом `[N/M]` на строку и frame-aware парсером, который нормализует `\r` progress-строки в один фрейм на видимую строку. Полный вывод пишется в `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log`.
+Репортёр заменяет подвал LiveLine на LiveBlock на время параллельной группы, по одной строке на sub-step, с пайплайн-индексом `[N/M]` на строку и frame-aware парсером, который нормализует `\r` progress-строки в один фрейм на видимую строку. Этот же парсер питает лог-файлы обоих маршрутов — последовательного и параллельного, — где серия перерисовок сворачивается до последнего кадра вместо строки на кадр. Закоммиченный вывод пишется в `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log`.
 
 Полная схема, дефолты, правила валидации и семантика выполнения: [`config/deploy/examples.md → Parallel step groups`](../config/deploy/examples.md#parallel-step-groups).
 

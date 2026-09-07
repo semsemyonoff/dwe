@@ -15,7 +15,7 @@ Rules that apply to every recipe:
   - **`exports.env` only** (`workspace/defaults.yml`) → `dwe run` (or `dwe deploy run --force`). That block is in no config hash, so a plain `dwe deploy run` never re-renders `.env` — it returns `already up-to-date`, or journal-skips the implicit render step when another always-run step defeats that gate (`render-and-vars.md` § 7).
   - **Mixed changes** → run `dwe deploy run` (it ends with `docker up --wait`, so it covers a restart too).
 - Always pass `--lang en` to `dwe docs ...`.
-- Use `--output json` for **data-emitting** commands you need to parse (e.g. `status`, `validate`, `docs list`, `docs search`, `services`). **Do NOT** combine it with `dwe docs llms-txt` — that command's `--output` is a file path, so `--output json` would write the markdown body to a file literally named `json`. For `dwe docs show`, the global `--output json` flag is silently ignored — the command always emits markdown (use `--raw` for unrendered plain markdown when piping).
+- Use `--output json` for **data-emitting** commands you need to parse (e.g. `status`, `validate`, `docs list`, `docs search`, `services`). **Do NOT** combine it with `dwe docs show` or `dwe docs llms-txt` — both always emit markdown and silently ignore the flag (on `docs show` use `--raw` for unrendered plain markdown when piping; on `llms-txt` use its own `--out PATH` to write the document to a file).
 
 ## Reference-file index
 
