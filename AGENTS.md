@@ -145,7 +145,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **`${...}` known-head whitelist** — `CompileVarSyntax` rewrites `${X}` only when the head is in `tpl.KnownVarHeads` AND `X` carries a tail (`${args}` excepted); anything else stays a **literal**, because rewriting a head-only `${host}`/`${files}` — a shell variable colliding with a namespace name, common in `cmd:` — silently erased it to `""` or dumped a `Raw` sub-map as `map[...]` text.
   It is a correctness control, not a security boundary; ask `tpl.IsVarNamespaceRef`/`IsKnownVarHead` rather than re-indexing the slice or re-deriving the tail rule elsewhere.
-  The pipeline context is Raw + Host only, so `tpl.ValidateRawScope` runs FIRST on every string and rejects `param`/`context`/`files`/`generated`/`args` — their lenient resolvers render `git checkout ${param.branch}` down to `git checkout `, invisible to both detectors. Do NOT extend it to `usercommands.buildRunContext` or workflow sub-steps, where `${param.*}` is legitimate.
+  The pipeline context is Raw + Host only, so `tpl.ValidateRawScope` runs FIRST on every string and rejects `param`/`context`/`files`/`generated`/`args` — their lenient resolvers render `git checkout ${param.branch}` down to `git checkout `, invisible to both detectors. Do NOT extend it to `usercommands.buildRunContext` or workflow sub-steps.
   See § `internal/shared/tpl/`, § Core — Execution (`pipeline/`), § Core — Validation and § Core — Foundation (`project/config/`, for the one `docker.yml project_name` exception).
 
 - **Resolve-time pipeline rendering** — `cmd`, `with:` leaves, `check`, `files_gate`, `timeout` and shell `when:` render **once** at resolve time into a deep copy; a render error fails the step, and `dwe reset step` must call `RenderStep`/`RenderWhen` itself.
@@ -179,7 +179,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   See § Core — Foundation (`project/config/`).
 
 - **Config render + generated-once values** — service configs materialize through `execution/templates/config/` on the `${...}` substrate, not the deprecated `service_configs_copy`; pair `service_configs_render_check` as the render step's `check:`, or template edits and store clears stop applying because the journal hash cannot see either.
-  DWE **harvests, never mints**, and `HarvestGenerated` MUST skip a field the store already holds *without reading its file*: `dwe reset run` keeps the store while wiping the hub, so an unconditional re-read fails the whole deploy over a value it already has (found by a control run) — do not "fix" that with a second `generated-missing` gate.
+  DWE **harvests, never mints**, and `HarvestGenerated` MUST skip a field the store already holds *without reading its file*: `dwe reset run` keeps the store while wiping the hub, so an unconditional re-read fails the whole deploy over a value it already has — do not "fix" that with a second `generated-missing` gate.
   `renderConfigsForRun` runs after the deploy gate but before phases; the `missingGeneratedKeys` and `config.SharesExtendsParentHub` skips are what stop `dwe run` blanking secrets.
   See § Core — Execution (`templates/config/`, `builtin/`), § `internal/shared/generatedstore/` and § `internal/core/workflow/lifecycle/`.
 
@@ -205,8 +205,8 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **`dwe vars` + comment-preserving `local.yml` writer** — `local/local_node.go` is the SINGLE `local.yml` write path, and `ApplyOverlayToNode` derives `Tag`/`Style` from the coerced NEW value, not the old node — keeping the old `DoubleQuoted` style would make `vars set x true` write a quoted string forever.
   `vars set` coerces through the PINNED `varsusage.CoerceScalar` grammar, and per-layer resolution goes through `config.LoadLayers`/`ResolveLayeredPath` so `LoadConfig` and `vars inspect` cannot drift.
-  The usage scanner is field-aware, not a grep: `templatedKeys` must list every field the resolver renders (incl. `timeout`, `files_gate.command`, `argv_append_from`), or a `${vars.typo}` there renders to `""` and `config.template_refs` never sees it.
-  `bridge.vars_writable` is a deny-by-default dot-boundary container-write allowlist enforced at RUNTIME inside `vars set`, because the command allowlist is prefix-wide and cannot see the var argument.
+  The usage scanner is field-aware, not a grep: `templatedKeys` must list every field the resolver renders, or a `${vars.typo}` there renders to `""` and `config.template_refs` never sees it.
+  `bridge.vars_writable` is a deny-by-default container-write allowlist enforced at RUNTIME inside `vars set`, because the command allowlist is prefix-wide and cannot see the var argument.
   See § `internal/core/project/local/`, § `internal/core/project/varsusage/`, § `internal/cli/vars/`, § Core — Foundation (`project/config/`) and § `internal/core/ui/cmdbrowser/`.
 
 - **Forms unification (`ask`/`widgets`)** — `widgets.RunHuhForm` is the single executor for every huh form, and hooks must fire **exactly once per prompt**, so a wrapper whose default seam calls it must not fire hooks itself.
@@ -226,8 +226,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **In-TUI form overlays + generic tree engine** — an embedded huh form returns NO Submit/Cancel cmd and completes **asynchronously**: poll `FormOverlay.State()` after every forwarded `Update` AND return huh's cmds, or the form silently never finishes; `MaxHeight` is a CAP measured from a once-captured natural height, never a fixed height.
   A capturing top overlay must be `ReplaceTop`'d, never `Push`ed, and a self-close travels as `tui.CloseOverlayMsg{Token}` — a plugin that can open more than one overlay MUST stamp a unique non-zero `CloseToken`, or a deferred close pops whatever modal is on top by then.
-  `cmdbrowser.Options.Edit`/`RunForm` are opt-in: nil keeps the old exit-and-return flows byte-identical.
-  In `tui/tree.Engine[N]` rendering stays in the consumer, expansion is keyed by stable `Key` so it survives a `SetRoots` node-graph rebuild, and `RebuildVisible` must never re-park the cursor (that flips a cmdbrowser golden).
+  In `tui/tree.Engine[N]` rendering stays in the consumer, expansion is keyed by stable `Key` so it survives a `SetRoots` rebuild, and `RebuildVisible` must never re-park the cursor (that flips a cmdbrowser golden).
   See § `internal/core/ui/tui/`, § `internal/core/ui/tui/tree/`, § `internal/core/ui/cmdbrowser/` and § `internal/cli/command/`.
 
 - **Compose project name: one resolver, lowercased** — use `config.ResolveComposeProjectName(baseDir, cfg)` or its in-memory sibling `config.ComposeProjectName(dockerCfg, cfg)`; never re-derive the `dockerCfg.ProjectName ?: cfg.Project.FullName()` precedence inline.
@@ -243,15 +242,13 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
   `envtest.ScrubComposeEnv()` runs before any flock, goroutine, UI or subprocess, and every runner test must stub the `execDweFunc` seam or the test binary re-execs itself.
   See § `internal/core/workflow/envtest/` and § `internal/cli/test/`.
 
-- **`dwe test` isolation & cleanup** — the runner takes a per-scenario flock only (never `lock.AcquireProjectLocks` on the original project), writes the manifest before touching Docker so a half-dead run stays sweepable, tears down strictly by the manifest's recorded identity and never appends `-v`, and remaps every enabled service's host port from one `AllocatePorts` batch so `ports_free` preflight and the actual compose bind move together.
-  Failure reports: only a failed non-`--keep` run, BEFORE teardown, under a fresh context, both captures taking `BuildInternalArgs` + `ps --all` + combined stdout/stderr — else `args.logs: ["-f"]` or a hidden stderr stream guts the report.
-  `dwe test clean` sweeps only what `validateManifestIdentity` re-derives from `(baseDir, scenario, runID)` — canonical symlink-free paths, and a `compose_project` pinned to the COPY's stamped identity, not the current root config, or a run kept across a `project.name` rename is stranded.
-  At `--parallel`, goroutines never return errors into the errgroup (siblings must not cancel each other); the aggregated display engages only at effective N>1.
-  Per-step `timeout:` bounds the step **body** only, never its `check:`.
+- **`dwe test` isolation & cleanup** — the runner takes a per-scenario flock only, never `lock.AcquireProjectLocks` on the original project, and writes its manifest before touching Docker so a half-dead run stays sweepable.
+  Teardown goes strictly by the manifest's recorded identity and never appends `-v`; `dwe test clean` sweeps only what `validateManifestIdentity` re-derives, with `compose_project` pinned to the COPY's stamped identity, or a run kept across a `project.name` rename is stranded.
+  Host ports come from one `AllocatePorts` batch so `ports_free` preflight and the compose bind move together; failure reports capture BEFORE teardown; at `--parallel` goroutines never return errors into the errgroup; per-step `timeout:` bounds the step **body** only, never its `check:`.
   See § `internal/core/workflow/envtest/`, § `internal/cli/test/`, § `internal/core/project/config/compose_scan.go`, § `internal/core/validate/tests/` and § Core — Execution (`pipeline/`).
 
-- **Pipeline primitives: `argv_append_from` / `check: auto` / `source_clone`** — `argv_append_from` is argv-only host program text rendered ONLY via `runio.RenderArgvAppendFrom`, and its shared `withoutArgs` helper stays unexported — hiding `${args}` is only a consistency rule *here*, but in `RenderShellCommand` it is what keeps caller bytes out of program text; output is DATA, one element per line, and empty output skips via `spec.ErrArgvAppendEmpty` while the step still **journals as success**, so it needs a `files_gate`/`check:`.
-  `check: auto` decodes to the `config.AutoCheckType` sentinel at LOAD time (ask `config.IsAutoCheck`) — a resolve-time-only rewrite would silently stop the step forcing re-runs; `pipeline.ResolveAutoCheck` is the single derivation, the rewrite takes a FRESH pointer (else a second resolve yields `! ( ! ( … ) )`), and plan renderers read `ResolvedStep.DisplayCheck()`.
+- **Pipeline primitives: `argv_append_from` / `check: auto` / `source_clone`** — `argv_append_from` is argv-only host program text rendered ONLY via `runio.RenderArgvAppendFrom`, its shared `withoutArgs` helper stays unexported, and empty output skips via `spec.ErrArgvAppendEmpty` while the step still **journals as success**, so it needs a `files_gate`/`check:`.
+  `check: auto` decodes to the `config.AutoCheckType` sentinel at LOAD time (ask `config.IsAutoCheck`) — a resolve-time-only rewrite would silently stop the step forcing re-runs; `pipeline.ResolveAutoCheck` is the single derivation and takes a FRESH pointer, else a second resolve yields `! ( ! ( … ) )`.
   `source_clone` gates itself, so it replaces the caller's `when:`/`check:` pair, and sets `GIT_ASKPASS`/`SSH_ASKPASS` **empty** on purpose (a dummy program would not defeat an inherited GUI helper).
   See § Core — Execution (`pipeline/`, `builtin/`), § Core — Foundation (`project/config/`), § Core — User Commands and § `internal/cli/lifecycle/`.
 
@@ -281,15 +278,15 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **Responsive tables: three traps** — every renderer in `internal/core/ui/render/` degrades shrink → wrap → records through one shared `tableView.Render(budget)`, and a new table inherits that for free by being a `tableView`, but:
   (1) a non-TTY sink gives budget 0, disabling shrinking *and* the record fallback but NOT wrapping, and the goldens hold only because `TestMain` pins the `termWidthFn` seam — check it before "fixing" a golden via budget logic;
-  (2) the budget follows the **sink**, so `DiagnosticsTable` probes stderr while its twin `DiagnosticsByDomain` probes stdout — backwards, it shrinks `dwe validate > report.txt` and leaves `2>/dev/null` unbounded; `width=0` means unbounded, never "probe the sink", so ship an `…At(width)` sibling with every sink-probing entry point and thread the same width into `stack.wrapSection` → `render.SectionTitleAt`;
-  (3) `fitRows` must raise each natural width back to its `columnFloors` value before distributing the deficit — a `Max` cap can clamp a column below an unbreakable token, and skipping the raise makes `distributeDeficit` see negative headroom, *widen* the column, and overflow while still reporting `ok=true`.
+  (2) the budget follows the **sink**, so a stderr renderer must probe stderr and its stdout twin stdout; `width=0` means unbounded, never "probe the sink", so ship an `…At(width)` sibling with every sink-probing entry point;
+  (3) `fitRows` must raise each natural width back to its `columnFloors` value before distributing the deficit, or `distributeDeficit` sees negative headroom, *widens* the column and overflows while still reporting `ok=true`.
   See § `internal/core/ui/render/`, § `internal/core/ui/styles/` and § `internal/core/project/stack/`.
 
 - **Encrypted secrets** — decryption happens ONCE in `LoadConfig`, so merged-config consumers stay crypto-unaware; `LoadConfigSanitized` is what ide/ai/git load, so a tracked output can only carry the marker.
   `secrets:` is `workspace.yml`-only (`ValidateLayerRoots`), the journal hash sees plaintext (age is non-deterministic), and `LoadConfig` SOLELY installs `trace.RegisterRedaction`.
   `secrets init`/`set`/`rekey` use the `local` Splicer, not the node writer; `StepCommand`/`FormatAction`/`FormatCondition` redact every plan surface.
-  `keygate.Ensure` offers the missing identity on raw layers pre-`LoadConfig` (menu, `RunRun`, `RunRestart` pre-`RunStop`); json/`--yes`/non-TTY/`DWE_NONINTERACTIVE`/nil hooks skip it.
-  `render env`/`config` run no preflight and refuse a marker; `secrets.unresolved` is preflight's 2nd cherry-pick + `runPreWizardPreflight`.
+  `keygate.Ensure` offers the missing identity on raw layers pre-`LoadConfig`; json/`--yes`/non-TTY/`DWE_NONINTERACTIVE`/nil hooks skip it.
+  `render env`/`config` run no preflight and refuse a marker; `ResolveComposeProjectName` refuses one too; `secrets.unresolved` is preflight's 2nd cherry-pick.
   Only `shared/secrets/` imports `filippo.io/age`; `dwe secrets` is not in `bridgeAllowedTopLevel`, but container READS stay open.
   See § Core — Foundation (`project/config/`), § `internal/shared/secrets/` and § `internal/cli/secrets/`.
 

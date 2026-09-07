@@ -172,7 +172,7 @@ dwe docs llms-txt --lang ru                # localize command descriptions
 - `--no-project` — force the project-agnostic shape even when run inside a DWE project.
 
 **Output shapes:**
-- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), the briefing sections below, `## Documentation` (topic links as `dwe-docs://path`), and `## Quick start`.
+- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), the briefing sections below, `## Documentation` (bare topic paths), and `## Quick start`.
 - *Outside a project* (or with `--no-project`): generic DWE reference — H1 "dwe", blockquote, the briefing sections, `## Documentation`, `## Quick start`. No project-specific sections.
 
 **Briefing sections** (identical in both shapes — they describe DWE itself):
@@ -185,7 +185,7 @@ dwe docs llms-txt --lang ru                # localize command descriptions
 - Read-only. Acquires no project lock and runs no preflight; works without `workspace.yml`.
 - The global `--output text|json` (`-o`) flag is accepted but has no effect here — like `dwe docs show`, this command always emits markdown. Use `--out PATH` to write it to a file.
 - Disabled services and private commands are excluded.
-- The `dwe-docs://<path>` link scheme corresponds to topic paths consumable by `dwe docs show <path>`.
+- `## Documentation` lists bare topic paths, each consumable by `dwe docs show <path>`, under a lead line saying so. They used to be emitted as `[<name>.md](dwe-docs://<path>)`; that scheme had no resolver, so an agent translated it back to the same command, while the visible label only repeated the tail of the URI — 2 KB of the capped document spent on ceremony.
 
 ## `dwe docs cache clear`
 

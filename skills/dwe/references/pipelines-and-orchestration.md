@@ -8,9 +8,11 @@ You edit the yml yourself, show the diff, tell the user the exact mutating comma
 
 `workspace/deploy.yml`, `workspace/lifecycle.yml`, and `workspace/reset.yml` are **optional**. When absent, the built-in default pipeline runs (reported `ⓘ`, not an error). When present, an active override **replaces the entire pipeline section — it does NOT merge.** A half-edited override silently drops every phase you didn't copy.
 
-That is why `dwe init` ships these as **inert, fully-commented mirrors**: the defaults stay active until you uncomment. To customize:
+That is why `dwe init` ships these as **inert, fully-commented mirrors**: the defaults stay active until you uncomment. `dwe validate` names that state rather than reporting OK — an absent file reports `no deploy.yml — built-in default pipeline is active`, a present-but-inert one `has no active content (all comments or empty) — built-in default pipeline is active`, and one that parses but declares nothing `declares no phases`. All three are `ⓘ`, not errors.
 
-1. Uncomment the section.
+To customize:
+
+1. Uncomment the section — or replace the mirror wholesale with `dwe deploy eject --out workspace/deploy.yml --force` (`dwe reset eject` for reset), which writes the built-in default as a commented, editable document instead of you hand-copying it from the source. It emits the built-in default only: no rendering, no per-service inlining. Both are mutating (they write a file) — hand them over.
 2. Copy **every** phase you still want (not just the one you're changing).
 3. Preview the resolved pipeline before handing off:
 

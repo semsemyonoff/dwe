@@ -1,4 +1,4 @@
-> Translated from: reference/config/vars.md @ 7c924e1a105b
+> Translated from: reference/config/vars.md @ d549c5aa455a
 
 # `dwe vars` — работа с песочницей `vars:`
 
@@ -235,9 +235,6 @@ JSON-режиме):
 note: vars.telegram.token is an encrypted secret in workspace/defaults.yml; this plaintext override wins locally
 ```
 
-Это законное действие — разработчик указывает на собственного бота, — но полезно
-знать, что вы перестали читать общее значение.
-
 ## Вывод не маскируется
 
 `dwe vars list`, `get` и `inspect` печатают эффективные значения **дословно** —
@@ -246,10 +243,8 @@ note: vars.telegram.token is an encrypted secret in workspace/defaults.yml; this
 DSN сервисов), потому что их нельзя подделать локально; такие значения попадают
 в вывод целиком.
 
-Маскирование намеренно не сделано: оно повысило бы планку доступа ровно на ноль
-бит — тот, кто может запустить `dwe vars list`, может и прочитать
-`workspace/local.yml`, — а оба файла и так в gitignore и пишутся с правами
-`0600`. Что маскирование *изменило бы*, так это то, куда значения уезжают, и
+Маскирование не сделано — тот, кто может запустить `dwe vars list`, и так может
+прочитать `workspace/local.yml`. Что маскирование *изменило бы*, так это то, куда значения уезжают, и
 следить надо именно за этим: перед вставкой в сессию AI-агента, в скриншот или
 в демо предпочитайте `dwe vars get <path>` полному `list`.
 
