@@ -201,21 +201,33 @@ func writeCommandsSection(b *strings.Builder, cmds []CommandSummary) {
 	writeSection(b, "Commands", items)
 }
 
+// writeDocumentationSection lists the readable topics as bare topic paths.
+//
+// The paths are emitted verbatim rather than as `[name.md](dwe-docs://path)`
+// links: that scheme has no resolver anywhere — an agent always had to translate
+// it back into `dwe docs show <topic>` — and the visible label only repeated the
+// tail of the URI. The list is the largest section of the document and the
+// document is capped (llmsTxtNoProjectBudget), so the ceremony cost real budget
+// that topic coverage needs. One lead line carries what the scheme implied.
 func writeDocumentationSection(b *strings.Builder, topics []coredocs.TopicEntry, includeInternals bool) {
-	items := make([]sectionItem, 0, len(topics))
+	paths := make([]string, 0, len(topics))
 	for _, t := range topics {
 		if strings.HasPrefix(t.Path, "internals/") && !includeInternals {
 			continue
 		}
-		items = append(items, sectionItem{
-			Label: t.DisplayName,
-			URL:   "dwe-docs://" + t.Path,
-		})
+		paths = append(paths, t.Path)
 	}
-	if len(items) == 0 {
+	if len(paths) == 0 {
 		return
 	}
-	writeSection(b, "Documentation", items)
+	writeHeading(b, "Documentation")
+	writeParagraph(b, "Read any topic below with `dwe docs show <topic>`; `dwe docs search <query>` searches across all of them.")
+	for _, p := range paths {
+		b.WriteString("- ")
+		b.WriteString(p)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 }
 
 // writeBriefingSections writes the static knowledge sections — the parts an

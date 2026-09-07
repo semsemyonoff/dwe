@@ -58,7 +58,9 @@ An unknown `${...}` head (`${HOME}`, a typo) is left literal, never blanked. Ful
 
 ## Documentation
 
-- [Services](dwe-docs://reference/config/services)
+Read any topic below with `dwe docs show <topic>`; `dwe docs search <query>` searches across all of them.
+
+- reference/config/services
 
 ## Quick start
 

@@ -112,8 +112,8 @@ func TestGenerate_WithDocTopics(t *testing.T) {
 		if strings.Contains(got, "internals/packages") {
 			t.Errorf("internals topic should be excluded when IncludeIntern=false")
 		}
-		if !strings.Contains(got, "dwe-docs://reference/config/services") {
-			t.Errorf("expected reference topic link in output")
+		if !strings.Contains(got, "\n- reference/config/services\n") {
+			t.Errorf("expected reference topic path in output")
 		}
 	})
 
