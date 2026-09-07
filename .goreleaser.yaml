@@ -126,14 +126,23 @@ homebrew_casks:
       fish: completions/dwe.fish
     # Strip the macOS quarantine attribute on install so the unsigned binary
     # runs without a Gatekeeper prompt. Standard pattern for unsigned CLI casks.
-    # Guarded by OS.mac? — Linuxbrew does not ship /usr/bin/xattr and has no
-    # Gatekeeper, so the hook is a no-op (and would crash) on Linux.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/dwe"]
-          end
+    # Guarded by on_macos — Linuxbrew does not ship /usr/bin/xattr and has no
+    # Gatekeeper, so the step is skipped there.
+    #
+    # NOT `hooks.post.install`: GoReleaser hardcodes that into a `postflight do`
+    # block, which Homebrew deprecated in favour of the declarative
+    # `postflight_steps`. `custom_block` is the only way to emit the new stanza
+    # (it lands right after `cask "dwe" do`, before `version` — stanza order in
+    # the generated file is cosmetic, `brew style` accepts it).
+    #
+    # The `{{ "{{" }}...{{ "}}" }}` dance escapes Homebrew's `{{staged_path}}`
+    # token past GoReleaser's own Go-template pass.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{" }}staged_path{{ "}}" }}/dwe"]
+        end
+      end
 
 checksum:
   name_template: 'checksums.txt'
