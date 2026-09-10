@@ -16,6 +16,30 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+### Changed
+
+- **Templates move to go-sprout 1.1, which no longer accepts Sprig's argument
+  order.** `get`, `set`, `unset`, `hasKey`, `pick`, `omit`, `append`,
+  `prepend`, `slice` and `without` fail to render unless the map or list is the
+  last argument; the old order used to be reordered silently with a warning.
+- **`regexFindAll`, `regexSplit`, `regexReplaceAll` and `regexReplaceAllLiteral`
+  take the string they work on last.** A template written for the old order
+  still renders, to a wrong result. [Upgrading DWE](docs/guides/upgrading.md)
+  has the before/after table and a search command.
+- **`div` by zero is a render error** instead of an arbitrary number.
+
+### Added
+
+- Template functions `toUnix`, `toUnixMilli`, `toUnixMicro`, `fromUnix`,
+  `fromUnixMilli`, `fromUnixMicro`, `escape` and `unescape`, from go-sprout 1.1.
+
+### Removed
+
+- **`mustRegexFind`, `mustRegexFindAll`, `mustRegexMatch`, `mustRegexSplit`,
+  `mustRegexReplaceAll` and `mustRegexReplaceAllLiteral`.** They were deprecated
+  aliases; a template still calling one fails to parse. Drop the `must` prefix,
+  and mind the new argument order where it applies.
+
 ### Fixed
 
 - **go-sprout's own diagnostics no longer print to stdout.** A deprecated

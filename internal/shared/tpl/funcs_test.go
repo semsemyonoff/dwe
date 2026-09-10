@@ -81,7 +81,7 @@ func TestSproutFunctions(t *testing.T) {
 		// maps registry
 		{
 			name:     "dict and hasKey",
-			template: `{{ hasKey (dict "a" 1) "a" }}`,
+			template: `{{ dict "a" 1 | hasKey "a" }}`,
 			want:     "true",
 		},
 		// conversion registry
@@ -102,6 +102,168 @@ func TestSproutFunctions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := Render(tt.template, nil)
+			if err != nil {
+				t.Fatalf("Render failed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSproutSignatures pins the argument order sprout v1.1 enforces: the value
+// a function operates on goes last. The legacy cases catch a sprout release
+// quietly reintroducing Sprig-order tolerance; the regex cases are written so
+// the pre-1.1 `regexp` order would render a different string.
+func TestSproutSignatures(t *testing.T) {
+	cases := []struct {
+		name     string
+		template string
+		want     string
+		wantErr  bool
+	}{
+		// maps registry
+		{
+			name:     "get",
+			template: `{{ dict "a" 1 | get "a" }}`,
+			want:     "1",
+		},
+		{
+			name:     "get legacy order",
+			template: `{{ get (dict "a" 1) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "set",
+			template: `{{ dict "a" 1 | set "b" 2 | get "b" }}`,
+			want:     "2",
+		},
+		{
+			name:     "set legacy order",
+			template: `{{ set (dict "a" 1) "b" 2 }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "unset",
+			template: `{{ dict "a" 1 | unset "a" | hasKey "a" }}`,
+			want:     "false",
+		},
+		{
+			name:     "unset legacy order",
+			template: `{{ unset (dict "a" 1) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "hasKey",
+			template: `{{ dict "a" 1 | hasKey "a" }}`,
+			want:     "true",
+		},
+		{
+			name:     "hasKey legacy order",
+			template: `{{ hasKey (dict "a" 1) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "pick",
+			template: `{{ dict "a" 1 "b" 2 | pick "a" | len }}`,
+			want:     "1",
+		},
+		{
+			name:     "pick legacy order",
+			template: `{{ pick (dict "a" 1 "b" 2) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "omit",
+			template: `{{ dict "a" 1 "b" 2 | omit "a" | hasKey "a" }}`,
+			want:     "false",
+		},
+		{
+			name:     "omit legacy order",
+			template: `{{ omit (dict "a" 1 "b" 2) "a" }}`,
+			wantErr:  true,
+		},
+		// slices registry
+		{
+			name:     "append",
+			template: `{{ list "a" | append "b" | join "," }}`,
+			want:     "a,b",
+		},
+		{
+			name:     "append legacy order",
+			template: `{{ append (list "a") "b" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "prepend",
+			template: `{{ list "b" | prepend "a" | join "," }}`,
+			want:     "a,b",
+		},
+		{
+			name:     "prepend legacy order",
+			template: `{{ prepend (list "b") "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "slice",
+			template: `{{ list "a" "b" "c" | slice 1 2 | join "," }}`,
+			want:     "b",
+		},
+		{
+			name:     "slice legacy order",
+			template: `{{ slice (list "a" "b" "c") 1 2 }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "without",
+			template: `{{ list "a" "b" "c" | without "b" | join "," }}`,
+			want:     "a,c",
+		},
+		{
+			name:     "without legacy order",
+			template: `{{ without (list "a" "b" "c") "b" }}`,
+			wantErr:  true,
+		},
+		// regex registry: the four functions whose order changed from regexp
+		{
+			name:     "regexReplaceAll",
+			template: `{{ regexReplaceAll "a" "o" "banana" }}`,
+			want:     "bonono",
+		},
+		{
+			name:     "regexReplaceAllLiteral",
+			template: `{{ regexReplaceAllLiteral "a" "$1" "banana" }}`,
+			want:     "b$1n$1n$1",
+		},
+		{
+			name:     "regexSplit",
+			template: `{{ regexSplit "," -1 "a,b,c" | join "|" }}`,
+			want:     "a|b|c",
+		},
+		{
+			name:     "regexFindAll",
+			template: `{{ regexFindAll "[0-9]" -1 "a1b2" | join "," }}`,
+			want:     "1,2",
+		},
+		// numeric registry
+		{
+			name:     "div by zero",
+			template: `{{ div 1 0 }}`,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Render(tt.template, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected a render error, got %q", got)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("Render failed: %v", err)
 			}

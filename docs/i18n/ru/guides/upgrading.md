@@ -1,4 +1,4 @@
-> Translated from: guides/upgrading.md @ d507c2f6e0e2
+> Translated from: guides/upgrading.md @ 62c95cb1f596
 
 # Обновление DWE
 
@@ -31,6 +31,47 @@ DWE не обновляет сам себя. Блок `update:` в `workspace.ym
 
    `dwe bridge status` показывает работающий демон; `dwe version` изнутри контейнера с bridge — сборку, которой он отвечает.
 3. **Сделайте принудительный передеплой, если это сказано в релизных заметках.** Изменение поведения, не меняющее хеш деплоя, невидимо для `dwe deploy run`: он отрапортует `already up-to-date` и пропустит ровно тот шаг, семантика которого сдвинулась. `dwe deploy run --force` перезапускает все шаги; условия `when:` при этом продолжают действовать.
+
+## Обновление до 0.6.1
+
+Две группы: функции шаблонов, затем платформа.
+
+### Функции шаблонов
+
+DWE переходит на go-sprout 1.1, который больше не принимает порядок аргументов Sprig. Это касается всех мест, где вычисляются шаблоны `{{ … }}`, — см. [Шаблоны](../reference/templates.md).
+
+**Десять функций теперь падают на порядке Sprig.** `get`, `set`, `unset`, `hasKey`, `pick`, `omit`, `append`, `prepend`, `slice` и `without` принимают map или список *последним*. Раньше старый порядок молча переставлялся с предупреждением; теперь это ошибка рендера, так что она всплывёт при первом же вычислении шаблона. Перепишите вызов через пайп:
+
+```
+{{ hasKey $m "a" }}     →  {{ $m | hasKey "a" }}
+{{ append $list "x" }}  →  {{ $list | append "x" }}
+{{ slice $list 1 2 }}   →  {{ $list | slice 1 2 }}
+```
+
+**Четыре regex-функции поменяли порядок аргументов и не падают.** Строка, с которой они работают, переехала на последнее место. Шаблон под старый порядок продолжает рендериться — в неверный результат:
+
+| функция | было | стало |
+|---|---|---|
+| `regexFindAll` | `regexFindAll <re> <value> <n>` | `regexFindAll <re> <n> <value>` |
+| `regexSplit` | `regexSplit <re> <value> <n>` | `regexSplit <re> <n> <value>` |
+| `regexReplaceAll` | `regexReplaceAll <re> <value> <replacement>` | `regexReplaceAll <re> <replacement> <value>` |
+| `regexReplaceAllLiteral` | `regexReplaceAllLiteral <re> <value> <replacement>` | `regexReplaceAllLiteral <re> <replacement> <value>` |
+
+Об этом ничто не сообщит, поэтому найдите их поиском:
+
+```bash
+grep -rnE 'regex(FindAll|Split|ReplaceAll)' workspace/
+```
+
+Поиск заодно зацепит `regexFindAllGroups` и `regexFindAllNamed`, которые не менялись, — их пропустите. Остальные regex-функции — `regexMatch`, `regexFind`, `regexQuoteMeta` и варианты `*Groups` / `*Named` — не изменились.
+
+**Алиасы `mustRegex*` удалены.** `mustRegexFind`, `mustRegexFindAll`, `mustRegexMatch`, `mustRegexSplit`, `mustRegexReplaceAll` и `mustRegexReplaceAllLiteral` были deprecated; шаблон, который их вызывает, теперь не парсится. Уберите префикс `must` — и там, где это касается, примените новый порядок аргументов из таблицы выше.
+
+**`div` на ноль теперь ошибка рендера**, а не произвольное число.
+
+### Платформа
+
+**Релизным бинарникам нужна macOS 13 Ventura или новее.** Они собираются Go 1.27, который прекратил поддержку macOS 12; на более старом Mac оставайтесь на 0.6.0. Сборка из исходников требует Go 1.27.
 
 ## Обновление до 0.6.0
 

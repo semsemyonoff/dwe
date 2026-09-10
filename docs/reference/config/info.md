@@ -308,7 +308,7 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 
 ### Template functions
 
-Info templates have access to the standard DWE DWE template surface: the `appURL` domain helper plus the sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [Templates](../templates.md) for the full helper reference.
+Info templates have access to the standard DWE template surface: the `appURL` domain helper plus the sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regex`, `conversion`, `time`, `filesystem`, `semver`). See [Templates](../templates.md) for the full helper reference.
 
 Example using `appURL`:
 

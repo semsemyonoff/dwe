@@ -198,13 +198,15 @@ The following registries from [go-sprout](https://docs.atom.codes/sprout/registr
 | `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Numeric operations |
 | `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | List/array operations |
 | `maps` | `keys`, `values`, `has`, `pick`, `omit` | Map/object operations |
-| `regexp` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Regular expression matching |
+| `regex` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Regular expression matching |
 | `conversion` | `toInt`, `toFloat64`, `toString`, `toBool` | Type conversion |
 | `time` | `now`, `date`, `dateInZone`, `duration` | Date/time operations |
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Path manipulation |
 | `semver` | `semver`, `semverCompare` | Semantic version operations |
 
-**Hermetic by construction.** The helper set is built without any function that touches the environment, filesystem, network, or random/crypto sources. Sprout's `shuffle` (math/rand seeded from crypto) and `hello` (debug stub) are deliberately removed.
+**The value goes last.** Sprout functions take the map, list or string they operate on as the *last* argument, so they read naturally in a pipe: `{{ $m | pick "a" }}`, `{{ $list | append "x" }}`, `{{ $name | regexReplaceAll "-" "_" }}`. Templates written for Sprig's argument order need rewriting — see [Upgrading DWE](../guides/upgrading.md).
+
+**Hermetic by construction.** The helper set is built without any function that touches the environment, filesystem, network, or random/crypto sources. Sprout's `shuffle` (random output) and `hello` (debug stub) are deliberately removed.
 
 For full per-function documentation see the [sprout registries reference](https://docs.atom.codes/sprout/registries/).
 
