@@ -5,6 +5,7 @@ package tpl
 
 import (
 	"fmt"
+	"log/slog"
 	"maps"
 	"strings"
 	"sync"
@@ -21,6 +22,8 @@ import (
 	"github.com/go-sprout/sprout/registry/std"
 	stringsr "github.com/go-sprout/sprout/registry/strings"
 	timer "github.com/go-sprout/sprout/registry/time"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // funcMapOnce caches the base sprout-built FuncMap. Building 10 sprout
@@ -43,7 +46,12 @@ func FuncMap() template.FuncMap {
 }
 
 func buildFuncMap() template.FuncMap {
-	h := sprout.New()
+	// sprout's default logger writes to os.Stdout, and a deprecated function
+	// logs a notice on every call — straight into --output json and the prompt.
+	// Route sprout's records through trace, visible only under --debug. The
+	// level is read per record, so this map may be built before the CLI root
+	// configures trace.
+	h := sprout.New(sprout.WithLogger(slog.New(trace.NewSlogHandlerAt(trace.LevelDebug))))
 	if err := h.AddRegistries(
 		std.NewRegistry(),
 		stringsr.NewRegistry(),

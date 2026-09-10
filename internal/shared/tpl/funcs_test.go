@@ -1,8 +1,15 @@
 package tpl
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"text/template"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestSproutFunctions(t *testing.T) {
@@ -103,6 +110,74 @@ func TestSproutFunctions(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSproutNoticesRouteThroughTrace pins that sprout's own diagnostics never
+// reach stdout. Not parallel: it swaps os.Stdout and the process-global trace
+// level.
+func TestSproutNoticesRouteThroughTrace(t *testing.T) {
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+	var offBuf, debugBuf bytes.Buffer
+	var offErr, debugErr error
+	stdout := captureStdout(t, func() {
+		// Built inside the capture: sprout's default logger binds os.Stdout at
+		// construction, so a map cached before the swap would hide a leak.
+		fm := buildFuncMap()
+		// addf carries a deprecation notice, logged on every call.
+		trace.Configure(&offBuf, trace.LevelOff)
+		offErr = execTemplate(fm, `{{ addf 1 2 }}`)
+		trace.Configure(&debugBuf, trace.LevelDebug)
+		debugErr = execTemplate(fm, `{{ addf 1 2 }}`)
+	})
+
+	if offErr != nil || debugErr != nil {
+		t.Fatalf("render failed: off=%v debug=%v", offErr, debugErr)
+	}
+	if stdout != "" {
+		t.Errorf("sprout wrote to stdout: %q", stdout)
+	}
+	if offBuf.Len() != 0 {
+		t.Errorf("notice emitted without --debug: %q", offBuf.String())
+	}
+	if got := debugBuf.String(); !strings.Contains(got, "addf") {
+		t.Errorf("notice missing from the debug trace: %q", got)
+	}
+}
+
+func execTemplate(fm template.FuncMap, src string) error {
+	tmpl, err := template.New("").Funcs(fm).Parse(src)
+	if err != nil {
+		return err
+	}
+	return tmpl.Execute(io.Discard, nil)
+}
+
+// captureStdout returns everything written to os.Stdout while fn runs.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	out := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		out <- string(b)
+	}()
+
+	orig := os.Stdout
+	os.Stdout = w
+	func() {
+		defer func() { os.Stdout = orig }()
+		fn()
+	}()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close pipe: %v", err)
+	}
+	return <-out
 }
 
 func TestTimeRenderingSmoke(t *testing.T) {

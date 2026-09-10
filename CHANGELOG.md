@@ -16,7 +16,12 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **go-sprout's own diagnostics no longer print to stdout.** A deprecated
+  template function or a Sprig-order call logged a `level=WARN` line into
+  standard output, corrupting `--output json` and `dwe prompt`. They now go
+  through the diagnostic trace and appear only under `--debug`.
 
 ## [0.6.0] - 2026-09-07
 
