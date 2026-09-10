@@ -16,7 +16,13 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **Release binaries are built with Go 1.27, which requires macOS 13 Ventura or
+  later.** The darwin archives and the Homebrew cask no longer start on macOS 12
+  or earlier. Linux requirements are unchanged.
+- **Building from source requires Go 1.27.** The `go` directive in `go.mod` is
+  the minimum toolchain for `go install` and `make build`.
 
 ## [0.6.0] - 2026-09-07
 
