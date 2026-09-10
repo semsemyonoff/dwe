@@ -67,7 +67,7 @@ func (v cfgValidator) questions() []setup.Question {
 
 // newCfg builds a cfgValidator base with the given diagnostic ID.
 func newCfg(id string, cfg *setup.Config) cfgValidator {
-	return cfgValidator{baseValidator: baseValidator{id: id}, cfg: cfg}
+	return cfgValidator{id: id, cfg: cfg}
 }
 
 // Compile-time checks.

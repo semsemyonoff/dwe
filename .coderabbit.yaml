@@ -70,7 +70,7 @@ reviews:
   path_instructions:
     - path: "internal/**/*.go"
       instructions: |
-        Go 1.26. gofmt + goimports formatting and golangci-lint (errcheck,
+        Go 1.27. gofmt + goimports formatting and golangci-lint (errcheck,
         govet, staticcheck, revive, gocritic, modernize) already run in CI — do
         NOT repeat pure style/format nits. Focus on:
         - Error handling: wrap with %w; check every returned error.

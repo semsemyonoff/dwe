@@ -94,8 +94,8 @@ func TestRunTestClean_JSONShape(t *testing.T) {
 	f := &fakeClean{
 		result: &envtest.CleanResult{
 			Swept:   []envtest.CleanEntry{{Scenario: "smoke", ComposeProject: "proj-t-smoke-abc", CopyPath: "/tmp/a"}},
-			Skipped: []envtest.SkippedEntry{{CleanEntry: envtest.CleanEntry{Scenario: "live-one"}, Reason: "live"}},
-			Failed:  []envtest.FailedEntry{{CleanEntry: envtest.CleanEntry{Scenario: "broke"}, Error: "compose down: boom"}},
+			Skipped: []envtest.SkippedEntry{{Scenario: "live-one", Reason: "live"}},
+			Failed:  []envtest.FailedEntry{{Scenario: "broke", Error: "compose down: boom"}},
 			Orphans: []envtest.OrphanEntry{{ComposeProject: "proj-t-ghost-xyz", Note: "no manifest — remove manually"}},
 		},
 	}
@@ -175,7 +175,7 @@ func TestRunTestClean_TextSummary_DryRunWording(t *testing.T) {
 func TestRunTestClean_FailedEntry_ExitOne_PayloadStillEmitted(t *testing.T) {
 	f := &fakeClean{
 		result: &envtest.CleanResult{
-			Failed: []envtest.FailedEntry{{CleanEntry: envtest.CleanEntry{Scenario: "broke"}, Error: "boom"}},
+			Failed: []envtest.FailedEntry{{Scenario: "broke", Error: "boom"}},
 		},
 	}
 	withFakeClean(t, f)
@@ -199,7 +199,7 @@ func TestRunTestClean_FailedEntry_ExitOne_PayloadStillEmitted(t *testing.T) {
 func TestRunTestClean_NoFailures_ExitZero(t *testing.T) {
 	f := &fakeClean{
 		result: &envtest.CleanResult{
-			Skipped: []envtest.SkippedEntry{{CleanEntry: envtest.CleanEntry{Scenario: "live-one"}, Reason: "live"}},
+			Skipped: []envtest.SkippedEntry{{Scenario: "live-one", Reason: "live"}},
 			Orphans: []envtest.OrphanEntry{{ComposeProject: "proj-t-ghost", Note: "no manifest — remove manually"}},
 		},
 	}

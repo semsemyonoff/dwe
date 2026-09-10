@@ -35,7 +35,7 @@ func TestParseValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &parseValidator{baseValidator: baseValidator{id: "parse"}, err: tt.err, path: tt.path}
+			v := &parseValidator{id: "parse", err: tt.err, path: tt.path}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
