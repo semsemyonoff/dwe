@@ -18,6 +18,11 @@ generated from commit subjects and stay on the
 
 ### Changed
 
+- **Release binaries are built with Go 1.27, which requires macOS 13 Ventura or
+  later.** The darwin archives and the Homebrew cask no longer start on macOS 12
+  or earlier. Linux requirements are unchanged.
+- **Building from source requires Go 1.27.** The `go` directive in `go.mod` is
+  the minimum toolchain for `go install` and `make build`.
 - **Templates move to go-sprout 1.1, which no longer accepts Sprig's argument
   order.** `get`, `set`, `unset`, `hasKey`, `pick`, `omit`, `append`,
   `prepend`, `slice` and `without` fail to render unless the map or list is the
