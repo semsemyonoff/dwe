@@ -134,7 +134,15 @@ func TestParseIdentity(t *testing.T) {
 
 	// A token with a broken checksum reaches age and must still come back as
 	// ErrInvalidIdentity, with no age text (it interpolates input characters).
-	truncated := id.Export()[:len(id.Export())-1] + "Q"
+	// The replacement must differ from the original last character: bech32
+	// catches any single substitution, but a random key ends in "Q" one run in
+	// 32, and swapping "Q" for "Q" leaves a valid key.
+	export := id.Export()
+	repl := "Q"
+	if strings.HasSuffix(export, "Q") {
+		repl = "P"
+	}
+	truncated := export[:len(export)-1] + repl
 	_, err := ParseIdentity(truncated)
 	if !errors.Is(err, ErrInvalidIdentity) {
 		t.Fatalf("ParseIdentity(checksum-broken) = %v, want ErrInvalidIdentity", err)
