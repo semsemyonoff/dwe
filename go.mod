@@ -18,7 +18,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gen2brain/beeep v0.11.2
-	github.com/go-sprout/sprout v1.0.3
+	github.com/go-sprout/sprout v1.1.1
 	github.com/muesli/termenv v0.16.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/spf13/cobra v1.10.2

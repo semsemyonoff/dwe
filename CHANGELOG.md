@@ -23,6 +23,34 @@ generated from commit subjects and stay on the
   or earlier. Linux requirements are unchanged.
 - **Building from source requires Go 1.27.** The `go` directive in `go.mod` is
   the minimum toolchain for `go install` and `make build`.
+- **Templates move to go-sprout 1.1, which no longer accepts Sprig's argument
+  order.** `get`, `set`, `unset`, `hasKey`, `pick`, `omit`, `append`,
+  `prepend`, `slice` and `without` fail to render unless the map or list is the
+  last argument; the old order used to be reordered silently with a warning.
+- **`regexFindAll`, `regexSplit`, `regexReplaceAll` and `regexReplaceAllLiteral`
+  take the string they work on last.** A template written for the old order
+  still renders, to a wrong result. [Upgrading DWE](docs/guides/upgrading.md)
+  has the before/after table and a search command.
+- **`div` by zero is a render error** instead of an arbitrary number.
+
+### Added
+
+- Template functions `toUnix`, `toUnixMilli`, `toUnixMicro`, `fromUnix`,
+  `fromUnixMilli`, `fromUnixMicro`, `escape` and `unescape`, from go-sprout 1.1.
+
+### Removed
+
+- **`mustRegexFind`, `mustRegexFindAll`, `mustRegexMatch`, `mustRegexSplit`,
+  `mustRegexReplaceAll` and `mustRegexReplaceAllLiteral`.** They were deprecated
+  aliases; a template still calling one fails to parse. Drop the `must` prefix,
+  and mind the new argument order where it applies.
+
+### Fixed
+
+- **go-sprout's own diagnostics no longer print to stdout.** A deprecated
+  template function or a Sprig-order call logged a `level=WARN` line into
+  standard output, corrupting `--output json` and `dwe prompt`. They now go
+  through the diagnostic trace and appear only under `--debug`.
 
 ## [0.6.0] - 2026-09-07
 

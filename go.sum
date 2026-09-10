@@ -97,12 +97,14 @@ github.com/gen2brain/beeep v0.11.2 h1:+KfiKQBbQCuhfJFPANZuJ+oxsSKAYNe88hIpJuyKWD
 github.com/gen2brain/beeep v0.11.2/go.mod h1:jQVvuwnLuwOcdctHn/uyh8horSBNJ8uGb9Cn2W4tvoc=
 github.com/go-ole/go-ole v1.3.0 h1:Dt6ye7+vXGIKZ7Xtk4s6/xVdGDQynvom7xCFEdWr6uE=
 github.com/go-ole/go-ole v1.3.0/go.mod h1:5LS6F96DhAwUc7C+1HLexzMXY1xGRSryjyPPKW6zv78=
-github.com/go-sprout/sprout v1.0.3 h1:LLuz0D3aYazgbVTOwCVuMor3LOUVYinipXRIdjA/D+I=
-github.com/go-sprout/sprout v1.0.3/go.mod h1:cFFzpnyGGry3cmN0UNCAM1f7AGok6vPVabeYQzBMBZY=
+github.com/go-sprout/sprout v1.1.1 h1:W1k8rnSGnKHDR5Z5M8pi22zjFvAx9mRsomsfFT9c85c=
+github.com/go-sprout/sprout v1.1.1/go.mod h1:/gb8yk3HCg6S5+X16PDh+mVjk+6KFtKb6j5xoix4sVk=
 github.com/godbus/dbus/v5 v5.1.0 h1:4KLkAxT3aOY8Li4FRJe/KvhoNFFxo0m6fNuFUO8QJUk=
 github.com/godbus/dbus/v5 v5.1.0/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/gorilla/css v1.0.1 h1:ntNaBIghp6JmvWnxbZKANoLyuXTPZ4cAMlo6RyhlbO8=
 github.com/gorilla/css v1.0.1/go.mod h1:BvnYkspnSzMmwRK+b8/xgNPLiIuNZr6vbZBTPQ2A3b0=
 github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=

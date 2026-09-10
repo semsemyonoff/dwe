@@ -30,6 +30,47 @@ Three things worth doing before you trust the new version in a project:
    `dwe bridge status` shows the running daemon; `dwe version` from inside a bridged container shows which build it answers with.
 3. **Force a redeploy when the release notes say so.** A behaviour change that does not alter the deployment hash is invisible to `dwe deploy run`, which will report `already up-to-date` and skip the very step whose semantics moved. `dwe deploy run --force` re-runs every step; `when:` guards still apply.
 
+## Upgrading to 0.6.1
+
+Two groups: template functions, then the platform.
+
+### Template functions
+
+DWE moves to go-sprout 1.1, which no longer accepts Sprig's argument order. This affects every place `{{ … }}` templates run — see [Templates](../reference/templates.md).
+
+**Ten functions now fail on the Sprig order.** `get`, `set`, `unset`, `hasKey`, `pick`, `omit`, `append`, `prepend`, `slice` and `without` take the map or list *last*. The old order used to be reordered for you with a warning; it is now a render error, so it surfaces the first time the template runs. Rewrite the call as a pipe:
+
+```
+{{ hasKey $m "a" }}     →  {{ $m | hasKey "a" }}
+{{ append $list "x" }}  →  {{ $list | append "x" }}
+{{ slice $list 1 2 }}   →  {{ $list | slice 1 2 }}
+```
+
+**Four regex functions changed argument order and do not fail.** The string they work on moved to the last position. A template written for the old order still renders — to the wrong result:
+
+| function | before | now |
+|---|---|---|
+| `regexFindAll` | `regexFindAll <re> <value> <n>` | `regexFindAll <re> <n> <value>` |
+| `regexSplit` | `regexSplit <re> <value> <n>` | `regexSplit <re> <n> <value>` |
+| `regexReplaceAll` | `regexReplaceAll <re> <value> <replacement>` | `regexReplaceAll <re> <replacement> <value>` |
+| `regexReplaceAllLiteral` | `regexReplaceAllLiteral <re> <value> <replacement>` | `regexReplaceAllLiteral <re> <replacement> <value>` |
+
+Nothing reports these, so search for them:
+
+```bash
+grep -rnE 'regex(FindAll|Split|ReplaceAll)' workspace/
+```
+
+The search also hits `regexFindAllGroups` and `regexFindAllNamed`, which did not change — skip those. The rest of the regex functions — `regexMatch`, `regexFind`, `regexQuoteMeta` and the `*Groups` / `*Named` variants — are unchanged.
+
+**The `mustRegex*` aliases are gone.** `mustRegexFind`, `mustRegexFindAll`, `mustRegexMatch`, `mustRegexSplit`, `mustRegexReplaceAll` and `mustRegexReplaceAllLiteral` were deprecated; a template calling one now fails to parse. Drop the `must` prefix — and apply the new argument order from the table above where it applies.
+
+**`div` by zero is now a render error** instead of an arbitrary number.
+
+### Platform
+
+**Release binaries need macOS 13 Ventura or later.** They are built with Go 1.27, which dropped macOS 12; on an older Mac, stay on 0.6.0. Building from source needs Go 1.27.
+
 ## Upgrading to 0.6.0
 
 Three groups, in the order you will hit them.
