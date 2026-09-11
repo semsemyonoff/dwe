@@ -3,6 +3,8 @@ package pipeline
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -50,6 +52,33 @@ func newRunOpts(t *testing.T, rep Reporter, rec Recorder, steps []ResolvedStep) 
 		WorkDir:     t.TempDir(),
 		Recorder:    rec,
 		SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+	}
+}
+
+// TestParallelGroup_SubStepsSeeComposeProjectName: parallel sub-steps get the
+// same per-spawn COMPOSE_PROJECT_NAME as a sequential shell step, overriding
+// an ambient value.
+func TestParallelGroup_SubStepsSeeComposeProjectName(t *testing.T) {
+	t.Setenv("COMPOSE_PROJECT_NAME", "live")
+	phase := config.DeployPhase{Name: "p"}
+	group := buildParallelGroupStep(phase, "g", true, 0, []config.DeployStep{
+		{Name: "a", Type: "shell", Cmd: `printf '%s' "$COMPOSE_PROJECT_NAME" > a.txt`},
+		{Name: "b", Type: "shell", Cmd: `printf '%s' "$COMPOSE_PROJECT_NAME" > b.txt`},
+	})
+	opts := newRunOpts(t, &mockReporter{}, nil, []ResolvedStep{group})
+	opts.DockerConfig = &config.DockerConfig{ProjectName: "Custom"}
+
+	if err := RunWithOptions(opts); err != nil {
+		t.Fatalf("RunWithOptions: %v", err)
+	}
+	for _, f := range []string{"a.txt", "b.txt"} {
+		data, err := os.ReadFile(filepath.Join(opts.WorkDir, f))
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if got := string(data); got != "custom" {
+			t.Errorf("%s: COMPOSE_PROJECT_NAME = %q, want %q", f, got, "custom")
+		}
 	}
 }
 

@@ -597,8 +597,6 @@ func TestVarsSet_GenerateNonInteractive(t *testing.T) {
 // exists-check, so a denied var reports the denial even when it already has
 // a local value.
 func TestVarsSet_GenerateContainerGate(t *testing.T) {
-	root := t.TempDir()
-	cfgPath := filepath.Join(root, "workspace.yml")
 	const workspace = `schema_version: "2"
 project:
   name: varstest
@@ -607,16 +605,7 @@ bridge:
   vars_writable:
     - vars.db.*
 `
-	if err := os.WriteFile(cfgPath, []byte(workspace), 0o644); err != nil {
-		t.Fatalf("writing workspace.yml: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
-	}
 	const local = "vars:\n  app:\n    secret: already\n"
-	if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(local), 0o644); err != nil {
-		t.Fatalf("writing local.yml: %v", err)
-	}
 	t.Setenv(bridgeclient.EnvInvokedFrom, bridgeclient.InvokedFromContainer)
 
 	tests := []struct {
@@ -630,17 +619,55 @@ bridge:
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			cfgPath := filepath.Join(root, "workspace.yml")
+			if err := os.WriteFile(cfgPath, []byte(workspace), 0o644); err != nil {
+				t.Fatalf("writing workspace.yml: %v", err)
+			}
+			if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
+				t.Fatalf("mkdir workspace: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(local), 0o644); err != nil {
+				t.Fatalf("writing local.yml: %v", err)
+			}
 			seedRandReader(t)
 			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
 			_, _, err := runVarsCmd(t, flags, "set", tc.path, "--generate", "hex")
 			if tc.code == "" {
 				if err != nil {
 					t.Fatalf("expected allowed write, got %v", err)
 				}
+				got, ok := reloadVar(t, cfgPath, tc.path)
+				if s, isStr := got.(string); !ok || !isStr || len(s) != 2*randval.DefaultBytes {
+					t.Errorf("%s: want a %d-char hex string, got %v (%T, ok=%v)", tc.path, 2*randval.DefaultBytes, got, got, ok)
+				}
 				return
 			}
 			wantCode(t, err, tc.code)
+			if after := localYAML(t, root); after != local {
+				t.Errorf("local.yml changed on denial\nbefore:\n%s\nafter:\n%s", local, after)
+			}
 		})
+	}
+}
+
+// TestVarsSet_GenerateInvalidLocalYAML: a local.yml the exists-check cannot
+// parse is a coded config error, never "absent" — so --generate cannot
+// overwrite a file it failed to read.
+func TestVarsSet_GenerateInvalidLocalYAML(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	const broken = "vars: [\n"
+	if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(broken), 0o644); err != nil {
+		t.Fatalf("writing local.yml: %v", err)
+	}
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	seedRandReader(t)
+
+	_, _, err := runVarsCmd(t, flags, "set", "app.secret", "--generate", "hex")
+	wantCode(t, err, "project_invalid_config")
+	if after := localYAML(t, root); after != broken {
+		t.Errorf("local.yml changed on a config error\nbefore:\n%s\nafter:\n%s", broken, after)
 	}
 }
 

@@ -87,6 +87,26 @@ func TestScanShellTextHits(t *testing.T) {
 			want: []hit{{Line: 1, Value: "${A}-x"}},
 		},
 		{
+			name: "assignment through env",
+			text: `env COMPOSE_PROJECT_NAME="${A}-x" docker compose up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "local declaration",
+			text: "local PROJECT=\"${A}-x\"\ndocker compose -p \"$PROJECT\" up\n",
+			want: []hit{{Line: 2, Value: "${A}-x"}},
+		},
+		{
+			name: "readonly declaration",
+			text: "readonly PROJECT=\"${A}-x\"\ndocker compose -p \"$PROJECT\" up\n",
+			want: []hit{{Line: 2, Value: "${A}-x"}},
+		},
+		{
+			name: "braced one-hop reference",
+			text: "PROJECT=\"${A}-x\"\ndocker compose -p \"${PROJECT}\" up\n",
+			want: []hit{{Line: 2, Value: "${A}-x"}},
+		},
+		{
 			name: "continued line reports its first line",
 			text: "echo start\n" +
 				"docker compose \\\n" +
@@ -187,6 +207,7 @@ func TestScanShellTextNoHits(t *testing.T) {
 		},
 		{name: "reference assignment", text: `export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-dwe-x}"`},
 		{name: "bare export", text: `export COMPOSE_PROJECT_NAME`},
+		{name: "escaped dollar is a literal", text: `docker compose -p "\${A}-x" up`},
 		{name: "empty text", text: ""},
 	})
 }

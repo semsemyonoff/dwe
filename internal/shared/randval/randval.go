@@ -55,7 +55,8 @@ func Parse(spec string) (Spec, error) {
 			return Spec{Kind: Kind(kind), Bytes: DefaultBytes}, nil
 		}
 		bytes, err := strconv.Atoi(n)
-		if err != nil {
+		// Atoi also takes a sign ("+32", "-1"); the grammar is digits only.
+		if err != nil || strings.TrimLeft(n, "0123456789") != "" {
 			return Spec{}, fmt.Errorf("invalid spec %q: byte count %q is not an integer; %s", spec, n, acceptedForms)
 		}
 		if bytes < MinBytes || bytes > MaxBytes {

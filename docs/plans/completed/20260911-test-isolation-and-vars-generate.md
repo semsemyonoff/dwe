@@ -3,7 +3,7 @@
 ## Overview
 
 Two independent changes ship on one branch (`feat/0.6.1-test-isolation`, cut
-from `release/0.6.1`) as four commits plus a close-out commit that moves this
+from `release/0.6.1`) as four logical commits (landed as per-task commits) plus a close-out commit that moves this
 plan to `docs/plans/completed/`, one PR into `release/0.6.1` (milestone 0.6.1).
 Commits in order:
 
@@ -522,7 +522,7 @@ line.
 - [x] `CHANGELOG.md` `### Fixed` (the section already exists at `:48`): inside `dwe test` a scenario's shell steps now see the copy's `COMPOSE_PROJECT_NAME`, so `${COMPOSE_PROJECT_NAME:-…}` no longer falls back to the live stack; shell steps of `dwe stop` / `restart` / `reset` also get dwe's name instead of an ambient one; `type: script` commands receive `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `type: shell`; commands run from snapshot workflows, service-toggle hooks and reset hooks now honour `docker.yml project_name` — container commands there exec into the right compose project with the project's `docker.yml` `args`, and the shell/script contract carries the same name
 - [x] `make build`, refresh the RU `> Translated from: … @ <hash>` headers of `commands/types.md` and `deploy/steps.md`
 - [x] `make lint && make test && (cd web && npm run build)` - must pass
-- [x] commit `fix(test): pass the copy's compose project name to host shell steps and scripts`
+- [x] commit `feat: pass the copy's compose project name to host shell steps and scripts`
 
 ### Task 4: Shell-text scanner for compose project names
 
