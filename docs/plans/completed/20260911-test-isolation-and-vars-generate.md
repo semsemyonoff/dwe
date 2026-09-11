@@ -650,12 +650,12 @@ line.
 Skill and reference edits already landed in their commits (Tasks 3, 7, 10);
 this task only closes out.
 
-- [ ] re-read the three CHANGELOG entries and the Upgrading addition together for consistent wording
-- [ ] update `AGENTS.md` only if a new trap emerged (respect `TestAgentsMdBudget`); candidate: "pipeline shell steps get the compose project name per spawn — never via process env" as a pointer into `packages.md`
-- [ ] scaffold `AGENTS.md.tmpl`: touch only if it already discusses `dwe test` isolation or `vars set`; if changed, regenerate `internal/core/workflow/scaffold/testdata/golden_default.txt`
-- [ ] move this plan to `docs/plans/completed/`
-- [ ] `make lint && make test` - must pass
-- [ ] commit `docs: close out the test isolation and vars generate plan`
+- [x] re-read the three CHANGELOG entries and the Upgrading addition together for consistent wording (already consistent — no edit)
+- [x] update `AGENTS.md` only if a new trap emerged (respect `TestAgentsMdBudget`); candidate: "pipeline shell steps get the compose project name per spawn — never via process env" as a pointer into `packages.md` (one sentence added to the `dwe test` isolation bullet)
+- [x] scaffold `AGENTS.md.tmpl`: touch only if it already discusses `dwe test` isolation or `vars set`; if changed, regenerate `internal/core/workflow/scaffold/testdata/golden_default.txt` (it does not — untouched)
+- [x] move this plan to `docs/plans/completed/`
+- [x] `make lint && make test` - must pass
+- [x] commit `docs: close out the test isolation and vars generate plan`
 
 ## Post-Completion
 
