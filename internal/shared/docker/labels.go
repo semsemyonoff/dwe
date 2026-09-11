@@ -1,10 +1,13 @@
 package docker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Standard labels Docker Compose stamps on every container it creates. Match on
@@ -70,6 +73,100 @@ func serviceContainerPSArgs(projectName, service string, runningOnly, excludeOne
 		args = append(args, "--filter", "label="+ComposeOneoffLabel+"=False")
 	}
 	return append(args, "--format", "{{.Names}}")
+}
+
+// OneoffFilter selects how a project container query treats the
+// com.docker.compose.oneoff label.
+type OneoffFilter int
+
+const (
+	// OneoffAny applies no oneoff filter — for backends that never stamp the
+	// label (some podman-compose versions), where filtering on it would match
+	// nothing.
+	OneoffAny OneoffFilter = iota
+	// OneoffLabelled matches containers that carry the label with any value.
+	// Used as a probe: an empty answer means the backend does not stamp it.
+	OneoffLabelled
+	// OneoffExcluded matches oneoff=False, skipping `compose run` containers.
+	OneoffExcluded
+)
+
+// ContainerState restricts a project container query by container state.
+type ContainerState int
+
+const (
+	// StateAny matches every state (`--all`).
+	StateAny ContainerState = iota
+	// StateRunning matches running containers only.
+	StateRunning
+	// StateExitedZero matches containers that exited with code 0 — a finished
+	// one-shot rather than a crash.
+	StateExitedZero
+)
+
+// ProjectContainerQuery selects containers of one compose project by label.
+type ProjectContainerQuery struct {
+	Project string
+	// Service restricts the query to one compose service; empty means every
+	// service of the project.
+	Service string
+	Oneoff  OneoffFilter
+	State   ContainerState
+}
+
+// projectContainerPSArgs builds the `ps … --format '{{.Names}}'` argv for q.
+// Like serviceContainerPSArgs it sticks to `{{.Names}}` plus `--filter`, the
+// only shape docker and podman agree on.
+func projectContainerPSArgs(q ProjectContainerQuery) []string {
+	args := []string{"ps"}
+	if q.State != StateRunning {
+		args = append(args, "--all")
+	}
+	args = append(args, "--filter", "label="+ComposeProjectLabel+"="+q.Project)
+	if q.Service != "" {
+		args = append(args, "--filter", "label="+ComposeServiceLabel+"="+q.Service)
+	}
+	switch q.Oneoff {
+	case OneoffLabelled:
+		args = append(args, "--filter", "label="+ComposeOneoffLabel)
+	case OneoffExcluded:
+		args = append(args, "--filter", "label="+ComposeOneoffLabel+"=False")
+	case OneoffAny:
+	}
+	switch q.State {
+	case StateRunning:
+		args = append(args, "--filter", "status=running")
+	case StateExitedZero:
+		args = append(args, "--filter", "exited=0")
+	case StateAny:
+	}
+	return append(args, "--format", "{{.Names}}")
+}
+
+// ProjectContainerNames returns the names of every container matching q, one
+// per non-empty `ps` output line (nil when none match). processEnv is the
+// environment for the probe (nil inherits) — pass the same env the compose
+// commands use so the probe hits the same daemon. An empty q.Project is an
+// error: the project label filter would silently match nothing.
+func ProjectContainerNames(ctx context.Context, dockerBin string, processEnv []string, q ProjectContainerQuery) ([]string, error) {
+	if q.Project == "" {
+		return nil, errors.New("project container query: empty compose project name")
+	}
+	args := projectContainerPSArgs(q)
+	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
+	cmd.Env = processEnv
+	// Read-only probe — echo only at Debug to keep `dwe status -v` quiet.
+	if trace.Enabled(trace.LevelDebug) {
+		trace.Command(ctx, dockerBin, args...)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		if ee, ok := errors.AsType[*exec.ExitError](err); ok && len(ee.Stderr) > 0 {
+			return nil, fmt.Errorf("%s ps: %w: %s", dockerBin, err, strings.TrimSpace(string(ee.Stderr)))
+		}
+		return nil, fmt.Errorf("%s ps: %w", dockerBin, err)
+	}
+	return splitNonEmptyLines(out), nil
 }
 
 // LookupServiceContainer resolves the real Docker container name for a dwe
