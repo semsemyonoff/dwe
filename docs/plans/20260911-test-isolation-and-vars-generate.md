@@ -637,13 +637,13 @@ line.
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] commit 1: a scenario shell step and a script command inside `dwe test` see the copy's name, concurrently too; deploy/run values unchanged (Task 1 invariant test)
-- [ ] commit 2: every listed source is scanned; the motivating shape warns; the fixed shape and every "no hit" row stay silent
-- [ ] commit 3: the isolation table matches the code paths verified in Tasks 1-3
-- [ ] commit 4: every row of the error table and both refusal/force paths are covered
-- [ ] run full test suite: `make test`
-- [ ] run `make lint`
-- [ ] run `cd web && npm run build`
+- [x] commit 1: a scenario shell step and a script command inside `dwe test` see the copy's name, concurrently too; deploy/run values unchanged (Task 1 invariant test)
+- [x] commit 2: every listed source is scanned; the motivating shape warns; the fixed shape and every "no hit" row stay silent
+- [x] commit 3: the isolation table matches the code paths verified in Tasks 1-3
+- [x] commit 4: every row of the error table and both refusal/force paths are covered
+- [x] run full test suite: `make test`
+- [x] run `make lint`
+- [x] run `cd web && npm run build`
 
 ### Task 12: [Final] Update documentation
 
