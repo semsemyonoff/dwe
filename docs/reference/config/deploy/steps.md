@@ -20,6 +20,8 @@ Executes a shell command via `sh -c`. Full shell semantics apply: environment va
   cmd: chmod +x scripts/deploy.sh
 ```
 
+The step inherits dwe's environment plus `COMPOSE_PROJECT_NAME`, set to the compose project name dwe itself passes as `-p` — `project_name` from [`docker.yml`](../docker.md), otherwise `<prefix>-<name>`, lowercased. It overrides a value inherited from your shell, so inside `dwe test` a step addresses the disposable copy's stack, not the live one. A shell `check:` gets the same value. `COMPOSE_FILE` is not set. Shell `when:` predicates and the builtin `shell` probe (`cmd: shell`) do not receive the variable.
+
 ## `cmd: shell` (builtin) vs `type: shell` (step)
 
 The `shell` builtin (`cmd: shell`) is **distinct** from the step execution type (`type: shell`). Both execute shell commands, but with different portability guarantees:

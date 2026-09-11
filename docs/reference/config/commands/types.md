@@ -172,6 +172,10 @@ The runner always injects the following env vars into the script process:
 | `DWE_PARAMS_JSON` | Resolved params as a JSON object |
 | `DWE_CONTEXT_JSON` | Resolved context as a JSON object |
 | `DWE_FILES_JSON` | JSON object mapping file IDs to `{path}` |
+| `COMPOSE_PROJECT_NAME` | Active compose project name (e.g. `dwe-laravel`) — `docker compose ...` picks this up without `-p` |
+| `COMPOSE_FILE` | Colon-joined list of active overlay paths, made absolute against the project root — `docker compose ...` picks this up without any `-f` flags |
+
+`COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` are the same pair the [shell env contract](#shell-env-contract) exports, with the same rules: `COMPOSE_FILE` is omitted when no overlay files are configured, `COMPOSE_PROJECT_NAME` is omitted when no project name is set, and a contract entry wins over a colliding key in the command's `env:` block.
 
 Use `DWE_BIN` instead of hard-coding `./bin/dwe`:
 

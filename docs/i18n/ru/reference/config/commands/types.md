@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ bbc4a3a058a7
+> Translated from: reference/config/commands/types.md @ ad32d8db7301
 
 # Типы команд
 
@@ -174,6 +174,10 @@ db.dump-create:
 | `DWE_PARAMS_JSON` | Разрешённые params как JSON-объект |
 | `DWE_CONTEXT_JSON` | Разрешённый context как JSON-объект |
 | `DWE_FILES_JSON` | JSON-объект, отображающий идентификаторы файлов в `{path}` |
+| `COMPOSE_PROJECT_NAME` | Имя активного compose-проекта (например, `dwe-laravel`) — `docker compose ...` подхватывает его без `-p` |
+| `COMPOSE_FILE` | Объединённый через двоеточие список путей активных оверлеев, приведённых к абсолютным относительно корня проекта — `docker compose ...` подхватывает их без флагов `-f` |
+
+`COMPOSE_PROJECT_NAME` и `COMPOSE_FILE` — та же пара, что экспортирует [контракт env для shell](#контракт-env-для-shell), и с теми же правилами: `COMPOSE_FILE` опускается, если файлы оверлеев не настроены, `COMPOSE_PROJECT_NAME` опускается, если имя проекта не задано, а запись из контракта побеждает совпадающий ключ в блоке `env:` команды.
 
 Используйте `DWE_BIN` вместо жёсткого пути `./bin/dwe`:
 

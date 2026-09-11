@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/steps.md @ 81f3af54fad4
+> Translated from: reference/config/deploy/steps.md @ 2c687c938aeb
 
 # Типы исполнения шагов
 
@@ -21,6 +21,8 @@
   type: shell
   cmd: chmod +x scripts/deploy.sh
 ```
+
+Шаг наследует окружение dwe плюс `COMPOSE_PROJECT_NAME` — имя compose-проекта, которое dwe сам передаёт как `-p`: `project_name` из [`docker.yml`](../docker.md), иначе `<prefix>-<name>`, в нижнем регистре. Оно перекрывает значение, унаследованное из вашего shell, поэтому внутри `dwe test` шаг обращается к стеку одноразовой копии, а не к живому. Shell-`check:` получает то же значение. `COMPOSE_FILE` не устанавливается. Shell-предикаты `when:` и билтин-проба `shell` (`cmd: shell`) эту переменную не получают.
 
 ## `cmd: shell` (билтин) vs `type: shell` (шаг)
 

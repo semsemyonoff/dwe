@@ -82,6 +82,21 @@ generated from commit subjects and stay on the
   pick `Apply changes` in the selector — and an ejected or hand-written
   `workspace/deploy.yml` needs the `check:` added by hand; see
   [Upgrading DWE](docs/guides/upgrading.md).
+- **Inside `dwe test`, a scenario's shell steps see the copy's
+  `COMPOSE_PROJECT_NAME`.** A host script written as
+  `${COMPOSE_PROJECT_NAME:-dwe-myproj}` used to fall back to the live name there
+  and address the live stack; it now gets the disposable copy's name, also when
+  scenarios run with `--parallel`. Shell steps and shell `check:` of
+  `dwe stop`, `dwe restart` and `dwe reset` also get dwe's own name — the one
+  it passes as `-p` — instead of one inherited from your shell.
+- **`type: script` commands receive `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE`**,
+  like `type: shell` commands always have.
+- **Commands run from snapshot workflows, service-toggle hooks and reset hooks
+  honour `docker.yml` `project_name`.** They used to fall back to
+  `<prefix>-<name>`, so on a project with a custom `project_name` a container
+  command there exec'd into the wrong compose project and missed the
+  `docker.yml` `args`; the shell and script contract carried the same wrong
+  name.
 
 ## [0.6.0] - 2026-09-07
 

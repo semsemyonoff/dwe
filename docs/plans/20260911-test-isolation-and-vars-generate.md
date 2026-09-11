@@ -513,16 +513,16 @@ line.
 - Modify: `skills/dwe/references/authoring-commands.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] write test: `runSteps` (with `noopReporter`) over a fixture copy whose `docker.local.yml` carries a test identity runs a scenario `type: shell` step that writes `$COMPOSE_PROJECT_NAME` to a file → the copy's name, not the original's, with `COMPOSE_PROJECT_NAME` of the live project set in the process env
-- [ ] write test: the same through a `type: command` step targeting a `type: script` command
-- [ ] write test: two `runSteps` calls on two copies, run as two goroutines in one test with `noopReporter` and per-run writers, each see their own name; run it with `go test -race`
-- [ ] `skills/dwe/references/authoring-commands.md` (~:74): the `script` entry inherits `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `shell`
-- [ ] `types.md` `type: script` contract table (:174) gains `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` with the same omission rules and collision note as the `type: shell` table (:77-93); RU mirror line for line
-- [ ] `deploy/steps.md` (`type: shell`, :15): shell steps and shell `check:` get `COMPOSE_PROJECT_NAME` from the project config (the name dwe passes as `-p`; no `COMPOSE_FILE`); `when:` predicates and the builtin `shell` probe do not; RU mirror
-- [ ] `CHANGELOG.md` `### Fixed` (the section already exists at `:48`): inside `dwe test` a scenario's shell steps now see the copy's `COMPOSE_PROJECT_NAME`, so `${COMPOSE_PROJECT_NAME:-…}` no longer falls back to the live stack; shell steps of `dwe stop` / `restart` / `reset` also get dwe's name instead of an ambient one; `type: script` commands receive `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `type: shell`; commands run from snapshot workflows, service-toggle hooks and reset hooks now honour `docker.yml project_name` — container commands there exec into the right compose project with the project's `docker.yml` `args`, and the shell/script contract carries the same name
-- [ ] `make build`, refresh the RU `> Translated from: … @ <hash>` headers of `commands/types.md` and `deploy/steps.md`
-- [ ] `make lint && make test && (cd web && npm run build)` - must pass
-- [ ] commit `fix(test): pass the copy's compose project name to host shell steps and scripts`
+- [x] write test: `runSteps` (with `noopReporter`) over a fixture copy whose `docker.local.yml` carries a test identity runs a scenario `type: shell` step that writes `$COMPOSE_PROJECT_NAME` to a file → the copy's name, not the original's, with `COMPOSE_PROJECT_NAME` of the live project set in the process env
+- [x] write test: the same through a `type: command` step targeting a `type: script` command
+- [x] write test: two `runSteps` calls on two copies, run as two goroutines in one test with `noopReporter` and per-run writers, each see their own name; run it with `go test -race`
+- [x] `skills/dwe/references/authoring-commands.md` (~:74): the `script` entry inherits `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `shell`
+- [x] `types.md` `type: script` contract table (:174) gains `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` with the same omission rules and collision note as the `type: shell` table (:77-93); RU mirror line for line
+- [x] `deploy/steps.md` (`type: shell`, :15): shell steps and shell `check:` get `COMPOSE_PROJECT_NAME` from the project config (the name dwe passes as `-p`; no `COMPOSE_FILE`); `when:` predicates and the builtin `shell` probe do not; RU mirror
+- [x] `CHANGELOG.md` `### Fixed` (the section already exists at `:48`): inside `dwe test` a scenario's shell steps now see the copy's `COMPOSE_PROJECT_NAME`, so `${COMPOSE_PROJECT_NAME:-…}` no longer falls back to the live stack; shell steps of `dwe stop` / `restart` / `reset` also get dwe's name instead of an ambient one; `type: script` commands receive `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `type: shell`; commands run from snapshot workflows, service-toggle hooks and reset hooks now honour `docker.yml project_name` — container commands there exec into the right compose project with the project's `docker.yml` `args`, and the shell/script contract carries the same name
+- [x] `make build`, refresh the RU `> Translated from: … @ <hash>` headers of `commands/types.md` and `deploy/steps.md`
+- [x] `make lint && make test && (cd web && npm run build)` - must pass
+- [x] commit `fix(test): pass the copy's compose project name to host shell steps and scripts`
 
 ### Task 4: Shell-text scanner for compose project names
 
