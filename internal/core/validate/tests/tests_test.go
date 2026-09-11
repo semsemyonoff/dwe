@@ -767,6 +767,116 @@ services:
 	}
 }
 
+// TestScenariosValidator_InterpolatedHostPort_DisabledServiceOverlay pins the
+// compose-chain half of coverage: a service's own compose file leaves a
+// scenario's stack when the scenario disables it, so nothing in that file
+// binds a host port in that copy — traced or untraced, the finding is covered
+// there. A required service's file stays in the chain whatever the scenario
+// says, so its port still warns.
+func TestScenariosValidator_InterpolatedHostPort_DisabledServiceOverlay(t *testing.T) {
+	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
+	disable := func(names string) string {
+		return "env:\n  services:\n    disable: [" + names + "]\n" + steps
+	}
+
+	tests := []struct {
+		name      string
+		scenarios map[string]string
+		// want maps a compose variable to the suffix its warning must end
+		// with ("" for a warning without a scenario list); a missing key
+		// means no warning for that variable.
+		want map[string]string
+	}{
+		{
+			name:      "overlay service disabled by every scenario",
+			scenarios: map[string]string{"a.yml": disable("tool"), "b.yml": disable("tool")},
+			want:      map[string]string{},
+		},
+		{
+			name:      "overlay service disabled by one scenario",
+			scenarios: map[string]string{"a.yml": disable("tool"), "b.yml": steps},
+			want:      map[string]string{"TOOL_EXTRA_PORT": ""},
+		},
+		{
+			name:      "required overlay service disabled by one scenario",
+			scenarios: map[string]string{"a.yml": disable("pinned"), "b.yml": steps},
+			want: map[string]string{
+				"PINNED_PORT":     " (not covered in scenarios: a)",
+				"TOOL_EXTRA_PORT": "",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, body := range tt.scenarios {
+				writeScenario(t, root, name, body)
+			}
+			if err := os.MkdirAll(filepath.Join(root, "compose"), 0o755); err != nil {
+				t.Fatalf("mkdir compose: %v", err)
+			}
+			overlays := map[string]string{
+				"tool.yml": `
+services:
+  tool:
+    image: redis:7
+    ports: ["${TOOL_PORT:-7001}:6379", "${TOOL_EXTRA_PORT:-7002}:6380"]
+`,
+				"pinned.yml": `
+services:
+  pinned:
+    image: redis:7
+    ports: ["${PINNED_PORT:-7003}:6379"]
+`,
+			}
+			for name, body := range overlays {
+				if err := os.WriteFile(filepath.Join(root, "compose", name), []byte(body), 0o644); err != nil {
+					t.Fatalf("write %s: %v", name, err)
+				}
+			}
+			cfg := baseCfg()
+			port := func(p int) map[string]config.ServicePortSpec {
+				return map[string]config.ServicePortSpec{"main": {Port: p}}
+			}
+			cfg.Services["tool"] = config.ServiceConfig{Enabled: true, Compose: []string{"compose/tool.yml"}, Ports: port(7001)}
+			cfg.Services["pinned"] = config.ServiceConfig{Required: true, Enabled: true, Compose: []string{"compose/pinned.yml"}, Ports: port(7003)}
+			cfg.Exports.Env = []config.ExportRule{
+				{Name: "TOOL_PORT", From: "services.tool.ports.main"},
+				{Name: "PINNED_PORT", From: "services.pinned.ports.main"},
+			}
+
+			got := map[string]string{}
+			for _, d := range warningDiags(runFor(root, cfg)) {
+				if d.Target != "tests.isolation" {
+					continue
+				}
+				for _, v := range []string{"TOOL_PORT", "TOOL_EXTRA_PORT", "PINNED_PORT"} {
+					if strings.Contains(d.Message, "from "+v+" ") || strings.Contains(d.Message, "from "+v+",") {
+						got[v] = d.Message
+					}
+				}
+			}
+
+			for v, suffix := range tt.want {
+				msg, ok := got[v]
+				switch {
+				case !ok:
+					t.Errorf("%s: want a warning, got none; warnings: %v", v, got)
+				case suffix == "" && strings.Contains(msg, "not covered in scenarios"):
+					t.Errorf("%s: want no scenario list, got %q", v, msg)
+				case !strings.HasSuffix(msg, suffix):
+					t.Errorf("%s: message %q does not end with %q", v, msg, suffix)
+				}
+			}
+			for v, msg := range got {
+				if _, ok := tt.want[v]; !ok {
+					t.Errorf("%s: want no warning, got %q", v, msg)
+				}
+			}
+		})
+	}
+}
+
 // TestScenariosValidator_InterpolatedHostPort_NoScenarioFiles pins an empty
 // tests directory: no scenario can run, so a traced interpolated port has no
 // uncovered scenario and stays silent, while an untraced one still warns.

@@ -82,7 +82,7 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	scenarios := make([]scenarioView, 0, len(names))
 	for _, name := range names {
 		fileDiags, scn := v.validateFile(ctx, filepath.Join(dir, name), reg)
-		scenarios = append(scenarios, scenarioView{name: envtest.ScenarioNameFromPath(name), scn: scn})
+		scenarios = append(scenarios, newScenarioView(ctx.Cfg, ctx.ProjectRoot, envtest.ScenarioNameFromPath(name), scn))
 		if len(fileDiags) == 0 {
 			// Every other domain emits an OK row per clean file. Without one a
 			// project whose scenarios all pass renders as "validation skipped
@@ -106,12 +106,19 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			continue
 		}
 		message := f.Message
-		if f.Kind == config.KindInterpolatedHostPort && (f.VarPath != "" || f.SourceService != "") {
+		if f.Kind == config.KindInterpolatedHostPort {
 			uncovered := uncoveredScenarios(ctx.Cfg, scenarios, f)
-			if len(uncovered) == 0 {
+			switch {
+			case f.VarPath != "" || f.SourceService != "":
+				if len(uncovered) == 0 {
+					continue
+				}
+				message += " (not covered in scenarios: " + strings.Join(uncovered, ", ") + ")"
+			case len(scenarios) > 0 && len(uncovered) == 0:
+				// No scenario's stack includes the file (every one disables
+				// the service that brings it), so no test run binds the port.
 				continue
 			}
-			message += " (not covered in scenarios: " + strings.Join(uncovered, ", ") + ")"
 		}
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityWarning,
@@ -125,25 +132,52 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	return diags
 }
 
-// scenarioView pairs a scenario file's name with its loaded scenario; scn is
-// nil when the file failed to load.
+// scenarioView pairs a scenario file's name with its loaded scenario and the
+// compose files of its copy's stack (absolute, cleaned); scn is nil and
+// composeFiles empty when the file failed to load.
 type scenarioView struct {
-	name string
-	scn  *envtest.Scenario
+	name         string
+	scn          *envtest.Scenario
+	composeFiles map[string]bool
+}
+
+// newScenarioView resolves the compose chain scn's copy would run.
+// ScanComposeIsolation scans the project's chain, but ComposeFiles gates each
+// service's own files on Enabled, and applyServiceToggles keeps a disabled
+// service Enabled only when it is required — so a file the scenario drops
+// binds nothing in that copy. Paths resolve as parseComposeFiles does, so they
+// compare against IsolationFinding.File.
+func newScenarioView(cfg *config.DweConfig, root, name string, scn *envtest.Scenario) scenarioView {
+	v := scenarioView{name: name, scn: scn}
+	if scn == nil {
+		return v
+	}
+	view := *cfg
+	applyServiceToggles(&view, scn.Env.Services)
+	v.composeFiles = make(map[string]bool)
+	for _, f := range view.ComposeFiles() {
+		if !filepath.IsAbs(f) {
+			f = filepath.Join(root, f)
+		}
+		v.composeFiles[filepath.Clean(f)] = true
+	}
+	return v
 }
 
 // uncoveredScenarios returns, in file order, the scenarios whose copy would
-// NOT remap the host port behind an interpolated finding. validate has no
-// scenario of its own, so the finding stays silent only when every scenario
+// bind the host port behind an interpolated finding: its compose file is in
+// the scenario's stack and the scenario does not remap the port. validate has
+// no scenario of its own, so the finding stays silent only when every scenario
 // covers it — the same bar that keeps a fixed project green under --strict.
 // An unloadable scenario covers nothing: checking a nil scenario would ask
 // about the project's own enabled state instead.
 func uncoveredScenarios(cfg *config.DweConfig, scenarios []scenarioView, f config.IsolationFinding) []string {
 	var out []string
 	for _, s := range scenarios {
-		if s.scn == nil || !envtest.CoversInterpolatedHostPort(cfg, s.scn, f) {
-			out = append(out, s.name)
+		if s.scn != nil && (!s.composeFiles[filepath.Clean(f.File)] || envtest.CoversInterpolatedHostPort(cfg, s.scn, f)) {
+			continue
 		}
+		out = append(out, s.name)
 	}
 	return out
 }

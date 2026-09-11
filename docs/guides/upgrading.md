@@ -81,7 +81,7 @@ env:
     ports.valkey: auto
 ```
 
-A port exported `from: services.<name>.ports.<x>` is already remapped while that service is enabled in the scenario; it warns only for a scenario that disables the service. See [Interpolated host ports](../reference/config/tests.md#interpolated-host-ports).
+A port exported `from: services.<name>.ports.<x>` is already remapped while that service is enabled in the scenario; it warns only for a scenario that disables the service while its compose file stays in the stack — a `required: true` service, or one declared in the root compose file. See [Interpolated host ports](../reference/config/tests.md#interpolated-host-ports).
 
 A warning that names no scenarios means no active `exports.env` rule traces the variable — it comes from a hand-written `.env`, the host environment, or a rule whose `when:` is falsy — so no scenario setting can fix it. Export the variable `from: vars.<path>` and add `env.vars: { <path>: auto }` to each scenario, or export it `from: services.<name>.ports.<x>`.
 

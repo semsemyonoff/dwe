@@ -410,15 +410,17 @@ The runner remaps a host port only through the value it writes into the copy, so
 |---|---|---|
 | `from: vars.<path>` | the scenario sets `env.vars: { <path>: auto }` | names the compose file, service and variable, and gives the fix line `env.vars: { <path>: auto }` |
 | `from: services.<name>.ports.<x>`, with `<x>` declared under `services.<name>.ports` | the runner remaps `<name>`'s ports — the service is enabled in the scenario and not listed under `env.services.disable` | says `<name>`'s ports are remapped only in scenarios where it is enabled and not listed under `env.services.disable` |
-| anything else — another path, a `.port` sub-path, an undeclared port, a falsy `when:`, no rule at all (host environment, a hand-written `.env`, the `:-` default) | never | names both remedies |
+| anything else — another path, a `.port` sub-path, an undeclared port, a falsy `when:`, no rule at all (host environment, a hand-written `.env`, the `:-` default) | only when its compose file is not in the scenario's stack (see below) | names both remedies |
 
 Membership in the remap is what counts, not whether the service ends up enabled: a `required: true` service listed under `env.services.disable` stays enabled in the copy, but its ports are not remapped, so the finding stands.
+
+Whatever the rule, a scenario also covers the finding when the compose file that publishes the port is not in its stack: a service's own compose files (`compose:` in its `service.yml`, plus its `local.yml` overlays) leave the chain when the scenario disables the service, so nothing in them binds a port in that copy. A `required: true` service stays enabled, so its files stay in; a service declared in the root compose file never leaves it.
 
 The finding is never blocking. Each caller filters it by its own view:
 
 - `dwe test run` drops it when the scenario being run covers it, and prints it as a warning otherwise.
 - `dwe test list --output json` does the same per scenario; `when:` conditions are evaluated with the scenario's service toggles applied.
-- `dwe validate tests` has no scenario of its own, so it drops the finding only when every scenario covers it, and otherwise appends `(not covered in scenarios: a, b)`. A scenario file that fails to load covers nothing; a finding of the last table row always warns. Here `when:` is evaluated on the project's own config, so a rule gated on a service that is off by default but enabled by every scenario still warns.
+- `dwe validate tests` has no scenario of its own, so it drops the finding only when every scenario covers it, and otherwise appends `(not covered in scenarios: a, b)`. A scenario file that fails to load covers nothing; a finding of the last table row warns without a scenario list, unless no scenario's stack includes its compose file. Here `when:` is evaluated on the project's own config, so a rule gated on a service that is off by default but enabled by every scenario still warns.
 
 Because `dwe test run` runs `dwe validate` inside the copy, and the copy carries every scenario file, `dwe test run a` still streams this project-wide warning while scenario `b` lacks the fix. It does not block the run.
 
