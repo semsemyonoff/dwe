@@ -35,6 +35,11 @@ import (
 //	DWE_CONTEXT_JSON    resolved context values as a JSON object
 //	DWE_BIN             absolute path to the dwe executable
 //	DWE_FILES_JSON      JSON object mapping file IDs to resolved paths
+//	COMPOSE_PROJECT_NAME  active compose project name (omitted when empty)
+//	COMPOSE_FILE          colon-joined absolute overlay paths (omitted when none)
+//
+// The contract is appended after the command's env: block, so it wins on a
+// key collision.
 type Runner struct{}
 
 // Run executes the script command described by rc.
@@ -139,7 +144,7 @@ func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string,
 		return nil, fmt.Errorf("script runner: marshal files: %w", err)
 	}
 
-	return []string{
+	env := []string{
 		"DWE_ROOT=" + root,
 		"DWE_COMMAND_ID=" + ctx.Cmd.ID,
 		"DWE_TEMP_DIR=" + tmpDir,
@@ -148,7 +153,8 @@ func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string,
 		"DWE_CONTEXT_JSON=" + string(contextJSON),
 		"DWE_BIN=" + dweBin,
 		"DWE_FILES_JSON=" + string(filesJSON),
-	}, nil
+	}
+	return append(env, runio.ComposeContractEnv(ctx)...), nil
 }
 
 // execScript runs a single script file using the given shell interpreter.

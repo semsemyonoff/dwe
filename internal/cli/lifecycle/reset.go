@@ -639,9 +639,16 @@ func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DweConfig
 		stderr = cmd.ErrOrStderr()
 		stdin = cmd.InOrStdin()
 	}
+	// Without the docker config rc.Compose() falls back to project.prefix/name,
+	// so the hook would ignore docker.yml project_name and args.
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
+	if err != nil {
+		return fmt.Errorf("hook %q: %w", cmdID, err)
+	}
 	rc := runtime.RunContext{
 		Cmd:            cmdDef,
 		Config:         cfg,
+		DockerConfig:   dockerCfg,
 		Registry:       reg,
 		ProjectRoot:    baseDir,
 		Stdout:         stdout,

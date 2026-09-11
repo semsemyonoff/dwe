@@ -112,6 +112,13 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 		}
 	}
 
+	// Without the docker config rc.Compose() falls back to project.prefix/name,
+	// so leaves would ignore docker.yml project_name and args.
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(p.BaseDir, p.Cfg)
+	if err != nil {
+		return fmt.Errorf("snapshot: %w", err)
+	}
+
 	rc := runtime.RunContext{
 		Cmd: cmd,
 		Render: &tpl.RenderContext{
@@ -121,6 +128,7 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 			SnapshotScope: p.Scope,
 		},
 		Config:         p.Cfg,
+		DockerConfig:   dockerCfg,
 		Registry:       p.Registry,
 		ProjectRoot:    p.BaseDir,
 		Stdout:         p.Stdout,

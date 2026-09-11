@@ -495,14 +495,14 @@ line.
 - Modify: `internal/cli/service/service_plan.go` + its test
 - Modify: `internal/cli/lifecycle/reset.go` (hook runner) + its test
 
-- [ ] extract the compose half of `hostContractEnv` into `runio.ComposeContractEnv(rc)`; `hostContractEnv` = `DWE_BIN` + helper (output byte-identical)
-- [ ] `buildContractEnv` appends `runio.ComposeContractEnv(ctx)` after the `DWE_*` entries; update the package doc comment's variable list and fix the misleading comment at `host.go:107`
-- [ ] snapshot workflows, service-toggle hooks and reset hooks set `RunContext.DockerConfig` from `config.LoadDockerConfigOrEmpty(baseDir, cfg)`; a load error is returned, never swallowed
-- [ ] write tests: a script sees `COMPOSE_PROJECT_NAME` and absolute `COMPOSE_FILE`; both omitted when the name is empty / there are no files; the contract wins over a colliding `env:` entry
-- [ ] write tests: with `docker.yml project_name: custom`, a `type: shell` and a `type: script` leaf run through each of the three entry points (and through a workflow leaf under one of them) see `custom`
-- [ ] write test: a `service_exec` leaf run through one of the entry points builds its compose with `ProjectName == "custom"` (inspect the built argv / `rc.Compose()` through the existing runner seam, no Docker)
-- [ ] confirm existing host contract tests pass unchanged
-- [ ] run `go test ./internal/core/usercommands/runtime/... ./internal/core/workflow/snapshot/... ./internal/cli/service/... ./internal/cli/lifecycle/...` - must pass before task 3
+- [x] extract the compose half of `hostContractEnv` into `runio.ComposeContractEnv(rc)`; `hostContractEnv` = `DWE_BIN` + helper (output byte-identical)
+- [x] `buildContractEnv` appends `runio.ComposeContractEnv(ctx)` after the `DWE_*` entries; update the package doc comment's variable list and fix the misleading comment at `host.go:107`
+- [x] snapshot workflows, service-toggle hooks and reset hooks set `RunContext.DockerConfig` from `config.LoadDockerConfigOrEmpty(baseDir, cfg)`; a load error is returned, never swallowed
+- [x] write tests: a script sees `COMPOSE_PROJECT_NAME` and absolute `COMPOSE_FILE`; both omitted when the name is empty / there are no files; the contract wins over a colliding `env:` entry
+- [x] write tests: with `docker.yml project_name: custom`, a `type: shell` and a `type: script` leaf run through each of the three entry points (and through a workflow leaf under one of them) see `custom`
+- [x] write test: a `service_exec` leaf run through one of the entry points builds its compose with `ProjectName == "custom"` (inspect the built argv / `rc.Compose()` through the existing runner seam, no Docker)
+- [x] confirm existing host contract tests pass unchanged
+- [x] run `go test ./internal/core/usercommands/runtime/... ./internal/core/workflow/snapshot/... ./internal/cli/service/... ./internal/cli/lifecycle/...` - must pass before task 3
 
 ### Task 3: Pin the copy's name inside `dwe test`, document, commit
 
