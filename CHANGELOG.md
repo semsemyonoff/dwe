@@ -73,10 +73,11 @@ generated from commit subjects and stay on the
   `check: {type: builtin, cmd: containers_running}`, runs on every deploy, and
   the built-in pipeline no longer exits `already up-to-date`.
   `containers_running` accepts an absent or empty `services` list, which checks
-  that every compose container of the project is running or exited 0. The first
-  deploy after upgrading sees the project config as changed once — pick
-  `Apply changes` in the selector — and an ejected `deploy.yml` needs the
-  `check:` added by hand; see [Upgrading DWE](docs/guides/upgrading.md).
+  that every non-one-off container of the compose project is running or exited
+  0. The first deploy after upgrading sees the project config as changed once —
+  pick `Apply changes` in the selector — and an ejected or hand-written
+  `workspace/deploy.yml` needs the `check:` added by hand; see
+  [Upgrading DWE](docs/guides/upgrading.md).
 
 ## [0.6.0] - 2026-09-07
 
