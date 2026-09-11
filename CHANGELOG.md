@@ -65,7 +65,11 @@ generated from commit subjects and stay on the
   `env.vars: { ports.valkey: auto }`, and `dwe test list --output json` reports
   it as an `interpolated_host_port` entry in `cost_profile.isolation_findings`.
   The warning fails `dwe validate --strict` until every scenario is covered —
-  see [Upgrading DWE](docs/guides/upgrading.md).
+  see [Upgrading DWE](docs/guides/upgrading.md). A port whose variable no
+  `exports.env` rule traces names no scenarios and needs such a rule first. A
+  literal host port behind an interpolated bind address
+  (`"${BIND:-127.0.0.1}:8080:80"`) is now recognised and blocks `dwe test run`
+  like any other literal host port.
 - **The built-in deploy pipeline brings a stopped stack back up.** After a
   `dwe stop`, `dwe deploy run` printed `Phase: start` and `✓ Done`, and the
   stack stayed down: the `up` step had no `check:`, so the journal skipped it on

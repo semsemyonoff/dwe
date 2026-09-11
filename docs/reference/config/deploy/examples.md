@@ -26,6 +26,9 @@ phases:
       - name: up
         type: dwe
         cmd: "docker up"
+        check:
+          type: builtin
+          cmd: containers_running
       - name: wait-healthy
         type: builtin
         cmd: docker_wait_healthy

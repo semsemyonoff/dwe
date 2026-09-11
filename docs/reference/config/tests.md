@@ -409,7 +409,7 @@ The runner remaps a host port only through the value it writes into the copy, so
 | The variable's rule | Covered in a scenario when | Message |
 |---|---|---|
 | `from: vars.<path>` | the scenario sets `env.vars: { <path>: auto }` | names the compose file, service and variable, and gives the fix line `env.vars: { <path>: auto }` |
-| `from: services.<name>.ports.<x>`, with `<x>` declared under `services.<name>.ports` | the runner remaps `<name>`'s ports — the service is enabled in the scenario and not listed under `env.services.disable` | says `<name>`'s ports are remapped only while it is enabled |
+| `from: services.<name>.ports.<x>`, with `<x>` declared under `services.<name>.ports` | the runner remaps `<name>`'s ports — the service is enabled in the scenario and not listed under `env.services.disable` | says `<name>`'s ports are remapped only in scenarios where it is enabled and not listed under `env.services.disable` |
 | anything else — another path, a `.port` sub-path, an undeclared port, a falsy `when:`, no rule at all (host environment, a hand-written `.env`, the `:-` default) | never | names both remedies |
 
 Membership in the remap is what counts, not whether the service ends up enabled: a `required: true` service listed under `env.services.disable` stays enabled in the copy, but its ports are not remapped, so the finding stands.

@@ -1184,6 +1184,68 @@ exports:
 	}
 }
 
+// TestRunScenario_InterpolatedHostPortFilteredByScenario pins that RunScenario
+// hands the loaded scenario to the isolation gate: without it the gate would
+// ignore env.vars: auto and warn about a port the copy does remap.
+func TestRunScenario_InterpolatedHostPortFilteredByScenario(t *testing.T) {
+	tests := []struct {
+		name     string
+		scenario string
+		wantWarn bool
+	}{
+		{name: "vars path not auto", scenario: noStepsScenario, wantWarn: true},
+		{name: "vars path auto", scenario: noStepsScenario + "env:\n  vars:\n    ports.valkey: auto\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFixtureFile(t, dir, "workspace.yml", `project:
+  name: runnertest
+  prefix: dwe
+compose:
+  base: docker-compose.yml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+`)
+			writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  valkey:\n    image: valkey/valkey:8\n    ports:\n      - \"${VALKEY_PORT:-6379}:6379\"\n")
+			writeFixtureFile(t, dir, "workspace/tests/smoke.yml", tt.scenario)
+
+			var execCalls []string
+			var warnings []string
+			r := &Runner{
+				execDwe:       stubExecDwe(nil, &execCalls),
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(new([]string), nil)
+				},
+				clock: time.Now,
+			}
+
+			result, err := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        "smoke",
+				ReporterFactory: noopReporterFactory,
+				Warn:            func(msg string) { warnings = append(warnings, msg) },
+			})
+			if err != nil {
+				t.Fatalf("RunScenario: %v", err)
+			}
+			if result.Status != StatusPassed {
+				t.Fatalf("status = %q, want passed; warnings: %v", result.Status, warnings)
+			}
+			got := slices.ContainsFunc(warnings, func(w string) bool { return strings.Contains(w, "VALKEY_PORT") })
+			if got != tt.wantWarn {
+				t.Errorf("VALKEY_PORT warning = %v, want %v; warnings: %v", got, tt.wantWarn, warnings)
+			}
+		})
+	}
+}
+
 func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {
 	dir := t.TempDir()
 	manifests := ManifestsDir(dir)

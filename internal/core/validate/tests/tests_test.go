@@ -767,6 +767,41 @@ services:
 	}
 }
 
+// TestScenariosValidator_InterpolatedHostPort_NoScenarioFiles pins an empty
+// tests directory: no scenario can run, so a traced interpolated port has no
+// uncovered scenario and stays silent, while an untraced one still warns.
+func TestScenariosValidator_InterpolatedHostPort_NoScenarioFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(envtest.TestsDir(root), 0o755); err != nil {
+		t.Fatalf("mkdir tests dir: %v", err)
+	}
+	composePath := filepath.Join(root, "docker-compose.yml")
+	if err := os.WriteFile(composePath, []byte(`
+services:
+  valkey:
+    image: valkey/valkey:8
+    ports: ["${VALKEY_PORT:-6379}:6379"]
+  raw:
+    image: redis:7
+    ports: ["${RAW_PORT:-6383}:6379"]
+`), 0o644); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+	cfg := baseCfg()
+	cfg.Compose.Base = composePath
+	cfg.Exports.Env = []config.ExportRule{{Name: "VALKEY_PORT", From: "vars.ports.valkey"}}
+
+	var msgs []string
+	for _, d := range warningDiags(runFor(root, cfg)) {
+		if d.Target == "tests.isolation" {
+			msgs = append(msgs, d.Message)
+		}
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "from RAW_PORT") {
+		t.Fatalf("want only the untraced RAW_PORT warning, got %v", msgs)
+	}
+}
+
 func TestScenariosValidator_MultipleFilesSorted(t *testing.T) {
 	root := t.TempDir()
 	writeScenario(t, root, "b.yml", `

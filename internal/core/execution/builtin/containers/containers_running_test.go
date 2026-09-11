@@ -70,9 +70,10 @@ type fakeDocker struct {
 	services   []string // compose config --services
 	configName string   // compose config --format json name
 
-	servicesErr error
-	psErr       error
-	psFailures  int // fail this many ps calls before answering
+	servicesErr  error
+	psErr        error
+	psServiceErr error // fail only the per-service queries (q.Service != "")
+	psFailures   int   // fail this many ps calls before answering
 
 	queries  []docker.ProjectContainerQuery
 	psCalls  int
@@ -119,6 +120,9 @@ func installFake(t *testing.T, f *fakeDocker) {
 		f.psCalls++
 		if f.psErr != nil {
 			return nil, f.psErr
+		}
+		if f.psServiceErr != nil && q.Service != "" {
+			return nil, f.psServiceErr
 		}
 		if f.psCalls <= f.psFailures {
 			return nil, errors.New("transient probe failure")
@@ -245,9 +249,13 @@ func TestContainersRunning_WholeProject_OneoffFilterFollowsProbe(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeDocker{project: "shop", containers: []fakeContainer{{"shop-app-1", "app", tc.oneoff, "exited1"}}, services: []string{"app"}}
 			installFake(t, f)
-			_ = runWhole(t, &config.DockerConfig{ProjectName: "shop"})
-			if len(f.queries) < 2 || f.queries[0].Oneoff != docker.OneoffLabelled {
-				t.Fatalf("first query must be the oneoff-label probe, got %+v", f.queries)
+			err := runWhole(t, &config.DockerConfig{ProjectName: "shop"})
+			if err == nil || err.Error() != "containers not running: shop-app-1" {
+				t.Fatalf("want the crashed container reported, got %v", err)
+			}
+			// oneoff probe, all, running, exited 0, then the per-service query.
+			if len(f.queries) != 5 || f.queries[0].Oneoff != docker.OneoffLabelled {
+				t.Fatalf("want the oneoff-label probe then four queries, got %+v", f.queries)
 			}
 			for _, q := range f.queries[1:] {
 				if q.Oneoff != tc.want {
@@ -282,6 +290,22 @@ func TestContainersRunning_WholeProject_ConfigServicesFailureSurfaced(t *testing
 	}
 	if f.svcCalls != probeRetries+1 {
 		t.Errorf("config --services attempts = %d, want %d", f.svcCalls, probeRetries+1)
+	}
+}
+
+// A failed per-service query must fail the check: skipping it would leave that
+// service's crashed container out of the active set and pass the check.
+func TestContainersRunning_WholeProject_ServiceQueryFailureSurfaced(t *testing.T) {
+	f := &fakeDocker{
+		project:      "shop",
+		containers:   []fakeContainer{{"shop-db-1", "db", "False", "exited1"}},
+		services:     []string{"db"},
+		psServiceErr: errors.New("Cannot connect to the Docker daemon"),
+	}
+	installFake(t, f)
+	err := runWhole(t, &config.DockerConfig{ProjectName: "shop"})
+	if err == nil || !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
+		t.Fatalf("want the per-service query failure surfaced, got %v", err)
 	}
 }
 

@@ -161,10 +161,7 @@ func ProjectContainerNames(ctx context.Context, dockerBin string, processEnv []s
 	}
 	out, err := cmd.Output()
 	if err != nil {
-		if ee, ok := errors.AsType[*exec.ExitError](err); ok && len(ee.Stderr) > 0 {
-			return nil, fmt.Errorf("%s ps: %w: %s", dockerBin, err, strings.TrimSpace(string(ee.Stderr)))
-		}
-		return nil, fmt.Errorf("%s ps: %w", dockerBin, err)
+		return nil, probeError(dockerBin+" ps", err)
 	}
 	return splitNonEmptyLines(out), nil
 }

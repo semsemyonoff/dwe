@@ -83,6 +83,10 @@ env:
 
 A port exported `from: services.<name>.ports.<x>` is already remapped while that service is enabled in the scenario; it warns only for a scenario that disables the service. See [Interpolated host ports](../reference/config/tests.md#interpolated-host-ports).
 
+A warning that names no scenarios means no active `exports.env` rule traces the variable — it comes from a hand-written `.env`, the host environment, or a rule whose `when:` is falsy — so no scenario setting can fix it. Export the variable `from: vars.<path>` and add `env.vars: { <path>: auto }` to each scenario, or export it `from: services.<name>.ports.<x>`.
+
+**A literal host port behind an interpolated bind address now blocks `dwe test run`.** `"${BIND:-127.0.0.1}:8080:80"` publishes the literal host port 8080, which collides with the live stack; the scanner used to miss it. Model the port under `services.<name>.ports` and interpolate it, as for any [literal host port](../reference/config/tests.md#compose-isolation-scanner), or pass `--skip-isolation-check`.
+
 ### Deploy
 
 **The built-in deploy pipeline now brings a stopped stack back up.** Its `up` step carries `check: {type: builtin, cmd: containers_running}`, so it runs on every deploy instead of being skipped by the journal after the first success. The built-in pipeline therefore never reports `already up-to-date` any more: a deploy of an unchanged, running project is a quick `docker up --wait` plus a probe.

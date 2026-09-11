@@ -987,7 +987,8 @@ func (e *composeExports) interpolatedFinding(service, token, name, file string) 
 			"; add `env.vars: { " + target.varPath + ": auto }` to the scenario"
 	case target.sourceService != "":
 		message = head + " (exports.env from: " + target.from + ") — dwe test remaps service " + target.sourceService +
-			"'s ports only while " + target.sourceService + " is enabled in the scenario; otherwise " + collides
+			"'s ports only in scenarios where " + target.sourceService + " is enabled and not listed under env.services.disable" +
+			" (a required service it disables stays enabled but keeps its port); otherwise " + collides
 	default:
 		message = head + ", which no active exports.env rule traces to a port dwe test remaps — " + collides +
 			"; export it from a declared service port (`from: services.<name>.ports.<port>`) or from" +

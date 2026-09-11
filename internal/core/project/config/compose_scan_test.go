@@ -84,6 +84,7 @@ func TestSplitShortPort(t *testing.T) {
 		{spec: "${V:80", want: []string{"${V:80"}},
 		{spec: "8080:80", want: []string{"8080", "80"}},
 		{spec: "127.0.0.1:8080:80", want: []string{"127.0.0.1", "8080", "80"}},
+		{spec: "${BIND:-127.0.0.1}:8080:80", want: []string{"${BIND:-127.0.0.1}", "8080", "80"}},
 		{spec: "80", want: []string{"80"}},
 	}
 	for _, tc := range tests {
@@ -114,6 +115,8 @@ func TestScanShortPort_SplitShapes(t *testing.T) {
 		{raw: "$$V:80"},
 		{raw: "8080:80", wantKind: KindRawHostPort, wantHostPort: 8080},
 		{raw: "127.0.0.1:8080:80", wantKind: KindRawHostPort, wantHostPort: 8080},
+		// The plain colon split used to yield four parts here and no finding.
+		{raw: "${BIND:-127.0.0.1}:8080:80", wantKind: KindRawHostPort, wantHostPort: 8080},
 		{raw: "8080:80/udp", wantKind: KindRawHostPort, wantHostPort: 8080},
 		{raw: "[::1]:8080:80"},
 		{raw: "[::1]:${V}:80"},
@@ -207,7 +210,7 @@ func TestScanComposeIsolation_InterpolatedHostPort(t *testing.T) {
 			case tc.wantVarPath != "":
 				require.Contains(t, f.Message, "`env.vars: { "+tc.wantVarPath+": auto }`")
 			case tc.wantSource != "":
-				require.Contains(t, f.Message, "remaps service db's ports only while db is enabled")
+				require.Contains(t, f.Message, "remaps service db's ports only in scenarios where db is enabled and not listed under env.services.disable")
 			default:
 				require.Contains(t, f.Message, "`from: services.<name>.ports.<port>`")
 				require.Contains(t, f.Message, "`env.vars: { <path>: auto }`")
