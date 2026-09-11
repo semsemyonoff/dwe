@@ -66,6 +66,17 @@ generated from commit subjects and stay on the
   it as an `interpolated_host_port` entry in `cost_profile.isolation_findings`.
   The warning fails `dwe validate --strict` until every scenario is covered —
   see [Upgrading DWE](docs/guides/upgrading.md).
+- **The built-in deploy pipeline brings a stopped stack back up.** After a
+  `dwe stop`, `dwe deploy run` printed `Phase: start` and `✓ Done`, and the
+  stack stayed down: the `up` step had no `check:`, so the journal skipped it on
+  every deploy after the first. It now carries
+  `check: {type: builtin, cmd: containers_running}`, runs on every deploy, and
+  the built-in pipeline no longer exits `already up-to-date`.
+  `containers_running` accepts an absent or empty `services` list, which checks
+  that every compose container of the project is running or exited 0. The first
+  deploy after upgrading sees the project config as changed once — pick
+  `Apply changes` in the selector — and an ejected `deploy.yml` needs the
+  `check:` added by hand; see [Upgrading DWE](docs/guides/upgrading.md).
 
 ## [0.6.0] - 2026-09-07
 

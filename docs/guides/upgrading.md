@@ -32,7 +32,7 @@ Three things worth doing before you trust the new version in a project:
 
 ## Upgrading to 0.6.1
 
-Three groups: template functions, the platform, then integration tests.
+Four groups: template functions, the platform, integration tests, then deploy.
 
 ### Template functions
 
@@ -82,6 +82,25 @@ env:
 ```
 
 A port exported `from: services.<name>.ports.<x>` is already remapped while that service is enabled in the scenario; it warns only for a scenario that disables the service. See [Interpolated host ports](../reference/config/tests.md#interpolated-host-ports).
+
+### Deploy
+
+**The built-in deploy pipeline now brings a stopped stack back up.** Its `up` step carries `check: {type: builtin, cmd: containers_running}`, so it runs on every deploy instead of being skipped by the journal after the first success. The built-in pipeline therefore never reports `already up-to-date` any more: a deploy of an unchanged, running project is a quick `docker up --wait` plus a probe.
+
+**The first deploy after upgrading sees a config change, once.** A `check:` is part of the project config hash, so a project deployed with the built-in pipeline no longer matches its recorded hash. An interactive `dwe deploy run` shows the `Deployed config changed. Choose action:` selector one time — pick `Apply changes`. A non-interactive deploy applies the change without asking. Either way the project-level steps (`up`, `info`, the success message) run once; per-service steps are not affected.
+
+**An ejected or hand-written `workspace/deploy.yml` keeps the old behaviour.** It replaces the built-in pipeline whole, so its `docker up` step still has no `check:` and is still skipped once recorded. Add the same check to get the fix — this triggers the same one-time config change:
+
+```yaml
+- name: up
+  type: dwe
+  cmd: "docker up --wait"
+  check:
+    type: builtin
+    cmd: containers_running
+```
+
+See [`containers_running`](../reference/config/deploy/builtins.md#whole-project-mode) for what the check accepts.
 
 ## Upgrading to 0.6.0
 

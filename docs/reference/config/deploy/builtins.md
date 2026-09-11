@@ -65,7 +65,7 @@ The schema also allows the reverse: an **action** builtin (`source_clone`, `remo
 | `confirm` | Interactive Y/n prompt (skipped under `--yes`) |
 | `docker_remove_project_volumes` | Remove all volumes whose name is prefixed with the compose project name |
 | `docker_wait_healthy` | Wait for Docker containers to reach healthy state |
-| `containers_running` | Fast "is running" check (no polling, no timeout, no healthcheck required) |
+| `containers_running` | Fast "is running" check for named services or the whole project (no polling, no timeout, no healthcheck required) |
 | `http_check` | Assert an HTTP endpoint returns an expected status (and optional body substring), with retries |
 | `remove_paths` | Delete project-relative paths from the filesystem |
 | `source_clone` | Clone a git repository into a project-relative directory, once (idempotent) |
@@ -260,13 +260,13 @@ Waits for Docker containers to reach a healthy state. Polls the active Docker Co
 
 ## `containers_running`
 
-Fast "is running" check for compose services. Unlike `docker_wait_healthy` it does not poll for readiness, does not honour a timeout, and does not require services to declare a healthcheck — a `docker compose ps --status=running --services` call returns the set of currently-running services, and the builtin compares that set with the requested list.
+Fast "is running" check for compose services. Unlike `docker_wait_healthy` it does not poll for readiness, does not honour a timeout, and does not require services to declare a healthcheck. With a `services` list, a `docker compose ps --status=running --services` call returns the set of currently-running services, and the builtin compares that set with the requested list. Without one it checks the whole compose project — see [Whole-project mode](#whole-project-mode).
 
-A *transient* probe failure — the `docker compose ps` call itself erroring (**any** non-nil failure to run, e.g. a non-zero exit right at the `docker up --wait` boundary when the compose CLI / daemon is momentarily busy even though every container is already up) — is retried a bounded number of times with a short backoff before the step fails; a cancelled context is the sole exception and short-circuits the remaining retries immediately. This is not readiness polling: a probe that succeeds but reports a service as not-running fails on the first attempt. When every retry fails, the underlying `docker compose ps` stderr is surfaced in the error, so the failure is diagnosable.
+A *transient* probe failure — the `docker compose ps` call itself erroring (**any** non-nil failure to run, e.g. a non-zero exit right at the `docker up --wait` boundary when the compose CLI / daemon is momentarily busy even though every container is already up) — is retried a bounded number of times with a short backoff before the step fails; a cancelled context is the sole exception and short-circuits the remaining retries immediately. This is not readiness polling: a probe that succeeds but reports a service as not-running fails on the first attempt. When every retry fails, the underlying `docker compose ps` stderr is surfaced in the error, so the failure is diagnosable. The same retry wraps every probe of the whole-project mode.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `services` | list of strings | required | Compose service names that must be currently running. Empty list is rejected. |
+| `services` | list of strings | — | Compose service names that must be currently running. Absent or empty selects the [whole-project mode](#whole-project-mode). An empty-string element is rejected. |
 
 **Example: gate a pipeline step on a running service**
 
@@ -288,6 +288,31 @@ A *transient* probe failure — the `docker compose ps` call itself erroring (**
 - The pipeline runs immediately after `docker up` and you just want to confirm the stack came up, without paying a polling round-trip.
 
 If services are missing, the builtin fails with `services not running: <comma-separated list>`.
+
+### Whole-project mode
+
+With no `services` (absent or `[]`) the builtin checks the compose project as a whole. This is the `check:` the `up` step of the [built-in deploy pipeline](index.md#purpose) carries:
+
+```yaml
+- name: up
+  type: dwe
+  cmd: "docker up --wait"
+  check:
+    type: builtin
+    cmd: containers_running
+```
+
+It passes when every non-one-off container of the project is running or has exited with code 0 (a finished init or migrate one-shot). `compose run` containers — the containers of [`type: daemon`](../commands/types.md#type-daemon) commands among them — are not evaluated.
+
+- **The expected set is the containers that exist**, not the service list of the compose config. A `scale: 0` / `deploy.replicas: 0` service has no container and never fails the check, and a project with no containers at all passes — nothing should be running.
+- **Only services active in the current compose config count.** A container that is neither running nor exited 0 (exited non-zero, stuck in `created` or `restarting`) fails the step with `containers not running: <comma-separated container names>` when its service is in `docker compose config --services`. The stopped container of an inactive-profile service, which `up --remove-orphans` does not remove, and an orphan container are ignored.
+- **Project name.** The label filter uses the name dwe passes as `-p` (`project.name`, or `project_name` in `docker.yml`). When neither is set, the name compose picks itself (`COMPOSE_PROJECT_NAME`, a top-level `name:`, the directory name) is read from `docker compose config --format json`; when that yields nothing, the step fails with `containers_running: cannot determine the compose project name — set project.name or docker.yml project_name`.
+
+Known edges, documented rather than handled:
+
+- **podman-compose without the `com.docker.compose.oneoff` label.** The builtin detects a backend that does not stamp the label and evaluates every project container unfiltered, so a stopped `compose run` container (a stopped daemon) of an active service can be reported as not running.
+- **A backend without `docker compose config --format json` or `config --services`.** The step fails with the backend's error when the project name is unset, or when a container is found that is neither running nor exited 0.
+- **`args.global` is not passed to these compose calls.** With `--project-directory` or `--env-file` in `args.global`, the fallback name can differ from the one `up` used — set `project.name`. With `--profile` there, that profile's services look inactive, so a crashed container of such a service passes instead of failing (never the reverse).
 
 ## `http_check`
 

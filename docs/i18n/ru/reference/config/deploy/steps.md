@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/steps.md @ 24b2e37e6f1b
+> Translated from: reference/config/deploy/steps.md @ 81f3af54fad4
 
 # Типы исполнения шагов
 
@@ -78,7 +78,10 @@
 ```yaml
 - name: up
   type: dwe
-  cmd: "docker up"
+  cmd: "docker up --wait"
+  check:
+    type: builtin
+    cmd: containers_running
 
 - name: info
   type: dwe
@@ -88,6 +91,8 @@
   type: dwe
   cmd: "render ide main"
 ```
+
+`check:` на `up` заставляет шаг выполняться на каждом деплое: без него журнал пропускает записанный `docker up`, и стек, остановленный после прошлого деплоя, остаётся лежать. Шаг `up` встроенного пайплайна деплоя устроен именно так — см. [Идемпотентный деплой и состояние](index.md#идемпотентный-деплой-и-состояние).
 
 ## `type: command`
 
