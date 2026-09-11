@@ -1,4 +1,4 @@
-> Translated from: guides/upgrading.md @ de61e3c66ad4
+> Translated from: guides/upgrading.md @ 83d35b4e5e9c
 
 # Обновление DWE
 
@@ -75,7 +75,7 @@ grep -rnE 'regex(FindAll|Split|ReplaceAll)' workspace/
 
 ### Интеграционные тесты
 
-**`dwe validate` предупреждает о host-портах compose, подставленных из переменной, которую `dwe test` не переназначает.** Порт вроде `"${VALKEY_PORT:-6379}:6379"`, где `VALKEY_PORT` экспортируется `from: vars.ports.valkey`, в каждом тестовом запуске биндит тот же host-порт, что и живой стек. Так было всегда; теперь об этом говорят `dwe validate` и `dwe test run`. Предупреждение появляется только в проектах со сценариями в `workspace/tests/` и проваливает `dwe validate --strict`. Исправьте каждый сценарий, который называет предупреждение:
+**`dwe validate` предупреждает о host-портах compose, подставленных из переменной, которую `dwe test` не переназначает.** Порт вроде `"${VALKEY_PORT:-6379}:6379"`, где `VALKEY_PORT` экспортируется `from: vars.ports.valkey`, в каждом тестовом запуске биндит тот же host-порт, что и живой стек. Так было всегда; теперь об этом говорят `dwe validate` и `dwe test run`. Предупреждение появляется только в проектах с каталогом `workspace/tests/` и проваливает `dwe validate --strict`. Исправьте каждый сценарий, который называет предупреждение:
 
 ```yaml
 env:

@@ -181,7 +181,10 @@ func runWholeProject(ctx context.Context, compose *docker.Compose) error {
 	}
 
 	// all → running → done: a container created between the queries is then
-	// simply not evaluated, never misclassified as not running.
+	// simply not evaluated, never misclassified as not running. A state change
+	// of an existing container between them is not re-probed — this is a
+	// best-effort snapshot taken right after `up --wait`, when the stack has
+	// settled; a container restarting in a loop is a candidate either way.
 	all, err := query(docker.ProjectContainerQuery{Oneoff: oneoff})
 	if err != nil || len(all) == 0 {
 		return err

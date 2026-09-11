@@ -877,6 +877,28 @@ services:
 	}
 }
 
+// TestScenariosValidator_ScenarioViewDoesNotMutateProjectConfig pins that
+// resolving a scenario's compose chain works on a copy: a scenario disabling a
+// service must not rewrite the project's Raw["services"], which the isolation
+// scan reads for `when:` and every later scenario seeds its view from.
+func TestScenariosValidator_ScenarioViewDoesNotMutateProjectConfig(t *testing.T) {
+	root := t.TempDir()
+	writeScenario(t, root, "a.yml", "env:\n  services:\n    disable: [tool]\nsteps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n")
+	cfg := baseCfg()
+	cfg.Services["tool"] = config.ServiceConfig{Enabled: true}
+	cfg.Raw["services"] = map[string]any{"tool": map[string]any{"enabled": true}}
+
+	runFor(root, cfg)
+
+	if !cfg.Services["tool"].Enabled {
+		t.Errorf("cfg.Services[tool].Enabled flipped to false")
+	}
+	entry, _ := cfg.Raw["services"].(map[string]any)["tool"].(map[string]any)
+	if entry["enabled"] != true {
+		t.Errorf("cfg.Raw[services][tool][enabled] = %v, want true", entry["enabled"])
+	}
+}
+
 // TestScenariosValidator_InterpolatedHostPort_NoScenarioFiles pins an empty
 // tests directory: no scenario can run, so a traced interpolated port has no
 // uncovered scenario and stays silent, while an untraced one still warns.

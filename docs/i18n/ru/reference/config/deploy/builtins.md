@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/builtins.md @ 595ef571e003
+> Translated from: reference/config/deploy/builtins.md @ d0c3d1544b84
 
 # Доступные билтины
 
@@ -289,7 +289,7 @@
 - Нужен пред-условный шаг для последующего (например, `service_exec`), и хочется явную ошибку «контейнер X не запущен» вместо stderr-трейса compose.
 - Пайплайн выполняется сразу после `docker up` и нужно лишь убедиться, что стек поднялся, без затрат на round-trip поллинга.
 
-Если сервисы отсутствуют, билтин падает с `services not running: <comma-separated list>`.
+При непустом списке `services` незапущенный сервис из этого списка роняет билтин с `services not running: <comma-separated list>`.
 
 ### Режим всего проекта
 

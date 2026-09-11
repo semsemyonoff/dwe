@@ -73,7 +73,7 @@ The search also hits `regexFindAllGroups` and `regexFindAllNamed`, which did not
 
 ### Integration tests
 
-**`dwe validate` warns about compose host ports interpolated from a variable `dwe test` does not remap.** A port such as `"${VALKEY_PORT:-6379}:6379"`, where `VALKEY_PORT` is exported `from: vars.ports.valkey`, binds the same host port as the live stack in every test run. It always did; now `dwe validate` and `dwe test run` say so. The warning appears only in projects that have scenarios under `workspace/tests/`, and it fails `dwe validate --strict`. Fix every scenario the warning names:
+**`dwe validate` warns about compose host ports interpolated from a variable `dwe test` does not remap.** A port such as `"${VALKEY_PORT:-6379}:6379"`, where `VALKEY_PORT` is exported `from: vars.ports.valkey`, binds the same host port as the live stack in every test run. It always did; now `dwe validate` and `dwe test run` say so. The warning appears only in projects that have a `workspace/tests/` directory, and it fails `dwe validate --strict`. Fix every scenario the warning names:
 
 ```yaml
 env:

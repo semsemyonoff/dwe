@@ -152,7 +152,14 @@ func newScenarioView(cfg *config.DweConfig, root, name string, scn *envtest.Scen
 	if scn == nil {
 		return v
 	}
+	// applyServiceToggles writes Raw["services"] into the map it is given, and
+	// a struct copy shares cfg.Raw — without a fresh map one scenario's toggles
+	// leak into ctx.Cfg and into every later scenario's view.
 	view := *cfg
+	view.Raw = maps.Clone(cfg.Raw)
+	if view.Raw == nil {
+		view.Raw = map[string]any{}
+	}
 	applyServiceToggles(&view, scn.Env.Services)
 	v.composeFiles = make(map[string]bool)
 	for _, f := range view.ComposeFiles() {

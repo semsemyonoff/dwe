@@ -223,7 +223,7 @@ Key behaviors:
 - In both cases the journal records the step for audit/status display using `step_hash`, which includes the gate config — so changing the gate invalidates the recorded hash and re-triggers the step
 - **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
 
-A step that always runs also keeps the whole deploy from exiting early with `already up-to-date`. The built-in pipeline relies on this: its `up` step carries `check: {type: builtin, cmd: containers_running}`, so every deploy runs `docker up --wait` (a no-op on a running stack) and then asserts that every compose container is running or exited 0 ([whole-project mode](builtins.md#whole-project-mode)). A `docker up` step without a `check:` in an ejected or hand-written `deploy.yml` is recorded after its first success and skipped from then on, so a stack stopped since the last deploy stays down — add the same `check:` to it.
+A step that always runs also keeps the whole deploy from exiting early with `already up-to-date`. The built-in pipeline relies on this: its `up` step carries `check: {type: builtin, cmd: containers_running}`, so every deploy runs `docker up --wait` (a no-op on a running stack) and then asserts that every non-one-off container of an active compose service is running or exited 0 ([whole-project mode](builtins.md#whole-project-mode)). A `docker up` step without a `check:` in an ejected or hand-written `deploy.yml` is recorded after its first success and skipped from then on, so a stack stopped since the last deploy stays down — add the same `check:` to it.
 
 Use `dwe deploy state show` to inspect the journal, `dwe deploy state clear` to reset it, and `dwe deploy state repair` to fix corrupted aggregates.
 

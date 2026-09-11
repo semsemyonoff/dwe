@@ -287,7 +287,7 @@ A *transient* probe failure — the `docker compose ps` call itself erroring (**
 - You need a precondition for a follow-up step (e.g. `service_exec`) and want a clear "container X is not running" error instead of a compose stderr trace.
 - The pipeline runs immediately after `docker up` and you just want to confirm the stack came up, without paying a polling round-trip.
 
-If services are missing, the builtin fails with `services not running: <comma-separated list>`.
+With a non-empty `services` list, a listed service that is not running fails the builtin with `services not running: <comma-separated list>`.
 
 ### Whole-project mode
 
