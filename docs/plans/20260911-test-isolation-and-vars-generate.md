@@ -598,11 +598,11 @@ line.
 - Create: `internal/shared/randval/randval.go`
 - Create: `internal/shared/randval/randval_test.go`
 
-- [ ] `Spec{Kind, Bytes}`, `Parse`, `Generate` per the Solution Overview; errors name the accepted forms
-- [ ] write table tests for `Parse`: every valid form incl. default N, bounds 1 and 1024; errors for unknown kind, `hex:0`, `hex:1025`, `hex:x`, `uuid:16`, empty
-- [ ] write tests for `Generate` with a fixed reader: hex length `2N`, lowercase alphabet, decodes back to the input bytes; base64url length `4*ceil(N/3)`, padded, URL alphabet, decodes back; uuid format `8-4-4-4-12`, version nibble 4, variant `10xx`
-- [ ] write test: a short reader → error
-- [ ] run `go test ./internal/shared/randval/...` - must pass before task 9
+- [x] `Spec{Kind, Bytes}`, `Parse`, `Generate` per the Solution Overview; errors name the accepted forms
+- [x] write table tests for `Parse`: every valid form incl. default N, bounds 1 and 1024; errors for unknown kind, `hex:0`, `hex:1025`, `hex:x`, `uuid:16`, empty
+- [x] write tests for `Generate` with a fixed reader: hex length `2N`, lowercase alphabet, decodes back to the input bytes; base64url length `4*ceil(N/3)`, padded, URL alphabet, decodes back; uuid format `8-4-4-4-12`, version nibble 4, variant `10xx`
+- [x] write test: a short reader → error
+- [x] run `go test ./internal/shared/randval/...` - must pass before task 9
 
 ### Task 9: `dwe vars set --generate`
 
