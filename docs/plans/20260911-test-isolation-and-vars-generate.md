@@ -474,14 +474,14 @@ line.
 - Modify: `internal/cli/lifecycle/reset.go`
 - Modify: `internal/cli/lifecycle/` reset-step tests
 
-- [ ] in `execShellAction`, set `cmd.Env = append(os.Environ(), "COMPOSE_PROJECT_NAME="+name)` when `actx.DockerCfg != nil` and `config.ComposeProjectName(actx.DockerCfg, actx.Cfg) != ""`; leave `cmd.Env` nil otherwise; comment the why (scrubbed env + concurrent scenarios) and the `DockerCfg` guard
-- [ ] `resetStepCmd` (`reset.go:762`) loads `config.LoadDockerConfigOrEmpty(workDir, cfg)` into `ActionContext.DockerCfg` (the `check:` copies the same actx)
-- [ ] update the `EnvNestedRuntime` comment in `bridgeclient/env.go:47-51` (execShellAction now builds its env from `os.Environ()`, so the marker still flows; the per-spawn-list argument stands)
-- [ ] write tests: a shell step (`printf '%s' "$COMPOSE_PROJECT_NAME"`) sees `project.prefix-name`; with `docker.yml project_name: Other` sees `other`; an ambient `COMPOSE_PROJECT_NAME` (`t.Setenv`) is overridden by the config value; nil `DockerCfg` → the ambient value passes through unchanged; empty name → not set
-- [ ] write test: a shell `check:` sees the same value as the body
-- [ ] write test (config package): for fixtures without `docker.yml`, with `project_name`, with a `docker.local.yml` override, with a `${vars.*}` template in `project_name` and with an uppercase name, `ResolveComposeProjectName(root, cfg) == ComposeProjectName(LoadDockerConfigOrEmpty(root, cfg), cfg)` — pins the "same value as `.env`" invariant (a non-string `project_name:` is a known pre-existing divergence, see Context — keep it out of the table)
-- [ ] write test: `dwe reset step` on a `type: shell` step sees the config name, with `docker.yml project_name` set
-- [ ] run `go test ./internal/core/execution/pipeline/... ./internal/core/project/config/... ./internal/shared/bridgeclient/... ./internal/cli/lifecycle/...` - must pass before task 2
+- [x] in `execShellAction`, set `cmd.Env = append(os.Environ(), "COMPOSE_PROJECT_NAME="+name)` when `actx.DockerCfg != nil` and `config.ComposeProjectName(actx.DockerCfg, actx.Cfg) != ""`; leave `cmd.Env` nil otherwise; comment the why (scrubbed env + concurrent scenarios) and the `DockerCfg` guard
+- [x] `resetStepCmd` (`reset.go:762`) loads `config.LoadDockerConfigOrEmpty(workDir, cfg)` into `ActionContext.DockerCfg` (the `check:` copies the same actx)
+- [x] update the `EnvNestedRuntime` comment in `bridgeclient/env.go:47-51` (execShellAction now builds its env from `os.Environ()`, so the marker still flows; the per-spawn-list argument stands)
+- [x] write tests: a shell step (`printf '%s' "$COMPOSE_PROJECT_NAME"`) sees `project.prefix-name`; with `docker.yml project_name: Other` sees `other`; an ambient `COMPOSE_PROJECT_NAME` (`t.Setenv`) is overridden by the config value; nil `DockerCfg` → the ambient value passes through unchanged; empty name → not set
+- [x] write test: a shell `check:` sees the same value as the body
+- [x] write test (config package): for fixtures without `docker.yml`, with `project_name`, with a `docker.local.yml` override, with a `${vars.*}` template in `project_name` and with an uppercase name, `ResolveComposeProjectName(root, cfg) == ComposeProjectName(LoadDockerConfigOrEmpty(root, cfg), cfg)` — pins the "same value as `.env`" invariant (a non-string `project_name:` is a known pre-existing divergence, see Context — keep it out of the table)
+- [x] write test: `dwe reset step` on a `type: shell` step sees the config name, with `docker.yml project_name` set
+- [x] run `go test ./internal/core/execution/pipeline/... ./internal/core/project/config/... ./internal/shared/bridgeclient/... ./internal/cli/lifecycle/...` - must pass before task 2
 
 ### Task 2: Give the `type: script` contract the compose pair
 

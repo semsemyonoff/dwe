@@ -247,12 +247,29 @@ func runChildCmd(cmd *exec.Cmd, actx ActionContext) error {
 }
 
 // execShellAction runs a shell command via sh -c.
+//
+// The child gets COMPOSE_PROJECT_NAME derived per spawn from the config the
+// step runs with, not from the process env: `dwe test` scrubs every COMPOSE_*
+// from the process and runs scenarios concurrently in one process, each over a
+// copy with its own name, so no process-global value can carry it. Where .env
+// was sourced (deploy, run) the value is the one already in the process — the
+// reserved export is ResolveComposeProjectName over the same configs.
+//
+// Injected only with a DockerCfg: without it ComposeProjectName falls back to
+// project.prefix/name and would overwrite a correct .env-sourced value that
+// came from docker.yml project_name. Callers that pass none (the deprecated
+// Run / ExecStep wrappers) keep inheriting the process env unchanged.
 func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
 	trace.Command(ctx, shell, "-c", strings.TrimSpace(a.Cmd))
 	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
+	if actx.DockerCfg != nil {
+		if name := config.ComposeProjectName(actx.DockerCfg, actx.Cfg); name != "" {
+			cmd.Env = append(os.Environ(), "COMPOSE_PROJECT_NAME="+name)
+		}
+	}
 	return runChildCmd(cmd, actx)
 }
 

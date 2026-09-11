@@ -2037,6 +2037,100 @@ func TestExecStep_ShellFromConfig(t *testing.T) {
 	}
 }
 
+// TestExecShellAction_ComposeProjectName pins the per-spawn derivation of
+// COMPOSE_PROJECT_NAME for pipeline shell steps: the config value wins over an
+// ambient one, and without a DockerCfg (or with an empty name) the process env
+// passes through untouched.
+func TestExecShellAction_ComposeProjectName(t *testing.T) {
+	const unset = "<unset>"
+	projectCfg := func(prefix, name string) *config.DweConfig {
+		c := &config.DweConfig{Raw: map[string]any{}}
+		c.Project.Prefix = prefix
+		c.Project.Name = name
+		return c
+	}
+	tests := []struct {
+		name      string
+		ambient   string // "" = unset
+		cfg       *config.DweConfig
+		dockerCfg *config.DockerConfig
+		want      string
+	}{
+		{"full name from project", "", projectCfg("dwe", "proj"), &config.DockerConfig{}, "dwe-proj"},
+		{"docker.yml project_name lowercased", "", projectCfg("dwe", "proj"), &config.DockerConfig{ProjectName: "Other"}, "other"},
+		{"config overrides ambient", "live", projectCfg("dwe", "proj"), &config.DockerConfig{}, "dwe-proj"},
+		{"nil DockerCfg keeps ambient", "live", projectCfg("dwe", "proj"), nil, "live"},
+		{"nil DockerCfg without ambient", "", projectCfg("dwe", "proj"), nil, unset},
+		{"empty name not set", "", projectCfg("", ""), &config.DockerConfig{}, unset},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("COMPOSE_PROJECT_NAME", tc.ambient)
+			if tc.ambient == "" {
+				if err := os.Unsetenv("COMPOSE_PROJECT_NAME"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var out bytes.Buffer
+			actx := ActionContext{
+				WorkDir:    t.TempDir(),
+				Cfg:        tc.cfg,
+				DockerCfg:  tc.dockerCfg,
+				StepWriter: &out,
+				Parallel:   true,
+			}
+			a := config.Action{Type: "shell", Cmd: `printf '%s' "${COMPOSE_PROJECT_NAME-` + unset + `}"`}
+			if err := ExecAction(context.Background(), a, actx); err != nil {
+				t.Fatalf("ExecAction: %v", err)
+			}
+			if got := out.String(); got != tc.want {
+				t.Errorf("COMPOSE_PROJECT_NAME = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRunWithOptions_ShellCheckSeesComposeProjectName verifies a shell check:
+// gets the same COMPOSE_PROJECT_NAME as the step body — both run through
+// ExecAction with the same DockerCfg.
+func TestRunWithOptions_ShellCheckSeesComposeProjectName(t *testing.T) {
+	t.Setenv("COMPOSE_PROJECT_NAME", "live")
+	dir := t.TempDir()
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+	cfg.Project.Prefix = "dwe"
+	cfg.Project.Name = "proj"
+	phase := config.DeployPhase{Name: "init"}
+	step := config.DeployStep{
+		Name:  "probe",
+		Type:  "shell",
+		Cmd:   `printf '%s' "$COMPOSE_PROJECT_NAME" > body.txt`,
+		Check: &config.Action{Type: "shell", Cmd: `printf '%s' "$COMPOSE_PROJECT_NAME" > check.txt`},
+	}
+
+	var log bytes.Buffer
+	err := RunWithOptions(RunOptions{
+		Steps:        buildResolvedSteps(phase, []config.DeployStep{step}),
+		Reporter:     &mockReporter{},
+		Name:         "test",
+		Config:       cfg,
+		DockerConfig: &config.DockerConfig{ProjectName: "Custom"},
+		WorkDir:      dir,
+		LogWriter:    &log,
+	})
+	if err != nil {
+		t.Fatalf("RunWithOptions: %v", err)
+	}
+	for _, f := range []string{"body.txt", "check.txt"} {
+		data, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if got := string(data); got != "custom" {
+			t.Errorf("%s: COMPOSE_PROJECT_NAME = %q, want %q", f, got, "custom")
+		}
+	}
+}
+
 // TestBuildDweCmd_DweBinParam verifies that buildDweCmd accepts a dweBin
 // fallback parameter and produces a non-empty shell command for any non-empty dweBin.
 // At runtime, os.Executable() is preferred; dweBin is only used when it fails.
@@ -2893,8 +2987,9 @@ func TestExecAction_CommandCheck_DefaultModeCreatesContainer(t *testing.T) {
 // os.Executable() → the test binary.
 //
 // The `type: shell` case is the one a per-spawn env list would have missed:
-// execShellAction never assigns cmd.Env at all, and DWE_BIN is exported into
-// shell/script children on purpose so project code can call dwe again.
+// execShellAction assigns cmd.Env only to add COMPOSE_PROJECT_NAME (not at all
+// here — no DockerConfig), and DWE_BIN is exported into shell/script children
+// on purpose so project code can call dwe again.
 func TestRunWithOptions_MarksNestedRuntime(t *testing.T) {
 	// Process-global and never cleared — clear it first so the assertion is
 	// about this pipeline's own mark, not another test's leftover.

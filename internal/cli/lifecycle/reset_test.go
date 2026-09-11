@@ -1184,6 +1184,40 @@ func writeResetStepFixture(t *testing.T, vars, resetYAML string) string {
 	return dir
 }
 
+// TestResetStepCmd_ShellSeesComposeProjectName verifies `dwe reset step` loads
+// the docker config, so a shell step and its check: see the same
+// COMPOSE_PROJECT_NAME as under `dwe reset run` — docker.yml's project_name,
+// overriding an ambient value.
+func TestResetStepCmd_ShellSeesComposeProjectName(t *testing.T) {
+	t.Setenv("COMPOSE_PROJECT_NAME", "live")
+	dir := writeResetStepFixture(t, "",
+		"phases:\n  - name: probe\n    steps:\n      - name: name\n        type: shell\n"+
+			"        cmd: 'printf \"%s\" \"$COMPOSE_PROJECT_NAME\" > body.txt'\n"+
+			"        check:\n          type: shell\n"+
+			"          cmd: 'printf \"%s\" \"$COMPOSE_PROJECT_NAME\" > check.txt'\n",
+	)
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "docker.yml"), []byte("project_name: Custom-Name\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+	cmd := &cobra.Command{}
+	cmd.SetOut(io.Discard)
+	cmd.SetContext(context.Background())
+
+	if err := resetStepCmd(cmd, flags, "probe/name", false); err != nil {
+		t.Fatalf("resetStepCmd: %v", err)
+	}
+	for _, f := range []string{"body.txt", "check.txt"} {
+		data, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if got := string(data); got != "custom-name" {
+			t.Errorf("%s: COMPOSE_PROJECT_NAME = %q, want %q", f, got, "custom-name")
+		}
+	}
+}
+
 // TestResetStepCmd_DryRunRendersCmd verifies that `dwe reset step --dry-run`
 // prints the step's cmd with ${vars.*} substituted, not the literal — the
 // same rendering ResolvePhaseSteps applies on the `dwe reset run` path.
