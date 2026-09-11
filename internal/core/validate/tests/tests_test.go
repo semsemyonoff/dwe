@@ -617,6 +617,156 @@ resources:
 	}
 }
 
+// TestScenariosValidator_InterpolatedHostPort pins the project-wide filter on
+// interpolated host ports: validate has no scenario of its own, so a finding is
+// silent only when EVERY scenario remaps its port (vars path set to auto, or
+// the source service in the runner's remap set), and otherwise names the
+// scenarios that still lack the fix. An unloadable scenario covers nothing, a
+// required service a scenario disables is not remapped, and a finding with no
+// VarPath/SourceService always warns without a scenario list.
+func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
+	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
+	const valkeyAuto = "env:\n  vars:\n    ports.valkey: auto\n" + steps
+	const enableCache = "env:\n  services:\n    enable: [cache]\n" + steps
+
+	tests := []struct {
+		name      string
+		scenarios map[string]string
+		// want maps a compose variable to the scenarios its warning must name;
+		// a missing key means no warning for that variable.
+		want map[string][]string
+	}{
+		{
+			name:      "vars path auto in every scenario",
+			scenarios: map[string]string{"a.yml": valkeyAuto, "b.yml": valkeyAuto},
+			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name:      "vars path auto in some scenarios",
+			scenarios: map[string]string{"a.yml": valkeyAuto, "b.yml": steps},
+			want:      map[string][]string{"VALKEY_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name:      "unloadable scenario counts as uncovered",
+			scenarios: map[string]string{"a.yml": valkeyAuto, "broken.yml": ""},
+			want: map[string][]string{
+				"VALKEY_PORT": {"broken"},
+				"REDIS_PORT":  {"broken"},
+				"LOCKED_PORT": {"broken"},
+				"CACHE_PORT":  {"a", "broken"},
+			},
+		},
+		{
+			name: "service off by default but enabled by every scenario",
+			scenarios: map[string]string{
+				"a.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    enable: [cache]\n" + steps,
+				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    enable: [cache]\n" + steps,
+			},
+			want: map[string][]string{},
+		},
+		{
+			name:      "service enabled by only one scenario",
+			scenarios: map[string]string{"a.yml": enableCache, "b.yml": steps},
+			want:      map[string][]string{"VALKEY_PORT": {"a", "b"}, "CACHE_PORT": {"b"}},
+		},
+		{
+			name: "source service disabled by one scenario",
+			scenarios: map[string]string{
+				"a.yml": valkeyAuto,
+				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    disable: [redis]\n" + steps,
+			},
+			want: map[string][]string{"REDIS_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name: "required source service disabled by one scenario",
+			scenarios: map[string]string{
+				"a.yml": valkeyAuto,
+				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    disable: [locked]\n" + steps,
+			},
+			want: map[string][]string{"LOCKED_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, body := range tt.scenarios {
+				writeScenario(t, root, name, body)
+			}
+			composePath := filepath.Join(root, "docker-compose.yml")
+			if err := os.WriteFile(composePath, []byte(`
+services:
+  valkey:
+    image: valkey/valkey:8
+    ports: ["${VALKEY_PORT:-6379}:6379"]
+  redis:
+    image: redis:7
+    ports: ["${REDIS_PORT:-6380}:6379"]
+  cache:
+    image: redis:7
+    ports: ["${CACHE_PORT:-6381}:6379"]
+  locked:
+    image: redis:7
+    ports: ["${LOCKED_PORT:-6382}:6379"]
+  raw:
+    image: redis:7
+    ports: ["${RAW_PORT:-6383}:6379"]
+`), 0o644); err != nil {
+				t.Fatalf("write compose file: %v", err)
+			}
+			cfg := baseCfg()
+			cfg.Compose.Base = composePath
+			port := func(p int) map[string]config.ServicePortSpec {
+				return map[string]config.ServicePortSpec{"main": {Port: p}}
+			}
+			cfg.Services["redis"] = config.ServiceConfig{Enabled: true, Ports: port(6380)}
+			cfg.Services["cache"] = config.ServiceConfig{Ports: port(6381)}
+			cfg.Services["locked"] = config.ServiceConfig{Required: true, Enabled: true, Ports: port(6382)}
+			cfg.Exports.Env = []config.ExportRule{
+				{Name: "VALKEY_PORT", From: "vars.ports.valkey"},
+				{Name: "REDIS_PORT", From: "services.redis.ports.main"},
+				{Name: "CACHE_PORT", From: "services.cache.ports.main"},
+				{Name: "LOCKED_PORT", From: "services.locked.ports.main"},
+			}
+
+			got := map[string]string{}
+			for _, d := range warningDiags(runFor(root, cfg)) {
+				if d.Target != "tests.isolation" {
+					continue
+				}
+				for _, v := range []string{"VALKEY_PORT", "REDIS_PORT", "CACHE_PORT", "LOCKED_PORT", "RAW_PORT"} {
+					if strings.Contains(d.Message, "from "+v) {
+						got[v] = d.Message
+					}
+				}
+			}
+
+			raw, ok := got["RAW_PORT"]
+			if !ok {
+				t.Errorf("RAW_PORT (no exports.env rule) must always warn, got %v", got)
+			} else if strings.Contains(raw, "not covered in scenarios") {
+				t.Errorf("RAW_PORT has no fix a scenario can apply, must not list scenarios: %q", raw)
+			}
+			delete(got, "RAW_PORT")
+
+			for v, scenarios := range tt.want {
+				msg, ok := got[v]
+				if !ok {
+					t.Errorf("%s: want a warning naming %v, got none; warnings: %v", v, scenarios, got)
+					continue
+				}
+				if suffix := "(not covered in scenarios: " + strings.Join(scenarios, ", ") + ")"; !strings.HasSuffix(msg, suffix) {
+					t.Errorf("%s: message %q does not end with %q", v, msg, suffix)
+				}
+			}
+			for v, msg := range got {
+				if _, ok := tt.want[v]; !ok {
+					t.Errorf("%s: want no warning, got %q", v, msg)
+				}
+			}
+		})
+	}
+}
+
 func TestScenariosValidator_MultipleFilesSorted(t *testing.T) {
 	root := t.TempDir()
 	writeScenario(t, root, "b.yml", `

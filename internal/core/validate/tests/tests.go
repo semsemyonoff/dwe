@@ -79,8 +79,10 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	reg, _ := ctx.CommandRegistry.(*registry.Registry)
 
 	var diags []validate.Diagnostic
+	scenarios := make([]scenarioView, 0, len(names))
 	for _, name := range names {
-		fileDiags := v.validateFile(ctx, filepath.Join(dir, name), reg)
+		fileDiags, scn := v.validateFile(ctx, filepath.Join(dir, name), reg)
+		scenarios = append(scenarios, scenarioView{name: envtest.ScenarioNameFromPath(name), scn: scn})
 		if len(fileDiags) == 0 {
 			// Every other domain emits an OK row per clean file. Without one a
 			// project whose scenarios all pass renders as "validation skipped
@@ -103,16 +105,47 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		if f.Shared {
 			continue
 		}
+		message := f.Message
+		if f.Kind == config.KindInterpolatedHostPort && (f.VarPath != "" || f.SourceService != "") {
+			uncovered := uncoveredScenarios(ctx.Cfg, scenarios, f)
+			if len(uncovered) == 0 {
+				continue
+			}
+			message += " (not covered in scenarios: " + strings.Join(uncovered, ", ") + ")"
+		}
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityWarning,
 			Domain:   "tests",
 			Target:   "tests.isolation",
 			File:     relPath(ctx.ProjectRoot, f.File),
-			Message:  f.Message,
+			Message:  message,
 		})
 	}
 
 	return diags
+}
+
+// scenarioView pairs a scenario file's name with its loaded scenario; scn is
+// nil when the file failed to load.
+type scenarioView struct {
+	name string
+	scn  *envtest.Scenario
+}
+
+// uncoveredScenarios returns, in file order, the scenarios whose copy would
+// NOT remap the host port behind an interpolated finding. validate has no
+// scenario of its own, so the finding stays silent only when every scenario
+// covers it — the same bar that keeps a fixed project green under --strict.
+// An unloadable scenario covers nothing: checking a nil scenario would ask
+// about the project's own enabled state instead.
+func uncoveredScenarios(cfg *config.DweConfig, scenarios []scenarioView, f config.IsolationFinding) []string {
+	var out []string
+	for _, s := range scenarios {
+		if s.scn == nil || !envtest.CoversInterpolatedHostPort(cfg, s.scn, f) {
+			out = append(out, s.name)
+		}
+	}
+	return out
 }
 
 // validateFile runs every check for a single scenario file, in load order.
@@ -120,7 +153,9 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 // (which also covers a bad scenario name — LoadScenario runs
 // ValidateScenarioName internally) and a render failure, both of which abort
 // the remaining checks for this file since nothing downstream can be trusted.
-func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg *registry.Registry) []validate.Diagnostic {
+// It also returns the loaded scenario (nil on a load failure) for the
+// project-wide isolation filter in Run.
+func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg *registry.Registry) ([]validate.Diagnostic, *envtest.Scenario) {
 	relFile := relPath(ctx.ProjectRoot, path)
 	target := "tests." + envtest.ScenarioNameFromPath(path)
 
@@ -132,7 +167,7 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 			Target:   target,
 			File:     relFile,
 			Message:  err.Error(),
-		}}
+		}}, nil
 	}
 
 	var diags []validate.Diagnostic
@@ -209,7 +244,7 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 		diags = append(diags, validateCommandRefs(renderCfg, scn.Steps, target, relFile, reg)...)
 	}
 
-	return diags
+	return diags, scn
 }
 
 // validateCommandRefs walks every step (recursing one level into parallel
