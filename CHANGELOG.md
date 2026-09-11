@@ -51,6 +51,12 @@ generated from commit subjects and stay on the
   template function or a Sprig-order call logged a `level=WARN` line into
   standard output, corrupting `--output json` and `dwe prompt`. They now go
   through the diagnostic trace and appear only under `--debug`.
+- **A parallel workflow sub-step no longer loses its last line of output when
+  that line has no trailing newline.** A sub-step ending in
+  `printf 'error: x'; exit 1` used to drop `error: x` from both the failure dump
+  and `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log` — in CI the
+  dump is the only output, so the line explaining the failure was the one that
+  disappeared. It now appears in both.
 
 ## [0.6.0] - 2026-09-07
 

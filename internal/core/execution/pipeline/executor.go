@@ -853,20 +853,22 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			// boundaries are reassembled and double-stripped before reaching
 			// disk (a stateless per-Write logSanitizer cannot handle split
 			// sequences); the final gate keeps a `\r` redraw run from landing
-			// one line per frame. Precedent:
-			// usercommands/runtime/runners/workflow/parallel.go:216-234 applies
-			// the same guard to the workflow runner's sub-step logs.
+			// one line per frame. The workflow runner's sub-step logs
+			// (usercommands/runtime/runners/workflow/parallel.go) use the
+			// same guard.
 			//
 			// What the guard costs: lineTee.Flush delivers an un-terminated
-			// tail as final=false (liveui/output.go:225), so ANY tail the child
-			// left without a closing newline — `\r`-terminated or not — never
-			// reaches this file, in both implementations alike.
-			// Here it is not lost, because the same frame also reaches
+			// tail as final=false (liveui/output.go, LineTee.Flush), so a tail
+			// the child left without a closing newline never reaches this
+			// file. It is not lost, because the same frame also reaches
 			// Reporter.StepOutput → entry.inProgress → commitTrailingTail →
-			// the global pipeline log (plain.go:659-668, :700-718).
-			// parallel.go has no such second sink. Do NOT give this callback
-			// pending-frame state to "fix" that: it would be a new composite
-			// flush hook on a path that already has one.
+			// the global pipeline log (plain.go, commitTrailingTail).
+			// parallel.go has no such second sink and commits the tail itself
+			// through an atEOF flag set after the child exits; that does not
+			// port here as-is, because flushTee is called early on several
+			// paths below. Do NOT give this callback pending-frame state to
+			// "fix" it: that would be a new composite flush hook on a path
+			// that already has one.
 			if subLog != nil && final {
 				_, _ = fmt.Fprintln(subLog, frame)
 			}
