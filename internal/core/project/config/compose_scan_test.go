@@ -69,6 +69,108 @@ func TestScanComposeIsolation_Ports(t *testing.T) {
 	}
 }
 
+func TestSplitShortPort(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		spec string
+		want []string
+	}{
+		{spec: "${V:-6379}:6379", want: []string{"${V:-6379}", "6379"}},
+		{spec: "127.0.0.1:${V}:80", want: []string{"127.0.0.1", "${V}", "80"}},
+		{spec: "${V:?unset}:80", want: []string{"${V:?unset}", "80"}},
+		{spec: "${V:-${W:-1}}:80", want: []string{"${V:-${W:-1}}", "80"}},
+		{spec: "$$V:80", want: []string{"$$V", "80"}},
+		{spec: "$${V:80", want: []string{"$${V", "80"}},
+		{spec: "${V:80", want: []string{"${V:80"}},
+		{spec: "8080:80", want: []string{"8080", "80"}},
+		{spec: "127.0.0.1:8080:80", want: []string{"127.0.0.1", "8080", "80"}},
+		{spec: "80", want: []string{"80"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.spec, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, splitShortPort(tc.spec))
+		})
+	}
+}
+
+// TestScanShortPort_SplitShapes pins scanShortPort end to end over the
+// brace-aware split: literal shapes keep their raw_host_port finding, and an
+// interpolated host token yields none (it is not a literal).
+func TestScanShortPort_SplitShapes(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		raw          string
+		wantFinding  bool
+		wantHostPort int
+	}{
+		{raw: "${V:-6379}:6379"},
+		{raw: "127.0.0.1:${V}:80"},
+		{raw: "${V}:80/tcp"},
+		{raw: "8080:80", wantFinding: true, wantHostPort: 8080},
+		{raw: "127.0.0.1:8080:80", wantFinding: true, wantHostPort: 8080},
+		{raw: "8080:80/udp", wantFinding: true, wantHostPort: 8080},
+		{raw: "[::1]:8080:80"},
+		{raw: "[::1]:${V}:80"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.raw, func(t *testing.T) {
+			t.Parallel()
+			f, ok := scanShortPort("svc", tc.raw, "compose.yml")
+			require.Equal(t, tc.wantFinding, ok, "finding: %+v", f)
+			if tc.wantFinding {
+				require.Equal(t, KindRawHostPort, f.Kind)
+				require.Equal(t, tc.wantHostPort, f.HostPort)
+			}
+		})
+	}
+}
+
+func TestInterpolatedVar(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		token    string
+		wantName string
+		wantOK   bool
+	}{
+		{token: "${V}", wantName: "V", wantOK: true},
+		{token: "${VALKEY_PORT:-6379}", wantName: "VALKEY_PORT", wantOK: true},
+		{token: "${V-6379}", wantName: "V", wantOK: true},
+		{token: "${V:?port required}", wantName: "V", wantOK: true},
+		{token: "${V?port required}", wantName: "V", wantOK: true},
+		{token: "${_v1:-${W}}", wantName: "_v1", wantOK: true},
+		{token: "$V", wantName: "V", wantOK: true},
+		{token: "$_PORT_2", wantName: "_PORT_2", wantOK: true},
+
+		{token: "${A}${B}"},
+		{token: "${A-1}${B}"},
+		{token: "80${X}"},
+		{token: "${X}80"},
+		{token: "$A$B"},
+		{token: "$$V"},
+		{token: "$${V}"},
+		{token: "${V:+x}"},
+		{token: "${V"},
+		{token: "${}"},
+		{token: "$"},
+		{token: "${1V}"},
+		{token: "$1V"},
+		{token: "${V-"},
+		{token: "${V.X}"},
+		{token: "$V-1"},
+		{token: "8080"},
+		{token: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.token, func(t *testing.T) {
+			t.Parallel()
+			name, ok := interpolatedVar(tc.token)
+			require.Equal(t, tc.wantOK, ok)
+			require.Equal(t, tc.wantName, name)
+		})
+	}
+}
+
 func TestScanComposeIsolation_ContainerName(t *testing.T) {
 	t.Parallel()
 	findings := scanFixture(t, "container_name.yml")

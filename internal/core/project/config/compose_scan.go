@@ -752,7 +752,7 @@ func scanShortPort(service, raw string, file string) (IsolationFinding, bool) {
 		return IsolationFinding{}, false
 	}
 
-	parts := strings.Split(spec, ":")
+	parts := splitShortPort(spec)
 	switch len(parts) {
 	case 1:
 		// container-port-only — random host port, not a finding.
@@ -764,6 +764,91 @@ func scanShortPort(service, raw string, file string) (IsolationFinding, bool) {
 	default:
 		return IsolationFinding{}, false
 	}
+}
+
+// splitShortPort splits the short port syntax on the `:` separators that lie
+// outside `${…}`, so the `:-` / `:?` operator inside `${PORT:-6379}:6379` does
+// not split the host token. `$$` is compose's escaped dollar, never the start
+// of an interpolation. An unterminated `${` swallows the rest of the spec,
+// which then fails every later classification — advisory, no false positive.
+func splitShortPort(spec string) []string {
+	var parts []string
+	depth, start := 0, 0
+	for i := 0; i < len(spec); i++ {
+		switch {
+		case strings.HasPrefix(spec[i:], "$$"):
+			i++
+		case strings.HasPrefix(spec[i:], "${"):
+			depth++
+			i++
+		case spec[i] == '}' && depth > 0:
+			depth--
+		case spec[i] == ':' && depth == 0:
+			parts = append(parts, spec[start:i])
+			start = i + 1
+		}
+	}
+	return append(parts, spec[start:])
+}
+
+// composeVarNameRe is the variable-name grammar compose interpolation accepts.
+var composeVarNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// interpolatedVar reports whether token is exactly one compose interpolation —
+// `${VAR}`, `${VAR:-d}`, `${VAR-d}`, `${VAR:?e}`, `${VAR?e}` or `$VAR` — and
+// returns VAR. A mixed token (`${A}${B}`, `80${X}`) is rejected: which variable
+// decides the port is then ambiguous, and the scanner stays advisory.
+func interpolatedVar(token string) (string, bool) {
+	if strings.HasPrefix(token, "$$") {
+		return "", false
+	}
+	if !strings.HasPrefix(token, "${") {
+		name, ok := strings.CutPrefix(token, "$")
+		if !ok || !composeVarNameRe.MatchString(name) {
+			return "", false
+		}
+		return name, true
+	}
+	if closeBrace(token) != len(token)-1 {
+		return "", false
+	}
+	body := token[2 : len(token)-1]
+	end := strings.IndexAny(body, ":-?")
+	if end == -1 {
+		end = len(body)
+	}
+	name, op := body[:end], body[end:]
+	if !composeVarNameRe.MatchString(name) {
+		return "", false
+	}
+	switch {
+	case op == "", strings.HasPrefix(op, ":-"), strings.HasPrefix(op, ":?"),
+		strings.HasPrefix(op, "-"), strings.HasPrefix(op, "?"):
+		return name, true
+	default:
+		return "", false
+	}
+}
+
+// closeBrace returns the index of the `}` closing the `${` token starts with,
+// or -1 when it is never closed. Nested `${…}` in a default count as depth.
+func closeBrace(token string) int {
+	depth := 0
+	for i := 0; i < len(token); i++ {
+		switch {
+		case strings.HasPrefix(token[i:], "$$"):
+			i++
+		case strings.HasPrefix(token[i:], "${"):
+			depth++
+			i++
+		case token[i] == '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // scanPublishedToken decides whether a host-published token is a literal
