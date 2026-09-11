@@ -48,6 +48,10 @@ func DefaultDeployConfig() *config.ProjectDeployConfig {
 						Cmd:         "docker up --wait",
 						Description: "Start all containers and wait until healthy",
 						Untracked:   true,
+						// Without a check: the journal records the step ok and
+						// skips it on every later deploy, so a stopped stack
+						// stays down. A check forces the run every time.
+						Check: &config.Action{Type: "builtin", Cmd: "containers_running"},
 					},
 				},
 			},
