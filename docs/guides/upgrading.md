@@ -32,7 +32,7 @@ Three things worth doing before you trust the new version in a project:
 
 ## Upgrading to 0.6.1
 
-Two groups: template functions, then the platform.
+Three groups: template functions, the platform, then integration tests.
 
 ### Template functions
 
@@ -70,6 +70,18 @@ The search also hits `regexFindAllGroups` and `regexFindAllNamed`, which did not
 ### Platform
 
 **Release binaries need macOS 13 Ventura or later.** They are built with Go 1.27, which dropped macOS 12; on an older Mac, stay on 0.6.0. Building from source needs Go 1.27.
+
+### Integration tests
+
+**`dwe validate` warns about compose host ports interpolated from a variable `dwe test` does not remap.** A port such as `"${VALKEY_PORT:-6379}:6379"`, where `VALKEY_PORT` is exported `from: vars.ports.valkey`, binds the same host port as the live stack in every test run. It always did; now `dwe validate` and `dwe test run` say so. The warning appears only in projects that have scenarios under `workspace/tests/`, and it fails `dwe validate --strict`. Fix every scenario the warning names:
+
+```yaml
+env:
+  vars:
+    ports.valkey: auto
+```
+
+A port exported `from: services.<name>.ports.<x>` is already remapped while that service is enabled in the scenario; it warns only for a scenario that disables the service. See [Interpolated host ports](../reference/config/tests.md#interpolated-host-ports).
 
 ## Upgrading to 0.6.0
 

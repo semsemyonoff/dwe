@@ -57,6 +57,15 @@ generated from commit subjects and stay on the
   and `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log` — in CI the
   dump is the only output, so the line explaining the failure was the one that
   disappeared. It now appears in both.
+- **`dwe test` now warns about a compose host port it cannot remap because the
+  port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
+  exported `from: vars.ports.valkey`, kept its original value in the test copy
+  and collided with the live stack at bind time, with nothing said beforehand.
+  `dwe test run` and `dwe validate` now warn with the fix line,
+  `env.vars: { ports.valkey: auto }`, and `dwe test list --output json` reports
+  it as an `interpolated_host_port` entry in `cost_profile.isolation_findings`.
+  The warning fails `dwe validate --strict` until every scenario is covered —
+  see [Upgrading DWE](docs/guides/upgrading.md).
 
 ## [0.6.0] - 2026-09-07
 
