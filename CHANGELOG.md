@@ -45,6 +45,13 @@ generated from commit subjects and stay on the
   `workspace/tests/`, fails `dwe validate --strict`, and its hint is the fix,
   `${COMPOSE_PROJECT_NAME:-<current value>}` — see
   [Upgrading DWE](docs/guides/upgrading.md).
+- **`dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]`**
+  writes a random value to `workspace/local.yml`, so a setup step no longer
+  needs a `python -c` one-liner for an app key or a Fernet key. `N` counts bytes
+  of entropy (default 32); `base64url` is padded, and the value is always a
+  string. A value already in `local.yml` is kept — the command refuses with
+  `vars_value_exists` — unless `--force` is given. See
+  [`dwe vars set`](docs/reference/config/vars.md#dwe-vars-set).
 
 ### Removed
 

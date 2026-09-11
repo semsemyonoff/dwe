@@ -626,14 +626,14 @@ line.
 - Modify: `skills/dwe/references/render-and-vars.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] `vars.md` § `dwe vars set` (:107): the flag, grammar, byte semantics, padding, refusal and `--force`, string typing; § JSON output (:298) — the new error codes; § Container behavior (:319) — `--generate` obeys `bridge.vars_writable`; mention that the value is printed (§ Output is not redacted) and that secret material belongs in `dwe secrets set --stdin`; RU
-- [ ] `setup.md` question fields (:107-116): a short note under the table — for a secret-like answer, tell the developer to run `dwe vars set <path> --generate …` instead of pasting a python one-liner into `description:`; RU
-- [ ] `packages.md`: a new `internal/shared/randval/` leaf entry (grammar, padded base64url, reader injected, reused by nothing else yet) and the `--generate` contract under § `internal/cli/vars/` (bypasses `CoerceScalar`; exists-check under the locks after the container gate); add `randval/` to the `internal/shared/` leaf list in `AGENTS.md` (respect `TestAgentsMdBudget`)
-- [ ] `skills/dwe/references/render-and-vars.md` §5: mention `--generate` as the command to hand the user for secret-like vars, keeping the "`vars set` is a handoff — never run it" framing
-- [ ] `CHANGELOG.md` `### Added`: `dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]`
-- [ ] `make build`, refresh RU headers
-- [ ] `make lint && make test && (cd web && npm run build)` - must pass
-- [ ] commit `feat(vars): generate a random value with dwe vars set --generate`
+- [x] `vars.md` § `dwe vars set` (:107): the flag, grammar, byte semantics, padding, refusal and `--force`, string typing; § JSON output (:298) — the new error codes; § Container behavior (:319) — `--generate` obeys `bridge.vars_writable`; mention that the value is printed (§ Output is not redacted) and that secret material belongs in `dwe secrets set --stdin`; RU
+- [x] `setup.md` question fields (:107-116): a short note under the table — for a secret-like answer, tell the developer to run `dwe vars set <path> --generate …` instead of pasting a python one-liner into `description:`; RU
+- [x] `packages.md`: a new `internal/shared/randval/` leaf entry (grammar, padded base64url, reader injected, reused by nothing else yet) and the `--generate` contract under § `internal/cli/vars/` (bypasses `CoerceScalar`; exists-check under the locks after the container gate); add `randval/` to the `internal/shared/` leaf list in `AGENTS.md` (respect `TestAgentsMdBudget`)
+- [x] `skills/dwe/references/render-and-vars.md` §5: mention `--generate` as the command to hand the user for secret-like vars, keeping the "`vars set` is a handoff — never run it" framing
+- [x] `CHANGELOG.md` `### Added`: `dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]`
+- [x] `make build`, refresh RU headers
+- [x] `make lint && make test && (cd web && npm run build)` - must pass
+- [x] commit `feat(vars): generate a random value with dwe vars set --generate`
 
 ### Task 11: Verify acceptance criteria
 
