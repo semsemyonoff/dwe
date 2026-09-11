@@ -48,7 +48,7 @@ The validate command runs seven domains in addition to the existing YAML-shape v
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
 | `translations.*` | `workspace/i18n/` translation files | No — fixed validators (parse errors, orphan command/group ids, unknown `render.*` keys) |
 | `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
-| `tests.*` | `workspace/tests/*.yml` scenario files | No — fixed scenario validators (renders + resolves each scenario's steps, flags unknown services / command refs / duplicate step names, and surfaces compose-isolation hazards as warnings) |
+| `tests.*` | `workspace/tests/*.yml` scenario files | No — fixed scenario validators (renders + resolves each scenario's steps, flags unknown services / command refs / duplicate step names, and surfaces compose-isolation hazards as warnings); also warns when a host script or shell step builds its own compose project name instead of deriving it from `$COMPOSE_PROJECT_NAME` |
 
 The `tests.*` domain is validate-only (like `snapshot.*`) — it never runs in preflight, and it stays silent when `workspace/tests/` is absent. See [`tests.md`](tests.md#dwe-validate-tests) for the full scenario-validation surface (`dwe validate tests`).
 

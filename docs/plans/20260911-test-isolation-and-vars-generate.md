@@ -565,14 +565,14 @@ line.
 - Modify: `docs/internals/packages.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] `tests.md` § `dwe validate tests` (:341): the new `tests.host_project_name` warning — sources, the rule in one paragraph, the fix, what it skips (literal, positional, command substitution, untraceable, deeper than one referenced file, a referenced path under a command's `workdir:`, `docker --context … compose`, `argv` other than `[<shell>, -c, …]` such as `[bash, -lc, …]`, non-POSIX-shell scripts, files outside the project or over 1 MiB); RU mirror, anchors checked with `dwe docs show --lang ru --anchors`
-- [ ] `validate.md:51` `tests.*` row mentions host scripts that compute their own compose project name; RU
-- [ ] `upgrading.md` § Upgrading to 0.6.1 → `### Integration tests` (:74): the new warning can fail `dwe validate --strict` in CI; the fix is `${COMPOSE_PROJECT_NAME:-…}`; RU
-- [ ] `packages.md` § validate/tests bullet (~:173): second validator (command sources parsed from files, not the registry — why), source set, scanner rules, never in preflight, "never guesses" policy
-- [ ] `CHANGELOG.md` `### Added`: `dwe validate` warns (`tests.host_project_name`) when a host script or shell step passes compose a project name not derived from `$COMPOSE_PROJECT_NAME`
-- [ ] `make build`, refresh RU `Translated from` headers of every edited page
-- [ ] `make lint && make test && (cd web && npm run build)` - must pass
-- [ ] commit `feat(validate): warn when a host script computes its own compose project name`
+- [x] `tests.md` § `dwe validate tests` (:341): the new `tests.host_project_name` warning — sources, the rule in one paragraph, the fix, what it skips (literal, positional, command substitution, untraceable, deeper than one referenced file, a referenced path under a command's `workdir:`, `docker --context … compose`, `argv` other than `[<shell>, -c, …]` such as `[bash, -lc, …]`, non-POSIX-shell scripts, files outside the project or over 1 MiB); RU mirror, anchors checked with `dwe docs show --lang ru --anchors`
+- [x] `validate.md:51` `tests.*` row mentions host scripts that compute their own compose project name; RU
+- [x] `upgrading.md` § Upgrading to 0.6.1 → `### Integration tests` (:74): the new warning can fail `dwe validate --strict` in CI; the fix is `${COMPOSE_PROJECT_NAME:-…}`; RU
+- [x] `packages.md` § validate/tests bullet (~:173): second validator (command sources parsed from files, not the registry — why), source set, scanner rules, never in preflight, "never guesses" policy
+- [x] `CHANGELOG.md` `### Added`: `dwe validate` warns (`tests.host_project_name`) when a host script or shell step passes compose a project name not derived from `$COMPOSE_PROJECT_NAME`
+- [x] `make build`, refresh RU `Translated from` headers of every edited page
+- [x] `make lint && make test && (cd web && npm run build)` - must pass
+- [x] commit `feat(validate): warn when a host script computes its own compose project name`
 
 ### Task 7: Document the `dwe test` isolation boundary and commit
 

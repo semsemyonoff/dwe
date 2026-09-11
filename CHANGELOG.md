@@ -37,6 +37,14 @@ generated from commit subjects and stay on the
 
 - Template functions `toUnix`, `toUnixMilli`, `toUnixMicro`, `fromUnix`,
   `fromUnixMilli`, `fromUnixMicro`, `escape` and `unescape`, from go-sprout 1.1.
+- **`dwe validate` warns when a host script or shell step passes compose a
+  project name not derived from `$COMPOSE_PROJECT_NAME`**
+  (`tests.host_project_name`). A name such as
+  `-p "${PROJECT_PREFIX:-dwe}-${PROJECT_NAME:-myproj}"` addresses the live stack
+  from inside `dwe test`. The warning appears only in projects with
+  `workspace/tests/`, fails `dwe validate --strict`, and its hint is the fix,
+  `${COMPOSE_PROJECT_NAME:-<current value>}` — see
+  [Upgrading DWE](docs/guides/upgrading.md).
 
 ### Removed
 
