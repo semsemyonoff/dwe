@@ -83,12 +83,12 @@ func TestRemappedHostPortServices(t *testing.T) {
 			want: map[string]bool{"core": true, "minio": true, "nginx": true},
 		},
 		{
-			// The loader keeps a required service enabled, but the remap skips
-			// it — membership follows the remap, not Enabled.
-			name: "required service disabled by the scenario is not remapped",
+			// The loader keeps a required service enabled, so it still runs in
+			// the copy and its ports must move.
+			name: "required service disabled by the scenario is still remapped",
 			cfg:  cfg,
 			scn:  &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"core"}}}},
-			want: map[string]bool{"db": true, "nginx": true},
+			want: map[string]bool{"core": true, "db": true, "nginx": true},
 		},
 		{
 			name: "nil config",

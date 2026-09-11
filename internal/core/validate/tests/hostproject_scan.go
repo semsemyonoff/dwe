@@ -2,6 +2,7 @@ package tests
 
 import (
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -306,9 +307,71 @@ var declKeywords = map[string]bool{
 }
 
 // commandWrappers run their argument as a command, so the compose anchor is
-// looked for after them (their options and `env`'s NAME=value skipped).
-var commandWrappers = map[string]bool{
-	"exec": true, "command": true, "env": true, "sudo": true, "time": true, "nice": true,
+// looked for after them (their options, option values and `env`'s NAME=value
+// skipped).
+var commandWrappers = map[string]wrapperOpts{
+	"exec":    {short: "a"},
+	"command": {},
+	"env":     {short: "uCPS", long: []string{"--unset", "--chdir", "--split-string"}},
+	"sudo": {short: "ughpCDrtUTR", long: []string{
+		"--user", "--group", "--host", "--prompt", "--close-from", "--chdir",
+		"--role", "--type", "--other-user", "--command-timeout", "--chroot",
+	}},
+	"time": {short: "fo", long: []string{"--format", "--output"}},
+	"nice": {short: "n", long: []string{"--adjustment"}},
+}
+
+// wrapperOpts names a wrapper's options whose value may be the next word.
+type wrapperOpts struct {
+	short string
+	long  []string
+}
+
+// takesNextWord reports whether option opt consumes the following word: a
+// value-taking long option without `=`, or a short cluster whose first
+// value-taking letter ends it (`-u root`, `-Eu root`, but not `-uroot`).
+func (o wrapperOpts) takesNextWord(opt string) bool {
+	if strings.HasPrefix(opt, "--") {
+		return !strings.Contains(opt, "=") && slices.Contains(o.long, opt)
+	}
+	for k := 1; k < len(opt); k++ {
+		if strings.IndexByte(o.short, opt[k]) >= 0 {
+			return k == len(opt)-1
+		}
+	}
+	return false
+}
+
+// skipWrappers returns the index of the first word after the wrappers
+// starting at words[i], feeding every NAME=value word among their arguments
+// to assign (which reports whether the word was one).
+func skipWrappers(words []string, i int, assign func(raw string) bool) int {
+	for i < len(words) {
+		opts, ok := commandWrappers[words[i]]
+		if !ok {
+			break
+		}
+		i = skipWrapperArgs(words, i+1, opts, assign)
+	}
+	return i
+}
+
+func skipWrapperArgs(words []string, i int, opts wrapperOpts, assign func(raw string) bool) int {
+	optsDone := false
+	for ; i < len(words); i++ {
+		w := unquoted(words[i])
+		switch {
+		case !optsDone && w == "--":
+			optsDone = true
+		case !optsDone && strings.HasPrefix(w, "-"):
+			if opts.takesNextWord(w) {
+				i++
+			}
+		case !assign(words[i]):
+			return i
+		}
+	}
+	return i
 }
 
 // composeValueFlags are compose global flags whose value is the next word.
@@ -403,12 +466,7 @@ func composeProjectValues(words []string) []string {
 		}
 		return out
 	}
-	for i < len(words) && commandWrappers[words[i]] {
-		i++
-		for i < len(words) && (strings.HasPrefix(words[i], "-") || captureAssignment(words[i])) {
-			i++
-		}
-	}
+	i = skipWrappers(words, i, captureAssignment)
 
 	if i >= len(words) {
 		return out

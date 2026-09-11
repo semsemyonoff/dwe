@@ -390,12 +390,12 @@ Sources:
 
 | Source | Text scanned |
 |--------|--------------|
-| `type: shell` user commands in every command file, hidden ones included | `cmd`, or the payload of `argv: [<shell>, -c, <payload>]` |
+| `type: shell` user commands in every command file, hidden ones included | `cmd`, or the `-c` payload of a POSIX-shell `argv` (`[sh, -c, <payload>]`, `[bash, -lc, <payload>]`) |
 | `type: script` user commands whose `script.shell` is empty or a POSIX shell (`sh`, `bash`, `dash`, `ksh`, `zsh`) | the `path`, `plan`, `run` and `cleanup` files |
 | `type: shell` steps and shell `check:` (including `parallel:` sub-steps) in `workspace/deploy.yml`, `workspace/reset.yml`, `workspace/lifecycle.yml` (`run` and `stop`), each service's `deploy.yml` / `reset.yml`, and every scenario | `cmd` |
 | A script an inline `cmd` above runs as `bash <path>`, `sh <path>` or `./<path>` (path relative to the project root) | the file, one level deep; a `./<path>` file only when it has no shebang or a POSIX-shell one |
 
-A file reached from several sources is scanned once. The scanner looks at compose invocations in command position — `docker compose`, `docker-compose` or `${DOCKER:-docker} compose`, also behind `VAR=value` prefixes and `sudo`, `env`, `exec`, `command`, `time`, `nice` — reads the `-p` / `--project-name` global flag, and also checks every `COMPOSE_PROJECT_NAME=` assignment. A value that references `$COMPOSE_PROJECT_NAME` anywhere passes (`${COMPOSE_PROJECT_NAME:-dwe-myproj}`, `${OVERRIDE:-$COMPOSE_PROJECT_NAME}`). For a bare `$PROJECT` it reads every assignment to `PROJECT` in the same text and warns only when all of them build the name without `$COMPOSE_PROJECT_NAME`; when they disagree it stays silent. A `-p` after the subcommand (`docker compose exec db psql -p 5432`) is not compose's flag and is never read.
+A file reached from several sources is scanned once. The scanner looks at compose invocations in command position — `docker compose`, `docker-compose` or `${DOCKER:-docker} compose`, also behind `VAR=value` prefixes and `sudo`, `env`, `exec`, `command`, `time`, `nice` with their options (`sudo -u root`, `nice -n 10`) — reads the `-p` / `--project-name` global flag, and also checks every `COMPOSE_PROJECT_NAME=` assignment. A value that references `$COMPOSE_PROJECT_NAME` anywhere passes (`${COMPOSE_PROJECT_NAME:-dwe-myproj}`, `${OVERRIDE:-$COMPOSE_PROJECT_NAME}`). For a bare `$PROJECT` it reads every assignment to `PROJECT` in the same text and warns only when all of them build the name without `$COMPOSE_PROJECT_NAME`; when they disagree it stays silent. A `-p` after the subcommand (`docker compose exec db psql -p 5432`) is not compose's flag and is never read.
 
 ```sh
 PROJECT="${PROJECT_PREFIX:-dwe}-${PROJECT_NAME:-myproj}"
@@ -417,7 +417,7 @@ The scanner never guesses. It skips, and never flags:
 - a script more than one referenced file deep, and a referenced path containing an expansion;
 - a referenced path under a command's `workdir:` — references resolve against the project root only;
 - `docker --context … compose`, which is not anchored;
-- an `argv` other than `[<shell>, -c, …]`, such as `[bash, -lc, …]` — any other `argv` runs without a shell;
+- an `argv` without a shell and `-c` — `[docker, compose, …]` runs without a shell, and a script file in `[bash, <path>]` is not followed;
 - scripts for other interpreters (`script.shell: python3`, a `./tool.py` with a python shebang);
 - files outside the project (an absolute path, a `../` path, a symlink leading out) and files over 1 MiB;
 - container-side commands.
@@ -479,7 +479,7 @@ The runner remaps a host port only through the value it writes into the copy, so
 | `from: services.<name>.ports.<x>`, with `<x>` declared under `services.<name>.ports` | the runner remaps `<name>`'s ports — the service is enabled in the scenario and not listed under `env.services.disable` | says `<name>`'s ports are remapped only in scenarios where it is enabled and not listed under `env.services.disable` |
 | anything else — another path, a `.port` sub-path, an undeclared port, a falsy `when:`, no rule at all (host environment, a hand-written `.env`, the `:-` default) | only when its compose file is not in the scenario's stack (see below) | names both remedies |
 
-Membership in the remap is what counts, not whether the service ends up enabled: a `required: true` service listed under `env.services.disable` stays enabled in the copy, but its ports are not remapped, so the finding stands.
+A `required: true` service listed under `env.services.disable` stays enabled in the copy, exactly as the config loader resolves the generated `local.yml`, so its ports are still remapped and the finding is covered.
 
 Whatever the rule, a scenario also covers the finding when the compose file that publishes the port is not in its stack: a service's own compose files (`compose:` in its `service.yml`, plus its `local.yml` overlays) leave the chain when the scenario disables the service, so nothing in them binds a port in that copy. A `required: true` service stays enabled, so its files stay in; a service declared in the root compose file never leaves it.
 

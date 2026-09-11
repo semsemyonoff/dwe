@@ -125,6 +125,14 @@ func TestHostProjectName_Sources(t *testing.T) {
 			want: []string{"command db.seed, cmd line 1"},
 		},
 		{
+			name: "shell command argv with -lc payload",
+			files: map[string]string{
+				"workspace/commands/db.yml": "commands:\n  seed:\n    type: shell\n    argv: [bash, -lc, 'docker compose -p \"${A}-x\" up']\n",
+			},
+			file: "workspace/commands/db.yml",
+			want: []string{"command db.seed, cmd line 1"},
+		},
+		{
 			name: "hidden command",
 			files: map[string]string{
 				"workspace/commands/db.yml": "commands:\n  seed:\n    type: shell\n    hide: \"true\"\n    cmd: '" + offendingCmd + "'\n",
@@ -273,9 +281,9 @@ func TestHostProjectName_NotScanned(t *testing.T) {
 			},
 		},
 		{
-			name: "argv with -lc is not the -c form",
+			name: "argv running a script file",
 			files: map[string]string{
-				"workspace/commands/db.yml": "commands:\n  seed:\n    type: shell\n    argv: [bash, -lc, '" + offendingCmd + "']\n",
+				"workspace/commands/db.yml": "commands:\n  seed:\n    type: shell\n    argv: [bash, -l, '" + offendingCmd + "']\n",
 			},
 		},
 		{
@@ -524,8 +532,13 @@ func TestScriptReferences(t *testing.T) {
 		{`X=1 sudo -E bash "scripts/a b.sh"`, []scriptRef{{path: "scripts/a b.sh"}}},
 		{"./bin/run --flag", []scriptRef{{path: "./bin/run", checkShebang: true}}},
 		{"cd x && ./run; sh y.sh", []scriptRef{{path: "./run", checkShebang: true}, {path: "y.sh"}}},
+		{"bash -eo pipefail scripts/a.sh", []scriptRef{{path: "scripts/a.sh"}}},
+		{"bash --rcfile rc scripts/a.sh", []scriptRef{{path: "scripts/a.sh"}}},
+		{"sudo -u root bash scripts/a.sh", []scriptRef{{path: "scripts/a.sh"}}},
+		{"nice -n 10 ./bin/run", []scriptRef{{path: "./bin/run", checkShebang: true}}},
 		{"bash -c 'x.sh'", nil},
 		{"bash -ec x.sh", nil},
+		{"bash -e -c x.sh", nil},
 		{"sh $DIR/a.sh", nil},
 		{"$SHELL a.sh", nil},
 		{"python3 a.py", nil},
@@ -576,7 +589,16 @@ func TestShellArgvPayload(t *testing.T) {
 	}{
 		{[]string{"sh", "-c", "x"}, "x", true},
 		{[]string{"/bin/bash", "-c", "x", "arg0"}, "x", true},
-		{[]string{"bash", "-lc", "x"}, "", false},
+		{[]string{"bash", "-lc", "x"}, "x", true},
+		{[]string{"sh", "-ec", "x"}, "x", true},
+		{[]string{"bash", "-e", "-c", "x"}, "x", true},
+		{[]string{"bash", "-c", "-e", "x"}, "x", true},
+		{[]string{"bash", "-o", "pipefail", "-c", "x"}, "x", true},
+		{[]string{"bash", "-eo", "pipefail", "-c", "x"}, "x", true},
+		{[]string{"bash", "--login", "-c", "x"}, "x", true},
+		{[]string{"bash", "-c", "--", "x"}, "x", true},
+		{[]string{"bash", "-l", "script.sh"}, "", false},
+		{[]string{"bash", "-o", "c", "x"}, "", false},
 		{[]string{"docker", "compose", "-p", "x"}, "", false},
 		{[]string{"python3", "-c", "x"}, "", false},
 		{[]string{"sh", "-c"}, "", false},

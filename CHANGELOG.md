@@ -85,6 +85,11 @@ generated from commit subjects and stay on the
   literal host port behind an interpolated bind address
   (`"${BIND:-127.0.0.1}:8080:80"`) is now recognised and blocks `dwe test run`
   like any other literal host port.
+- **`dwe test` remaps the host ports of a `required: true` service a scenario
+  lists under `env.services.disable`.** A required service cannot be disabled,
+  so it still ran in the test copy, but on its original ports — colliding with
+  the live stack and with other scenarios under `--parallel`. It now gets free
+  ports like every other service that runs in the copy.
 - **The built-in deploy pipeline brings a stopped stack back up.** After a
   `dwe stop`, `dwe deploy run` printed `Phase: start` and `✓ Done`, and the
   stack stayed down: the `up` step had no `check:`, so the journal skipped it on

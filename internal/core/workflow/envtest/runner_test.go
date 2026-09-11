@@ -1100,9 +1100,9 @@ func TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped(t *testing.T
 // TestScanComposeIsolationGate_InterpolatedHostPort pins the scenario filter on
 // interpolated host ports: a vars-sourced port warns until the scenario sets
 // its path to auto; a service-sourced port is silent while the runner remaps
-// the service and warns once the scenario disables it — including a required
-// service, which stays enabled in the copy but is not remapped. The kind never
-// blocks.
+// the service and warns once the scenario disables it — except a required
+// service, which stays enabled in the copy and so stays remapped. The kind
+// never blocks.
 func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
 	disableRedis := &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"redis"}}}}
 	tests := []struct {
@@ -1118,7 +1118,7 @@ func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
 			scn:  &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": AutoPortSentinel}}},
 		},
 		{name: "source service disabled", scn: disableRedis, wantValkey: true, wantRedis: true},
-		{name: "required source service disabled", redisRequired: true, scn: disableRedis, wantValkey: true, wantRedis: true},
+		{name: "required source service disabled", redisRequired: true, scn: disableRedis, wantValkey: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

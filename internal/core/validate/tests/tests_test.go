@@ -622,7 +622,7 @@ resources:
 // silent only when EVERY scenario remaps its port (vars path set to auto, or
 // the source service in the runner's remap set), and otherwise names the
 // scenarios that still lack the fix. An unloadable scenario covers nothing, a
-// required service a scenario disables is not remapped, and a finding with no
+// required service a scenario disables stays remapped, and a finding with no
 // VarPath/SourceService always warns without a scenario list.
 func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
@@ -683,7 +683,7 @@ func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 				"a.yml": valkeyAuto,
 				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    disable: [locked]\n" + steps,
 			},
-			want: map[string][]string{"LOCKED_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+			want: map[string][]string{"CACHE_PORT": {"a", "b"}},
 		},
 	}
 	for _, tt := range tests {
@@ -772,7 +772,8 @@ services:
 // scenario's stack when the scenario disables it, so nothing in that file
 // binds a host port in that copy — traced or untraced, the finding is covered
 // there. A required service's file stays in the chain whatever the scenario
-// says, so its port still warns.
+// says, so its untraced port still warns everywhere, while its traced port is
+// remapped even where a scenario disables it.
 func TestScenariosValidator_InterpolatedHostPort_DisabledServiceOverlay(t *testing.T) {
 	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
 	disable := func(names string) string {
@@ -790,19 +791,19 @@ func TestScenariosValidator_InterpolatedHostPort_DisabledServiceOverlay(t *testi
 		{
 			name:      "overlay service disabled by every scenario",
 			scenarios: map[string]string{"a.yml": disable("tool"), "b.yml": disable("tool")},
-			want:      map[string]string{},
+			want:      map[string]string{"PINNED_EXTRA_PORT": ""},
 		},
 		{
 			name:      "overlay service disabled by one scenario",
 			scenarios: map[string]string{"a.yml": disable("tool"), "b.yml": steps},
-			want:      map[string]string{"TOOL_EXTRA_PORT": ""},
+			want:      map[string]string{"TOOL_EXTRA_PORT": "", "PINNED_EXTRA_PORT": ""},
 		},
 		{
 			name:      "required overlay service disabled by one scenario",
 			scenarios: map[string]string{"a.yml": disable("pinned"), "b.yml": steps},
 			want: map[string]string{
-				"PINNED_PORT":     " (not covered in scenarios: a)",
-				"TOOL_EXTRA_PORT": "",
+				"TOOL_EXTRA_PORT":   "",
+				"PINNED_EXTRA_PORT": "",
 			},
 		},
 	}
@@ -826,7 +827,7 @@ services:
 services:
   pinned:
     image: redis:7
-    ports: ["${PINNED_PORT:-7003}:6379"]
+    ports: ["${PINNED_PORT:-7003}:6379", "${PINNED_EXTRA_PORT:-7004}:6380"]
 `,
 			}
 			for name, body := range overlays {
@@ -850,7 +851,7 @@ services:
 				if d.Target != "tests.isolation" {
 					continue
 				}
-				for _, v := range []string{"TOOL_PORT", "TOOL_EXTRA_PORT", "PINNED_PORT"} {
+				for _, v := range []string{"TOOL_PORT", "TOOL_EXTRA_PORT", "PINNED_PORT", "PINNED_EXTRA_PORT"} {
 					if strings.Contains(d.Message, "from "+v+" ") || strings.Contains(d.Message, "from "+v+",") {
 						got[v] = d.Message
 					}

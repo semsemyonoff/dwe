@@ -300,14 +300,50 @@ func (s *hostProjectScan) report(file, location string, h hit) {
 	s.diags = append(s.diags, d)
 }
 
-// shellArgvPayload returns the script of an argv of the form
-// [<posix shell>, -c, <payload>, …]. Any other argv is exec'd without a shell,
-// so `$…` in it never expands.
+// shellArgvPayload returns the script of a POSIX-shell argv whose options
+// carry `c` (`[sh, -c, …]`, `[bash, -lc, …]`, `[sh, -e, -c, …]`). Any other
+// argv is exec'd without a shell, so `$…` in it never expands, or runs a
+// script file, which is not followed.
 func shellArgvPayload(argv []string) (string, bool) {
-	if len(argv) < 3 || !posixShells[path.Base(argv[0])] || argv[1] != "-c" {
+	if len(argv) < 2 || !posixShells[path.Base(argv[0])] {
 		return "", false
 	}
-	return argv[2], true
+	operand, inline := shellInvocation(argv[1:])
+	if !inline || operand >= len(argv)-1 {
+		return "", false
+	}
+	return argv[1+operand], true
+}
+
+// shellLongOptsWithValue are bash long options whose value is the next word.
+var shellLongOptsWithValue = map[string]bool{"--rcfile": true, "--init-file": true}
+
+// shellInvocation walks the (unquoted) arguments of a POSIX shell invocation
+// and returns the index of its first operand — len(args) when there is none —
+// and whether a `c` among the options makes that operand inline script text
+// rather than a script file. Options are parsed to the first operand, so
+// `bash -c -e 'x'` is inline too; each `o`/`O` in a cluster takes the next
+// word (`-eo pipefail`).
+func shellInvocation(args []string) (operand int, inline bool) {
+	for j := 0; j < len(args); j++ {
+		a := args[j]
+		switch {
+		case a == "--" || a == "-":
+			return j + 1, inline
+		case strings.HasPrefix(a, "--"):
+			if shellLongOptsWithValue[a] {
+				j++
+			}
+		case len(a) > 1 && (a[0] == '-' || a[0] == '+'):
+			if a[0] == '-' && strings.Contains(a, "c") {
+				inline = true
+			}
+			j += strings.Count(a, "o") + strings.Count(a, "O")
+		default:
+			return j, inline
+		}
+	}
+	return len(args), inline
 }
 
 type scriptRef struct {
@@ -330,15 +366,10 @@ func scriptReferences(text string) []scriptRef {
 			}
 			i++
 		}
-		for i < len(words) && commandWrappers[words[i]] {
-			i++
-			for i < len(words) {
-				if _, ok := parseAssignment(words[i]); !ok && !strings.HasPrefix(words[i], "-") {
-					break
-				}
-				i++
-			}
-		}
+		i = skipWrappers(words, i, func(raw string) bool {
+			_, ok := parseAssignment(raw)
+			return ok
+		})
 		if i >= len(words) || strings.ContainsAny(words[i], "$`") {
 			continue
 		}
@@ -360,29 +391,15 @@ func scriptReferences(text string) []scriptRef {
 // shellOperand returns the script-file operand after a shell's options, or
 // false when there is none or `-c` makes the operand inline text.
 func shellOperand(args []string) (string, bool) {
-	for j := 0; j < len(args); j++ {
-		a := unquoted(args[j])
-		switch {
-		case a == "--":
-			j++
-			if j < len(args) && !strings.ContainsAny(args[j], "$`") {
-				return unquoted(args[j]), true
-			}
-			return "", false
-		case a == "-o" || a == "+o":
-			j++ // takes an option name
-		case strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+"):
-			if !strings.HasPrefix(a, "--") && strings.Contains(a, "c") {
-				return "", false
-			}
-		default:
-			if strings.ContainsAny(args[j], "$`") {
-				return "", false
-			}
-			return a, true
-		}
+	plain := make([]string, len(args))
+	for j, a := range args {
+		plain[j] = unquoted(a)
 	}
-	return "", false
+	operand, inline := shellInvocation(plain)
+	if inline || operand >= len(args) || strings.ContainsAny(args[operand], "$`") {
+		return "", false
+	}
+	return plain[operand], true
 }
 
 // posixShebang reports whether a directly executed file runs under a POSIX

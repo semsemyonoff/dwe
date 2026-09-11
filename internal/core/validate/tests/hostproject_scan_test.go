@@ -226,6 +226,41 @@ func TestScanShellTextPositionAndLexing(t *testing.T) {
 			want: []hit{{Line: 1, Value: "${A}-x"}},
 		},
 		{
+			name: "sudo option with a value",
+			text: `sudo -u root docker compose -p "${A}-x" up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "sudo cluster ending in a value option",
+			text: `sudo -Eu root docker compose -p "${A}-x" up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "sudo attached and long option values",
+			text: `sudo -uroot --group=docker --chdir /tmp -- docker compose -p "${A}-x" up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "nice option with a value",
+			text: `nice -n 10 docker compose -p "${A}-x" up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "time option with a value",
+			text: `time -o t.log docker compose -p "${A}-x" up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "env unset then assignment",
+			text: `env -u COMPOSE_PROJECT_NAME COMPOSE_PROJECT_NAME="${A}-x" docker compose up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
+			name: "nested wrappers",
+			text: `sudo -u root env -u X nice -n 5 docker compose -p "${A}-x" up`,
+			want: []hit{{Line: 1, Value: "${A}-x"}},
+		},
+		{
 			name: "reserved word before the command",
 			text: `if true; then docker compose -p "${A}-x" up; fi`,
 			want: []hit{{Line: 1, Value: "${A}-x"}},
