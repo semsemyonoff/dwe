@@ -2,8 +2,10 @@ package vars
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 	uirender "github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
+	"github.com/semsemyonoff/dwe/internal/shared/randval"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
@@ -36,9 +39,23 @@ type varSetJSON struct {
 	Value any    `json:"value"`
 }
 
+// randReader is the randomness source for --generate; tests swap in a fixed
+// reader and MUST NOT call t.Parallel() while overriding it (global state).
+var randReader io.Reader = rand.Reader
+
+// varSetGenerate carries the --generate / --force flags into runVarsSet.
+// Enabled tracks flag presence (cmd.Flags().Changed), not Spec != "", so an
+// explicit --generate= is an invalid spec rather than "flag absent".
+type varSetGenerate struct {
+	Enabled bool
+	Spec    string
+	Force   bool
+}
+
 func newVarsSetCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	var gen varSetGenerate
 	cmd := &cobra.Command{
-		Use:   "set <var> [value]",
+		Use:   "set <var> [value | --generate SPEC [--force]]",
 		Short: "Write a var override to workspace/local.yml",
 		Long: `Set a var by writing an override to workspace/local.yml, preserving the
 file's comments and formatting.
@@ -50,13 +67,21 @@ sequences are rejected — a var is a leaf value.
 With no value an interactive form opens (TTY only); in JSON or non-interactive
 mode a missing value is an error.
 
+--generate writes a fresh random value instead of a positional one. SPEC is
+hex[:N], base64url[:N] (padded) or uuid; N counts bytes of entropy (1..1024,
+default 32). The value is always written as a string and is printed like any
+other set. A value already present in local.yml is kept unless --force is
+given; a default from workspace.yml does not block.
+
 The vars. prefix is optional ("db.host" writes vars.db.host). From inside a
 container the target must additionally be listed in the project's
 bridge.vars_writable allowlist; from the host, set is unrestricted.`,
 		Example: `  dwe vars set db.host db.internal
   dwe vars set db.port 5432
   dwe vars set feature.enabled true
-  dwe vars set db.host          # interactive form`,
+  dwe vars set db.host          # interactive form
+  dwe vars set app.secret_key --generate hex
+  dwe vars set app.fernet_key --generate base64url:32 --force`,
 		Args:              cobra.RangeArgs(1, 2),
 		SilenceUsage:      true,
 		ValidArgsFunction: leafCompletion(flags),
@@ -68,10 +93,13 @@ bridge.vars_writable allowlist; from the host, set is unrestricted.`,
 			if len(args) == 2 {
 				rawValue, haveValue = args[1], true
 			}
-			_, err := runVarsSet(cmd, flags, path, rawValue, haveValue)
+			gen.Enabled = cmd.Flags().Changed("generate")
+			_, err := runVarsSet(cmd, flags, path, rawValue, haveValue, gen)
 			return err
 		},
 	}
+	cmd.Flags().StringVar(&gen.Spec, "generate", "", "write a random value: hex[:N], base64url[:N] or uuid (N = bytes, default 32)")
+	cmd.Flags().BoolVar(&gen.Force, "force", false, "with --generate, overwrite an existing value in local.yml")
 	return cmd
 }
 
@@ -83,7 +111,7 @@ bridge.vars_writable allowlist; from the host, set is unrestricted.`,
 // interactive form was aborted (a clean no-op) and on every error, and true once
 // the override is persisted. The TUI browser uses it to decide whether to close
 // (committed) or reopen (aborted) after an edit.
-func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue string, haveValue bool) (committed bool, err error) {
+func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue string, haveValue bool, gen varSetGenerate) (committed bool, err error) {
 	// Path confinement: vars.* only. This is also the container trust boundary —
 	// a non-vars path could otherwise mutate formalized config. The
 	// container-write allowlist gate lives at the shared write chokepoint
@@ -91,6 +119,14 @@ func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue stri
 	// edit overlay alike — is covered structurally, not per-caller.
 	if err := validateVarsSetPath(path); err != nil {
 		return false, err
+	}
+
+	if gen.Force && !gen.Enabled {
+		return false, cmdctx.Err("vars_force_requires_generate", "--force only applies together with --generate").
+			WithDetail("var", path)
+	}
+	if gen.Enabled {
+		return runVarsSetGenerated(cmd, flags, path, haveValue, gen)
 	}
 
 	// Resolve the value: positional arg, interactive form, or value-required.
@@ -116,7 +152,35 @@ func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue stri
 		return false, cmdctx.ErrWrap("vars_value_invalid", err).WithDetail("var", path)
 	}
 
-	newCfg, err := writeVarOverride(cmd, flags, path, coerced)
+	return confirmVarSet(cmd, flags, path, coerced, false)
+}
+
+// runVarsSetGenerated is the --generate branch of runVarsSet. Every usage
+// error is raised before any lock is taken; the "already set" refusal needs
+// the locks, so it runs inside writeVarOverrideCore.
+func runVarsSetGenerated(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, haveValue bool, gen varSetGenerate) (bool, error) {
+	if haveValue {
+		return false, cmdctx.Err("vars_value_ambiguous",
+			fmt.Sprintf("pass either a value or --generate for %q, not both", path)).
+			WithDetail("var", path)
+	}
+	spec, err := randval.Parse(gen.Spec)
+	if err != nil {
+		return false, cmdctx.ErrWrap("vars_generate_invalid", err).WithDetail("var", path)
+	}
+	value, err := randval.Generate(spec, randReader)
+	if err != nil {
+		return false, fmt.Errorf("generating a value for %q: %w", path, err)
+	}
+	// A generated value is always a string: CoerceScalar would turn an
+	// all-digit hex value into an int.
+	return confirmVarSet(cmd, flags, path, value, !gen.Force)
+}
+
+// confirmVarSet writes value and prints the confirmation shared by every set
+// path. committed is true once the override is persisted.
+func confirmVarSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, value any, onlyIfAbsent bool) (bool, error) {
+	newCfg, err := writeVarOverride(cmd, flags, path, value, onlyIfAbsent)
 	if err != nil {
 		return false, err
 	}
@@ -172,7 +236,7 @@ func buildVarOverride(path string, value any) map[string]any {
 // project locks via the PRINTING wrapper (lock-held diagnostics go to stderr so
 // JSON-mode stdout stays clean) and delegates to writeVarOverrideCore. Symmetry
 // with the services toggle, which shares this writer/file.
-func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, value any, onlyIfAbsent bool) (*config.DweConfig, error) {
 	baseDir := flags.ProjectRoot()
 
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean.
@@ -183,7 +247,7 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 	}
 	defer release()
 
-	return writeVarOverrideCore(flags, path, value)
+	return writeVarOverrideCore(flags, path, value, onlyIfAbsent)
 }
 
 // writeVarOverrideSilent performs the same locked write as writeVarOverride but
@@ -200,7 +264,7 @@ func writeVarOverrideSilent(flags *cmdctx.RootFlags, path string, value any) (*c
 	}
 	defer release()
 
-	return writeVarOverrideCore(flags, path, value)
+	return writeVarOverrideCore(flags, path, value, false)
 }
 
 // writeVarOverrideCore is the shared, lock-agnostic write body: capture
@@ -208,7 +272,10 @@ func writeVarOverrideSilent(flags *cmdctx.RootFlags, path string, value any) (*c
 // (preserving comments), write atomically, and reload config. No preflight —
 // this is not a lifecycle/stack mutation. On any post-write failure the captured
 // bytes are restored. Callers MUST already hold the project locks.
-func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+//
+// onlyIfAbsent refuses the write with vars_value_exists when local.yml already
+// holds a non-null value at path (lower layers never block).
+func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any, onlyIfAbsent bool) (*config.DweConfig, error) {
 	// Container-write gate: from inside a container the target var must match a
 	// bridge.vars_writable pattern (host writes are unrestricted). Enforced here,
 	// at the single write chokepoint, so both the CLI `set` path and the in-TUI
@@ -225,6 +292,22 @@ func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*con
 				fmt.Sprintf("var %q is not writable from inside a container", path)).
 				WithDetail("var", path).
 				WithHint("add it to bridge.vars_writable, or run `dwe vars set` on the host")
+		}
+	}
+
+	// Checked after the container gate, so a denied var reports the denial and
+	// never leaks whether it is set; under the locks, so a concurrent writer
+	// cannot slip a value in between check and write.
+	if onlyIfAbsent {
+		layered, err := config.ResolveLayeredPath(flags.ConfigPath, path)
+		if err != nil {
+			return nil, cmdctx.ErrWrap("project_invalid_config", err)
+		}
+		if layered.LocalOK && layered.Local != nil {
+			return nil, cmdctx.Err("vars_value_exists",
+				fmt.Sprintf("%q already has a value in local.yml", path)).
+				WithDetail("var", path).
+				WithHint("pass --force to regenerate")
 		}
 	}
 

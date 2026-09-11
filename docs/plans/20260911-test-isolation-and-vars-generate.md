@@ -610,12 +610,12 @@ line.
 - Modify: `internal/cli/vars/set.go`
 - Modify: `internal/cli/vars/set_test.go`
 
-- [ ] add `--generate` and `--force` flags; update `Use`/`Long`/`Example`; track presence with `cmd.Flags().Changed("generate")` (an explicit `--generate=` must be `vars_generate_invalid`, never "flag absent" → form)
-- [ ] in `runVarsSet`: flag-combination errors and `Parse` before any lock; generate via a package-level reader seam (`randReader = rand.Reader`); skip `CoerceScalar` for the generated string
-- [ ] pass an "only if absent" option into `writeVarOverrideCore` so the `LocalOK && Local != nil` check runs under the locks, AFTER the container gate and before the file is touched — inside a container a non-writable var must still report `vars_not_container_writable`, never `vars_value_exists`; the TUI path (`writeVarOverrideSilent`) passes the option off
-- [ ] write tests: each kind writes a string (all-digit hex from a seeded reader reloads as a string, quoted in `local.yml`); `--generate` + value → `vars_value_ambiguous`; bad spec → `vars_generate_invalid`; `--force` alone → `vars_force_requires_generate`; existing local value → `vars_value_exists`, file unchanged; `--force` overwrites; explicit null in `local.yml` and a `workspace.yml` default do not block; JSON output `{var, value}`; non-interactive works without a TTY; container gate still refuses a non-writable var; container + non-writable + existing local value → `vars_not_container_writable`
-- [ ] write test: `--generate=` → `vars_generate_invalid`, no form opened, file untouched
-- [ ] run `go test ./internal/cli/vars/...` - must pass before task 10
+- [x] add `--generate` and `--force` flags; update `Use`/`Long`/`Example`; track presence with `cmd.Flags().Changed("generate")` (an explicit `--generate=` must be `vars_generate_invalid`, never "flag absent" → form)
+- [x] in `runVarsSet`: flag-combination errors and `Parse` before any lock; generate via a package-level reader seam (`randReader = rand.Reader`); skip `CoerceScalar` for the generated string
+- [x] pass an "only if absent" option into `writeVarOverrideCore` so the `LocalOK && Local != nil` check runs under the locks, AFTER the container gate and before the file is touched — inside a container a non-writable var must still report `vars_not_container_writable`, never `vars_value_exists`; the TUI path (`writeVarOverrideSilent`) passes the option off
+- [x] write tests: each kind writes a string (all-digit hex from a seeded reader reloads as a string, quoted in `local.yml`); `--generate` + value → `vars_value_ambiguous`; bad spec → `vars_generate_invalid`; `--force` alone → `vars_force_requires_generate`; existing local value → `vars_value_exists`, file unchanged; `--force` overwrites; explicit null in `local.yml` and a `workspace.yml` default do not block; JSON output `{var, value}`; non-interactive works without a TTY; container gate still refuses a non-writable var; container + non-writable + existing local value → `vars_not_container_writable`
+- [x] write test: `--generate=` → `vars_generate_invalid`, no form opened, file untouched
+- [x] run `go test ./internal/cli/vars/...` - must pass before task 10
 
 ### Task 10: Document `--generate` and commit
 

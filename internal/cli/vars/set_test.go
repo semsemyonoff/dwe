@@ -1,8 +1,10 @@
 package vars
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
+	"github.com/semsemyonoff/dwe/internal/shared/randval"
 )
 
 // localYAML reads workspace/local.yml from a fixture root.
@@ -367,6 +370,277 @@ vars:
 	}
 	if got, ok := reloadVar(t, cfgPath, "vars.app.name"); !ok || got != "renamed" {
 		t.Errorf("host write: want renamed, got %v (ok=%v)", got, ok)
+	}
+}
+
+// generateSeed starts with 0x12 0x34 so hex:2 yields the all-digit "1234",
+// the value CoerceScalar would have turned into an int. 64 bytes cover the
+// default 32-byte spec.
+var generateSeed = bytes.Repeat([]byte{
+	0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+	0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78,
+}, 4)
+
+// seedRandReader swaps randReader for a fixed reader over generateSeed.
+func seedRandReader(t *testing.T) {
+	t.Helper()
+	orig := randReader
+	randReader = bytes.NewReader(generateSeed)
+	t.Cleanup(func() { randReader = orig })
+}
+
+// wantCode asserts err is a CodedError carrying code.
+func wantCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var ce *cmdctx.CodedError
+	if !errors.As(err, &ce) || ce.Code != code {
+		t.Fatalf("want %s, got %v", code, err)
+	}
+}
+
+// forbidForm fails the test if the interactive form opens, and makes the
+// session look interactive so a missing --generate would reach the form.
+func forbidForm(t *testing.T) {
+	t.Helper()
+	origAsk, origIsInteractive := runAsk, widgets.IsInteractiveFn
+	runAsk = func(context.Context, string, []ask.Field, ask.RunOptions) (ask.Result, error) {
+		t.Fatal("the interactive form must not open with --generate")
+		return ask.Result{}, nil
+	}
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	t.Cleanup(func() { runAsk, widgets.IsInteractiveFn = origAsk, origIsInteractive })
+}
+
+func TestVarsSet_GenerateKinds(t *testing.T) {
+	tests := []struct {
+		spec     string
+		wantYAML string // a substring the written local.yml must contain; "" skips
+	}{
+		{"hex:2", `secret: "1234"`},
+		{"hex", ""},
+		{"base64url:5", ""},
+		{"uuid", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.spec, func(t *testing.T) {
+			cfgPath, root := writeVarsFixture(t)
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			seedRandReader(t)
+			forbidForm(t)
+
+			spec, err := randval.Parse(tc.spec)
+			if err != nil {
+				t.Fatalf("parse %s: %v", tc.spec, err)
+			}
+			want, err := randval.Generate(spec, bytes.NewReader(generateSeed))
+			if err != nil {
+				t.Fatalf("generate %s: %v", tc.spec, err)
+			}
+
+			out, _, err := runVarsCmd(t, flags, "set", "app.secret", "--generate", tc.spec)
+			if err != nil {
+				t.Fatalf("vars set --generate %s: %v", tc.spec, err)
+			}
+			if !strings.Contains(out, want) {
+				t.Errorf("confirmation should print the value %q\ngot:\n%s", want, out)
+			}
+			if tc.wantYAML != "" {
+				if got := localYAML(t, root); !strings.Contains(got, tc.wantYAML) {
+					t.Errorf("local.yml missing %q\ngot:\n%s", tc.wantYAML, got)
+				}
+			}
+			got, ok := reloadVar(t, cfgPath, "vars.app.secret")
+			if !ok {
+				t.Fatal("vars.app.secret not resolvable after set")
+			}
+			if s, isStr := got.(string); !isStr || s != want {
+				t.Errorf("effective value: want string %q, got %v (%T)", want, got, got)
+			}
+		})
+	}
+}
+
+func TestVarsSet_GenerateUsageErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		code string
+	}{
+		{"value and generate", []string{"set", "app.secret", "x", "--generate", "hex"}, "vars_value_ambiguous"},
+		{"unknown kind", []string{"set", "app.secret", "--generate", "sha"}, "vars_generate_invalid"},
+		{"zero bytes", []string{"set", "app.secret", "--generate", "hex:0"}, "vars_generate_invalid"},
+		{"uuid with n", []string{"set", "app.secret", "--generate", "uuid:16"}, "vars_generate_invalid"},
+		{"explicit empty spec", []string{"set", "app.secret", "--generate="}, "vars_generate_invalid"},
+		{"force alone", []string{"set", "app.secret", "x", "--force"}, "vars_force_requires_generate"},
+		{"force alone no value", []string{"set", "app.secret", "--force"}, "vars_force_requires_generate"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfgPath, root := writeVarsFixture(t)
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			seedRandReader(t)
+			forbidForm(t)
+			before := localYAML(t, root)
+
+			_, _, err := runVarsCmd(t, flags, tc.args...)
+			wantCode(t, err, tc.code)
+			if after := localYAML(t, root); after != before {
+				t.Errorf("local.yml changed on a usage error\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+		})
+	}
+}
+
+func TestVarsSet_GenerateRefusesExistingLocalValue(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	seedRandReader(t)
+	before := localYAML(t, root)
+
+	_, _, err := runVarsCmd(t, flags, "set", "db.host", "--generate", "hex")
+	wantCode(t, err, "vars_value_exists")
+	var ce *cmdctx.CodedError
+	errors.As(err, &ce)
+	if ce.Details["var"] != "vars.db.host" {
+		t.Errorf("detail var: want vars.db.host, got %v", ce.Details["var"])
+	}
+	if !strings.Contains(ce.Hint, "--force") {
+		t.Errorf("hint should name --force, got %q", ce.Hint)
+	}
+	if after := localYAML(t, root); after != before {
+		t.Errorf("local.yml changed on refusal\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+func TestVarsSet_GenerateForceOverwrites(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	seedRandReader(t)
+
+	if _, _, err := runVarsCmd(t, flags, "set", "db.host", "--generate", "hex:2", "--force"); err != nil {
+		t.Fatalf("vars set --generate --force: %v", err)
+	}
+	if got, ok := reloadVar(t, cfgPath, "vars.db.host"); !ok || got != "1234" {
+		t.Errorf("forced overwrite: want \"1234\", got %v (%T, ok=%v)", got, got, ok)
+	}
+}
+
+// TestVarsSet_GenerateLowerLayersDoNotBlock: an explicit null in local.yml
+// and a workspace.yml default are not "a local value".
+func TestVarsSet_GenerateLowerLayersDoNotBlock(t *testing.T) {
+	tests := []struct {
+		name  string
+		local string
+		path  string
+	}{
+		{"explicit null in local.yml", "vars:\n  app:\n    secret: null\n", "vars.app.secret"},
+		{"workspace.yml default", "vars:\n  db:\n    host: override-host\n", "vars.app.name"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfgPath, root := writeVarsFixture(t)
+			if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(tc.local), 0o644); err != nil {
+				t.Fatalf("writing local.yml: %v", err)
+			}
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			seedRandReader(t)
+
+			if _, _, err := runVarsCmd(t, flags, "set", tc.path, "--generate", "hex:2"); err != nil {
+				t.Fatalf("vars set --generate: %v", err)
+			}
+			if got, ok := reloadVar(t, cfgPath, tc.path); !ok || got != "1234" {
+				t.Errorf("%s: want \"1234\", got %v (ok=%v)", tc.path, got, ok)
+			}
+		})
+	}
+}
+
+func TestVarsSet_GenerateJSON(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+	seedRandReader(t)
+
+	out, errOut, err := runVarsCmd(t, flags, "set", "app.secret", "--generate", "hex:2")
+	if err != nil {
+		t.Fatalf("vars set --generate --output json: %v", err)
+	}
+	if errOut != "" {
+		t.Errorf("stderr should be empty in JSON mode, got: %q", errOut)
+	}
+	var data varSetJSON
+	if e := json.Unmarshal([]byte(out), &data); e != nil {
+		t.Fatalf("unmarshal set json: %v\nraw: %s", e, out)
+	}
+	if data.Var != "vars.app.secret" || data.Value != "1234" {
+		t.Errorf("json: want {vars.app.secret, \"1234\"}, got {%s, %v (%T)}", data.Var, data.Value, data.Value)
+	}
+}
+
+func TestVarsSet_GenerateNonInteractive(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+	seedRandReader(t)
+	t.Setenv("DWE_NONINTERACTIVE", "1")
+	origIsInteractive := widgets.IsInteractiveFn
+	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
+	defer func() { widgets.IsInteractiveFn = origIsInteractive }()
+
+	if _, _, err := runVarsCmd(t, flags, "set", "app.secret", "--generate", "hex:2"); err != nil {
+		t.Fatalf("vars set --generate without a TTY: %v", err)
+	}
+	if got, ok := reloadVar(t, cfgPath, "vars.app.secret"); !ok || got != "1234" {
+		t.Errorf("want \"1234\", got %v (ok=%v)", got, ok)
+	}
+}
+
+// TestVarsSet_GenerateContainerGate: the container gate runs before the
+// exists-check, so a denied var reports the denial even when it already has
+// a local value.
+func TestVarsSet_GenerateContainerGate(t *testing.T) {
+	root := t.TempDir()
+	cfgPath := filepath.Join(root, "workspace.yml")
+	const workspace = `schema_version: "2"
+project:
+  name: varstest
+  prefix: dwe
+bridge:
+  vars_writable:
+    - vars.db.*
+`
+	if err := os.WriteFile(cfgPath, []byte(workspace), 0o644); err != nil {
+		t.Fatalf("writing workspace.yml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	const local = "vars:\n  app:\n    secret: already\n"
+	if err := os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(local), 0o644); err != nil {
+		t.Fatalf("writing local.yml: %v", err)
+	}
+	t.Setenv(bridgeclient.EnvInvokedFrom, bridgeclient.InvokedFromContainer)
+
+	tests := []struct {
+		name string
+		path string
+		code string // "" = allowed
+	}{
+		{"writable", "vars.db.password", ""},
+		{"not writable", "vars.app.token", "vars_not_container_writable"},
+		{"not writable and already set", "vars.app.secret", "vars_not_container_writable"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			seedRandReader(t)
+			flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+			_, _, err := runVarsCmd(t, flags, "set", tc.path, "--generate", "hex")
+			if tc.code == "" {
+				if err != nil {
+					t.Fatalf("expected allowed write, got %v", err)
+				}
+				return
+			}
+			wantCode(t, err, tc.code)
+		})
 	}
 }
 
