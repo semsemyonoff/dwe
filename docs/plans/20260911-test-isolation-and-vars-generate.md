@@ -582,15 +582,15 @@ line.
 - Modify: `docs/internals/packages.md`
 - Modify: `skills/dwe/references/integration-tests.md`
 
-- [ ] `tests.md` § Isolation model (:162): table — guaranteed (unique compose project name, `services.*.ports` remap, own `.dwe/`, own generated store); who sees the copy's `COMPOSE_PROJECT_NAME` (shell steps and shell `check:`, `type: shell` / `type: script` commands, `type: command`, `type: dwe` — the child dwe resolves it itself); who does not (shell `when:` predicates, the builtin `shell` probe, anything launched outside dwe); `files_gate` probes files and spawns no shell, so it is not listed
-- [ ] `tests.md` § Documented limitations (:460): not isolated — self-built project or container names, `container_name:`, raw ports (blocking) and interpolated ports (`interpolated_host_port`), external and `shared: true` volumes, host side effects outside the copy, `.git/`
-- [ ] `integration-tests.md`: new section after "Resolving an isolation failure" (:168) — host scripts and the project name: `${COMPOSE_PROJECT_NAME:-<live>}` for scripts also run by hand, `${COMPOSE_PROJECT_NAME:?}` for scripts only dwe runs; the validator catches the common mistake and what it cannot catch; RU mirror
-- [ ] `packages.md`: § envtest bullet (:108) — the runner relies on per-spawn derivation, never on process env; the `DWE_NESTED_RUNTIME` paragraph (:315) — `execShellAction` now sets `cmd.Env`; a Core — Execution note on the `DockerCfg` guard and the `.env` invariant
-- [ ] `skills/dwe/references/integration-tests.md` (~:48, isolation limits): the host-script recipe and the new warning, one short paragraph
-- [ ] no CHANGELOG entry (documentation only)
-- [ ] `make build`, refresh RU headers, anchors checked
-- [ ] `make lint && make test && (cd web && npm run build)` - must pass
-- [ ] commit `docs(test): document what dwe test isolates and how host scripts stay inside the copy`
+- [x] `tests.md` § Isolation model (:162): table — guaranteed (unique compose project name, `services.*.ports` remap, own `.dwe/`, own generated store); who sees the copy's `COMPOSE_PROJECT_NAME` (shell steps and shell `check:`, `type: shell` / `type: script` commands, `type: command`, `type: dwe` — the child dwe resolves it itself); who does not (shell `when:` predicates, the builtin `shell` probe, anything launched outside dwe); `files_gate` probes files and spawns no shell, so it is not listed
+- [x] `tests.md` § Documented limitations (:460): not isolated — self-built project or container names, `container_name:`, raw ports (blocking) and interpolated ports (`interpolated_host_port`), external and `shared: true` volumes, host side effects outside the copy, `.git/`
+- [x] `integration-tests.md`: new section after "Resolving an isolation failure" (:168) — host scripts and the project name: `${COMPOSE_PROJECT_NAME:-<live>}` for scripts also run by hand, `${COMPOSE_PROJECT_NAME:?}` for scripts only dwe runs; the validator catches the common mistake and what it cannot catch; RU mirror
+- [x] `packages.md`: § envtest bullet (:108) — the runner relies on per-spawn derivation, never on process env; the `DWE_NESTED_RUNTIME` paragraph (:315) — `execShellAction` now sets `cmd.Env`; a Core — Execution note on the `DockerCfg` guard and the `.env` invariant
+- [x] `skills/dwe/references/integration-tests.md` (~:48, isolation limits): the host-script recipe and the new warning, one short paragraph
+- [x] no CHANGELOG entry (documentation only)
+- [x] `make build`, refresh RU headers, anchors checked
+- [x] `make lint && make test && (cd web && npm run build)` - must pass
+- [x] commit `docs(test): document what dwe test isolates and how host scripts stay inside the copy`
 
 ### Task 8: `randval` generator
 

@@ -185,6 +185,30 @@ The developer's own `workspace/local.yml` is gitignored and therefore **not copi
 
 **State.** Journal, locks, generated-value store, prompt cache, logs — everything lives under the copy's own `.dwe/`, disjoint from the original. `.env` is regenerated inside the copy by the deploy itself. The Docker daemon (image/build caches) and `~/.config/dwe` (user-level preferences, binary overrides) are shared by design — "all state is project-local" holds for *runtime* state, not for the daemon or user-level config.
 
+**What each run gets on its own:**
+
+| Guaranteed | How |
+|------------|-----|
+| A unique compose project name | `<base>-t-<scenario>-<run-id>`, written into the copy's docker config (above) |
+| Host ports declared under `services.<name>.ports` | remapped to free ports in the generated `local.yml` |
+| Runtime state | the copy's own `.dwe/` — journal, locks, logs, prompt cache |
+| Generated values | the copy's own generated-value store, under that `.dwe/` |
+
+Everything else is listed under [Documented limitations](#documented-limitations).
+
+**Who sees the copy's `COMPOSE_PROJECT_NAME`.** The runner strips every `COMPOSE_*` variable from its own process and runs scenarios concurrently, so no process-wide value can carry the name. dwe derives it from the copy's config each time it starts a child:
+
+| Child process | Gets the copy's name |
+|---------------|----------------------|
+| `type: shell` steps and shell `check:` — scenario `steps:` and the copy's deploy | yes, as `COMPOSE_PROJECT_NAME` |
+| `type: shell` / `type: script` commands reached through a `type: command` step | yes, as `COMPOSE_PROJECT_NAME` plus `COMPOSE_FILE` |
+| Container commands (`service_exec` / `service_run`) reached through a `type: command` step | yes — dwe passes the copy's name as `-p` |
+| `type: dwe` steps | yes — the child `dwe` runs in the copy and resolves the name from the copy's config itself |
+| Shell `when:` predicates and the builtin `shell` probe | no — nothing is injected; in scenario `steps:` they see no `COMPOSE_PROJECT_NAME` at all |
+| Anything started outside dwe — a script run by hand, another terminal | no |
+
+`files_gate` only checks files and starts no shell, so it has nothing to receive. A host script that builds its own `docker compose -p` instead of reading `$COMPOSE_PROJECT_NAME` bypasses all of this: `dwe validate tests` [warns about it](#host-scripts-that-build-their-own-compose-project-name), and the guide has [the recipe](../../guides/integration-tests.md#host-scripts-and-the-project-name).
+
 ## `.dwe/tests/` layout
 
 All paths below are relative to the **original** project root (never the copy):
@@ -504,6 +528,7 @@ dwe test list --output json
 
 - **`.git/` is excluded from the copy.** A deploy or scenario step that shells out to `git` against the project root will fail or behave differently inside the copy.
 - **Named compose resources bypass isolation.** `container_name:`, explicitly named networks/volumes, and `external: true` in raw compose files ignore the compose project-name scoping and can collide with — or attach to — the working environment. This is why teardown never uses `compose down -v`. The [compose isolation scanner](#compose-isolation-scanner) detects these constructs and, for `container_name:` and literal host ports, fails the scenario before deploy (downgradeable with `--skip-isolation-check`) — it does not make them safe, it surfaces them before they cause a collision. A volume declared `shared: true` in `docker.yml` is [acknowledged](#volumes-acknowledged-by-shared-true) and reported no longer: it still bypasses isolation, deliberately.
+- **Names a script builds itself are not isolated.** A host script that assembles a compose project name (`docker compose -p "${PREFIX}-${NAME}"`) or a container name (`docker exec myproj-db-1 …`) from the project prefix and name reaches the working environment, not the copy. Take the name from `$COMPOSE_PROJECT_NAME` (see the [guide](../../guides/integration-tests.md#host-scripts-and-the-project-name)). `dwe validate tests` [warns](#host-scripts-that-build-their-own-compose-project-name) about a self-built `-p` or `COMPOSE_PROJECT_NAME=` value, but not about a hand-built container name.
 - **Host ports not modelled in `services.<name>.ports` aren't isolated.** The automatic remap and the `ports_free` preflight only see ports declared via `services.<name>.ports`; a host port hardcoded straight in a raw compose file (`8080:8080`) bypasses both. Declare it under `services.<name>.ports`, or route the compose interpolation through a var set with `env.vars: { …: auto }`. The isolation scanner flags a literal as a **blocking** `raw_host_port` finding, and a variable the scenario does not remap as a non-blocking `interpolated_host_port` warning — only a warning, so a scenario that ignores it still binds the original port.
 - **Host side effects of a project's own deploy/scenario steps aren't sandboxed.** A `shell` step touching absolute paths, `~`, or bind mounts outside the project affects the real host, same as it would from a real deploy. `dwe test` isolates dwe-managed state (files, containers, volumes, networks, ports) — not arbitrary side effects a step chooses to have.
 - **The copy is not atomic.** Nothing locks the original project while `git ls-files` and the copy run; editing files during a test run can produce a mixed snapshot.

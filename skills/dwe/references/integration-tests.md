@@ -138,6 +138,8 @@ Two isolation gotchas that **block** a run (the compose isolation scanner fails 
 
 `external:` / explicitly-`name:`d volumes/networks are warnings only. `--skip-isolation-check` downgrades blocking findings — a last resort for false positives, not a fix. Scanner detail → `dwe docs show config/tests#compose-isolation-scanner --lang en`.
 
+**Host scripts must take the project name from `$COMPOSE_PROJECT_NAME`.** Inside `dwe test` dwe hands the copy's name to shell steps and host commands as `COMPOSE_PROJECT_NAME`; a script that builds its own `docker compose -p "${PREFIX}-${NAME}"` hits the **live** stack while the scenario passes. Use `PROJECT="${COMPOSE_PROJECT_NAME:-<live name>}"` for a script also run by hand, `${COMPOSE_PROJECT_NAME:?}` for one only dwe runs. `dwe validate tests` warns about the common shape (`tests.host_project_name`), but not about a name passed as `$1`, a hand-built container name, or anything deeper than one referenced script → `dwe docs show guides/integration-tests#host-scripts-and-the-project-name --lang en`.
+
 **The remap changes the Host/URL the app sees.** An assertion hits the app on a freshly-allocated non-default port, so anything with **host-dependent logic** — multisite/domain routing, admin routing, CORS, signed/absolute URLs — can behave differently through a random port than prod-style access on the canonical one. Before writing an `http_check` against anything beyond a trivial health path, confirm the app actually tolerates a non-standard port in `Host` — not merely that nginx routes it. This is *not* a dwe bug; it's an inherent consequence of port isolation.
 
 ## 7. Test-only commands via `type: command`
