@@ -2,8 +2,9 @@
 // files: schema/name normalisation (via envtest.LoadScenario), the wall-clock
 // timeout string, env.services references, whole-phase step resolution
 // (reusing the exact runtime pipeline resolver), type: command references,
-// and compose-isolation hazards. Validate-only — never registered in
-// preflight.Run.
+// and compose-isolation hazards, plus host scripts and shell steps that build
+// their own compose project name (hostproject.go). Validate-only — never
+// registered in preflight.Run.
 package tests
 
 import (
@@ -32,7 +33,7 @@ const autoPortPlaceholder = 1
 
 // All returns the tests domain's validators.
 func All() []validate.Validator {
-	return []validate.Validator{&scenariosValidator{}}
+	return []validate.Validator{&scenariosValidator{}, &hostProjectNameValidator{}}
 }
 
 // scenariosValidator statically validates every workspace/tests/*.yml
