@@ -51,6 +51,37 @@ generated from commit subjects and stay on the
   template function or a Sprig-order call logged a `level=WARN` line into
   standard output, corrupting `--output json` and `dwe prompt`. They now go
   through the diagnostic trace and appear only under `--debug`.
+- **A parallel workflow sub-step no longer loses its last line of output when
+  that line has no trailing newline.** A sub-step ending in
+  `printf 'error: x'; exit 1` used to drop `error: x` from both the failure dump
+  and `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log` — in CI the
+  dump is the only output, so the line explaining the failure was the one that
+  disappeared. It now appears in both.
+- **`dwe test` now warns about a compose host port it cannot remap because the
+  port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
+  exported `from: vars.ports.valkey`, kept its original value in the test copy
+  and collided with the live stack at bind time, with nothing said beforehand.
+  `dwe test run` and `dwe validate` now warn with the fix line,
+  `env.vars: { ports.valkey: auto }`, and `dwe test list --output json` reports
+  it as an `interpolated_host_port` entry in `cost_profile.isolation_findings`.
+  The warning fails `dwe validate --strict` until every scenario is covered —
+  see [Upgrading DWE](docs/guides/upgrading.md). A port whose variable no
+  `exports.env` rule traces names no scenarios and needs such a rule first. A
+  literal host port behind an interpolated bind address
+  (`"${BIND:-127.0.0.1}:8080:80"`) is now recognised and blocks `dwe test run`
+  like any other literal host port.
+- **The built-in deploy pipeline brings a stopped stack back up.** After a
+  `dwe stop`, `dwe deploy run` printed `Phase: start` and `✓ Done`, and the
+  stack stayed down: the `up` step had no `check:`, so the journal skipped it on
+  every deploy after the first. It now carries
+  `check: {type: builtin, cmd: containers_running}`, runs on every deploy, and
+  the built-in pipeline no longer exits `already up-to-date`.
+  `containers_running` accepts an absent or empty `services` list, which checks
+  that every non-one-off container of the compose project is running or exited
+  0. The first deploy after upgrading sees the project config as changed once —
+  pick `Apply changes` in the selector — and an ejected or hand-written
+  `workspace/deploy.yml` needs the `check:` added by hand; see
+  [Upgrading DWE](docs/guides/upgrading.md).
 
 ## [0.6.0] - 2026-09-07
 

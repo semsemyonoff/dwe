@@ -524,7 +524,7 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 
 #### Per-sub-step logs
 
-Each sub-step's combined stdout/stderr is captured to `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only newline-terminated frames are written to the log file (carriage-return progress frames stay on the live row and are dropped from logs), so the file stays readable without `\r`-spam.
+Each sub-step's combined stdout/stderr is captured to `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only newline-terminated frames are written to the log file (carriage-return progress frames stay on the live row and are dropped from logs), so the file stays readable without `\r`-spam. The one exception is the last line of output: when the child exits without a trailing newline (`printf 'error: x'; exit 1`), that line is still written to the log file and replayed in the failure dump. A trailing `\r` progress frame is still dropped, and so is a tail made only of ANSI escape sequences (a colour reset, a cursor-show).
 
 #### Sub-step naming and pipeline overrides
 

@@ -8,7 +8,7 @@
 
 A scenario step that needs a remapped port references it the normal way: `${services.<name>.ports.<x>}`.
 
-The one case this does *not* cover is a host port hardcoded straight in a raw compose file (`8080:8080`) that your dwe service config never models — it bypasses both the remap and the `ports_free` preflight. Either declare it under `services.<name>.ports` so `dwe test` can see and reassign it, or route the compose interpolation through a var and set that var per scenario with `env.vars: { …: auto }` (the runner allocates a free port and writes it into the copy's `vars:`; the step then reads `${vars.<path>}`).
+The one case this does *not* cover is a host port hardcoded straight in a raw compose file (`8080:8080`) that your dwe service config never models — it bypasses both the remap and the `ports_free` preflight. Either declare it under `services.<name>.ports` so `dwe test` can see and reassign it, or route the compose interpolation through a var and set that var per scenario with `env.vars: { …: auto }` (the runner allocates a free port and writes it into the copy's `vars:`; the step then reads `${vars.<path>}`). Miss that and `dwe test run` and `dwe validate` warn about it: an `interpolated_host_port` finding names the variable and, when it comes from `vars:`, gives the exact line to add — for example `env.vars: { ports.valkey: auto }`.
 
 ## Your first scenario
 

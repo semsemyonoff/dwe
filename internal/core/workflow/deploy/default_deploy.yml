@@ -33,6 +33,13 @@ phases:
         # untracked keeps this step out of the [N/M] counter and hides its
         # start/done lines; failures are still reported.
         untracked: true
+        # Without a check: the journal records this step and skips it on later
+        # deploys, leaving a stopped stack down. With one, the step runs on
+        # every deploy (`up --wait` is a no-op on a running stack), then asserts
+        # every compose container is running or exited 0.
+        check:
+          type: builtin
+          cmd: containers_running
 
   # Summary phase. Untracked at phase level, so nothing here is counted and
   # nothing here runs unless every prior phase succeeded.

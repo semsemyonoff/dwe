@@ -218,7 +218,9 @@ Each scenario carries a `cost_profile`. Two groups, judged differently:
 outside its own copy, so a failure is not confined to it:
 
 - `isolation_findings` non-empty **after dropping entries carrying `"shared": true`** — named /
-  `external:` volumes or networks, reused verbatim. A `"shared": true` entry is a volume the
+  `external:` volumes or networks, reused verbatim, or a host port interpolated from a
+  variable this scenario's copy does not remap (`interpolated_host_port`; the fix is
+  `env.vars: { <path>: auto }` in the scenario). A `"shared": true` entry is a volume the
   project itself declares `shared: true` in `docker.yml`; it is already counted by
   `shared_volumes` and must not stop you twice
 - `shared_volumes` > 0 — `shared: true` volumes carry the real cache/data

@@ -475,7 +475,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	logWriter = lw
 	defer cleanup()
 
-	if scanComposeIsolationGate(copyRoot, req.SkipIsolationCheck, warn) {
+	if scanComposeIsolationGate(copyRoot, origCfg, scn, req.SkipIsolationCheck, warn) {
 		return finish(StatusFailed, "")
 	}
 
@@ -536,10 +536,12 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 // project-name scoping (config.ScanComposeIsolation). Every finding not
 // acknowledged by a docker.yml shared: true volume is printed as a warning;
 // it reports true (block the scenario) only when at least one such finding is
-// Blocking and skipIsolationCheck is false. If the copy
-// config fails to load, the scan is skipped entirely — the subsequent `dwe
-// validate` subprocess surfaces the real config error.
-func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn func(string)) bool {
+// Blocking and skipIsolationCheck is false. An interpolated host port this
+// scenario's copy remaps (CoversInterpolatedHostPort, judged on origCfg — the
+// same inputs writeCopyLocalYAML allocates from) is not a hazard and stays
+// silent. If the copy config fails to load, the scan is skipped entirely — the
+// subsequent `dwe validate` subprocess surfaces the real config error.
+func scanComposeIsolationGate(copyRoot string, origCfg *config.DweConfig, scn *Scenario, skipIsolationCheck bool, warn func(string)) bool {
 	copyCfg, err := config.LoadConfigOrWrap(filepath.Join(copyRoot, "workspace.yml"))
 	if err != nil {
 		return false
@@ -554,7 +556,7 @@ func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn fun
 	for _, f := range findings {
 		// Acknowledged by docker.yml resources.volumes shared: true — the
 		// cross-project scope is the point, not a hazard.
-		if f.Shared {
+		if f.Shared || CoversInterpolatedHostPort(origCfg, scn, f) {
 			continue
 		}
 		warn(fmt.Sprintf("compose isolation: %s", f.Message))
@@ -583,7 +585,7 @@ func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn fun
 // lose a TOCTOU race worth re-allocating for, but on its own it is true for
 // nearly every project and so must never gate the retry alone.
 func hasAllocatedPorts(cfg *config.DweConfig, scn *Scenario) bool {
-	return len(enabledHostPortKeys(cfg, scn)) > 0 || len(autoPortVarPaths(scn)) > 0
+	return len(enabledHostPortKeys(cfg, scn)) > 0 || len(scn.AutoPortVarPaths()) > 0
 }
 
 // deployTailLimit bounds how much of the deploy subprocess output the retry
@@ -645,7 +647,7 @@ func (r *Runner) writeCopyLocalYAML(
 	composeProject, copyRoot string, warn func(string),
 ) error {
 	keys := enabledHostPortKeys(origCfg, scn)
-	autoPaths := autoPortVarPaths(scn)
+	autoPaths := scn.AutoPortVarPaths()
 
 	var hostPorts []HostPortOverride
 	varPorts := make(map[string]int, len(autoPaths))
@@ -801,19 +803,6 @@ func resolveScenarioTimeout(flagTimeout time.Duration, scenarioTimeout string) (
 		return d, nil
 	}
 	return defaultScenarioTimeout, nil
-}
-
-// autoPortVarPaths returns the sorted dot-paths (relative to vars:) of every
-// scenario env.vars entry whose value is AutoPortSentinel.
-func autoPortVarPaths(scn *Scenario) []string {
-	var paths []string
-	for path, v := range scn.Env.Vars {
-		if s, ok := v.(string); ok && s == AutoPortSentinel {
-			paths = append(paths, path)
-		}
-	}
-	sort.Strings(paths)
-	return paths
 }
 
 // existingManifestPaths finds every manifest belonging to scenario under

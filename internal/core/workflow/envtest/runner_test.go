@@ -1057,7 +1057,7 @@ func TestScanComposeIsolationGate_SharedVolumeSilent(t *testing.T) {
 	writeFixtureFile(t, dir, "workspace/docker.yml", "resources:\n  volumes:\n    npm_cache:\n      name: dwe_npm_cache\n      shared: true\n")
 
 	var warnings []string
-	blocked := scanComposeIsolationGate(dir, false, func(msg string) { warnings = append(warnings, msg) })
+	blocked := scanComposeIsolationGate(dir, nil, nil, false, func(msg string) { warnings = append(warnings, msg) })
 	if blocked {
 		t.Fatalf("non-blocking findings must never block, warnings: %v", warnings)
 	}
@@ -1088,12 +1088,161 @@ func TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped(t *testing.T
 	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\nbinaries:\n  docker: /bin/docker\n")
 
 	var warnings []string
-	blocked := scanComposeIsolationGate(dir, false, func(msg string) { warnings = append(warnings, msg) })
+	blocked := scanComposeIsolationGate(dir, nil, nil, false, func(msg string) { warnings = append(warnings, msg) })
 	if blocked {
 		t.Fatal("expected the gate not to block when the copy config fails to load")
 	}
 	if len(warnings) != 0 {
 		t.Fatalf("expected no warnings when the scan is skipped, got %v", warnings)
+	}
+}
+
+// TestScanComposeIsolationGate_InterpolatedHostPort pins the scenario filter on
+// interpolated host ports: a vars-sourced port warns until the scenario sets
+// its path to auto; a service-sourced port is silent while the runner remaps
+// the service and warns once the scenario disables it — including a required
+// service, which stays enabled in the copy but is not remapped. The kind never
+// blocks.
+func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
+	disableRedis := &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"redis"}}}}
+	tests := []struct {
+		name          string
+		redisRequired bool
+		scn           *Scenario
+		wantValkey    bool
+		wantRedis     bool
+	}{
+		{name: "no overrides", scn: &Scenario{}, wantValkey: true},
+		{
+			name: "vars path set to auto",
+			scn:  &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": AutoPortSentinel}}},
+		},
+		{name: "source service disabled", scn: disableRedis, wantValkey: true, wantRedis: true},
+		{name: "required source service disabled", redisRequired: true, scn: disableRedis, wantValkey: true, wantRedis: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFixtureFile(t, dir, "workspace.yml", `project:
+  name: runnertest
+  prefix: dwe
+compose:
+  base: docker-compose.yml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+    - name: REDIS_PORT
+      from: services.redis.ports.redis
+`)
+			redis := "type: infra\ncontainer: redis\nports:\n  redis: 6379\n"
+			if tt.redisRequired {
+				redis += "required: true\n"
+			} else {
+				writeFixtureFile(t, dir, "workspace/defaults.yml", "services:\n  redis:\n    enabled: true\n")
+			}
+			writeFixtureFile(t, dir, "workspace/services/redis/service.yml", redis)
+			writeFixtureFile(t, dir, "docker-compose.yml", `services:
+  valkey:
+    image: valkey/valkey:8
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+  redis:
+    image: redis:7
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+`)
+			origCfg, err := config.LoadConfig(filepath.Join(dir, "workspace.yml"))
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if !origCfg.Services["redis"].Enabled {
+				t.Fatal("fixture: redis must be enabled in the project config")
+			}
+
+			var warnings []string
+			blocked := scanComposeIsolationGate(dir, origCfg, tt.scn, false, func(msg string) { warnings = append(warnings, msg) })
+			if blocked {
+				t.Fatalf("interpolated host ports must never block, warnings: %v", warnings)
+			}
+			has := func(v string) bool {
+				return slices.ContainsFunc(warnings, func(w string) bool { return strings.Contains(w, v) })
+			}
+			if got := has("VALKEY_PORT"); got != tt.wantValkey {
+				t.Errorf("VALKEY_PORT warning = %v, want %v; warnings: %v", got, tt.wantValkey, warnings)
+			}
+			if tt.wantValkey && !has("env.vars: { ports.valkey: auto }") {
+				t.Errorf("vars warning must carry the fix line, got %v", warnings)
+			}
+			if got := has("REDIS_PORT"); got != tt.wantRedis {
+				t.Errorf("REDIS_PORT warning = %v, want %v; warnings: %v", got, tt.wantRedis, warnings)
+			}
+		})
+	}
+}
+
+// TestRunScenario_InterpolatedHostPortFilteredByScenario pins that RunScenario
+// hands the loaded scenario to the isolation gate: without it the gate would
+// ignore env.vars: auto and warn about a port the copy does remap.
+func TestRunScenario_InterpolatedHostPortFilteredByScenario(t *testing.T) {
+	tests := []struct {
+		name     string
+		scenario string
+		wantWarn bool
+	}{
+		{name: "vars path not auto", scenario: noStepsScenario, wantWarn: true},
+		{name: "vars path auto", scenario: noStepsScenario + "env:\n  vars:\n    ports.valkey: auto\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFixtureFile(t, dir, "workspace.yml", `project:
+  name: runnertest
+  prefix: dwe
+compose:
+  base: docker-compose.yml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+`)
+			writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  valkey:\n    image: valkey/valkey:8\n    ports:\n      - \"${VALKEY_PORT:-6379}:6379\"\n")
+			writeFixtureFile(t, dir, "workspace/tests/smoke.yml", tt.scenario)
+
+			var execCalls []string
+			var warnings []string
+			r := &Runner{
+				execDwe:       stubExecDwe(nil, &execCalls),
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(new([]string), nil)
+				},
+				clock: time.Now,
+			}
+
+			result, err := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        "smoke",
+				ReporterFactory: noopReporterFactory,
+				Warn:            func(msg string) { warnings = append(warnings, msg) },
+			})
+			if err != nil {
+				t.Fatalf("RunScenario: %v", err)
+			}
+			if result.Status != StatusPassed {
+				t.Fatalf("status = %q, want passed; warnings: %v", result.Status, warnings)
+			}
+			got := slices.ContainsFunc(warnings, func(w string) bool { return strings.Contains(w, "VALKEY_PORT") })
+			if got != tt.wantWarn {
+				t.Errorf("VALKEY_PORT warning = %v, want %v; warnings: %v", got, tt.wantWarn, warnings)
+			}
+		})
 	}
 }
 

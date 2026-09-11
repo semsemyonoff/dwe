@@ -91,6 +91,22 @@ func LoadScenario(path string) (*Scenario, error) {
 	return &scn, nil
 }
 
+// AutoPortVarPaths returns the sorted dot-paths (relative to vars:) of every
+// env.vars entry whose value is AutoPortSentinel. A nil scenario has none.
+func (s *Scenario) AutoPortVarPaths() []string {
+	if s == nil {
+		return nil
+	}
+	var paths []string
+	for path, v := range s.Env.Vars {
+		if str, ok := v.(string); ok && str == AutoPortSentinel {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	return paths
+}
+
 // ScenarioNameFromPath returns the scenario name for a file path: the basename
 // with its .yml/.yaml extension stripped.
 func ScenarioNameFromPath(path string) string {

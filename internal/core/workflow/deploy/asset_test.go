@@ -24,6 +24,13 @@ func TestDefaultDeployYAML_RoundTrip(t *testing.T) {
 	loaded, err := config.LoadProjectDeployConfig(path)
 	require.NoError(t, err, "the emitted asset must load through the strict deploy.yml loader")
 	require.Equal(t, deploy.DefaultDeployConfig(), loaded)
+
+	// Pinned by name as well: an ejected file that lost the check would bring
+	// back the journal skip that leaves a stopped stack down, and full-struct
+	// equality alone would pass if both sides dropped it together.
+	up := loaded.Phases[1].Steps[0]
+	require.Equal(t, "up", up.Name)
+	require.Equal(t, &config.Action{Type: "builtin", Cmd: "containers_running"}, up.Check)
 }
 
 // The asset declares log: true explicitly rather than relying on

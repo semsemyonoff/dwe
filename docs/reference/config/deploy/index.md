@@ -28,7 +28,7 @@ To start from that default instead of writing a pipeline from scratch, run `dwe 
 
 **Default deploy pipeline** (fires when `workspace/deploy.yml` is absent):
 
-Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: dwe`, `cmd: "docker up --wait"`) → `post-deploy` (info display + success message).
+Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: dwe`, `cmd: "docker up --wait"`, with `check: {type: builtin, cmd: containers_running}`) → `post-deploy` (info display + success message). The `check:` makes the `up` step run on every deploy, so a stack stopped since the last deploy comes back up and the built-in pipeline never exits `already up-to-date` — see [Idempotent deploy and state](#idempotent-deploy-and-state).
 
 **Default reset pipeline** (fires when `workspace/reset.yml` is absent):
 
@@ -141,7 +141,7 @@ phases:
 | `cmd` | string | Command payload (required); content depends on `type` |
 | `with` | mapping | Parameters passed to command or builtin (optional; required for most builtins) |
 | `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy. See [Conditions](conditions.md). |
-| `check` | typed action, or the scalar `auto` | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. See [Conditions](conditions.md). |
+| `check` | typed action, or the scalar `auto` | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. A step with a `check:` is never skipped by the journal, and a plan that contains one never exits `already up-to-date` (see [Idempotent deploy and state](#idempotent-deploy-and-state)). See [Conditions](conditions.md). |
 | `files_gate` | typed gate | Pre-condition based on file existence/absence from a command's `files:` block. Step skipped if unsatisfied. See [`files_gate:`](conditions.md#files_gate-pre-condition-for-files). |
 | `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](../lifecycle.md). When the step body succeeds but `check:` fails and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
 | `skip_confirm` | bool | When `true`, bypasses confirmation prompts for this step only — equivalent to a per-step `-y` / `--yes`. Propagates to the step body and its `check:` action. ORed with the pipeline-wide skip-confirm flag, so the step is non-interactive whenever either is set. Useful when most of the pipeline is interactive but one step (e.g. a `confirm` builtin guarding an idempotent action, or a command that re-prompts internally) should always proceed. |
@@ -222,6 +222,8 @@ Key behaviors:
 - **Has `files_gate: state: readable`** → journal skip is consulted first like any other step; the gate only fires when the journal would otherwise let the step run (the consumer pattern: destructive consumers stay idempotent). Use an explicit `check:` to force re-evaluation on every run
 - In both cases the journal records the step for audit/status display using `step_hash`, which includes the gate config — so changing the gate invalidates the recorded hash and re-triggers the step
 - **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
+
+A step that always runs also keeps the whole deploy from exiting early with `already up-to-date`. The built-in pipeline relies on this: its `up` step carries `check: {type: builtin, cmd: containers_running}`, so every deploy runs `docker up --wait` (a no-op on a running stack) and then asserts that every non-one-off container of an active compose service is running or exited 0 ([whole-project mode](builtins.md#whole-project-mode)). A `docker up` step without a `check:` in an ejected or hand-written `deploy.yml` is recorded after its first success and skipped from then on, so a stack stopped since the last deploy stays down — add the same `check:` to it.
 
 Use `dwe deploy state show` to inspect the journal, `dwe deploy state clear` to reset it, and `dwe deploy state repair` to fix corrupted aggregates.
 

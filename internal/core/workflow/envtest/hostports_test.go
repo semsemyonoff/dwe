@@ -58,6 +58,101 @@ func TestEnabledHostPortKeys_NilConfig(t *testing.T) {
 	}
 }
 
+func TestRemappedHostPortServices(t *testing.T) {
+	cfg := remapTestConfig()
+	cfg.Services["core"] = config.ServiceConfig{
+		Enabled: true, Required: true,
+		Ports: map[string]config.ServicePortSpec{"http": {Port: 8000}},
+	}
+	tests := []struct {
+		name string
+		cfg  *config.DweConfig
+		scn  *Scenario
+		want map[string]bool
+	}{
+		{
+			name: "enabled services with an in-range port only",
+			cfg:  cfg,
+			scn:  &Scenario{},
+			want: map[string]bool{"core": true, "db": true, "nginx": true},
+		},
+		{
+			name: "scenario enable and disable move membership",
+			cfg:  cfg,
+			scn:  &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Enable: []string{"minio"}, Disable: []string{"db"}}}},
+			want: map[string]bool{"core": true, "minio": true, "nginx": true},
+		},
+		{
+			// The loader keeps a required service enabled, but the remap skips
+			// it — membership follows the remap, not Enabled.
+			name: "required service disabled by the scenario is not remapped",
+			cfg:  cfg,
+			scn:  &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"core"}}}},
+			want: map[string]bool{"db": true, "nginx": true},
+		},
+		{
+			name: "nil config",
+			cfg:  nil,
+			scn:  &Scenario{},
+			want: map[string]bool{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RemappedHostPortServices(tt.cfg, tt.scn); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("RemappedHostPortServices = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScenarioAutoPortVarPaths(t *testing.T) {
+	scn := &Scenario{Env: ScenarioEnv{Vars: map[string]any{
+		"ports.web":    AutoPortSentinel,
+		"ports.api":    AutoPortSentinel,
+		"feature.flag": "on",
+		"ports.fixed":  8080,
+	}}}
+	if got, want := scn.AutoPortVarPaths(), []string{"ports.api", "ports.web"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("AutoPortVarPaths = %v, want %v", got, want)
+	}
+	var nilScn *Scenario
+	if got := nilScn.AutoPortVarPaths(); got != nil {
+		t.Fatalf("nil scenario AutoPortVarPaths = %v, want nil", got)
+	}
+}
+
+func TestCoversInterpolatedHostPort(t *testing.T) {
+	cfg := remapTestConfig()
+	auto := &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": AutoPortSentinel}}}
+	interp := func(varPath, source string) config.IsolationFinding {
+		return config.IsolationFinding{Kind: config.KindInterpolatedHostPort, VarPath: varPath, SourceService: source}
+	}
+	tests := []struct {
+		name string
+		scn  *Scenario
+		f    config.IsolationFinding
+		want bool
+	}{
+		{"vars path set to auto", auto, interp("ports.valkey", ""), true},
+		{"vars path without auto", &Scenario{}, interp("ports.valkey", ""), false},
+		{"other vars path set to auto", auto, interp("ports.redis", ""), false},
+		{"source service remapped", &Scenario{}, interp("", "db"), true},
+		{"source service disabled by the scenario", &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"db"}}}}, interp("", "db"), false},
+		{"source service off by default", &Scenario{}, interp("", "minio"), false},
+		{"neither field", auto, interp("", ""), false},
+		{"nil scenario", nil, interp("ports.valkey", ""), false},
+		{"other kind never covered", auto, config.IsolationFinding{Kind: config.KindRawHostPort, VarPath: "ports.valkey"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CoversInterpolatedHostPort(cfg, tt.scn, tt.f); got != tt.want {
+				t.Fatalf("CoversInterpolatedHostPort = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildHostPortOverrides_PreservesScheme(t *testing.T) {
 	cfg := remapTestConfig()
 	keys := []hostPortKey{{"db", "mysql"}, {"nginx", "https"}}

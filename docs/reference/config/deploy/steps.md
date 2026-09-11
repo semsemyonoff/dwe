@@ -76,7 +76,10 @@ Invokes a DWE CLI subcommand. The binary path is resolved automatically.
 ```yaml
 - name: up
   type: dwe
-  cmd: "docker up"
+  cmd: "docker up --wait"
+  check:
+    type: builtin
+    cmd: containers_running
 
 - name: info
   type: dwe
@@ -86,6 +89,8 @@ Invokes a DWE CLI subcommand. The binary path is resolved automatically.
   type: dwe
   cmd: "render ide main"
 ```
+
+The `check:` on `up` makes the step run on every deploy: without one, the journal skips a recorded `docker up` and a stack stopped since the last deploy stays down. The built-in deploy pipeline's `up` step is exactly this — see [Idempotent deploy and state](index.md#idempotent-deploy-and-state).
 
 ## `type: command`
 

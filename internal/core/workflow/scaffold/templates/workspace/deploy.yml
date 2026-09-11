@@ -24,6 +24,9 @@
 #         cmd: "docker up --wait"
 #         description: "Start all containers and wait until healthy"
 #         untracked: true
+#         check:
+#           type: builtin
+#           cmd: containers_running
 #   - name: post-deploy
 #     description: "Post-deploy summary (runs only if all prior phases succeeded)"
 #     untracked: true

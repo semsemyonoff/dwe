@@ -15,7 +15,7 @@ func Builtins() map[string]spec.Entry {
 		"docker_daemon_stop":            {Impl: DaemonStop{}, Kind: spec.KindInternal, Summary: "stop a named daemon container (idempotent)"},
 		"docker_stop_remove_container":  {Impl: StopRemoveContainer{}, Kind: spec.KindInternal, Summary: "stop and remove a named container; per-service reset baseline"},
 		"daemons_reap":                  {Impl: DaemonsReap{}, Kind: spec.KindInternal, Summary: "stop every project daemon container; auto-injected as _auto_reap_daemons"},
-		"containers_running":            {Impl: ContainersRunning{}, Kind: spec.KindPredicate, Summary: "report whether the named containers are running"},
+		"containers_running":            {Impl: ContainersRunning{}, Kind: spec.KindPredicate, Summary: "report whether the named services, or every project container, are running"},
 		"docker_wait_healthy":           {Impl: WaitHealthy{}, Kind: spec.KindAction, Summary: "wait until the named containers report healthy"},
 		"docker_remove_project_volumes": {Impl: RemoveProjectVolumes{}, Kind: spec.KindAction, Summary: "remove every Docker volume belonging to the project"},
 	}

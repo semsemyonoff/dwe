@@ -114,7 +114,9 @@ Once config-hash validation passes (or the scope is unchanged), the step's prior
 | ok | no | — | **Run** |
 | failed / partial / in_progress | — | — | **Run** (resume) |
 
-**Key insight:** Steps with a `check:` action **always run**, even if their hash matches and prior status was ok. The `check:` re-validates that the step's intended effect is still present (idempotency check). This prevents false skips when external state has changed.
+**Key insight:** Steps with a `check:` action **always run** — the journal never skips them, even if their hash matches and prior status was ok. The `check:` re-validates that the step's intended effect is still present (idempotency check). This prevents false skips when external state has changed; it is why the built-in deploy pipeline's `up` step carries `check: {type: builtin, cmd: containers_running}`, so a stack stopped since the last deploy comes back up.
+
+`check:` is not part of `action_hash`, so adding or editing one never re-runs the step through its own hash. It is part of the `config_hash` of the file that declares it — the project hash for `workspace/deploy.yml` (and for the built-in pipeline when that file is absent), the service hash for `workspace/services/<name>/deploy.yml` — so the first deploy after such an edit sees a config change and re-runs that scope once.
 
 ## See also
 

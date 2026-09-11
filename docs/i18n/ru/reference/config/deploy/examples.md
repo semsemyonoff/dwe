@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/examples.md @ 79bd5092346b
+> Translated from: reference/config/deploy/examples.md @ 14b52b8aa531
 
 # Примеры и паттерны
 
@@ -28,6 +28,9 @@ phases:
       - name: up
         type: dwe
         cmd: "docker up"
+        check:
+          type: builtin
+          cmd: containers_running
       - name: wait-healthy
         type: builtin
         cmd: docker_wait_healthy

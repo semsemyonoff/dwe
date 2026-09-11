@@ -617,6 +617,323 @@ resources:
 	}
 }
 
+// TestScenariosValidator_InterpolatedHostPort pins the project-wide filter on
+// interpolated host ports: validate has no scenario of its own, so a finding is
+// silent only when EVERY scenario remaps its port (vars path set to auto, or
+// the source service in the runner's remap set), and otherwise names the
+// scenarios that still lack the fix. An unloadable scenario covers nothing, a
+// required service a scenario disables is not remapped, and a finding with no
+// VarPath/SourceService always warns without a scenario list.
+func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
+	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
+	const valkeyAuto = "env:\n  vars:\n    ports.valkey: auto\n" + steps
+	const enableCache = "env:\n  services:\n    enable: [cache]\n" + steps
+
+	tests := []struct {
+		name      string
+		scenarios map[string]string
+		// want maps a compose variable to the scenarios its warning must name;
+		// a missing key means no warning for that variable.
+		want map[string][]string
+	}{
+		{
+			name:      "vars path auto in every scenario",
+			scenarios: map[string]string{"a.yml": valkeyAuto, "b.yml": valkeyAuto},
+			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name:      "vars path auto in some scenarios",
+			scenarios: map[string]string{"a.yml": valkeyAuto, "b.yml": steps},
+			want:      map[string][]string{"VALKEY_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name:      "unloadable scenario counts as uncovered",
+			scenarios: map[string]string{"a.yml": valkeyAuto, "broken.yml": ""},
+			want: map[string][]string{
+				"VALKEY_PORT": {"broken"},
+				"REDIS_PORT":  {"broken"},
+				"LOCKED_PORT": {"broken"},
+				"CACHE_PORT":  {"a", "broken"},
+			},
+		},
+		{
+			name: "service off by default but enabled by every scenario",
+			scenarios: map[string]string{
+				"a.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    enable: [cache]\n" + steps,
+				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    enable: [cache]\n" + steps,
+			},
+			want: map[string][]string{},
+		},
+		{
+			name:      "service enabled by only one scenario",
+			scenarios: map[string]string{"a.yml": enableCache, "b.yml": steps},
+			want:      map[string][]string{"VALKEY_PORT": {"a", "b"}, "CACHE_PORT": {"b"}},
+		},
+		{
+			name: "source service disabled by one scenario",
+			scenarios: map[string]string{
+				"a.yml": valkeyAuto,
+				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    disable: [redis]\n" + steps,
+			},
+			want: map[string][]string{"REDIS_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name: "required source service disabled by one scenario",
+			scenarios: map[string]string{
+				"a.yml": valkeyAuto,
+				"b.yml": "env:\n  vars:\n    ports.valkey: auto\n  services:\n    disable: [locked]\n" + steps,
+			},
+			want: map[string][]string{"LOCKED_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, body := range tt.scenarios {
+				writeScenario(t, root, name, body)
+			}
+			composePath := filepath.Join(root, "docker-compose.yml")
+			if err := os.WriteFile(composePath, []byte(`
+services:
+  valkey:
+    image: valkey/valkey:8
+    ports: ["${VALKEY_PORT:-6379}:6379"]
+  redis:
+    image: redis:7
+    ports: ["${REDIS_PORT:-6380}:6379"]
+  cache:
+    image: redis:7
+    ports: ["${CACHE_PORT:-6381}:6379"]
+  locked:
+    image: redis:7
+    ports: ["${LOCKED_PORT:-6382}:6379"]
+  raw:
+    image: redis:7
+    ports: ["${RAW_PORT:-6383}:6379"]
+`), 0o644); err != nil {
+				t.Fatalf("write compose file: %v", err)
+			}
+			cfg := baseCfg()
+			cfg.Compose.Base = composePath
+			port := func(p int) map[string]config.ServicePortSpec {
+				return map[string]config.ServicePortSpec{"main": {Port: p}}
+			}
+			cfg.Services["redis"] = config.ServiceConfig{Enabled: true, Ports: port(6380)}
+			cfg.Services["cache"] = config.ServiceConfig{Ports: port(6381)}
+			cfg.Services["locked"] = config.ServiceConfig{Required: true, Enabled: true, Ports: port(6382)}
+			cfg.Exports.Env = []config.ExportRule{
+				{Name: "VALKEY_PORT", From: "vars.ports.valkey"},
+				{Name: "REDIS_PORT", From: "services.redis.ports.main"},
+				{Name: "CACHE_PORT", From: "services.cache.ports.main"},
+				{Name: "LOCKED_PORT", From: "services.locked.ports.main"},
+			}
+
+			got := map[string]string{}
+			for _, d := range warningDiags(runFor(root, cfg)) {
+				if d.Target != "tests.isolation" {
+					continue
+				}
+				for _, v := range []string{"VALKEY_PORT", "REDIS_PORT", "CACHE_PORT", "LOCKED_PORT", "RAW_PORT"} {
+					if strings.Contains(d.Message, "from "+v) {
+						got[v] = d.Message
+					}
+				}
+			}
+
+			raw, ok := got["RAW_PORT"]
+			if !ok {
+				t.Errorf("RAW_PORT (no exports.env rule) must always warn, got %v", got)
+			} else if strings.Contains(raw, "not covered in scenarios") {
+				t.Errorf("RAW_PORT has no fix a scenario can apply, must not list scenarios: %q", raw)
+			}
+			delete(got, "RAW_PORT")
+
+			for v, scenarios := range tt.want {
+				msg, ok := got[v]
+				if !ok {
+					t.Errorf("%s: want a warning naming %v, got none; warnings: %v", v, scenarios, got)
+					continue
+				}
+				if suffix := "(not covered in scenarios: " + strings.Join(scenarios, ", ") + ")"; !strings.HasSuffix(msg, suffix) {
+					t.Errorf("%s: message %q does not end with %q", v, msg, suffix)
+				}
+			}
+			for v, msg := range got {
+				if _, ok := tt.want[v]; !ok {
+					t.Errorf("%s: want no warning, got %q", v, msg)
+				}
+			}
+		})
+	}
+}
+
+// TestScenariosValidator_InterpolatedHostPort_DisabledServiceOverlay pins the
+// compose-chain half of coverage: a service's own compose file leaves a
+// scenario's stack when the scenario disables it, so nothing in that file
+// binds a host port in that copy — traced or untraced, the finding is covered
+// there. A required service's file stays in the chain whatever the scenario
+// says, so its port still warns.
+func TestScenariosValidator_InterpolatedHostPort_DisabledServiceOverlay(t *testing.T) {
+	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
+	disable := func(names string) string {
+		return "env:\n  services:\n    disable: [" + names + "]\n" + steps
+	}
+
+	tests := []struct {
+		name      string
+		scenarios map[string]string
+		// want maps a compose variable to the suffix its warning must end
+		// with ("" for a warning without a scenario list); a missing key
+		// means no warning for that variable.
+		want map[string]string
+	}{
+		{
+			name:      "overlay service disabled by every scenario",
+			scenarios: map[string]string{"a.yml": disable("tool"), "b.yml": disable("tool")},
+			want:      map[string]string{},
+		},
+		{
+			name:      "overlay service disabled by one scenario",
+			scenarios: map[string]string{"a.yml": disable("tool"), "b.yml": steps},
+			want:      map[string]string{"TOOL_EXTRA_PORT": ""},
+		},
+		{
+			name:      "required overlay service disabled by one scenario",
+			scenarios: map[string]string{"a.yml": disable("pinned"), "b.yml": steps},
+			want: map[string]string{
+				"PINNED_PORT":     " (not covered in scenarios: a)",
+				"TOOL_EXTRA_PORT": "",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, body := range tt.scenarios {
+				writeScenario(t, root, name, body)
+			}
+			if err := os.MkdirAll(filepath.Join(root, "compose"), 0o755); err != nil {
+				t.Fatalf("mkdir compose: %v", err)
+			}
+			overlays := map[string]string{
+				"tool.yml": `
+services:
+  tool:
+    image: redis:7
+    ports: ["${TOOL_PORT:-7001}:6379", "${TOOL_EXTRA_PORT:-7002}:6380"]
+`,
+				"pinned.yml": `
+services:
+  pinned:
+    image: redis:7
+    ports: ["${PINNED_PORT:-7003}:6379"]
+`,
+			}
+			for name, body := range overlays {
+				if err := os.WriteFile(filepath.Join(root, "compose", name), []byte(body), 0o644); err != nil {
+					t.Fatalf("write %s: %v", name, err)
+				}
+			}
+			cfg := baseCfg()
+			port := func(p int) map[string]config.ServicePortSpec {
+				return map[string]config.ServicePortSpec{"main": {Port: p}}
+			}
+			cfg.Services["tool"] = config.ServiceConfig{Enabled: true, Compose: []string{"compose/tool.yml"}, Ports: port(7001)}
+			cfg.Services["pinned"] = config.ServiceConfig{Required: true, Enabled: true, Compose: []string{"compose/pinned.yml"}, Ports: port(7003)}
+			cfg.Exports.Env = []config.ExportRule{
+				{Name: "TOOL_PORT", From: "services.tool.ports.main"},
+				{Name: "PINNED_PORT", From: "services.pinned.ports.main"},
+			}
+
+			got := map[string]string{}
+			for _, d := range warningDiags(runFor(root, cfg)) {
+				if d.Target != "tests.isolation" {
+					continue
+				}
+				for _, v := range []string{"TOOL_PORT", "TOOL_EXTRA_PORT", "PINNED_PORT"} {
+					if strings.Contains(d.Message, "from "+v+" ") || strings.Contains(d.Message, "from "+v+",") {
+						got[v] = d.Message
+					}
+				}
+			}
+
+			for v, suffix := range tt.want {
+				msg, ok := got[v]
+				switch {
+				case !ok:
+					t.Errorf("%s: want a warning, got none; warnings: %v", v, got)
+				case suffix == "" && strings.Contains(msg, "not covered in scenarios"):
+					t.Errorf("%s: want no scenario list, got %q", v, msg)
+				case !strings.HasSuffix(msg, suffix):
+					t.Errorf("%s: message %q does not end with %q", v, msg, suffix)
+				}
+			}
+			for v, msg := range got {
+				if _, ok := tt.want[v]; !ok {
+					t.Errorf("%s: want no warning, got %q", v, msg)
+				}
+			}
+		})
+	}
+}
+
+// TestScenariosValidator_ScenarioViewDoesNotMutateProjectConfig pins that
+// resolving a scenario's compose chain works on a copy: a scenario disabling a
+// service must not rewrite the project's Raw["services"], which the isolation
+// scan reads for `when:` and every later scenario seeds its view from.
+func TestScenariosValidator_ScenarioViewDoesNotMutateProjectConfig(t *testing.T) {
+	root := t.TempDir()
+	writeScenario(t, root, "a.yml", "env:\n  services:\n    disable: [tool]\nsteps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n")
+	cfg := baseCfg()
+	cfg.Services["tool"] = config.ServiceConfig{Enabled: true}
+	cfg.Raw["services"] = map[string]any{"tool": map[string]any{"enabled": true}}
+
+	runFor(root, cfg)
+
+	if !cfg.Services["tool"].Enabled {
+		t.Errorf("cfg.Services[tool].Enabled flipped to false")
+	}
+	entry, _ := cfg.Raw["services"].(map[string]any)["tool"].(map[string]any)
+	if entry["enabled"] != true {
+		t.Errorf("cfg.Raw[services][tool][enabled] = %v, want true", entry["enabled"])
+	}
+}
+
+// TestScenariosValidator_InterpolatedHostPort_NoScenarioFiles pins an empty
+// tests directory: no scenario can run, so a traced interpolated port has no
+// uncovered scenario and stays silent, while an untraced one still warns.
+func TestScenariosValidator_InterpolatedHostPort_NoScenarioFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(envtest.TestsDir(root), 0o755); err != nil {
+		t.Fatalf("mkdir tests dir: %v", err)
+	}
+	composePath := filepath.Join(root, "docker-compose.yml")
+	if err := os.WriteFile(composePath, []byte(`
+services:
+  valkey:
+    image: valkey/valkey:8
+    ports: ["${VALKEY_PORT:-6379}:6379"]
+  raw:
+    image: redis:7
+    ports: ["${RAW_PORT:-6383}:6379"]
+`), 0o644); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+	cfg := baseCfg()
+	cfg.Compose.Base = composePath
+	cfg.Exports.Env = []config.ExportRule{{Name: "VALKEY_PORT", From: "vars.ports.valkey"}}
+
+	var msgs []string
+	for _, d := range warningDiags(runFor(root, cfg)) {
+		if d.Target == "tests.isolation" {
+			msgs = append(msgs, d.Message)
+		}
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "from RAW_PORT") {
+		t.Fatalf("want only the untraced RAW_PORT warning, got %v", msgs)
+	}
+}
+
 func TestScenariosValidator_MultipleFilesSorted(t *testing.T) {
 	root := t.TempDir()
 	writeScenario(t, root, "b.yml", `

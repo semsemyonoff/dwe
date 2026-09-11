@@ -213,11 +213,22 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 			}
 
 			var buf bytes.Buffer
+			// atEOF flips once the child has exited. Flush then delivers the
+			// un-terminated tail as a non-final frame, but it is the last line
+			// of output — often the one explaining a failure — so it is
+			// committed like a final frame. No write can race it: WireChildIO's
+			// cleanup joins the copy goroutines before runCommandStep returns.
+			atEOF := false
 			tee := liveui.NewLineTeePreserveANSI(func(frame string, final bool) {
 				stripped := liveui.ANSIOnlyRe.ReplaceAllString(frame, "")
+				// Many CLIs end with ANSI-only bytes after the last newline
+				// (colour reset, cursor show); such a tail carries no line.
+				if atEOF && strings.TrimSpace(stripped) == "" {
+					return
+				}
 				live.SetBlockRowRunning(i,
 					fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, stripped))
-				if !final {
+				if !final && !atEOF {
 					return
 				}
 				buf.WriteString(frame)
@@ -231,6 +242,7 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 			gRC.Stderr = gRC.Stdout
 
 			err := r.runCommandStep(gctx, gRC, i, sub)
+			atEOF = true
 			tee.Flush()
 			results[i].output = buf.String()
 
