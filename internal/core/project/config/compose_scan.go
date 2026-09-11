@@ -25,6 +25,11 @@ const (
 	KindNamedNetwork    IsolationKind = "named_network"
 	KindExternalVolume  IsolationKind = "external_volume"
 	KindExternalNetwork IsolationKind = "external_network"
+	// KindInterpolatedHostPort is a host port published through a compose
+	// variable (`${VALKEY_PORT:-6379}:6379`). The copy's remap cannot rewrite
+	// it unless the variable traces to a port dwe test remaps — which depends
+	// on the scenario, so consumers filter it (see EnvVar/VarPath/SourceService).
+	KindInterpolatedHostPort IsolationKind = "interpolated_host_port"
 )
 
 // IsolationFinding is one construct in a project's raw compose files that
@@ -42,6 +47,18 @@ type IsolationFinding struct {
 	Shared  bool
 	Message string
 	File    string // compose file the finding came from
+	// The three fields below are set on KindInterpolatedHostPort only.
+	// EnvVar is the compose variable the host port is interpolated from.
+	EnvVar string
+	// VarPath is the vars:-relative path the variable's active exports.env
+	// rule reads (`from: vars.<VarPath>`); a scenario setting it to `auto`
+	// covers the finding.
+	VarPath string
+	// SourceService is the dwe service whose declared port the variable's
+	// active rule reads (`from: services.<n>.ports.<p>`). The scanner never
+	// decides whether that port is remapped — a consumer drops the finding
+	// when its scenario remaps the service.
+	SourceService string
 }
 
 // composeScanDoc is the narrow shape ScanComposeIsolation needs from a compose
@@ -119,9 +136,10 @@ func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding
 	effective := make(map[declKey]int)
 	portIdx := make(map[string][]int)
 	dropped := make(map[int]bool)
+	exports := newComposeExports(cfg, projectRoot)
 
 	for _, pf := range parseComposeFiles(cfg, projectRoot) {
-		scan := scanComposeDoc(pf.doc, pf.file)
+		scan := scanComposeDoc(pf.doc, pf.file, exports)
 		for _, service := range scan.replacedPorts {
 			for _, i := range portIdx[service] {
 				dropped[i] = true
@@ -131,7 +149,7 @@ func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding
 		for _, f := range scan.findings {
 			findings = append(findings, f)
 			switch f.Kind {
-			case KindRawHostPort:
+			case KindRawHostPort, KindInterpolatedHostPort:
 				portIdx[f.Resource] = append(portIdx[f.Resource], len(findings)-1)
 			default:
 				effective[declKey{f.Kind, f.Resource}] = len(findings) - 1
@@ -227,7 +245,7 @@ func isVolumeFinding(f IsolationFinding) bool {
 
 // declKey identifies one last-declaration-wins declaration across the `-f`
 // chain, so at most one finding per key survives the collapse. Never used for
-// KindRawHostPort — ports merge by appending, not by replacement.
+// the host-port kinds — ports merge by appending, not by replacement.
 type declKey struct {
 	kind     IsolationKind
 	resource string
@@ -505,7 +523,7 @@ func parseStartPeriod(h composeScanHealthcheck) (time.Duration, bool) {
 // The returned composeDocScan also carries what this file CLEARS or REPLACES:
 // declarations that produce no finding of their own but must cancel ones an
 // earlier file in the `-f` chain produced. See ScanComposeIsolation.
-func scanComposeDoc(doc composeScanDoc, file string) composeDocScan {
+func scanComposeDoc(doc composeScanDoc, file string, exports *composeExports) composeDocScan {
 	var scan composeDocScan
 
 	for _, name := range slices.Sorted(maps.Keys(doc.Services)) {
@@ -537,7 +555,7 @@ func scanComposeDoc(doc composeScanDoc, file string) composeDocScan {
 			scan.replacedPorts = append(scan.replacedPorts, name)
 		}
 		if tag != mergeReset {
-			scan.findings = append(scan.findings, scanPortEntries(name, svc.Ports, file)...)
+			scan.findings = append(scan.findings, scanPortEntries(name, svc.Ports, file, exports)...)
 		}
 	}
 
@@ -571,14 +589,14 @@ func (s *composeDocScan) addEntity(e composeScanNamedEntity, name, file string, 
 
 // scanPortEntries scans one file's `ports:` list. A non-sequence (absent key,
 // or a shape ports: cannot legally take) contributes nothing.
-func scanPortEntries(service string, n yaml.Node, file string) []IsolationFinding {
+func scanPortEntries(service string, n yaml.Node, file string, exports *composeExports) []IsolationFinding {
 	n = resolveAlias(n)
 	if n.Kind != yaml.SequenceNode {
 		return nil
 	}
 	var findings []IsolationFinding
 	for _, entry := range n.Content {
-		if f, ok := scanPortNode(service, *entry, file); ok {
+		if f, ok := scanPortNode(service, *entry, file, exports); ok {
 			findings = append(findings, f)
 		}
 	}
@@ -703,19 +721,19 @@ func entityTruthy(n yaml.Node) bool {
 	}
 }
 
-// scanPortNode extracts a literal host port from one `ports:` entry, in
-// either short (`"8080:80"`) or long (`{ target: 80, published: 8080 }`)
-// compose syntax.
-func scanPortNode(service string, n yaml.Node, file string) (IsolationFinding, bool) {
+// scanPortNode extracts a literal or interpolated host port from one `ports:`
+// entry, in either short (`"8080:80"`) or long
+// (`{ target: 80, published: 8080 }`) compose syntax.
+func scanPortNode(service string, n yaml.Node, file string, exports *composeExports) (IsolationFinding, bool) {
 	switch n = resolveAlias(n); n.Kind {
 	case yaml.ScalarNode:
-		return scanShortPort(service, n.Value, file)
+		return scanShortPort(service, n.Value, file, exports)
 	case yaml.MappingNode:
 		var long composeScanLongPort
 		if err := n.Decode(&long); err != nil {
 			return IsolationFinding{}, false
 		}
-		return scanPublishedToken(service, publishedNodeToken(long.Published), file)
+		return scanPublishedToken(service, publishedNodeToken(long.Published), file, exports)
 	default:
 		return IsolationFinding{}, false
 	}
@@ -737,7 +755,7 @@ func publishedNodeToken(n yaml.Node) string {
 //	"80"                  container only, random host port — not a finding
 //
 // An optional trailing "/tcp" or "/udp" protocol suffix is stripped first.
-func scanShortPort(service, raw string, file string) (IsolationFinding, bool) {
+func scanShortPort(service, raw string, file string, exports *composeExports) (IsolationFinding, bool) {
 	spec := raw
 	if idx := strings.LastIndex(spec, "/"); idx != -1 {
 		proto := spec[idx+1:]
@@ -758,9 +776,9 @@ func scanShortPort(service, raw string, file string) (IsolationFinding, bool) {
 		// container-port-only — random host port, not a finding.
 		return IsolationFinding{}, false
 	case 2:
-		return scanPublishedToken(service, parts[0], file)
+		return scanPublishedToken(service, parts[0], file, exports)
 	case 3:
-		return scanPublishedToken(service, parts[1], file)
+		return scanPublishedToken(service, parts[1], file, exports)
 	default:
 		return IsolationFinding{}, false
 	}
@@ -852,9 +870,13 @@ func closeBrace(token string) int {
 }
 
 // scanPublishedToken decides whether a host-published token is a literal
-// port/range worth flagging, ignoring ${...}/env-var interpolated tokens.
-func scanPublishedToken(service, token, file string) (IsolationFinding, bool) {
+// port/range or a whole-token interpolation worth flagging. Mixed tokens
+// (`80${X}`) and anything else unparseable are ignored.
+func scanPublishedToken(service, token, file string, exports *composeExports) (IsolationFinding, bool) {
 	token = strings.TrimSpace(token)
+	if name, ok := interpolatedVar(token); ok {
+		return exports.interpolatedFinding(service, token, name, file), true
+	}
 	if token == "" || !hostPortLiteralRe.MatchString(token) {
 		return IsolationFinding{}, false
 	}
@@ -880,4 +902,107 @@ func scanPublishedToken(service, token, file string) (IsolationFinding, bool) {
 		Message:  message,
 		File:     file,
 	}, true
+}
+
+// exportTarget is what one active exports.env rule reads, as far as the test
+// copy's port remap is concerned: a vars: path (covered by `env.vars: auto`),
+// a declared dwe service port (covered while the runner remaps that service),
+// or neither.
+type exportTarget struct {
+	from          string
+	varPath       string
+	sourceService string
+}
+
+// composeExports indexes the ACTIVE exports.env rules by variable name so an
+// interpolated host port can be traced to what it reads. Built once per
+// ScanComposeIsolation call; a nil *composeExports means "no rules".
+type composeExports struct {
+	root  string
+	byVar map[string]exportTarget
+}
+
+// newComposeExports builds the index with envfile.Render's own semantics: a
+// reserved name is never user-exported, a rule whose when: resolves falsy on
+// cfg.Raw is not emitted at all (compose then falls back to the `${VAR:-d}`
+// default), and of two active rules for one name the later line wins in .env.
+func newComposeExports(cfg *DweConfig, projectRoot string) *composeExports {
+	e := &composeExports{root: projectRoot, byVar: make(map[string]exportTarget)}
+	for _, rule := range cfg.Exports.Env {
+		if rule.Name == "" || IsReservedExportName(rule.Name) {
+			continue
+		}
+		if rule.When != "" {
+			if v, _ := ResolvePath(cfg.Raw, rule.When); !isTruthy(v) {
+				continue
+			}
+		}
+		e.byVar[rule.Name] = classifyExportSource(cfg, rule.From)
+	}
+	return e
+}
+
+// classifyExportSource maps a rule's from: onto an exportTarget. Only the exact
+// `services.<n>.ports.<p>` shape over a declared, in-range port counts as a
+// service source: Raw stores a declared port as a bare int, so a deeper path
+// (`.port`) never resolves, and an undeclared or out-of-range port is not one
+// the runner remaps — both export the rule's default instead. Enabled is
+// deliberately not consulted: whether the port is remapped is per scenario.
+func classifyExportSource(cfg *DweConfig, from string) exportTarget {
+	t := exportTarget{from: from}
+	if path, ok := strings.CutPrefix(from, "vars."); ok && path != "" {
+		t.varPath = path
+		return t
+	}
+	parts := strings.Split(from, ".")
+	if len(parts) != 4 || parts[0] != "services" || parts[2] != "ports" {
+		return t
+	}
+	if spec, ok := cfg.Services[parts[1]].Ports[parts[3]]; ok && spec.Port >= 1 && spec.Port <= 65535 {
+		t.sourceService = parts[1]
+	}
+	return t
+}
+
+// interpolatedFinding builds the KindInterpolatedHostPort finding for a host
+// port interpolated from variable name. Non-blocking: the collision is real
+// only in scenarios that neither remap the source service nor set the vars
+// path to auto, and that filtering is each consumer's job.
+func (e *composeExports) interpolatedFinding(service, token, name, file string) IsolationFinding {
+	var target exportTarget
+	display := file
+	if e != nil {
+		target = e.byVar[name]
+		if rel, err := filepath.Rel(e.root, file); err == nil && !strings.HasPrefix(rel, "..") {
+			display = rel
+		}
+	}
+
+	head := "service " + service + " in " + display + " publishes host port " + token + " from " + name
+	collides := "a test run binds the same host port as the live stack"
+	var message string
+	switch {
+	case target.varPath != "":
+		message = head + " (exports.env from: " + target.from + ") — dwe test does not remap it, so " + collides +
+			"; add `env.vars: { " + target.varPath + ": auto }` to the scenario"
+	case target.sourceService != "":
+		message = head + " (exports.env from: " + target.from + ") — dwe test remaps service " + target.sourceService +
+			"'s ports only while " + target.sourceService + " is enabled in the scenario; otherwise " + collides
+	default:
+		message = head + ", which no active exports.env rule traces to a port dwe test remaps — " + collides +
+			"; export it from a declared service port (`from: services.<name>.ports.<port>`) or from" +
+			" `vars.<path>` with `env.vars: { <path>: auto }` in the scenario"
+	}
+
+	return IsolationFinding{
+		Kind:          KindInterpolatedHostPort,
+		Resource:      service,
+		Value:         token,
+		Blocking:      false,
+		Message:       message,
+		File:          file,
+		EnvVar:        name,
+		VarPath:       target.varPath,
+		SourceService: target.sourceService,
+	}
 }

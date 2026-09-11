@@ -95,35 +95,158 @@ func TestSplitShortPort(t *testing.T) {
 }
 
 // TestScanShortPort_SplitShapes pins scanShortPort end to end over the
-// brace-aware split: literal shapes keep their raw_host_port finding, and an
-// interpolated host token yields none (it is not a literal).
+// brace-aware split: literal shapes keep their raw_host_port finding, a
+// whole-token interpolated host port becomes interpolated_host_port, and a
+// mixed token or an IPv6 host yields nothing.
 func TestScanShortPort_SplitShapes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		raw          string
-		wantFinding  bool
+		wantKind     IsolationKind // "" = no finding
 		wantHostPort int
+		wantEnvVar   string
 	}{
-		{raw: "${V:-6379}:6379"},
-		{raw: "127.0.0.1:${V}:80"},
-		{raw: "${V}:80/tcp"},
-		{raw: "8080:80", wantFinding: true, wantHostPort: 8080},
-		{raw: "127.0.0.1:8080:80", wantFinding: true, wantHostPort: 8080},
-		{raw: "8080:80/udp", wantFinding: true, wantHostPort: 8080},
+		{raw: "${V:-6379}:6379", wantKind: KindInterpolatedHostPort, wantEnvVar: "V"},
+		{raw: "127.0.0.1:${V}:80", wantKind: KindInterpolatedHostPort, wantEnvVar: "V"},
+		{raw: "${V}:80/tcp", wantKind: KindInterpolatedHostPort, wantEnvVar: "V"},
+		{raw: "$V:80", wantKind: KindInterpolatedHostPort, wantEnvVar: "V"},
+		{raw: "80${X}:80"},
+		{raw: "$$V:80"},
+		{raw: "8080:80", wantKind: KindRawHostPort, wantHostPort: 8080},
+		{raw: "127.0.0.1:8080:80", wantKind: KindRawHostPort, wantHostPort: 8080},
+		{raw: "8080:80/udp", wantKind: KindRawHostPort, wantHostPort: 8080},
 		{raw: "[::1]:8080:80"},
 		{raw: "[::1]:${V}:80"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.raw, func(t *testing.T) {
 			t.Parallel()
-			f, ok := scanShortPort("svc", tc.raw, "compose.yml")
-			require.Equal(t, tc.wantFinding, ok, "finding: %+v", f)
-			if tc.wantFinding {
-				require.Equal(t, KindRawHostPort, f.Kind)
-				require.Equal(t, tc.wantHostPort, f.HostPort)
+			f, ok := scanShortPort("svc", tc.raw, "compose.yml", nil)
+			require.Equal(t, tc.wantKind != "", ok, "finding: %+v", f)
+			if !ok {
+				return
+			}
+			require.Equal(t, tc.wantKind, f.Kind)
+			require.Equal(t, tc.wantHostPort, f.HostPort)
+			require.Equal(t, tc.wantEnvVar, f.EnvVar)
+		})
+	}
+}
+
+// interpolatedCompose publishes app's host port through ${V}.
+const interpolatedCompose = "services:\n  app:\n    image: busybox\n    ports:\n      - \"${V:-6379}:6379\"\n"
+
+// TestScanComposeIsolation_InterpolatedHostPort pins how an interpolated host
+// port is traced through the ACTIVE exports.env rules: a vars: source carries
+// VarPath and the ready-made fix line, an exact declared service port carries
+// SourceService regardless of Enabled, and everything else — no rule, a falsy
+// when:, a from: that falls back to its default — is the generic finding.
+func TestScanComposeIsolation_InterpolatedHostPort(t *testing.T) {
+	t.Parallel()
+	raw := map[string]any{
+		"vars":  map[string]any{"ports": map[string]any{"valkey": 6379}},
+		"flags": map[string]any{"on": true, "off": false},
+	}
+	tests := []struct {
+		name        string
+		rules       []ExportRule
+		dbEnabled   bool
+		wantVarPath string
+		wantSource  string
+	}{
+		{name: "declared service port", rules: []ExportRule{{Name: "V", From: "services.db.ports.main"}}, dbEnabled: true, wantSource: "db"},
+		{name: "declared service port, service disabled", rules: []ExportRule{{Name: "V", From: "services.db.ports.main"}}, wantSource: "db"},
+		{name: "service rule with truthy when", rules: []ExportRule{{Name: "V", From: "services.db.ports.main", When: "flags.on"}}, wantSource: "db"},
+		{name: "port sub-path", rules: []ExportRule{{Name: "V", From: "services.db.ports.main.port"}}},
+		{name: "undeclared port", rules: []ExportRule{{Name: "V", From: "services.db.ports.nope"}}},
+		{name: "out-of-range port", rules: []ExportRule{{Name: "V", From: "services.db.ports.bad"}}},
+		{name: "unknown service", rules: []ExportRule{{Name: "V", From: "services.ghost.ports.main"}}},
+		{name: "service rule with falsy when", rules: []ExportRule{{Name: "V", From: "services.db.ports.main", When: "flags.off"}}},
+		{name: "vars rule", rules: []ExportRule{{Name: "V", From: "vars.ports.valkey"}}, wantVarPath: "ports.valkey"},
+		{name: "vars rule with falsy when", rules: []ExportRule{{Name: "V", From: "vars.ports.valkey", When: "flags.off"}}},
+		{name: "vars rule with unresolvable when", rules: []ExportRule{{Name: "V", From: "vars.ports.valkey", When: "flags.missing"}}},
+		{name: "falsy later rule keeps the active one", rules: []ExportRule{
+			{Name: "V", From: "vars.ports.valkey"},
+			{Name: "V", From: "services.db.ports.main", When: "flags.off"},
+		}, wantVarPath: "ports.valkey"},
+		{name: "later active rule wins", rules: []ExportRule{
+			{Name: "V", From: "vars.ports.valkey"},
+			{Name: "V", From: "services.db.ports.main"},
+		}, wantSource: "db"},
+		{name: "rule for another variable", rules: []ExportRule{{Name: "OTHER", From: "vars.ports.valkey"}}},
+		{name: "no rule"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &DweConfig{
+				Raw:     raw,
+				Exports: ExportsConfig{Env: tc.rules},
+				Services: map[string]ServiceConfig{"db": {
+					Enabled: tc.dbEnabled,
+					Ports: map[string]ServicePortSpec{
+						"main": {Port: 5432},
+						"bad":  {Port: 70000},
+					},
+				}},
+			}
+			findings := scanChainCfg(t, cfg, interpolatedCompose)
+			require.Len(t, findings, 1)
+			f := findings[0]
+			require.Equal(t, KindInterpolatedHostPort, f.Kind)
+			require.Equal(t, "app", f.Resource)
+			require.Equal(t, "${V:-6379}", f.Value)
+			require.Equal(t, "V", f.EnvVar)
+			require.Zero(t, f.HostPort)
+			require.False(t, f.Blocking)
+			require.Equal(t, tc.wantVarPath, f.VarPath)
+			require.Equal(t, tc.wantSource, f.SourceService)
+			require.Contains(t, f.Message, "service app in compose-0.yml publishes host port ${V:-6379} from V")
+
+			switch {
+			case tc.wantVarPath != "":
+				require.Contains(t, f.Message, "`env.vars: { "+tc.wantVarPath+": auto }`")
+			case tc.wantSource != "":
+				require.Contains(t, f.Message, "remaps service db's ports only while db is enabled")
+			default:
+				require.Contains(t, f.Message, "`from: services.<name>.ports.<port>`")
+				require.Contains(t, f.Message, "`env.vars: { <path>: auto }`")
 			}
 		})
 	}
+}
+
+// TestScanComposeIsolation_InterpolatedLongSyntax pins that the long port
+// syntax shares the interpolation branch through scanPublishedToken.
+func TestScanComposeIsolation_InterpolatedLongSyntax(t *testing.T) {
+	t.Parallel()
+	cfg := &DweConfig{Exports: ExportsConfig{Env: []ExportRule{{Name: "V", From: "vars.ports.valkey"}}}}
+	findings := scanChainCfg(t, cfg,
+		"services:\n  app:\n    image: busybox\n    ports:\n      - target: 6379\n        published: \"${V}\"\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, KindInterpolatedHostPort, findings[0].Kind)
+	require.Equal(t, "V", findings[0].EnvVar)
+	require.Equal(t, "ports.valkey", findings[0].VarPath)
+}
+
+// TestScanComposeIsolation_InterpolatedPortsCollapse pins that the new kind
+// merges like every other port finding (appended, dropped by `!reset` /
+// `!override`) rather than falling into the last-wins scalar map.
+func TestScanComposeIsolation_InterpolatedPortsCollapse(t *testing.T) {
+	t.Parallel()
+
+	require.Empty(t, scanChain(t, interpolatedCompose, "services:\n  app:\n    ports: !reset null\n"))
+
+	findings := scanChain(t, interpolatedCompose, "services:\n  app:\n    ports: !override\n      - \"9090:90\"\n")
+	require.Len(t, findings, 1)
+	require.Equal(t, KindRawHostPort, findings[0].Kind)
+
+	// Appended across the chain: two interpolated entries both stand.
+	findings = scanChain(t, interpolatedCompose, "services:\n  app:\n    ports:\n      - \"${W}:80\"\n")
+	require.Len(t, findings, 2)
+	require.Equal(t, "V", findings[0].EnvVar)
+	require.Equal(t, "W", findings[1].EnvVar)
 }
 
 func TestInterpolatedVar(t *testing.T) {
@@ -269,6 +392,13 @@ func TestScanComposeIsolation_DeterministicOrder(t *testing.T) {
 // (first is compose.base, the rest are extras) and returns the scan findings.
 func scanChain(t *testing.T, docs ...string) []IsolationFinding {
 	t.Helper()
+	return scanChainCfg(t, &DweConfig{}, docs...)
+}
+
+// scanChainCfg is scanChain over a caller-built config (exports, Raw,
+// services); its compose chain is overwritten with the written documents.
+func scanChainCfg(t *testing.T, cfg *DweConfig, docs ...string) []IsolationFinding {
+	t.Helper()
 	root := t.TempDir()
 	paths := make([]string, 0, len(docs))
 	for i, doc := range docs {
@@ -276,7 +406,7 @@ func scanChain(t *testing.T, docs ...string) []IsolationFinding {
 		require.NoError(t, os.WriteFile(p, []byte(doc), 0o644))
 		paths = append(paths, p)
 	}
-	cfg := &DweConfig{Compose: ComposeConfig{Base: paths[0], Extra: paths[1:]}}
+	cfg.Compose = ComposeConfig{Base: paths[0], Extra: paths[1:]}
 	return ScanComposeIsolation(cfg, root)
 }
 
