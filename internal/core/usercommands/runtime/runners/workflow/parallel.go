@@ -238,6 +238,14 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 				}
 			})
 
+			// Stderr is assigned FROM Stdout, not re-derived: os/exec gives the
+			// child one pipe and one copy goroutine only when the two writers
+			// compare equal as interface values (exec.Cmd.childStderr →
+			// interfaceEqual). That equality is what keeps this tee — and the
+			// buf/subFile its callback writes — single-writer on the fallback
+			// path where ParallelChildIO cannot allocate a PTY. Wrapping either
+			// stream separately (an io.MultiWriter around one of them, say)
+			// silently splits them into two goroutines writing one LineTee.
 			gRC.Stdout = tee
 			gRC.Stderr = gRC.Stdout
 

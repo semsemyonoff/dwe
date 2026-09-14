@@ -70,6 +70,10 @@ var stdoutIsTTY = func() bool {
 //     "cannot attach stdin to a TTY-enabled container because stdin is
 //     not a terminal". Without PTY the child sees a pipe and falls back
 //     to non-TTY output, which is what the live-block expects.
+//     Both streams are the SAME writer value on purpose: os/exec hands the
+//     child one pipe and one copy goroutine only when stdout and stderr
+//     compare equal as interfaces (exec.Cmd.childStderr → interfaceEqual),
+//     which is what keeps the lineTee behind stepWriter single-writer.
 func childIO(stepWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
 	if parallel {
 		if stepWriter == nil {

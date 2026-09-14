@@ -13,7 +13,7 @@ is the only output, the swallowed line is exactly the one being read.
 Reproduced against the current code (no PTY needed, two `Write` calls suffice).
 `PLAIN` is `NewLineTee`, `ANSI` is `NewLineTeePreserveANSI`:
 
-```
+```text
 PLAIN "foo\r\n"            -> [("foo",true)]                ok
 PLAIN "foo\r" + "\n"       -> [("foo",false) ("",true)]     bug
 PLAIN "foo\r" + "\x1b[K\n" -> [("foo",false) ("",true)]     bug (ANSI removed by the per-write strip)
@@ -267,22 +267,22 @@ A duplicate in place of a blank is not a trade worth making.
       Rows marked **fails now** are the reproduction; the rest are controls that pass
       today and must keep passing:
 
-      | constructor | writes | want | |
-      | --- | --- | --- | --- |
-      | plain | `"foo\r\n"` | `[(foo,true)]` | control |
-      | plain | `"foo\r"`, `"\n"` | `[(foo,false) (foo,true)]` | **fails now** |
-      | plain | `"foo\r"`, `"\x1b[K\n"` | `[(foo,false) (foo,true)]` | **fails now** |
-      | plain | `"foo\r\x1b["`, `"K\n"` | `[(foo,false) (foo,true)]` | **fails now** |
-      | plain | `"50%\r"`, `"60%\r"` | `[(50%,false) (60%,false)]` | control — progress bar |
-      | plain | `"foo\r"`, `"\r"`, `"\n"` | `[(foo,false) ("",false) (foo,true)]` | **fails now** — pending survives a bare CR |
-      | plain | `"foo\r"`, `"\n\n"` | `[(foo,false) (foo,true) ("",true)]` | **fails now** — a genuine blank line after |
-      | plain | `"10"`, `"%\r100%"`, `"\n"` | `[(10%,false) (100%,true)]` | control — buffer not empty at the CR |
-      | preserveANSI | `"foo\r"`, `"\n"` | `[(foo,false) (foo,true)]` | **fails now** |
-      | preserveANSI | `"foo\r"`, `"\x1b[K\n"` | `[(foo,false) (foo,true)]` | **fails now** — final frame is `"\x1b[K"` today |
-      | preserveANSI | `"foo\r\x1b["`, `"K\n"` | `[(foo,false) (foo,true)]` | **fails now** — same |
-      | preserveANSI | `"50%\r"`, `"60%\r"` | `[(50%,false) (60%,false)]` | control |
-      | plain | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("",false) (foo,true)]` | **fails now** — the accepted trade, pinned deliberately |
-      | preserveANSI | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("\x1b[K",false) (foo,true)]` | **fails now** — same, and the held frame survives an ANSI-only frame |
+  | constructor | writes | want | |
+  | --- | --- | --- | --- |
+  | plain | `"foo\r\n"` | `[(foo,true)]` | control |
+  | plain | `"foo\r"`, `"\n"` | `[(foo,false) (foo,true)]` | **fails now** |
+  | plain | `"foo\r"`, `"\x1b[K\n"` | `[(foo,false) (foo,true)]` | **fails now** |
+  | plain | `"foo\r\x1b["`, `"K\n"` | `[(foo,false) (foo,true)]` | **fails now** |
+  | plain | `"50%\r"`, `"60%\r"` | `[(50%,false) (60%,false)]` | control — progress bar |
+  | plain | `"foo\r"`, `"\r"`, `"\n"` | `[(foo,false) ("",false) (foo,true)]` | **fails now** — pending survives a bare CR |
+  | plain | `"foo\r"`, `"\n\n"` | `[(foo,false) (foo,true) ("",true)]` | **fails now** — a genuine blank line after |
+  | plain | `"10"`, `"%\r100%"`, `"\n"` | `[(10%,false) (100%,true)]` | control — buffer not empty at the CR |
+  | preserveANSI | `"foo\r"`, `"\n"` | `[(foo,false) (foo,true)]` | **fails now** |
+  | preserveANSI | `"foo\r"`, `"\x1b[K\n"` | `[(foo,false) (foo,true)]` | **fails now** — final frame is `"\x1b[K"` today |
+  | preserveANSI | `"foo\r\x1b["`, `"K\n"` | `[(foo,false) (foo,true)]` | **fails now** — same |
+  | preserveANSI | `"50%\r"`, `"60%\r"` | `[(50%,false) (60%,false)]` | control |
+  | plain | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("",false) (foo,true)]` | **fails now** — the accepted trade, pinned deliberately |
+  | preserveANSI | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("\x1b[K",false) (foo,true)]` | **fails now** — same, and the held frame survives an ANSI-only frame |
 
 - [x] add `TestLineTee_Flush_ClearsHeldFrame` with both `Flush` paths — a control today,
       a pin on the unconditional clear afterwards:
