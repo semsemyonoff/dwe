@@ -22,6 +22,13 @@ func Slugify(s string) string {
 	s = mdLinkRE.ReplaceAllString(s, "$1")
 	s = mdCodeRE.ReplaceAllString(s, "$1")
 	s = strings.ToLower(s)
+	// Trim BEFORE the character pass, not the hyphens after it: surrounding
+	// whitespace is the only thing whose hyphens are an artifact. A blanket
+	// Trim(…, "-") also ate hyphens belonging to the heading itself, so a
+	// flag heading like "`--parallel N`" slugged to `parallel-n` while every
+	// other surface — GitHub, the Starlight site, the doc's own TOC link —
+	// says `--parallel-n`, and `dwe docs show` could not resolve its own link.
+	s = strings.TrimSpace(s)
 
 	var b strings.Builder
 	b.Grow(len(s))
@@ -37,8 +44,7 @@ func Slugify(s string) string {
 			// Drop punctuation / symbols entirely (matches GitHub).
 		}
 	}
-	// Trim leading/trailing hyphens introduced by surrounding whitespace.
-	return strings.Trim(b.String(), "-")
+	return b.String()
 }
 
 // HeadingInfo describes one H2/H3 heading in document order. Used by
@@ -88,6 +94,8 @@ func ParseHeadingSlugs(content []byte) []HeadingInfo {
 //  3. slug-prefix (the heading slug starts with anchor followed by `-`) — lets
 //     `#binaries` find a heading whose slug is `binaries-block` when no other
 //     heading slug starts with `binaries-`
+//  4. equality ignoring leading/trailing hyphens — lets `#parallel-n` find a
+//     flag heading whose slug is `--parallel-n`
 //
 // The section spans from the matched heading line up to (but not including)
 // the next heading at the same or shallower depth, with content inside fenced
@@ -160,6 +168,20 @@ func SliceByAnchor(content []byte, anchor string) (sliced []byte, matchedSlug st
 	if len(prefixMatches) == 1 {
 		h := prefixMatches[0]
 		return sliceSection(content, h.startOff, nextSectionOffset(headings, h, lines, content)), h.slug, candidates, true
+	}
+
+	// Tier 4: equality ignoring leading/trailing hyphens on both sides, so a
+	// flag heading answers to the bare name — `#parallel-n` finds
+	// "`--parallel N`". Typing the dashes is unnatural, and it is what dwe
+	// itself advertised before Slugify stopped eating them.
+	if trimmedAnchor := strings.Trim(anchorLower, "-"); trimmedAnchor != "" {
+		trimMatches := filterHeadings(headings, func(h heading) bool {
+			return strings.Trim(strings.ToLower(h.slug), "-") == trimmedAnchor
+		})
+		if len(trimMatches) == 1 {
+			h := trimMatches[0]
+			return sliceSection(content, h.startOff, nextSectionOffset(headings, h, lines, content)), h.slug, candidates, true
+		}
 	}
 
 	return nil, "", candidates, false

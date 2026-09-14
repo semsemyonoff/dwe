@@ -2,6 +2,8 @@ package docs
 
 import (
 	"io/fs"
+	"path"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -158,6 +160,93 @@ func rootBySource(roots []DocRoot, source string) (DocRoot, bool) {
 		}
 	}
 	return DocRoot{}, false
+}
+
+// linkWithAnchorRE matches an inline markdown link whose target carries an
+// `#anchor`. Targets never contain whitespace or parentheses in this doc set.
+var linkWithAnchorRE = regexp.MustCompile(`\[[^\]]*\]\(([^()\s]+#[^()\s]+)\)`)
+
+var (
+	fenceLineRE = regexp.MustCompile("^(```|~~~)")
+	codeSpanRE  = regexp.MustCompile("`[^`\n]*`")
+	urlSchemeRE = regexp.MustCompile(`^[a-z][a-z0-9+.-]*:`)
+)
+
+// TestDocumentLinkAnchorsResolve covers the fourth surface, and the one the
+// other three cannot see: the `#anchor` a document *links to*. The sibling
+// tests prove dwe resolves the anchors it advertises — which stayed true while
+// the docs linked to something else entirely.
+//
+// Two defect classes hid in that gap. The RU mirror translates headings but
+// kept the English anchors, so 140 links resolved to nothing; and `Slugify`
+// trimmed a heading's own leading hyphens, so `docs/reference/config/tests.md`
+// linked its own `#--parallel-n` while the resolver answered to `parallel-n`.
+//
+// A link to a missing *file* is deliberately not an error here — `web/` already
+// degrades those to plain text with a build warning, by design.
+func TestDocumentLinkAnchorsResolve(t *testing.T) {
+	files := embeddedMarkdownFiles(t)
+
+	checked := 0
+	for _, docPath := range files {
+		content, err := fs.ReadFile(BuiltinFS, docPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", docPath, err)
+		}
+		for _, m := range linkWithAnchorRE.FindAllStringSubmatch(stripCodeForLinkScan(string(content)), -1) {
+			target := m[1]
+			if urlSchemeRE.MatchString(target) {
+				continue
+			}
+			relPath, anchor, _ := strings.Cut(target, "#")
+
+			targetPath := docPath
+			if relPath != "" {
+				if !strings.HasSuffix(relPath, ".md") {
+					continue
+				}
+				targetPath = path.Join(path.Dir(docPath), relPath)
+				if strings.HasPrefix(targetPath, "..") {
+					continue // escapes the embedded tree — not ours to resolve
+				}
+			}
+
+			targetContent, err := fs.ReadFile(BuiltinFS, targetPath)
+			if err != nil {
+				continue // missing file: see the doc comment
+			}
+			checked++
+			if _, _, _, ok := SliceByAnchor(targetContent, anchor); !ok {
+				t.Errorf("%s links to %q, but %s has no such anchor", docPath, target, targetPath)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no anchor links found; the embedded tree is likely not synced (run `make embedded-docs`)")
+	}
+}
+
+// stripCodeForLinkScan removes fenced blocks and inline code spans so prose
+// *about* link syntax is not scanned as a link — `[x](#frag)` in tui-keymap.md
+// and Go generics like `errors.AsType[*lock.HeldError](err)` in packages.md both
+// parse as one otherwise. Never use it for slugs: a code span's text belongs to
+// the heading's anchor.
+func stripCodeForLinkScan(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inFence := false
+	for line := range strings.SplitSeq(s, "\n") {
+		if fenceLineRE.MatchString(strings.TrimSpace(line)) {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		b.WriteString(codeSpanRE.ReplaceAllString(line, ""))
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 func embeddedMarkdownFiles(t *testing.T) []string {

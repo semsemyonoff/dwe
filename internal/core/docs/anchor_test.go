@@ -18,6 +18,13 @@ func TestSlugify(t *testing.T) {
 		{"Contents", "contents"},
 		{"  Padded  ", "padded"},
 		{"", ""},
+		// A heading's own leading hyphens belong to the slug — GitHub, the
+		// Starlight site and the doc's own TOC link all keep them, so eating
+		// them left `dwe docs show` unable to resolve a link the docs ship.
+		{"`--parallel N`", "--parallel-n"},
+		{"`--force`", "--force"},
+		{"`-y` / `--non-interactive`", "-y----non-interactive"},
+		{"  `--force`  ", "--force"},
 	}
 	for _, tt := range tests {
 		got := Slugify(tt.in)
@@ -51,7 +58,11 @@ const anchorDoc = "# Title\n" +
 	"\n" +
 	"## Gamma\n" +
 	"\n" +
-	"Gamma body.\n"
+	"Gamma body.\n" +
+	"\n" +
+	"### `--parallel N`\n" +
+	"\n" +
+	"Parallel body.\n"
 
 func TestSliceByAnchor_ExactSlug(t *testing.T) {
 	sliced, slug, _, ok := SliceByAnchor([]byte(anchorDoc), "binaries-block")
@@ -89,6 +100,23 @@ func TestSliceByAnchor_PrefixFallback(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(sliced), "## `binaries` block\n") {
 		t.Errorf("unexpected slice start: %q", first80(string(sliced)))
+	}
+}
+
+func TestSliceByAnchor_LeadingHyphensBothWays(t *testing.T) {
+	// The canonical slug keeps the flag's own hyphens, which is what the docs
+	// link to. Typing them is unnatural, so tier 4 resolves the bare name too.
+	for _, anchor := range []string{"--parallel-n", "parallel-n"} {
+		sliced, slug, _, ok := SliceByAnchor([]byte(anchorDoc), anchor)
+		if !ok {
+			t.Fatalf("SliceByAnchor(%q): expected match", anchor)
+		}
+		if slug != "--parallel-n" {
+			t.Errorf("SliceByAnchor(%q): slug = %q, want --parallel-n", anchor, slug)
+		}
+		if !strings.HasPrefix(string(sliced), "### `--parallel N`\n") {
+			t.Errorf("SliceByAnchor(%q): unexpected slice start: %q", anchor, first80(string(sliced)))
+		}
 	}
 }
 
@@ -134,8 +162,8 @@ func TestSliceByAnchor_NotFoundReturnsCandidates(t *testing.T) {
 
 func TestParseHeadingSlugs(t *testing.T) {
 	got := ParseHeadingSlugs([]byte(anchorDoc))
-	if len(got) != 4 {
-		t.Fatalf("expected 4 H2/H3 headings, got %d: %+v", len(got), got)
+	if len(got) != 5 {
+		t.Fatalf("expected 5 H2/H3 headings, got %d: %+v", len(got), got)
 	}
 	// Verify level + slug + text for each.
 	want := []HeadingInfo{
@@ -143,6 +171,9 @@ func TestParseHeadingSlugs(t *testing.T) {
 		{Level: 3, Slug: "alpha-child", Text: "Alpha child"},
 		{Level: 2, Slug: "binaries-block", Text: "binaries block"},
 		{Level: 2, Slug: "gamma", Text: "Gamma"},
+		// The TOC surface advertises the flag's own hyphens, so it matches
+		// what the docs (and GitHub, and the site) link to.
+		{Level: 3, Slug: "--parallel-n", Text: "--parallel N"},
 	}
 	for i, h := range got {
 		if h != want[i] {
