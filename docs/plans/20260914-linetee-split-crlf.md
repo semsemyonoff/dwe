@@ -368,13 +368,13 @@ without a split.
 **Files:**
 - Modify: `internal/core/execution/pipeline/logframe_wiring_test.go`
 
-- [ ] add `TestParallelSubStepLog_SplitCRLF_NoBlankLine` next to
+- [x] add `TestParallelSubStepLog_SplitCRLF_NoBlankLine` next to
       `TestParallelSubStepLog_OnlyCommittedFrames`, reusing its harness
       (`buildParallelGroupStep` + `RunWithOptions`)
-- [ ] make the child split the CRLF across two writes — `printf 'frame-99\r'; sleep 0.1;
+- [x] make the child split the CRLF across two writes — `printf 'frame-99\r'; sleep 0.1;
       printf '\n'` — since a single `printf 'a\r\n'` collapses in one buffer scan and
       cannot reproduce the bug
-- [ ] **do NOT assert through `logLines`** — that helper drops empty and
+- [x] **do NOT assert through `logLines`** — that helper drops empty and
       whitespace-only lines (`logframe_wiring_test.go`, `strings.TrimSpace(l) != ""`),
       so it cannot distinguish a missing line from a blanked one, and it would mask a
       `"frame-99\n\n"`-shaped regression outright. Compare **raw file content**: the
@@ -383,31 +383,38 @@ without a split.
       non-final frame only reaches `entry.inProgress`, which the blank final frame then
       clears — so the raw comparison is what states the contract, not a rescue of an
       assertion `logLines` would have passed.)
-- [ ] note in the test that the byte-equality holds only while trace output is silent:
+- [x] note in the test that the byte-equality holds only while trace output is silent:
       `executor.go` routes `trace.WithLinePrinter` into the same `stepWriter`, so a
       `-v` / `--debug` environment would add command echoes to that file
-- [ ] for the global pipeline log, build a **real** `PlainReporter` — the
+- [x] for the global pipeline log, build a **real** `PlainReporter` — the
       `mockReporter` used by `TestParallelSubStepLog_OnlyCommittedFrames` never writes
       there, because only `PlainReporter.writeLog` does. Copy the construction from the
       sibling `TestParallelSubStep_UnterminatedTail_ReachesGlobalLog`:
       `NewPlainReporter(render.NewWriter(scr), globalLog, io.Discard)`
-- [ ] assert that log by **containment**, not equality — it also carries timestamped
+- [x] assert that log by **containment**, not equality — it also carries timestamped
       phase and step lines. Pre-fix the signature is a bare empty line plus a missing
       `frame-99`; assert `strings.Contains(global, "\nframe-99\n")` — that one does fail
       pre-fix — plus the absence of any `"\n\n"`. Do **not** anchor the negative on
       `"p/alpha\n\n"`: the blank line comes from `PlainReporter.writeLog("")` and lands
       right after the parallel-group header, while the only `p/alpha` line is the later
       `Done:` emit, so such a string could never match. Still not `logLines`
-- [ ] **verify the test is not vacuous**: run it once with the Task 2 change reverted
+- [x] **verify the test is not vacuous**: run it once with the Task 2 change reverted
       (`git stash` the `output.go` hunk) and confirm it FAILS on the blank line. A
       100 ms gap normally forces two reads, but nothing guarantees the copy goroutine
       is scheduled between the two `printf`s; if the writes coalesce the test passes
       without exercising the split at all. It never fails spuriously — the risk is
       silent vacuity, and the deterministic coverage lives in Tasks 1–3
-- [ ] note that conclusion in the test's doc comment so a future reader knows the
+- [x] note that conclusion in the test's doc comment so a future reader knows the
       timing is load-bearing
-- [ ] run `go test ./internal/core/execution/pipeline/` and
+- [x] run `go test ./internal/core/execution/pipeline/` and
       `go test -race -count=5 -run TestParallelSubStepLog ./internal/core/execution/pipeline/`
+
+**Non-vacuity result** (Task 2's `output.go` swapped for `git show
+2675f4d9:internal/shared/liveui/output.go`): all three assertions fail —
+`.dwe/logs/parallel/deploy/g/alpha.log` is exactly `"\n"`, the global log has no
+`frame-99` at all, and its blank line lands directly after the
+`· [1/1] p/alpha` group header (confirming the plan's note that anchoring the
+negative on `p/alpha\n\n` could never have matched).
 
 ### Task 5: Remove the now-unreachable guard in FrameLogWriter
 
