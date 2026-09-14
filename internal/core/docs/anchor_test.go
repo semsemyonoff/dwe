@@ -149,6 +149,27 @@ func TestMatchSlugIndex_AmbiguityRejected(t *testing.T) {
 	if got := MatchSlugIndex(slugs, "--force"); got != 0 {
 		t.Errorf("MatchSlugIndex(exact) = %d, want 0", got)
 	}
+
+	// The slug-prefix tier requires uniqueness too. docstui's
+	// headingIndexForAnchor used to take the first prefix hit; it now
+	// delegates here, so an ambiguous prefix must resolve nowhere rather
+	// than to whichever heading happens to come first in the document.
+	prefixes := []string{"binaries-block", "binaries-list"}
+	if got := MatchSlugIndex(prefixes, "binaries"); got != -1 {
+		t.Errorf("MatchSlugIndex = %d, want -1 for an ambiguous slug-prefix anchor", got)
+	}
+	if got := MatchSlugIndex(prefixes, "binaries-list"); got != 1 {
+		t.Errorf("MatchSlugIndex(exact) = %d, want 1", got)
+	}
+
+	// So does the case-insensitive tier.
+	folds := []string{"Setup", "setup"}
+	if got := MatchSlugIndex(folds, "SETUP"); got != -1 {
+		t.Errorf("MatchSlugIndex = %d, want -1 for an ambiguous case-insensitive anchor", got)
+	}
+	if got := MatchSlugIndex(folds, "setup"); got != 1 {
+		t.Errorf("MatchSlugIndex(exact) = %d, want 1", got)
+	}
 }
 
 func TestSliceByAnchor_H3StopsAtSiblingH2(t *testing.T) {
