@@ -1,4 +1,4 @@
-> Translated from: reference/config/setup.md @ 22557bbf835d
+> Translated from: reference/config/setup.md @ b9bf8a048cac
 
 # setup.yml
 
@@ -111,12 +111,14 @@ questions:
 | `options` | list | нет | Валидно только для `select` и `multiselect`. Список пар `{value, label}`. Обязательно для обоих типов. |
 | `validate` | object | нет | Опциональные правила валидации. Имеет два поля (взаимоисключающие): `preset` (именованный пресет вроде `port` / `hostname`) или `regex` (regex-паттерн). Имеет смысл только для `type: input`. |
 
-Для ответа, похожего на секрет, — ключ приложения, секрет сессии, ключ Fernet —
-отправляйте разработчика в `description:` к
-`dwe vars set <path> --generate hex|base64url[:N]|uuid`, а не к однострочнику
-вроде `python -c 'import secrets; …'`. Команде не нужно ничего, кроме dwe, она
-пишет тот же путь в `local.yml` и не перезаписывает существующее значение без
-`--force` (см. [`vars.md`](vars.md#dwe-vars-set)).
+Для ответа, похожего на секрет, чей `writes:` указывает на лист внутри `vars.*`,
+— ключ приложения, секрет сессии, ключ Fernet — отправляйте разработчика в
+`description:` к `dwe vars set <path> --generate hex|base64url[:N]|uuid`, а не к
+однострочнику вроде `python -c 'import secrets; …'`. Команде не нужно ничего,
+кроме dwe, она пишет тот же путь в `local.yml` — и всегда резолвит его под
+`vars.`, поэтому указывайте значение `writes:` без этого префикса — и не
+перезаписывает существующее значение без `--force`
+(см. [`vars.md`](vars.md#dwe-vars-set)).
 
 Схемные правила, форсируемые на загрузке:
 
