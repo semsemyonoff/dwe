@@ -6,7 +6,7 @@
 
 Один YAML-блок при загрузке реестра разворачивается в четыре виртуальные команды (`.start`, `.logs`, `.stop`, `.restart`), и каждая из них появляется в `dwe commands list`, в интерактивном браузере, в автодополнении и как цель шага внутри воркфлоу. Контейнеры-демоны отслеживаются по стандартным docker-меткам — отдельного файла состояния нет — и автоматически останавливаются вместе со стеком.
 
-Полная схема — в [`../reference/config/commands/types.md#type-daemon`](../reference/config/commands/types.md#type-daemon); эта страница описывает приёмы, к которым вы будете обращаться при настройке.
+Полная схема — в [`../reference/config/commands/types.md#type-daemon`](../reference/config/commands/types.md#тип-daemon); эта страница описывает приёмы, к которым вы будете обращаться при настройке.
 
 ## Анатомия блока демона
 
@@ -186,6 +186,6 @@ commands:
 
 ## Перекрёстные ссылки
 
-- [`../reference/config/commands/types.md#type-daemon`](../reference/config/commands/types.md#type-daemon) — полная схема, правила валидации, метки, реализация виртуальных команд.
+- [`../reference/config/commands/types.md#type-daemon`](../reference/config/commands/types.md#тип-daemon) — полная схема, правила валидации, метки, реализация виртуальных команд.
 - [`author-project-commands.md`](author-project-commands.md) — другие типы команд (`shell`, `service_exec`, `workflow`), которыми оборачивают демонов.
 - [`daily-workflow.md`](daily-workflow.md) — `dwe status` и сценарий stop/restart.
