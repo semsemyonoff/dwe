@@ -94,6 +94,14 @@ generated from commit subjects and stay on the
   runner's log blanked even when it arrived in one write. In a parallel block
   the live row now keeps showing that line instead of briefly blanking; nothing
   else in the live view changes.
+- **A parallel workflow failure dump no longer leaves the terminal coloured.**
+  The dump forwards the sub-step's own ANSI so its colours survive, but the
+  child's closing reset does not always reach it — a reset written after the
+  last newline is dropped as carrying no line, one written between a `\r` and
+  its `\n` is replaced by the content line, and a killed child never writes one
+  at all. The colour then bled into the dump's closing bar and every later
+  message. The dump now closes the colour state itself; a dump whose output
+  carries no escape bytes stays escape-free for log scrapers.
 - **`dwe test` now warns about a compose host port it cannot remap because the
   port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
   exported `from: vars.ports.valkey`, kept its original value in the test copy

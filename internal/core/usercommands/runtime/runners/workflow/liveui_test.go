@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -447,6 +448,56 @@ func TestWorkflowRunner_Parallel_SplitCRLF(t *testing.T) {
 				t.Errorf("expected the block row to show 'foo'; got:\n%q", rendered)
 			}
 		})
+	}
+}
+
+// TestWorkflowRunner_Parallel_DumpClosesSGRState pins that a failure dump never
+// hands the terminal back with the child's colour still active. Frame capture
+// keeps the colour-setting bytes but drops the child's cleanup in both shapes
+// below — the split-CRLF rule substitutes the held frame for the ANSI-only
+// final one, and an ANSI-only trailing tail is discarded as carrying no line —
+// so without an explicit reset the closing bar and every later stderr write
+// inherit the colour. The per-sub-step log is stripped and must stay clean.
+func TestWorkflowRunner_Parallel_DumpClosesSGRState(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "reset-after-cr", body: `printf '\033[31mERR\r\033[0m\n'; exit 1`},
+		{name: "reset-after-lf", body: `printf '\033[31mERR\n\033[0m'; exit 1`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			wf, reg := tailWorkflow("sgr", tc.body)
+			_, cleanup := installLiveLineCapture(t)
+			defer cleanup()
+
+			_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+			if err == nil {
+				t.Fatal("expected sub-step to fail")
+			}
+			if !strings.Contains(errOut, "\033[31mERR\n"+render.Reset+"  ──") {
+				t.Errorf("expected the dump to reset SGR state before the closing bar; got %q", errOut)
+			}
+			if got := readSubStepLog(t, dir, "sgr"); got != "ERR\n" {
+				t.Errorf("sub-step log = %q, want %q", got, "ERR\n")
+			}
+		})
+	}
+}
+
+// TestDumpSubStepOutput_PlainOutputStaysEscapeFree pins the other half of the
+// rule above: a dump whose captured output carries no escape bytes must not
+// gain one, so log scrapers reading a non-TTY run see plain text.
+func TestDumpSubStepOutput_PlainOutputStaysEscapeFree(t *testing.T) {
+	var buf bytes.Buffer
+	dumpSubStepOutput(&buf, "plain.run", "header\nboom\n")
+	if strings.ContainsRune(buf.String(), 0x1b) {
+		t.Errorf("plain dump must stay escape-free; got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "header\nboom\n  ──") {
+		t.Errorf("unexpected dump shape: %q", buf.String())
 	}
 }
 
