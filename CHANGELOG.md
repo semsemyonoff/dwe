@@ -87,11 +87,12 @@ generated from commit subjects and stay on the
 - **A line whose `\r\n` is split across a read boundary is no longer recorded as
   an empty line.** When the carriage return and the newline arrived in separate
   reads from the child process, the line was replaced by a blank one in
-  `.dwe/logs/<pipeline>.log`, in `.dwe/logs/parallel/<workflow>/<sub>.log` and in
-  the parallel failure dump — in CI, where the log is the only output, the
-  swallowed line was exactly the one being read. The same now applies to the
-  `\r\x1b[K\n` redraw idiom, which the workflow runner's log blanked even when it
-  arrived in one write. The live view is unchanged.
+  `.dwe/logs/<pipeline>.log`, in the per-sub-step logs under
+  `.dwe/logs/parallel/` and in the parallel failure dump — in CI, where the log
+  is the only output, the swallowed line was exactly the one being read. The
+  same now applies to the `\r\x1b[K\n` redraw idiom, which the workflow
+  runner's log blanked even when it arrived in one write. The live view is
+  unchanged.
 - **`dwe test` now warns about a compose host port it cannot remap because the
   port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
   exported `from: vars.ports.valkey`, kept its original value in the test copy

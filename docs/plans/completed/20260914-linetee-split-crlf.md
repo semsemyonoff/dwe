@@ -539,10 +539,17 @@ run — the permanent coverage is Tasks 1/3/4):
 
 ### Task 9: [Final] Update documentation
 
-- [ ] re-read the `CHANGELOG.md` entry against what actually shipped
-- [ ] no `AGENTS.md` change — this adds no new cross-cutting trap, and the `liveui`
+- [x] re-read the `CHANGELOG.md` entry against what actually shipped — the wording
+      matches the shipped behaviour (blank line in the pipeline log, the per-sub-step
+      parallel logs and the failure dump; the `\r\x1b[K\n` idiom fixed on the workflow
+      runner even in its intact form; live view unchanged). One correction: the entry
+      named `.dwe/logs/parallel/<workflow>/<sub>.log`, which is neither real path —
+      the workflow runner writes `.dwe/logs/parallel/workflow/<workflow-id>/<sub>.log`
+      and the executor `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log` — so it now
+      says "the per-sub-step logs under `.dwe/logs/parallel/`", which covers both
+- [x] no `AGENTS.md` change — this adds no new cross-cutting trap, and the `liveui`
       bullet there already points at `packages.md`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
