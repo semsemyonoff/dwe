@@ -476,30 +476,30 @@ negative on `p/alpha\n\n` could never have matched).
 - Modify: `docs/internals/packages.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] in `docs/internals/packages.md`, § `internal/shared/liveui/`: add the
+- [x] in `docs/internals/packages.md`, § `internal/shared/liveui/`: add the
       `LineTee`-level hold-and-re-emit (including the after-strip blankness rule and
       the double delivery) **before** the sentence "Do not 'fix' either callback by
       giving it pending-frame state — that would be a new composite flush hook", and
       say why that prohibition survives it — the state lives where a single `Flush`
       owns the lifecycle
-- [ ] the same paragraph's mechanic (1) says "`LineTee.Flush` delivers its
+- [x] the same paragraph's mechanic (1) says "`LineTee.Flush` delivers its
       un-terminated tail as `(tail, false)`, i.e. *into* the pending slot, so
       `FrameLogWriter.Flush` calls `tee.Flush()` FIRST…" — there are now **two**
       pending slots; name which belongs to which type and state that `LineTee.Flush`
       clears its own unconditionally
-- [ ] do **not** look for a description of the deleted `FrameLogWriter` substitution
+- [x] do **not** look for a description of the deleted `FrameLogWriter` substitution
       there — the paragraph documents the *redraw-eviction* rule, which Task 5 keeps,
       and says nothing about the `line == "" && f.hasPending` branch. Nothing to remove
-- [ ] add an entry under `## [Unreleased]` → `### Fixed` in `CHANGELOG.md`: a line
+- [x] add an entry under `## [Unreleased]` → `### Fixed` in `CHANGELOG.md`: a line
       whose `\r\n` was split across a read boundary was recorded as an empty line in
       pipeline and workflow logs and in failure dumps
-- [ ] run `make build` — `docs/internals/` is synced into the **gitignored**
+- [x] run `make build` — `docs/internals/` is synced into the **gitignored**
       `internal/core/docs/embedded/` tree and `internal/core/docs/content_hashes_gen.go`
       is regenerated; only the latter is tracked and it must be committed, or the tree
       is dirty on every subsequent `make build`
-- [ ] run `git status` and confirm `content_hashes_gen.go` is the only generated file
+- [x] run `git status` and confirm `content_hashes_gen.go` is the only generated file
       to stage
-- [ ] no upgrade-guide entry — nothing breaks; no `docs/reference/` change — this is
+- [x] no upgrade-guide entry — nothing breaks; no `docs/reference/` change — this is
       internal log mechanics with no user-facing schema
 
 ### Task 8: Verify acceptance criteria
