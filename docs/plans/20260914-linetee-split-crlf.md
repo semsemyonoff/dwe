@@ -260,9 +260,9 @@ A duplicate in place of a blank is not a trade worth making.
 **Files:**
 - Modify: `internal/shared/liveui/output_test.go`
 
-- [ ] read the nine invariants in the package doc at the top of
+- [x] read the nine invariants in the package doc at the top of
       `internal/shared/liveui/liveline.go` before writing anything
-- [ ] add `TestLineTee_SplitCRLF_ReemitsHeldFrame`, table-driven over a slice of
+- [x] add `TestLineTee_SplitCRLF_ReemitsHeldFrame`, table-driven over a slice of
       writes per case, reusing the existing `collectFrames` / `equalFrames` helpers.
       Rows marked **fails now** are the reproduction; the rest are controls that pass
       today and must keep passing:
@@ -284,16 +284,34 @@ A duplicate in place of a blank is not a trade worth making.
       | plain | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("",false) (foo,true)]` | **fails now** — the accepted trade, pinned deliberately |
       | preserveANSI | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("\x1b[K",false) (foo,true)]` | **fails now** — same, and the held frame survives an ANSI-only frame |
 
-- [ ] add `TestLineTee_Flush_ClearsHeldFrame` with both `Flush` paths — a control today,
+- [x] add `TestLineTee_Flush_ClearsHeldFrame` with both `Flush` paths — a control today,
       a pin on the unconditional clear afterwards:
       - `"foo\r"`, `Flush()`, `"\n"` → `[(foo,false) ("",true)]` — the **empty-buffer
         early return** (after `"foo\r"` the tee buffer is drained)
       - `"foo\r"`, `"bar"`, `Flush()`, `"\n"` → `[(foo,false) (bar,false) ("",true)]` —
         the tail path, pinning that `Flush`'s own `cb(tail,false)` does not re-arm
         pending
-- [ ] run `go test ./internal/shared/liveui/` and record the observed frames for the
+- [x] run `go test ./internal/shared/liveui/` and record the observed frames for the
       **fails now** rows — that output is the reproduction
-- [ ] confirm no pre-existing test in the package fails at this point
+- [x] confirm no pre-existing test in the package fails at this point
+
+**Observed reproduction** (`go test ./internal/shared/liveui/`, before Task 2 —
+exactly the 10 **fails now** rows fail, every control row and both
+`TestLineTee_Flush_ClearsHeldFrame` sub-tests pass, and no pre-existing test in the
+package fails):
+
+| constructor | writes | got | want |
+| --- | --- | --- | --- |
+| plain | `"foo\r"`, `"\n"` | `[(foo,false) ("",true)]` | `[(foo,false) (foo,true)]` |
+| plain | `"foo\r"`, `"\x1b[K\n"` | `[(foo,false) ("",true)]` | `[(foo,false) (foo,true)]` |
+| plain | `"foo\r\x1b["`, `"K\n"` | `[(foo,false) ("",true)]` | `[(foo,false) (foo,true)]` |
+| plain | `"foo\r"`, `"\r"`, `"\n"` | `[(foo,false) ("",false) ("",true)]` | `[(foo,false) ("",false) (foo,true)]` |
+| plain | `"foo\r"`, `"\n\n"` | `[(foo,false) ("",true) ("",true)]` | `[(foo,false) (foo,true) ("",true)]` |
+| plain | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("",false) ("",true)]` | `[(foo,false) ("",false) (foo,true)]` |
+| preserveANSI | `"foo\r"`, `"\n"` | `[(foo,false) ("",true)]` | `[(foo,false) (foo,true)]` |
+| preserveANSI | `"foo\r"`, `"\x1b[K\n"` | `[(foo,false) ("\x1b[K",true)]` | `[(foo,false) (foo,true)]` |
+| preserveANSI | `"foo\r\x1b["`, `"K\n"` | `[(foo,false) ("\x1b[K",true)]` | `[(foo,false) (foo,true)]` |
+| preserveANSI | `"foo\r"`, `"\x1b[K\r"`, `"\n"` | `[(foo,false) ("\x1b[K",false) ("",true)]` | `[(foo,false) ("\x1b[K",false) (foo,true)]` |
 
 ### Task 2: Hold a `\r`-closed frame in LineTee and re-emit it on a blank final frame
 
