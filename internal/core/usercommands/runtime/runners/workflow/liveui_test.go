@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -384,6 +385,119 @@ func TestWorkflowRunner_Parallel_ANSIOnlyTail(t *testing.T) {
 	}
 	if !strings.Contains(rendered, label+"x") {
 		t.Errorf("expected the block row to show the last line 'x'; got:\n%q", rendered)
+	}
+}
+
+// TestWorkflowRunner_Parallel_SplitCRLF pins the split-CRLF fix at the real
+// workflow-runner callback, the consumer the CHANGELOG names: a `\r`-closed
+// frame whose line is closed by a frame carrying no text must contribute its
+// content to the per-sub-step log and the failure dump, not a blank line.
+//
+// The liveui-level table test imitates this callback; only this test runs the
+// actual one, which is the code that could regress by committing a non-final
+// frame or by dropping the substituted frame through the `atEOF` blank guard.
+//
+// Both forms are covered because this tee is preserveANSI: the erase-then-
+// newline idiom reaches the callback as a blank FINAL frame even when the
+// child writes it in one call, so unlike the plain-tee case the bug does not
+// need a read boundary to reproduce. The `sleep` in the split form forces one
+// anyway; nothing guarantees the copy goroutine is scheduled in that gap, so
+// that sub-case degrades to the intact one rather than failing spuriously.
+func TestWorkflowRunner_Parallel_SplitCRLF(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "intact", body: `printf 'foo\r\033[K\n'; exit 1`},
+		{name: "split", body: `printf 'foo\r'; sleep 0.1; printf '\033[K\n'; exit 1`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			wf, reg := tailWorkflow("crlf", tc.body)
+			cap, cleanup := installLiveLineCapture(t)
+			defer cleanup()
+
+			_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+			if err == nil {
+				t.Fatal("expected sub-step to fail")
+			}
+			if !strings.Contains(errOut, "  ───── output: crlf.run ─────\nfoo\n  ──") {
+				t.Errorf("expected dump to hold exactly 'foo'; got %q", errOut)
+			}
+			if got := readSubStepLog(t, dir, "crlf"); got != "foo\n" {
+				t.Errorf("sub-step log = %q, want %q", got, "foo\n")
+			}
+
+			// The substituted frame reaches this callback twice — once as
+			// `(frame,false)`, once as `(frame,true)` — so the log assertions
+			// above also pin that the callback commits on final only.
+			rendered := cap.buf.String()
+			const label = "crlf.run: "
+			for rest := rendered; ; {
+				idx := strings.Index(rest, label)
+				if idx < 0 {
+					break
+				}
+				rest = rest[idx+len(label):]
+				if !strings.HasPrefix(rest, "foo") {
+					t.Fatalf("block row repainted with a blank label; got:\n%q", rendered)
+				}
+			}
+			if !strings.Contains(rendered, label+"foo") {
+				t.Errorf("expected the block row to show 'foo'; got:\n%q", rendered)
+			}
+		})
+	}
+}
+
+// TestWorkflowRunner_Parallel_DumpClosesSGRState pins that a failure dump never
+// hands the terminal back with the child's colour still active. Frame capture
+// keeps the colour-setting bytes but drops the child's cleanup in both shapes
+// below — the split-CRLF rule substitutes the held frame for the ANSI-only
+// final one, and an ANSI-only trailing tail is discarded as carrying no line —
+// so without an explicit reset the closing bar and every later stderr write
+// inherit the colour. The per-sub-step log is stripped and must stay clean.
+func TestWorkflowRunner_Parallel_DumpClosesSGRState(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "reset-after-cr", body: `printf '\033[31mERR\r\033[0m\n'; exit 1`},
+		{name: "reset-after-lf", body: `printf '\033[31mERR\n\033[0m'; exit 1`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			wf, reg := tailWorkflow("sgr", tc.body)
+			_, cleanup := installLiveLineCapture(t)
+			defer cleanup()
+
+			_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+			if err == nil {
+				t.Fatal("expected sub-step to fail")
+			}
+			if !strings.Contains(errOut, "\033[31mERR\n"+render.Reset+"  ──") {
+				t.Errorf("expected the dump to reset SGR state before the closing bar; got %q", errOut)
+			}
+			if got := readSubStepLog(t, dir, "sgr"); got != "ERR\n" {
+				t.Errorf("sub-step log = %q, want %q", got, "ERR\n")
+			}
+		})
+	}
+}
+
+// TestDumpSubStepOutput_PlainOutputStaysEscapeFree pins the other half of the
+// rule above: a dump whose captured output carries no escape bytes must not
+// gain one, so log scrapers reading a non-TTY run see plain text.
+func TestDumpSubStepOutput_PlainOutputStaysEscapeFree(t *testing.T) {
+	var buf bytes.Buffer
+	dumpSubStepOutput(&buf, "plain.run", "header\nboom\n")
+	if strings.ContainsRune(buf.String(), 0x1b) {
+		t.Errorf("plain dump must stay escape-free; got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "header\nboom\n  ──") {
+		t.Errorf("unexpected dump shape: %q", buf.String())
 	}
 }
 

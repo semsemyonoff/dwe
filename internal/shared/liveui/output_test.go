@@ -220,6 +220,51 @@ func TestSubStepLog_RoutedViaLineTee_SplitOSCClean(t *testing.T) {
 	}
 }
 
+// TestSubStepLog_RoutedViaLineTee_SplitCRLF pins the split-CRLF fix at the
+// shape of the real consumer: the workflow runner's parallel sub-step callback
+// (parallel.go), which builds its tee with NewLineTeePreserveANSI, strips the
+// frame with ANSIOnlyRe itself and writes only committed frames to
+// .dwe/logs/parallel/<workflow>/<sub>.log. That constructor skips both of the
+// tee's own strips, so before the fix the closing frame of a split
+// `\r\x1b[K\n` reached this callback as "\x1b[K" — byte-non-empty, blanked by
+// the callback's own strip — which is why LineTee measures blankness after an
+// ANSI strip rather than in bytes.
+//
+// The intact form is asserted alongside the split one: both must produce
+// byte-identical sink content, since which side of a read boundary the `\n`
+// lands on is not something the emitting tool controls.
+func TestSubStepLog_RoutedViaLineTee_SplitCRLF(t *testing.T) {
+	cases := []struct {
+		name   string
+		writes []string
+	}{
+		{"split at the CR", []string{"foo\r", "\x1b[K\n"}},
+		{"intact", []string{"foo\r\x1b[K\n"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var logBuf bytes.Buffer
+			// Same shape as parallel.go's sub-step callback: strip the frame,
+			// repaint the live row on every frame, log only committed ones.
+			tee := NewLineTeePreserveANSI(func(frame string, final bool) {
+				stripped := ANSIOnlyRe.ReplaceAllString(frame, "")
+				if !final {
+					return
+				}
+				_, _ = fmt.Fprintln(&logBuf, stripped)
+			})
+			for _, w := range tc.writes {
+				if _, err := tee.Write([]byte(w)); err != nil {
+					t.Fatalf("write %q: %v", w, err)
+				}
+			}
+			if got, want := logBuf.String(), "foo\n"; got != want {
+				t.Errorf("sub-step log = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // TestAnsiOnlyRe_PreservesCR ensures the regex used by the tee path leaves
 // `\r` bytes intact (precondition for LineTee frame parsing).
 func TestAnsiOnlyRe_PreservesCR(t *testing.T) {
@@ -491,6 +536,153 @@ func TestLineTee_SplitWriteOSC_Flush_StrippedAtEmit(t *testing.T) {
 	if !strings.Contains((*got)[0].frame, "text") || !strings.Contains((*got)[0].frame, "more") {
 		t.Errorf("visible text missing from flushed tail: %q", (*got)[0].frame)
 	}
+}
+
+// TestLineTee_SplitCRLF_ReemitsHeldFrame pins both forms of a CRLF: the intact
+// one, which collapses inside a single buffer scan, and the split one, where
+// the `\r` closes a frame in one Write and the `\n` arrives in the next. The
+// split form must commit the held frame instead of a blank line, and it must do
+// so under both constructors — a `preserveANSI` tee skips both ANSI strips, so
+// the closing frame of a split `\r\x1b[K\n` reaches the callback as `"\x1b[K"`
+// and blankness has to be measured after a strip, not in bytes.
+//
+// The progress-bar rows are controls: a redraw run must keep emitting one
+// non-final frame per redraw (invariant #6 — a carriage return is data).
+func TestLineTee_SplitCRLF_ReemitsHeldFrame(t *testing.T) {
+	tests := []struct {
+		name         string
+		preserveANSI bool
+		writes       []string
+		want         []teeFrame
+	}{
+		{
+			name:   "plain/intact CRLF",
+			writes: []string{"foo\r\n"},
+			want:   []teeFrame{{"foo", true}},
+		},
+		{
+			name:   "plain/split CRLF",
+			writes: []string{"foo\r", "\n"},
+			want:   []teeFrame{{"foo", false}, {"foo", true}},
+		},
+		{
+			name:   "plain/split CRLF with intact erase-line between",
+			writes: []string{"foo\r", "\x1b[K\n"},
+			want:   []teeFrame{{"foo", false}, {"foo", true}},
+		},
+		{
+			name:   "plain/split CRLF with erase-line split across the boundary",
+			writes: []string{"foo\r\x1b[", "K\n"},
+			want:   []teeFrame{{"foo", false}, {"foo", true}},
+		},
+		{
+			name:   "plain/progress redraws are unaffected",
+			writes: []string{"50%\r", "60%\r"},
+			want:   []teeFrame{{"50%", false}, {"60%", false}},
+		},
+		{
+			name:   "plain/held frame survives a bare CR",
+			writes: []string{"foo\r", "\r", "\n"},
+			want:   []teeFrame{{"foo", false}, {"", false}, {"foo", true}},
+		},
+		{
+			name:   "plain/a genuine blank line after the split CRLF",
+			writes: []string{"foo\r", "\n\n"},
+			want:   []teeFrame{{"foo", false}, {"foo", true}, {"", true}},
+		},
+		{
+			name:   "plain/buffer not empty at the CR",
+			writes: []string{"10", "%\r100%", "\n"},
+			want:   []teeFrame{{"10%", false}, {"100%", true}},
+		},
+		{
+			name:         "preserveANSI/split CRLF",
+			preserveANSI: true,
+			writes:       []string{"foo\r", "\n"},
+			want:         []teeFrame{{"foo", false}, {"foo", true}},
+		},
+		{
+			name:         "preserveANSI/split CRLF with intact erase-line between",
+			preserveANSI: true,
+			writes:       []string{"foo\r", "\x1b[K\n"},
+			want:         []teeFrame{{"foo", false}, {"foo", true}},
+		},
+		{
+			name:         "preserveANSI/split CRLF with erase-line split across the boundary",
+			preserveANSI: true,
+			writes:       []string{"foo\r\x1b[", "K\n"},
+			want:         []teeFrame{{"foo", false}, {"foo", true}},
+		},
+		{
+			name:         "preserveANSI/progress redraws are unaffected",
+			preserveANSI: true,
+			writes:       []string{"50%\r", "60%\r"},
+			want:         []teeFrame{{"50%", false}, {"60%", false}},
+		},
+		{
+			// The accepted trade, pinned deliberately: on a real terminal
+			// `foo\r\x1b[K\r\n` erases the line and leaves it blank; frame
+			// collapsing records `foo`. An ANSI-only non-final frame does not
+			// evict the held one, which is FrameLogWriter.onFrame's existing rule.
+			name:   "plain/ANSI-only frame does not evict the held frame",
+			writes: []string{"foo\r", "\x1b[K\r", "\n"},
+			want:   []teeFrame{{"foo", false}, {"", false}, {"foo", true}},
+		},
+		{
+			name:         "preserveANSI/ANSI-only frame does not evict the held frame",
+			preserveANSI: true,
+			writes:       []string{"foo\r", "\x1b[K\r", "\n"},
+			want:         []teeFrame{{"foo", false}, {"\x1b[K", false}, {"foo", true}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, cb := collectFrames()
+			tee := NewLineTee(cb)
+			if tc.preserveANSI {
+				tee = NewLineTeePreserveANSI(cb)
+			}
+			for _, w := range tc.writes {
+				_, _ = tee.Write([]byte(w))
+			}
+			if !equalFrames(*got, tc.want) {
+				t.Errorf("frames = %#v, want %#v", *got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLineTee_Flush_ClearsHeldFrame pins that Flush drops the held frame on
+// both of its paths. executor.go calls flushTee at three sites with
+// PlainReporter.FlushOutput running between two of them, so a held frame that
+// survived a flush would be committed twice — a duplicated line, which is worse
+// than the blank one this fix removes.
+func TestLineTee_Flush_ClearsHeldFrame(t *testing.T) {
+	t.Run("empty-buffer early return", func(t *testing.T) {
+		// After "foo\r" the tee buffer is drained, so Flush takes its early return.
+		got, cb := collectFrames()
+		tee := NewLineTee(cb)
+		_, _ = tee.Write([]byte("foo\r"))
+		tee.Flush()
+		_, _ = tee.Write([]byte("\n"))
+		want := []teeFrame{{"foo", false}, {"", true}}
+		if !equalFrames(*got, want) {
+			t.Errorf("frames = %#v, want %#v", *got, want)
+		}
+	})
+	t.Run("tail path", func(t *testing.T) {
+		// Flush's own cb(tail, false) must not re-arm the held frame either.
+		got, cb := collectFrames()
+		tee := NewLineTee(cb)
+		_, _ = tee.Write([]byte("foo\r"))
+		_, _ = tee.Write([]byte("bar"))
+		tee.Flush()
+		_, _ = tee.Write([]byte("\n"))
+		want := []teeFrame{{"foo", false}, {"bar", false}, {"", true}}
+		if !equalFrames(*got, want) {
+			t.Errorf("frames = %#v, want %#v", *got, want)
+		}
+	})
 }
 
 func equalFrames(a, b []teeFrame) bool {

@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference, docs/guides, and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"README.md":                                "1e328aa5e19f",
+	"README.md":                                "93af0098060d",
 	"guides/add-a-service.md":                  "c5ab3861731c",
 	"guides/author-project-commands.md":        "f568b0f4673c",
 	"guides/background-daemons.md":             "b2dcd1937aba",
@@ -25,7 +25,7 @@ var ContentHashes = map[string]string{
 	"guides/upgrading.md":                      "e3098acde6f3",
 	"guides/write-snapshot-workflows.md":       "b02f8eabca3e",
 	"internals/architecture.md":                "cb1aa72beee3",
-	"internals/packages.md":                    "c22020428afc",
+	"internals/packages.md":                    "d4007f620bb5",
 	"internals/tui-keymap.md":                  "739fe9a61f5d",
 	"reference/concepts/architecture.md":       "0fa38ae667ca",
 	"reference/concepts/bridge.md":             "f21a702ba0e5",
@@ -39,12 +39,12 @@ var ContentHashes = map[string]string{
 	"reference/config/commands/directives.md":  "be6285666208",
 	"reference/config/commands/index.md":       "fd96b004d9d0",
 	"reference/config/commands/templating.md":  "f0fff008deb3",
-	"reference/config/commands/types.md":       "ad32d8db7301",
+	"reference/config/commands/types.md":       "b286fcce120a",
 	"reference/config/commands/validation.md":  "aa749b8c4482",
 	"reference/config/conditions.md":           "89a0f0e6c5e2",
 	"reference/config/deploy/builtins.md":      "d0c3d1544b84",
 	"reference/config/deploy/conditions.md":    "78775c7f30ce",
-	"reference/config/deploy/examples.md":      "14b52b8aa531",
+	"reference/config/deploy/examples.md":      "52c97866f03f",
 	"reference/config/deploy/index.md":         "3c7b1356869f",
 	"reference/config/deploy/steps.md":         "2c687c938aeb",
 	"reference/config/docker.md":               "eee6eb15cea7",

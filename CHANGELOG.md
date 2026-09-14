@@ -84,6 +84,24 @@ generated from commit subjects and stay on the
   and `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log` — in CI the
   dump is the only output, so the line explaining the failure was the one that
   disappeared. It now appears in both.
+- **A line whose `\r\n` is split across a read boundary is no longer recorded as
+  an empty line.** When the carriage return and the newline arrived in separate
+  reads from the child process, the line was replaced by a blank one in
+  `.dwe/logs/<pipeline>.log`, in the per-sub-step logs under
+  `.dwe/logs/parallel/` and in the parallel failure dump — in CI, where the log
+  is the only output, the swallowed line was exactly the one being read. The
+  same now applies to the `\r\x1b[K\n` redraw idiom, which the workflow
+  runner's log blanked even when it arrived in one write. In a parallel block
+  the live row now keeps showing that line instead of briefly blanking; nothing
+  else in the live view changes.
+- **A parallel workflow failure dump no longer leaves the terminal coloured.**
+  The dump forwards the sub-step's own ANSI so its colours survive, but the
+  child's closing reset does not always reach it — a reset written after the
+  last newline is dropped as carrying no line, one written between a `\r` and
+  its `\n` is replaced by the content line, and a killed child never writes one
+  at all. The colour then bled into the dump's closing bar and every later
+  message. The dump now closes the colour state itself; a dump whose output
+  carries no escape bytes stays escape-free for log scrapers.
 - **`dwe test` now warns about a compose host port it cannot remap because the
   port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
   exported `from: vars.ports.valkey`, kept its original value in the test copy

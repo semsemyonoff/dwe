@@ -21,7 +21,7 @@ A single-binary CLI for running, configuring, and maintaining containerised loca
 
 DWE ships as a single static Go binary. Pick whichever channel fits.
 
-**Supported platforms:** macOS (Intel + Apple Silicon) and Linux (x86_64 + arm64). There is no Windows build — on Windows run DWE inside WSL2, installed in the distro.
+**Supported platforms:** macOS 13 Ventura or later (Intel + Apple Silicon) and Linux (x86_64 + arm64). There is no Windows build — on Windows run DWE inside WSL2, installed in the distro.
 
 ### Using Homebrew
 
@@ -29,7 +29,7 @@ DWE ships as a single static Go binary. Pick whichever channel fits.
 brew install semsemyonoff/tap/dwe
 ```
 
-Installs the binary plus bash, zsh, and fish completion to the standard Homebrew paths. Works on macOS (Intel + Apple Silicon) and Linux (linuxbrew).
+Installs the binary plus bash, zsh, and fish completion to the standard Homebrew paths. Works on macOS 13 Ventura or later (Intel + Apple Silicon) and Linux (linuxbrew).
 
 ### From releases
 
@@ -42,6 +42,8 @@ Download the appropriate archive or package from [GitHub releases](https://githu
 File integrity can be verified against the published `checksums.txt`.
 
 ### From source
+
+Requires Go 1.27 or later — the `go` directive in `go.mod` is `1.27` and the tree uses 1.27 language features, so an older toolchain fails to compile.
 
 ```sh
 git clone https://github.com/semsemyonoff/dwe.git

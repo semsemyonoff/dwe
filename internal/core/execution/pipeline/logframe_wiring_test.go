@@ -183,6 +183,78 @@ func TestParallelSubStepLog_OnlyCommittedFrames(t *testing.T) {
 	}
 }
 
+// TestParallelSubStepLog_SplitCRLF_NoBlankLine pins the split-CRLF fix at the
+// executor's own wiring: a child whose `\r\n` lands in two separate reads must
+// still contribute its content line, not a blank one, to both the per-sub-step
+// log and the global pipeline log.
+//
+// Two things about this test are load-bearing:
+//
+//   - The `sleep` between the two printfs is what forces the read boundary. A
+//     single `printf 'frame-99\r\n'` collapses inside one LineTee buffer scan
+//     and cannot reproduce the bug at all. Nothing guarantees the copy
+//     goroutine is scheduled in that gap, so if the writes ever coalesce this
+//     test passes without exercising the split — it is a wiring pin, and the
+//     deterministic coverage lives in liveui's own table tests.
+//   - The per-sub-step file is compared BYTE FOR BYTE, deliberately not through
+//     logLines: that helper drops empty and whitespace-only lines, so it cannot
+//     tell a missing line from a blanked one and would pass on a
+//     "frame-99\n\n"-shaped regression. Byte equality holds only while trace
+//     output is silent — executor.go routes trace.WithLinePrinter into the same
+//     stepWriter, so a `-v` / `--debug` environment adds command echoes here.
+func TestParallelSubStepLog_SplitCRLF_NoBlankLine(t *testing.T) {
+	tmp := t.TempDir()
+
+	// A real PlainReporter, not mockReporter: only PlainReporter.writeLog
+	// reaches the global pipeline log.
+	scr := &bytes.Buffer{}
+	globalLog := &syncBuf{}
+	rep := NewPlainReporter(render.NewWriter(scr), globalLog, io.Discard)
+	defer rep.Close()
+
+	phase := config.DeployPhase{Name: "p"}
+	group := buildParallelGroupStep(phase, "g", true, 0, []config.DeployStep{
+		{Name: "alpha", Type: "shell", Cmd: `printf 'frame-99\r'; sleep 0.1; printf '\n'`},
+	})
+
+	opts := RunOptions{
+		Steps:       []ResolvedStep{group},
+		Reporter:    rep,
+		Name:        "deploy",
+		Config:      &config.DweConfig{Raw: map[string]any{}},
+		WorkDir:     tmp,
+		LogWriter:   globalLog,
+		Recorder:    &mockRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+	}
+	if err := RunWithOptions(opts); err != nil {
+		t.Fatalf("RunWithOptions: %v", err)
+	}
+
+	alphaPath := filepath.Join(tmp, ".dwe", "logs", "parallel", "deploy", "g", "alpha.log")
+	alpha, err := os.ReadFile(alphaPath)
+	if err != nil {
+		t.Fatalf("read alpha log: %v", err)
+	}
+	if string(alpha) != "frame-99\n" {
+		t.Errorf("per-sub-step log must hold the content line only; got %q want %q", alpha, "frame-99\n")
+	}
+
+	// The global log also carries timestamped phase and step lines, so assert on
+	// the count rather than on the whole contents. Pre-fix the signature is a
+	// bare empty line where `frame-99` belongs; the count (not a Contains) is
+	// what also catches the hazard the fix introduces — the substituted frame
+	// reaches the callback twice, as `(frame,false)` then `(frame,true)`, so a
+	// consumer that ever committed the non-final one would log it twice.
+	global := globalLog.String()
+	if n := strings.Count(global, "frame-99"); n != 1 {
+		t.Errorf("global pipeline log must hold the content line exactly once; got %d:\n%s", n, global)
+	}
+	if strings.Contains(global, "\n\n") {
+		t.Errorf("global pipeline log must not gain a blank line:\n%s", global)
+	}
+}
+
 // TestParallelSubStep_UnterminatedTail_ReachesGlobalLog documents what the
 // final gate costs and why it is affordable here. lineTee.Flush delivers ANY
 // un-terminated tail as final=false, so both a `\r`-terminated redraw frame and

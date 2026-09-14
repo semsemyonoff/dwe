@@ -9,12 +9,22 @@ import (
 	fgspec "github.com/semsemyonoff/dwe/internal/core/execution/filesgate/spec"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // dumpSubStepOutput writes a sub-step's captured output between labelled
 // separator bars on w. The top bar names the sub-step so multi-failure dumps
 // stay attributable; ANSI escape sequences in output are forwarded verbatim
 // so the child's colours survive the round-trip. No-op when output is empty.
+//
+// Frame capture keeps colour-setting bytes but cannot guarantee the child's
+// matching cleanup reaches the dump: an ANSI-only trailing tail is dropped as
+// carrying no line, and an ANSI-only final frame is replaced by the held
+// `\r`-closed one (LineTee's split-CRLF rule) — plus a child killed mid-line
+// never writes its reset at all. A dump that ends with SGR state still active
+// would bleed into the closing bar and every later stderr write, so close it
+// explicitly. Gated on the output actually carrying escape bytes: a plain dump
+// must stay escape-free for log scrapers.
 func dumpSubStepOutput(w io.Writer, command, output string) {
 	if output == "" {
 		return
@@ -23,6 +33,9 @@ func dumpSubStepOutput(w io.Writer, command, output string) {
 	_, _ = fmt.Fprint(w, output)
 	if !strings.HasSuffix(output, "\n") {
 		_, _ = fmt.Fprintln(w)
+	}
+	if strings.ContainsRune(output, 0x1b) {
+		_, _ = fmt.Fprint(w, render.Reset)
 	}
 	_, _ = fmt.Fprintln(w, "  ──────────────────")
 }

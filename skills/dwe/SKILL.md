@@ -148,7 +148,7 @@ After editing yml, the apply command depends on **what** changed (never run it y
 - `workspace/lifecycle.yml` or the compose base/overlays → `dwe run`
 - toggled a service → `dwe services enable|disable <name> --apply`
 - only icon / host / display strings → `dwe validate` (then `run`/`deploy run` if it affects runtime)
-- `exports.env` **only** → `dwe run` (or `dwe deploy run --force`) — that block is in no config hash, so a plain `dwe deploy run` never re-renders `.env`: it either returns `already up-to-date` or journal-skips the implicit render step (`references/render-and-vars.md` § 7)
+- `exports.env` **only** → `dwe run` (or `dwe deploy run --force`) — that block is in no config hash, so a plain `dwe deploy run` never re-renders `.env`: it journal-skips the implicit render step and the built-in pipeline's always-run `up` step re-ups against the stale file (only a custom pipeline with no always-run step returns `already up-to-date`) (`references/render-and-vars.md` § 7)
 - mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart)
 - authored/edited a `workspace/tests/<scenario>.yml` → verify read-only with `dwe validate tests`, then run or hand off `dwe test run <scenario>` (a clean deploy in a throwaway copy — does not touch the live stack). Whether you may run it yourself is decided by that scenario's cost profile — see **The `dwe test run` gate** below. Propose it for **substantial** changes (new service, reworked deploy pipeline), not after display-only edits. See `references/integration-tests.md`.
 
