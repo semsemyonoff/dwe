@@ -82,6 +82,56 @@ func TestFrameLogWriter_SplitWrites(t *testing.T) {
 	}
 }
 
+// TestFrameLogWriter_SplitCRLF_ANSIOnlyFrame pins the lockstep between the two
+// pending slots that onFrame's deleted split-CRLF guard now depends on: a
+// non-final frame that carries nothing but escape bytes (the `\r\x1b[K\r\n`
+// redraw idiom split across reads) must evict neither slot, so the content
+// frame still survives both routes out — the later `\n` and Flush.
+//
+// It is the guard against the divergence onFrame documents: a preserveANSI
+// FrameLogWriter would arm f.pending on `"\x1b[K"` where the tee's
+// frameIsBlank would not, and the flush case below turns that into a lost line
+// rather than a silent regression.
+func TestFrameLogWriter_SplitCRLF_ANSIOnlyFrame(t *testing.T) {
+	cases := []struct {
+		name   string
+		writes []string
+		flush  bool
+		want   string
+	}{
+		{
+			name:   "newline commits the held frame",
+			writes: []string{"foo\r", "\x1b[K\r", "\n"},
+			want:   "foo\n",
+		},
+		{
+			name:   "flush commits the held frame",
+			writes: []string{"foo\r", "\x1b[K\r"},
+			flush:  true,
+			want:   "foo\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			w := NewFrameLogWriter(&buf)
+			for _, chunk := range tc.writes {
+				if _, err := w.Write([]byte(chunk)); err != nil {
+					t.Fatalf("write %q: %v", chunk, err)
+				}
+			}
+			if tc.flush {
+				if err := w.Flush(); err != nil {
+					t.Fatalf("flush: %v", err)
+				}
+			}
+			if got := buf.String(); got != tc.want {
+				t.Errorf("log contents = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestFrameLogWriter_SplitANSISequence pins the double-strip inherited from
 // LineTee: an escape sequence split across two Writes matches neither half on
 // the per-write pass but is complete in the buffer at frame-emit time. The

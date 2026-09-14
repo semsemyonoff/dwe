@@ -41,7 +41,7 @@ Three consumers are hit:
 
 - `internal/core/usercommands/runtime/runners/workflow/parallel.go` (the sub-step
   callback, `NewLineTeePreserveANSI`) — a blank line in the failure dump and in
-  `.dwe/logs/parallel/<workflow>/<sub>.log`;
+  `.dwe/logs/parallel/workflow/<workflow-id>/<sub>.log`;
 - `internal/core/execution/pipeline/executor.go` (the parallel-branch callback,
   `NewLineTee`) — the same in the per-sub-step log, plus `StepOutput(addr, "", true)`;
 - `internal/core/execution/pipeline/plain.go`, `PlainReporter.StepOutput` — that
@@ -562,7 +562,8 @@ run — the permanent coverage is Tasks 1/3/4):
   run is a **no-regression** check only: run a parallel workflow whose sub-steps emit
   `\r` redraws (a `docker pull` is the easy source), then confirm
   - the live block rows still animate per redraw frame, and
-  - `.dwe/logs/parallel/<workflow>/<sub>.log` plus the global
+  - `.dwe/logs/parallel/workflow/<workflow-id>/<sub>.log` (and the executor's
+    `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log`) plus the global
     `.dwe/logs/<pipeline>.log` hold one line per committed line, with no blank lines
     and no duplicates.
 - Frequency in real-world output has never been measured. Most output in the corpus is

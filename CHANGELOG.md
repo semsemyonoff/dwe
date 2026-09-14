@@ -91,8 +91,9 @@ generated from commit subjects and stay on the
   `.dwe/logs/parallel/` and in the parallel failure dump — in CI, where the log
   is the only output, the swallowed line was exactly the one being read. The
   same now applies to the `\r\x1b[K\n` redraw idiom, which the workflow
-  runner's log blanked even when it arrived in one write. The live view is
-  unchanged.
+  runner's log blanked even when it arrived in one write. In a parallel block
+  the live row now keeps showing that line instead of briefly blanking; nothing
+  else in the live view changes.
 - **`dwe test` now warns about a compose host port it cannot remap because the
   port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
   exported `from: vars.ports.valkey`, kept its original value in the test copy

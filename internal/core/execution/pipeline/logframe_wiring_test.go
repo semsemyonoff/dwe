@@ -240,12 +240,15 @@ func TestParallelSubStepLog_SplitCRLF_NoBlankLine(t *testing.T) {
 		t.Errorf("per-sub-step log must hold the content line only; got %q want %q", alpha, "frame-99\n")
 	}
 
-	// The global log also carries timestamped phase and step lines, so assert
-	// by containment. Pre-fix the signature is a bare empty line where
-	// `frame-99` belongs.
+	// The global log also carries timestamped phase and step lines, so assert on
+	// the count rather than on the whole contents. Pre-fix the signature is a
+	// bare empty line where `frame-99` belongs; the count (not a Contains) is
+	// what also catches the hazard the fix introduces — the substituted frame
+	// reaches the callback twice, as `(frame,false)` then `(frame,true)`, so a
+	// consumer that ever committed the non-final one would log it twice.
 	global := globalLog.String()
-	if !strings.Contains(global, "\nframe-99\n") {
-		t.Errorf("global pipeline log must hold the content line:\n%s", global)
+	if n := strings.Count(global, "frame-99"); n != 1 {
+		t.Errorf("global pipeline log must hold the content line exactly once; got %d:\n%s", n, global)
 	}
 	if strings.Contains(global, "\n\n") {
 		t.Errorf("global pipeline log must not gain a blank line:\n%s", global)

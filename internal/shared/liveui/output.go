@@ -150,20 +150,14 @@ func (f *FrameLogWriter) onFrame(frame string, final bool) {
 		}
 		return
 	}
-	// No substitution for a split CRLF here: LineTee resolves that one frame
-	// earlier — it holds a `\r`-closed frame and re-emits it in place of a blank
-	// final frame — so a blank final frame reaching this callback is a genuine
-	// blank line. Between flushes the two pending slots move in lockstep (set on
-	// a non-blank non-final frame, untouched by a blank one, cleared on any final
-	// frame); they diverge only inside Flush below, where tee.Flush() delivers
-	// `(tail, false)` into f.pending after LineTee cleared its own — a window
-	// opened and closed under f.mu that no frame can enter.
-	//
-	// The lockstep holds because NewFrameLogWriter builds its tee with NewLineTee,
-	// the plain constructor, where `frame != ""` above and LineTee's
-	// `!frameIsBlank(frame)` are the same predicate. A preserveANSI
+	// No substitution for a split CRLF here — LineTee resolves that one frame
+	// earlier (see the type doc). Between flushes the two pending slots move in
+	// lockstep, and that lockstep holds only because NewFrameLogWriter builds its
+	// tee with NewLineTee, the plain constructor, where `frame != ""` above and
+	// LineTee's `!frameIsBlank(frame)` are the same predicate. A preserveANSI
 	// FrameLogWriter would diverge — f would set pending on `"\x1b[K"` where the
-	// tee would not — and regress this silently.
+	// tee would not — and regress this silently; TestFrameLogWriter_SplitCRLF_
+	// ANSIOnlyFrame pins it.
 	f.pending, f.hasPending = "", false
 	f.writeLine(frame)
 }
@@ -412,10 +406,7 @@ func (t *LineTee) frameIsBlank(frame string) bool {
 // the worse of the two.
 func (t *LineTee) Flush() {
 	t.mu.Lock()
-	// Drop any held frame unconditionally, the early return included: callers
-	// flush mid-stream (pipeline's executor does so three times per step) and a
-	// tail the consumer has already committed must not be re-emitted by a later
-	// `\n`, which would duplicate the line rather than blank it.
+	// Ahead of the empty-buffer early return on purpose — see the doc comment.
 	t.pending, t.hasPending = "", false
 	if t.buf.Len() == 0 {
 		t.mu.Unlock()

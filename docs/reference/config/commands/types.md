@@ -528,7 +528,9 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 
 #### Per-sub-step logs
 
-Each sub-step's combined stdout/stderr is captured to `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only newline-terminated frames are written to the log file (carriage-return progress frames stay on the live row and are dropped from logs), so the file stays readable without `\r`-spam. The one exception is the last line of output: when the child exits without a trailing newline (`printf 'error: x'; exit 1`), that line is still written to the log file and replayed in the failure dump. A trailing `\r` progress frame is still dropped, and so is a tail made only of ANSI escape sequences (a colour reset, a cursor-show).
+Each sub-step's combined stdout/stderr is captured to `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only the frame that closes a line is written to the log file — intermediate carriage-return progress frames stay on the live row, so `50%\r100%\n` logs a single `100%` and the file stays readable without `\r`-spam. A `\r`-closed frame *is* what gets logged when the frame that closes the line carries no text: a `\r\n` split across two reads, and the `\r\x1b[K\n` erase-then-newline idiom, both record the content line. The second case is a deliberate approximation — this is frame collapsing, not terminal emulation, so where a real terminal shows a blank line the log keeps the content instead (see [deploy → Reporter and logging](../deploy/examples.md#reporter-and-logging)).
+
+The one exception is the last line of output: when the child exits without a trailing newline (`printf 'error: x'; exit 1`), that line is still written to the log file and replayed in the failure dump. A trailing `\r` progress frame is still dropped, and so is a tail made only of ANSI escape sequences (a colour reset, a cursor-show).
 
 #### Sub-step naming and pipeline overrides
 
