@@ -2,6 +2,8 @@ package docs
 
 import (
 	"io/fs"
+	"path"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -158,6 +160,150 @@ func rootBySource(roots []DocRoot, source string) (DocRoot, bool) {
 		}
 	}
 	return DocRoot{}, false
+}
+
+// linkWithAnchorRE matches an inline markdown link whose target carries an
+// `#anchor`. Targets never contain whitespace or parentheses in this doc set.
+//
+// The path part is `*`, not `+`: a same-document link is written `(#anchor)`
+// with nothing before the `#`, and requiring a character there silently skipped
+// 1421 of the tree's 1793 anchor links — including the one this guard was
+// written for. Group 1 captures a leading `!` so an image can be told apart
+// from a link; RE2 has no lookbehind.
+var linkWithAnchorRE = regexp.MustCompile(`(!?)\[[^\]]*\]\(([^()\s]*#[^()\s]+)\)`)
+
+var (
+	// Longest run first: ``…`` is a valid code span whose content may hold a
+	// single backtick, and matching the short form first would leave the inside
+	// exposed to the link scan.
+	codeSpanRE  = regexp.MustCompile("```[^\n]*?```|``[^\n]*?``|`[^`\n]*`")
+	urlSchemeRE = regexp.MustCompile(`^[a-z][a-z0-9+.-]*:`)
+)
+
+// TestDocumentLinkAnchorsResolve covers the fourth surface, and the one the
+// other three cannot see: the `#anchor` a document *links to*. The sibling
+// tests prove dwe resolves the anchors it advertises — which stayed true while
+// the docs linked to something else entirely.
+//
+// Two defect classes hid in that gap. The RU mirror translates headings but
+// kept the English anchors, so 140 links resolved to nothing; and `Slugify`
+// trimmed a heading's own leading hyphens, so `docs/reference/config/tests.md`
+// linked its own `#--parallel-n` while the resolver answered to `parallel-n`.
+//
+// A link to a missing *file* is deliberately not an error here — `web/` already
+// degrades those to plain text with a build warning, by design.
+func TestDocumentLinkAnchorsResolve(t *testing.T) {
+	files := embeddedMarkdownFiles(t)
+
+	checked, sameDoc := 0, 0
+	for _, docPath := range files {
+		content, err := fs.ReadFile(BuiltinFS, docPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", docPath, err)
+		}
+		for _, m := range linkWithAnchorRE.FindAllStringSubmatch(stripCodeForLinkScan(string(content)), -1) {
+			if m[1] == "!" {
+				continue // an image, not a link
+			}
+			target := m[2]
+			if urlSchemeRE.MatchString(target) {
+				continue
+			}
+			relPath, anchor, _ := strings.Cut(target, "#")
+
+			targetPath := docPath
+			if relPath != "" {
+				if !strings.HasSuffix(relPath, ".md") {
+					continue
+				}
+				// The repo README is embedded FLAT as `README.md`, so its links
+				// keep the repo-relative `docs/` prefix the tree itself dropped.
+				// Without this the whole README is silently skipped as missing.
+				if docPath == "README.md" {
+					relPath = strings.TrimPrefix(relPath, "docs/")
+				}
+				targetPath = path.Join(path.Dir(docPath), relPath)
+				if strings.HasPrefix(targetPath, "..") {
+					continue // escapes the embedded tree — not ours to resolve
+				}
+			}
+
+			targetContent, err := fs.ReadFile(BuiltinFS, targetPath)
+			if err != nil {
+				continue // missing file: see the doc comment
+			}
+			checked++
+			if relPath == "" {
+				sameDoc++
+			}
+			if _, _, _, ok := SliceByAnchor(targetContent, anchor); !ok {
+				t.Errorf("%s links to %q, but %s has no such anchor", docPath, target, targetPath)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no anchor links found; the embedded tree is likely not synced (run `make embedded-docs`)")
+	}
+	// Same-document links are the bulk of the corpus (every page's own table of
+	// contents) and were the class the first version of linkWithAnchorRE
+	// skipped wholesale while still reporting a healthy `checked`. Counting
+	// them separately is what makes that failure loud.
+	if sameDoc == 0 {
+		t.Error("no same-document (#anchor) links were checked — linkWithAnchorRE is skipping them")
+	}
+}
+
+// TestLinkWithAnchorRE_MatchesSameDocumentLinks pins the shape that the corpus
+// test cannot pin on its own: a corpus with zero same-document links and a
+// regex that cannot match one look identical from the outside.
+func TestLinkWithAnchorRE_MatchesSameDocumentLinks(t *testing.T) {
+	tests := []struct {
+		name       string
+		in         string
+		wantImage  bool
+		wantTarget string
+	}{
+		{name: "same document", in: "- [`--parallel N`](#--parallel-n)", wantTarget: "#--parallel-n"},
+		{name: "cross document", in: "see [vars](../config/vars.md#dwe-vars-set)", wantTarget: "../config/vars.md#dwe-vars-set"},
+		{name: "image is not a link", in: "![diagram](pic.md#frag)", wantTarget: "pic.md#frag", wantImage: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := linkWithAnchorRE.FindStringSubmatch(tt.in)
+			if m == nil {
+				t.Fatalf("no match for %q", tt.in)
+			}
+			if got := m[2]; got != tt.wantTarget {
+				t.Errorf("target = %q, want %q", got, tt.wantTarget)
+			}
+			if got := m[1] == "!"; got != tt.wantImage {
+				t.Errorf("image = %v, want %v", got, tt.wantImage)
+			}
+		})
+	}
+}
+
+// stripCodeForLinkScan removes fenced blocks and inline code spans so prose
+// *about* link syntax is not scanned as a link — `[x](#frag)` in tui-keymap.md
+// and Go generics like `errors.AsType[*lock.HeldError](err)` in packages.md both
+// parse as one otherwise. Never use it for slugs: a code span's text belongs to
+// the heading's anchor.
+func stripCodeForLinkScan(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inFence := false
+	for line := range strings.SplitSeq(s, "\n") {
+		if IsFenceLine(strings.TrimSpace(line)) {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		b.WriteString(codeSpanRE.ReplaceAllString(line, ""))
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 func embeddedMarkdownFiles(t *testing.T) []string {

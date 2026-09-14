@@ -62,6 +62,18 @@ generated from commit subjects and stay on the
 
 ### Fixed
 
+- **`dwe docs show 'topic#anchor'` resolves an anchor whose heading starts with
+  a hyphen.** A heading such as `` `--parallel N` `` was advertised as
+  `--parallel-n` by GitHub, by the documentation site, and by the page's own
+  table of contents, but the resolver trimmed the flag's leading hyphens and
+  answered only to `parallel-n` — so following a link the docs themselves ship
+  failed. The slug now keeps them, and the trimmed form still resolves, so both
+  spellings work.
+- **Cross-references in the Russian documentation point at the Russian
+  anchors.** The mirror translates headings but kept the English anchors, so 140
+  links across the reference and guides resolved to nothing — worst in
+  `render/ai`, `git`, `ide`, `config`, `env` and `index`, where no entry in the
+  page's own table of contents was navigable.
 - **go-sprout's own diagnostics no longer print to stdout.** A deprecated
   template function or a Sprig-order call logged a `level=WARN` line into
   standard output, corrupting `--output json` and `dwe prompt`. They now go

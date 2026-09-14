@@ -274,6 +274,8 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **Anchor derivation + long-doc hint** — `parseHeadingSlugLabel` is the single derivation for every anchor surface, with the **slug from the RAW heading text and the label from the stripped one**.
   Never write `Slugify(stripInlineMarkdown(x))` and never re-slug `Heading.Text`: `stripEmphasis` ate `_` as an emphasis marker, so three surfaces advertised `servicedirsensure` while the resolver answered only to `service_dirs_ensure` — on every builtin name and snake_case key.
+  A slug also keeps the heading's OWN leading hyphens (`--parallel-n`) — trimming them made `docs show` reject a link its own docs ship — and matching is single-sourced through `MatchSlugIndex` (hyphen-equivalence ABOVE slug-prefix; `docstui` delegates, never re-implements).
+  `TestDocumentLinkAnchorsResolve` pins the surface the advertise-side tests cannot see: every `#anchor` a doc links to, same-document `(#a)` links included.
   `emitLongDocHint` writes to **stderr** because the target case is `docs show <topic> | head`, which truncates stdout only; its silence gates keep it from becoming a banner.
   See § Core — Docs.
 
