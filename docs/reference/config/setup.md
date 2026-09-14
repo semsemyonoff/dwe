@@ -109,6 +109,15 @@ Unknown top-level fields are rejected at load time (strict decoding).
 | `options` | list | no | Valid for `select` and `multiselect` only. List of `{value, label}` pairs. Required for both types. |
 | `validate` | object | no | Optional validation rules. Has two fields (mutually exclusive): `preset` (a named preset like `port` / `hostname`) or `regex` (a regular expression pattern). Only meaningful for `type: input`. |
 
+For a secret-like answer whose `writes:` target is a `vars.*` leaf — an app key,
+a session secret, a Fernet key — point the developer at
+`dwe vars set <path> --generate hex|base64url[:N]|uuid` in `description:` rather
+than a one-liner such as `python -c 'import secrets; …'`. The command needs
+nothing beyond dwe, writes the same `local.yml` path — it always resolves under
+`vars.`, so quote the `writes:` value without that prefix — and refuses to
+overwrite an existing value without `--force` (see
+[`vars.md`](vars.md#dwe-vars-set)).
+
 Schema rules enforced at load time:
 
 - `id` must be unique across entries.

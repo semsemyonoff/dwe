@@ -639,9 +639,16 @@ func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DweConfig
 		stderr = cmd.ErrOrStderr()
 		stdin = cmd.InOrStdin()
 	}
+	// Without the docker config rc.Compose() falls back to project.prefix/name,
+	// so the hook would ignore docker.yml project_name and args.
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
+	if err != nil {
+		return fmt.Errorf("hook %q: %w", cmdID, err)
+	}
 	rc := runtime.RunContext{
 		Cmd:            cmdDef,
 		Config:         cfg,
+		DockerConfig:   dockerCfg,
 		Registry:       reg,
 		ProjectRoot:    baseDir,
 		Stdout:         stdout,
@@ -743,6 +750,13 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 		return fmt.Errorf("loading command registry: %w", err)
 	}
 	_ = reg.ApplyVisibility(cfg, workDir)
+	// `reset run` passes the docker config through RunWithOptions; without it
+	// here the same shell step would see a different COMPOSE_PROJECT_NAME
+	// under `reset step` (see pipeline.execShellAction).
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(workDir, cfg)
+	if err != nil {
+		return err
+	}
 	// Single-step execution: no --yes flag, so confirm prompts are shown.
 	// UserInvoked is what separates this from the same step inside a pipeline:
 	// this command calls ExecAction directly with the real os.Stdout, so a
@@ -762,6 +776,7 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 	actx := pipeline.ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
+		DockerCfg:   dockerCfg,
 		Reg:         reg,
 		LogWriter:   nil,
 		SkipConfirm: false,

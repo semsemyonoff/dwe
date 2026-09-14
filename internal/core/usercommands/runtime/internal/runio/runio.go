@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -383,4 +385,33 @@ func BuildRenderedEnv(cmd *model.CommandDef, ctx spec.RunContext) (map[string]st
 		result[k] = rendered
 	}
 	return result, nil
+}
+
+// ComposeContractEnv returns the compose half of the host-side env contract
+// shared by type:shell and type:script, derived from rc.Compose():
+//
+//	COMPOSE_PROJECT_NAME  active compose project name (omitted when empty)
+//	COMPOSE_FILE          colon-joined overlay paths, absolute against
+//	                      rc.ProjectRoot when known (omitted when no files)
+//
+// The name follows rc.DockerConfig, so an entry point that leaves it nil
+// silently ignores docker.yml project_name.
+func ComposeContractEnv(rc spec.RunContext) []string {
+	var out []string
+	compose := rc.Compose()
+	if compose.ProjectName != "" {
+		out = append(out, "COMPOSE_PROJECT_NAME="+compose.ProjectName)
+	}
+	if len(compose.Files) > 0 {
+		joined := make([]string, len(compose.Files))
+		for i, f := range compose.Files {
+			if filepath.IsAbs(f) || rc.ProjectRoot == "" {
+				joined[i] = f
+			} else {
+				joined[i] = filepath.Join(rc.ProjectRoot, f)
+			}
+		}
+		out = append(out, "COMPOSE_FILE="+strings.Join(joined, ":"))
+	}
+	return out
 }

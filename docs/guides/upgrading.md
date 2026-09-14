@@ -87,6 +87,14 @@ A warning that names no scenarios means no active `exports.env` rule traces the 
 
 **A literal host port behind an interpolated bind address now blocks `dwe test run`.** `"${BIND:-127.0.0.1}:8080:80"` publishes the literal host port 8080, which collides with the live stack; the scanner used to miss it. Model the port under `services.<name>.ports` and interpolate it, as for any [literal host port](../reference/config/tests.md#compose-isolation-scanner), or pass `--skip-isolation-check`.
 
+**`dwe validate` warns when a host script builds its own compose project name.** Inside `dwe test`, shell steps and scripts get the copy's name in `COMPOSE_PROJECT_NAME`; a script that passes `docker compose -p "${PROJECT_PREFIX:-dwe}-${PROJECT_NAME:-myproj}"` ignores it and addresses the live stack. The new `tests.host_project_name` warning names the file and the line. Like the port warning, it appears only in projects with a `workspace/tests/` directory and fails `dwe validate --strict`. Keep the old expression as the fallback:
+
+```sh
+PROJECT="${COMPOSE_PROJECT_NAME:-${PROJECT_PREFIX:-dwe}-${PROJECT_NAME:-myproj}}"
+```
+
+See [Host scripts that build their own compose project name](../reference/config/tests.md#host-scripts-that-build-their-own-compose-project-name) for what the check reads and what it skips.
+
 ### Deploy
 
 **The built-in deploy pipeline now brings a stopped stack back up.** Its `up` step carries `check: {type: builtin, cmd: containers_running}`, so it runs on every deploy instead of being skipped by the journal after the first success. The built-in pipeline therefore never reports `already up-to-date` any more: a deploy of an unchanged, running project is a quick `docker up --wait` plus a probe.

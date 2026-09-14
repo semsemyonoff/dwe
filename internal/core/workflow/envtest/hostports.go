@@ -40,8 +40,11 @@ type hostPortKey struct {
 // enabledHostPortKeys returns, sorted deterministically, every (service,
 // portName) host port declared by a service that will be ENABLED in the test:
 // the original merged enabled state, overridden by the scenario's
-// env.services.enable/disable. Ports outside 1..65535 are skipped (mirrors the
-// ports_free preflight's own guard in collectDeclaredPorts).
+// env.services.enable/disable. A disable does not turn off a required service,
+// mirroring the loader (Enabled = required || services.<name>.enabled): the
+// service still runs in the copy, so skipping it would bind its original port.
+// Ports outside 1..65535 are skipped (mirrors the ports_free preflight's own
+// guard in collectDeclaredPorts).
 func enabledHostPortKeys(cfg *config.DweConfig, scn *Scenario) []hostPortKey {
 	if cfg == nil {
 		return nil
@@ -62,7 +65,7 @@ func enabledHostPortKeys(cfg *config.DweConfig, scn *Scenario) []hostPortKey {
 		if enable[name] {
 			on = true
 		}
-		if disable[name] {
+		if disable[name] && !svc.Required {
 			on = false
 		}
 		if !on {
@@ -86,10 +89,8 @@ func enabledHostPortKeys(cfg *config.DweConfig, scn *Scenario) []hostPortKey {
 
 // RemappedHostPortServices returns the services whose declared host ports the
 // runner remaps in this scenario's copy — exactly the services behind
-// enabledHostPortKeys. It answers "is this port remapped", which is NOT "is
-// this service enabled": the remap does not honour `required`, so a required
-// service the scenario disables stays enabled in the copy yet keeps its
-// original port.
+// enabledHostPortKeys, i.e. the services enabled in the copy that declare at
+// least one host port.
 func RemappedHostPortServices(cfg *config.DweConfig, scn *Scenario) map[string]bool {
 	out := map[string]bool{}
 	for _, k := range enabledHostPortKeys(cfg, scn) {

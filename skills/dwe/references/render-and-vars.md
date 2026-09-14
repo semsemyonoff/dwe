@@ -138,6 +138,15 @@ Schema: `dwe docs show config/vars --lang en`.
 dwe vars set vars.db.user appuser
 ```
 
+For a secret-like var (app key, session secret, Fernet key) the handoff is `--generate` — never invent the value or hand over a `python -c` one-liner:
+
+```shell
+# hand this to the user:
+dwe vars set vars.app.secret_key --generate hex          # or base64url[:N] / uuid
+```
+
+`N` is bytes of entropy (default 32); `base64url` is padded, so `base64url:32` is a valid Fernet key. The value is always a string, is printed (never redacted), and an existing `local.yml` value is refused with `vars_value_exists` unless `--force` is added. A secret the whole team shares belongs in `dwe secrets set <vars.path> --stdin` instead.
+
 From inside a container, `set` is additionally gated by the top-level `bridge.vars_writable` allowlist (dot-boundary match, deny-by-default); on the host it is unrestricted. Schema: `dwe docs show config/vars --lang en`.
 
 ## 6. `.env` is generated — edit the export rule, not the file

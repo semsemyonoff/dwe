@@ -108,6 +108,7 @@ is **confined to `vars.*`** — a non-`vars` path is `vars_not_found`.
 
 ```
 dwe vars set <var> [value]
+dwe vars set <var> --generate SPEC [--force]
 ```
 
 Write a var override into `workspace/local.yml`, preserving surrounding comments
@@ -136,6 +137,55 @@ and formatting (see [comment-preserving writes](#comment-preserving-localyml-wri
   inspect-style context (the current per-layer values). Submit writes through
   the same path. In JSON / non-interactive mode, omitting `value` is a typed
   `vars_value_required` error (no form is opened).
+- **`--generate SPEC` (random value)** — writes a fresh random value instead of
+  a positional one; see [Generating a random value](#generating-a-random-value).
+
+#### Generating a random value
+
+`--generate` fills a var that needs a random secret-like value — an app key, a
+session secret, a Fernet key — without a one-liner in another language:
+
+```shell
+dwe vars set app.secret_key --generate hex          # 64 hex characters
+dwe vars set app.fernet_key --generate base64url:32  # a valid Fernet key
+dwe vars set app.instance_id --generate uuid
+```
+
+| `SPEC` | Output |
+|--------|--------|
+| `hex[:N]` | N random bytes as lowercase hex — `2N` characters |
+| `base64url[:N]` | N random bytes as URL-safe base64 **with `=` padding** — `4·⌈N/3⌉` characters |
+| `uuid` | an RFC 9562 version 4 UUID (`8-4-4-4-12`); takes no `N` |
+
+`N` counts **bytes of entropy**, not output characters, so the same `N` means
+the same strength in either encoding. It defaults to `32` and must be an integer
+from `1` to `1024`. The padding is deliberate: a Fernet key is exactly
+`base64url:32`, and Fernet rejects the unpadded form. The bytes come from the
+operating system's cryptographic random source.
+
+- **Always a string.** The value skips [value coercion](#dwe-vars-set) and is
+  written as a YAML string, so an all-digit hex value stays a string on reload.
+- **Existing values are kept.** When `local.yml` already holds a non-null value
+  at the path, `set` refuses with `vars_value_exists` and leaves the file
+  untouched — rerunning a setup command never rotates a key an app already
+  uses. Pass `--force` to regenerate. A default from `workspace.yml` /
+  `defaults.yml`, or an explicit `null` in `local.yml`, does not block. The
+  check runs under the project locks, so a concurrent writer cannot slip in
+  between check and write.
+- **Usage errors come first.** A positional value together with `--generate` is
+  `vars_value_ambiguous`; a malformed spec — an unknown kind, a non-integer or
+  out-of-range `N`, an `N` on `uuid`, an empty `--generate=` — is
+  `vars_generate_invalid`; `--force` without `--generate` is
+  `vars_force_requires_generate`. All three are raised before any lock is taken.
+- **No form.** `--generate` never opens the interactive form, so it works the
+  same in JSON and non-interactive mode.
+
+The generated value is **printed** in the confirmation and the JSON output, like
+any other `set` — `dwe vars` never redacts (see
+[Output is not redacted](#output-is-not-redacted)). It also lands in plaintext
+in the gitignored `local.yml`. That fits a per-developer local key; a
+credential the team shares belongs in a tracked layer, encrypted, via
+`dwe secrets set <vars.path> --stdin` (see [`secrets.md`](secrets.md)).
 
 `set` acquires the project locks (symmetry with `dwe services enable/disable`,
 which share the same `local.yml` writer — a lock-free `set` could race a
@@ -228,7 +278,8 @@ note: vars.telegram.token is an encrypted secret in workspace/defaults.yml; this
 `dwe vars list`, `get`, and `inspect` print effective values **verbatim** —
 nothing is masked. Some projects legitimately keep third-party credentials (API
 tokens, service DSNs) in `workspace/local.yml` / `.env`, because those cannot be
-faked locally; such values appear in full in the output.
+faked locally; such values appear in full in the output. `set` prints the value
+it wrote the same way, including one made by `--generate`.
 
 Masking is not offered — anyone who can run `dwe vars list` can already read
 `workspace/local.yml`. What masking *would* change is where the values travel,
@@ -306,11 +357,24 @@ stderr.
 | `get` | `{"var": "...", "value": <any>, "encrypted": <bool>}` |
 | `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local\|default", "encrypted": <bool>}]}` |
 | `inspect` | `{"var": "...", "layers": {"default": <any>, "default_set": <bool>, "local": ..., "local_set": ..., "current": ..., "current_set": ...}, "origin": "...", "encrypted": <bool>, "secret": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
-| `set` (with value) | `{"var": "...", "value": <any>}` |
+| `set` (with value or `--generate`) | `{"var": "...", "value": <any>}` |
 
 The `*_set` booleans on `inspect` layers distinguish an explicit `null` value
 from an absent layer. `set` with no value in JSON mode is the
 `vars_value_required` error (no form).
+
+`set` error codes in the envelope:
+
+| Code | When |
+|------|------|
+| `vars_path_invalid` | the path is not a `vars.*` leaf |
+| `vars_value_required` | no value, and no form in this mode |
+| `vars_value_invalid` | the value is not a single YAML scalar |
+| `vars_value_ambiguous` | a positional value together with `--generate` |
+| `vars_generate_invalid` | a malformed `--generate` spec |
+| `vars_force_requires_generate` | `--force` without `--generate` |
+| `vars_value_exists` | `--generate` and `local.yml` already holds a value, no `--force` (detail `var`; the hint names `--force`) |
+| `vars_not_container_writable` | a container write to a var outside `bridge.vars_writable` |
 
 `encrypted` and `secret` are `omitempty`: a project with no encrypted values
 emits exactly the fields it did before — see
@@ -326,6 +390,10 @@ emits exactly the fields it did before — see
   matches an entry in the project's `bridge.vars_writable` allowlist. A
   non-matching var is rejected with `vars_not_container_writable`. From the
   **host**, `set` is unrestricted.
+- `set --generate` obeys the same allowlist. The allowlist is checked before
+  the existing-value refusal, so a denied var reports
+  `vars_not_container_writable`, never `vars_value_exists` — a container learns
+  nothing about whether the var is set.
 - The TUI is auto-disabled in a container (the non-interactive fallback to
   `list`).
 
@@ -385,6 +453,7 @@ read-only render crosses the boundary.
 - `dwe vars list [namespace]` — enumerate `vars.*` leaves
 - `dwe vars inspect <var>` — per-layer values, origin, and usages
 - `dwe vars set <var> [value]` — write a `local.yml` override (comment-preserving)
+- `dwe vars set <var> --generate SPEC [--force]` — write a random `hex` / `base64url` / `uuid` value
 - `dwe secrets set <vars.path> [value]` — write an **encrypted** value into a tracked layer ([`secrets.md`](secrets.md))
 - `dwe secrets status` — report every encrypted value and whether it can be read here
 - `dwe render env` / `dwe render config` — regenerate `.env` / service configs from the merged config

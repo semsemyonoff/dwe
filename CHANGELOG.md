@@ -37,6 +37,21 @@ generated from commit subjects and stay on the
 
 - Template functions `toUnix`, `toUnixMilli`, `toUnixMicro`, `fromUnix`,
   `fromUnixMilli`, `fromUnixMicro`, `escape` and `unescape`, from go-sprout 1.1.
+- **`dwe validate` warns when a host script or shell step passes compose a
+  project name not derived from `$COMPOSE_PROJECT_NAME`**
+  (`tests.host_project_name`). A name such as
+  `-p "${PROJECT_PREFIX:-dwe}-${PROJECT_NAME:-myproj}"` addresses the live stack
+  from inside `dwe test`. The warning appears only in projects with
+  `workspace/tests/`, fails `dwe validate --strict`, and its hint is the fix,
+  `${COMPOSE_PROJECT_NAME:-<current value>}` — see
+  [Upgrading DWE](docs/guides/upgrading.md).
+- **`dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]`**
+  writes a random value to `workspace/local.yml`, so a setup step no longer
+  needs a `python -c` one-liner for an app key or a Fernet key. `N` counts bytes
+  of entropy (default 32); `base64url` is padded, and the value is always a
+  string. A value already in `local.yml` is kept — the command refuses with
+  `vars_value_exists` — unless `--force` is given. See
+  [`dwe vars set`](docs/reference/config/vars.md#dwe-vars-set).
 
 ### Removed
 
@@ -70,6 +85,11 @@ generated from commit subjects and stay on the
   literal host port behind an interpolated bind address
   (`"${BIND:-127.0.0.1}:8080:80"`) is now recognised and blocks `dwe test run`
   like any other literal host port.
+- **`dwe test` remaps the host ports of a `required: true` service a scenario
+  lists under `env.services.disable`.** A required service cannot be disabled,
+  so it still ran in the test copy, but on its original ports — colliding with
+  the live stack and with other scenarios under `--parallel`. It now gets free
+  ports like every other service that runs in the copy.
 - **The built-in deploy pipeline brings a stopped stack back up.** After a
   `dwe stop`, `dwe deploy run` printed `Phase: start` and `✓ Done`, and the
   stack stayed down: the `up` step had no `check:`, so the journal skipped it on
@@ -82,6 +102,21 @@ generated from commit subjects and stay on the
   pick `Apply changes` in the selector — and an ejected or hand-written
   `workspace/deploy.yml` needs the `check:` added by hand; see
   [Upgrading DWE](docs/guides/upgrading.md).
+- **Inside `dwe test`, a scenario's shell steps see the copy's
+  `COMPOSE_PROJECT_NAME`.** A host script written as
+  `${COMPOSE_PROJECT_NAME:-dwe-myproj}` used to fall back to the live name there
+  and address the live stack; it now gets the disposable copy's name, also when
+  scenarios run with `--parallel`. Shell steps and shell `check:` of
+  `dwe stop`, `dwe restart` and `dwe reset` also get dwe's own name — the one
+  it passes as `-p` — instead of one inherited from your shell.
+- **`type: script` commands receive `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE`**,
+  like `type: shell` commands always have.
+- **Commands run from snapshot workflows, service-toggle hooks and reset hooks
+  honour `docker.yml` `project_name`.** They used to fall back to
+  `<prefix>-<name>`, so on a project with a custom `project_name` a container
+  command there exec'd into the wrong compose project and missed the
+  `docker.yml` `args`; the shell and script contract carried the same wrong
+  name.
 
 ## [0.6.0] - 2026-09-07
 

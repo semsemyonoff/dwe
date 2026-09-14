@@ -524,9 +524,16 @@ func runToggleHook(ctx context.Context, deps ExecuteDeps, step PlanStep) error {
 		stderr = deps.Cmd.ErrOrStderr()
 		stdin = deps.Cmd.InOrStdin()
 	}
+	// Without the docker config rc.Compose() falls back to project.prefix/name,
+	// so the hook would ignore docker.yml project_name and args.
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(deps.BaseDir, deps.Cfg)
+	if err != nil {
+		return fmt.Errorf("hook %q: %w", step.CommandID, err)
+	}
 	rc := runtime.RunContext{
 		Cmd:            cmdDef,
 		Config:         deps.Cfg,
+		DockerConfig:   dockerCfg,
 		Registry:       deps.CmdReg,
 		ProjectRoot:    deps.BaseDir,
 		Stdout:         stdout,

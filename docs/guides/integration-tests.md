@@ -186,6 +186,27 @@ dwe test run --skip-isolation-check smoke
 
 See [Compose isolation scanner](../reference/config/tests.md#compose-isolation-scanner) for the full list of flagged constructs and the fail/warn tiering.
 
+## Host scripts and the project name
+
+Inside `dwe test` the copy runs under its own compose project name, and dwe hands that name to the shell steps and host commands it starts as `COMPOSE_PROJECT_NAME` (see [who gets it](../reference/config/tests.md#isolation-model)). A host script that computes its own `-p` from the project prefix and name ignores it and talks to your **working** stack — the scenario passes while the script seeds, dumps or truncates the live database.
+
+Take the name from `$COMPOSE_PROJECT_NAME`. For a script you also run by hand, keep your old value as the fallback:
+
+```sh
+PROJECT="${COMPOSE_PROJECT_NAME:-dwe-myproj}"
+docker compose -p "$PROJECT" exec db psql
+```
+
+For a script only dwe runs, make a missing name fatal instead of falling back to the live stack:
+
+```sh
+PROJECT="${COMPOSE_PROJECT_NAME:?run this through dwe}"
+```
+
+The `:?` form also covers the places dwe does not inject the name: a shell `when:` predicate or the builtin `shell` probe in a scenario sees no `COMPOSE_PROJECT_NAME` at all, so a `:-` fallback there resolves to the live stack.
+
+`dwe validate tests` catches the common mistake — a `-p` / `--project-name` or `COMPOSE_PROJECT_NAME=` value built without `$COMPOSE_PROJECT_NAME`, in host commands, scripts, pipeline and scenario shell steps, and scripts they call one level deep. It never guesses, so it cannot see a name passed in as `$1`, read with `read`, returned by a command substitution, set in a script two files deep, or a hand-built container name (`docker exec myproj-db-1 …`); those stay yours to check. See [Host scripts that build their own compose project name](../reference/config/tests.md#host-scripts-that-build-their-own-compose-project-name) for the full rule.
+
 ## Running the whole suite
 
 ```shell
