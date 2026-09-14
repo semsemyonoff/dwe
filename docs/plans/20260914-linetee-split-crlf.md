@@ -344,18 +344,24 @@ package fails):
 **Files:**
 - Modify: `internal/shared/liveui/output_test.go`
 
-- [ ] add `TestSubStepLog_RoutedViaLineTee_SplitCRLF`, modelled on the existing
+- [x] add `TestSubStepLog_RoutedViaLineTee_SplitCRLF`, modelled on the existing
       `TestSubStepLog_RoutedViaLineTee_SplitOSCClean`, using
       `NewLineTeePreserveANSI` plus the `parallel.go` callback shape (strip the frame
       with `ANSIOnlyRe`, write it to the sink only when `final`) — that callback is
       covered by `internal/core/usercommands/runtime/runners/workflow/liveui_test.go`
       for redraws, tails and ANSI-only tails, but by nothing for a split CRLF, and it
       is the consumer the `frameIsBlank` widening exists for
-- [ ] feed `"foo\r"` then `"\x1b[K\n"` and assert the sink holds `"foo\n"`, no blank
+- [x] feed `"foo\r"` then `"\x1b[K\n"` and assert the sink holds `"foo\n"`, no blank
       line
-- [ ] add the intact form `"foo\r\x1b[K\n"` to the same test so both paths produce
+- [x] add the intact form `"foo\r\x1b[K\n"` to the same test so both paths produce
       byte-identical sink content
-- [ ] run `go test ./internal/shared/liveui/`
+- [x] run `go test ./internal/shared/liveui/`
+
+**Non-vacuity check** (not required by this task, but cheap here): re-run against the
+pre-fix `output.go` (`git show 2675f4d9:internal/shared/liveui/output.go`) — **both**
+sub-tests fail with `sub-step log = "\n"`, the intact form included, confirming the
+`preserveANSI` consumer was broken for the plain `\r\x1b[K\n` redraw idiom even
+without a split.
 
 ### Task 4: Pin the fix end-to-end through the executor
 

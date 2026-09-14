@@ -220,6 +220,51 @@ func TestSubStepLog_RoutedViaLineTee_SplitOSCClean(t *testing.T) {
 	}
 }
 
+// TestSubStepLog_RoutedViaLineTee_SplitCRLF pins the split-CRLF fix at the
+// shape of the real consumer: the workflow runner's parallel sub-step callback
+// (parallel.go), which builds its tee with NewLineTeePreserveANSI, strips the
+// frame with ANSIOnlyRe itself and writes only committed frames to
+// .dwe/logs/parallel/<workflow>/<sub>.log. That constructor skips both of the
+// tee's own strips, so before the fix the closing frame of a split
+// `\r\x1b[K\n` reached this callback as "\x1b[K" — byte-non-empty, blanked by
+// the callback's own strip — which is why LineTee measures blankness after an
+// ANSI strip rather than in bytes.
+//
+// The intact form is asserted alongside the split one: both must produce
+// byte-identical sink content, since which side of a read boundary the `\n`
+// lands on is not something the emitting tool controls.
+func TestSubStepLog_RoutedViaLineTee_SplitCRLF(t *testing.T) {
+	cases := []struct {
+		name   string
+		writes []string
+	}{
+		{"split at the CR", []string{"foo\r", "\x1b[K\n"}},
+		{"intact", []string{"foo\r\x1b[K\n"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var logBuf bytes.Buffer
+			// Same shape as parallel.go's sub-step callback: strip the frame,
+			// repaint the live row on every frame, log only committed ones.
+			tee := NewLineTeePreserveANSI(func(frame string, final bool) {
+				stripped := ANSIOnlyRe.ReplaceAllString(frame, "")
+				if !final {
+					return
+				}
+				_, _ = fmt.Fprintln(&logBuf, stripped)
+			})
+			for _, w := range tc.writes {
+				if _, err := tee.Write([]byte(w)); err != nil {
+					t.Fatalf("write %q: %v", w, err)
+				}
+			}
+			if got, want := logBuf.String(), "foo\n"; got != want {
+				t.Errorf("sub-step log = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // TestAnsiOnlyRe_PreservesCR ensures the regex used by the tee path leaves
 // `\r` bytes intact (precondition for LineTee frame parsing).
 func TestAnsiOnlyRe_PreservesCR(t *testing.T) {
