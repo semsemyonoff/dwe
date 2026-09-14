@@ -421,24 +421,24 @@ negative on `p/alpha\n\n` could never have matched).
 **Files:**
 - Modify: `internal/shared/liveui/output.go`
 
-- [ ] delete the `if line == "" && f.hasPending { line = f.pending }` substitution from
+- [x] delete the `if line == "" && f.hasPending { line = f.pending }` substitution from
       `FrameLogWriter.onFrame` and the comment block explaining it
-- [ ] replace it with a short comment carrying the actual reason from Consequences:
+- [x] replace it with a short comment carrying the actual reason from Consequences:
       `LineTee` resolves a split CRLF before it reaches this callback, so a blank final
       frame here is a genuine blank line — and the one place the two pending slots
       diverge (`FrameLogWriter.Flush`, where `tee.Flush()` sets `f.pending` after
       `t.pending` was cleared) is a window under `f.mu` no frame can enter
-- [ ] name the precondition in that comment: `NewFrameLogWriter` builds its tee with
+- [x] name the precondition in that comment: `NewFrameLogWriter` builds its tee with
       `NewLineTee`, the **plain** constructor, where `frame != ""` and
       `!frameIsBlank(frame)` are the same predicate. A `preserveANSI` `FrameLogWriter`
       would diverge — `f` would set pending on `"\x1b[K"` where `t` would not — and
       regress silently
-- [ ] leave the `!final` pending logic untouched — that is redraw collapsing, a
+- [x] leave the `!final` pending logic untouched — that is redraw collapsing, a
       different job
-- [ ] run `go test ./internal/shared/liveui/` — `TestFrameLogWriter_SplitWrites` in
+- [x] run `go test ./internal/shared/liveui/` — `TestFrameLogWriter_SplitWrites` in
       `logframe_test.go` must still pass, notably `{"a\r", "\nb\n"} → "a\nb\n"`; if it
       does not, the transitions do not coincide and the deletion is wrong
-- [ ] run `go test -race ./internal/shared/liveui/`
+- [x] run `go test -race ./internal/shared/liveui/`
 
 ### Task 6: Update the in-code contracts
 

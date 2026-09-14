@@ -145,15 +145,22 @@ func (f *FrameLogWriter) onFrame(frame string, final bool) {
 		}
 		return
 	}
-	line := frame
-	if line == "" && f.hasPending {
-		// CRLF split across two Writes: the `\r` already arrived as a non-final
-		// frame and the `\n` now closes it. The committed line is the pending
-		// frame, not a blank line.
-		line = f.pending
-	}
+	// No substitution for a split CRLF here: LineTee resolves that one frame
+	// earlier — it holds a `\r`-closed frame and re-emits it in place of a blank
+	// final frame — so a blank final frame reaching this callback is a genuine
+	// blank line. Between flushes the two pending slots move in lockstep (set on
+	// a non-blank non-final frame, untouched by a blank one, cleared on any final
+	// frame); they diverge only inside Flush below, where tee.Flush() delivers
+	// `(tail, false)` into f.pending after LineTee cleared its own — a window
+	// opened and closed under f.mu that no frame can enter.
+	//
+	// The lockstep holds because NewFrameLogWriter builds its tee with NewLineTee,
+	// the plain constructor, where `frame != ""` above and LineTee's
+	// `!frameIsBlank(frame)` are the same predicate. A preserveANSI
+	// FrameLogWriter would diverge — f would set pending on `"\x1b[K"` where the
+	// tee would not — and regress this silently.
 	f.pending, f.hasPending = "", false
-	f.writeLine(line)
+	f.writeLine(frame)
 }
 
 // writeLine appends one line to the destination. Called with f.mu held.
