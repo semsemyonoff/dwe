@@ -886,6 +886,16 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			// paths below. Do NOT give this callback pending-frame state to
 			// "fix" it: that would be a new composite flush hook on a path
 			// that already has one.
+			//
+			// The prohibition stands, but the split-CRLF case it used to
+			// cover is gone: a `\r\n` landing in two different reads no
+			// longer blanks the line here, because LineTee holds the
+			// `\r`-closed frame and re-emits it in place of the blank final
+			// frame (liveui/output.go, LineTee.holdOrSubstitute). That state
+			// belongs one level down, where a single Flush owns its
+			// lifecycle. The cost is that such a frame arrives twice —
+			// non-final, then final — which StepOutput already handles by
+			// repainting on the non-final one and committing on the final.
 			if subLog != nil && final {
 				_, _ = fmt.Fprintln(subLog, frame)
 			}

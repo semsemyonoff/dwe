@@ -98,6 +98,11 @@ func (s *LogSanitizer) Write(p []byte) (int, error) {
 //     on a bare `\r` with no committing newline (a killed clone, a tool that
 //     never terminates its last progress line).
 //
+// A CRLF split across two writes never reaches this callback as a blank final
+// frame: LineTee resolves it one level earlier by holding the `\r`-closed frame
+// and substituting it for the blank one. A blank final frame here is therefore
+// a genuine blank line and is written as such.
+//
 // Known limitation, deliberate: this is frame collapsing, not terminal
 // emulation. `abc\rX\n` renders as `Xbc` on a real terminal — the shorter
 // overwrite leaves the tail of the previous frame visible — while the log
@@ -129,9 +134,9 @@ func NewFrameLogWriter(w io.Writer) *FrameLogWriter {
 }
 
 // onFrame runs synchronously inside LineTee.Write / LineTee.Flush, which
-// release only their own mutex around the callback (output.go:196-199,
-// :224-226). It is therefore always entered with f.mu ALREADY HELD by Write or
-// Flush and must never take it itself: a non-reentrant sync.Mutex taken here
+// release only their own mutex around the callback. It is therefore always
+// entered with f.mu ALREADY HELD by Write or Flush and must never take it
+// itself: a non-reentrant sync.Mutex taken here
 // too would self-deadlock on the very first frame, while moving the lock in
 // here instead of around the whole Write body would let two goroutines evict
 // each other's pending slot out of order — the exact race the lock exists for.
@@ -189,10 +194,13 @@ func (f *FrameLogWriter) Write(p []byte) (int, error) {
 // Flush emits a surviving pending frame and is idempotent.
 //
 // Ordering is load-bearing: LineTee.Flush delivers its un-terminated tail as
-// `(tail, false)` (output.go:225), i.e. *into* the pending slot, so the tee is
-// flushed FIRST and the pending frame emitted after. Idempotency does not come
-// for free the way it does for LineTee (whose buffer simply empties) — it is
-// the explicit clear below.
+// `(tail, false)`, i.e. *into* this type's pending slot, so the tee is
+// flushed FIRST and the pending frame emitted after. This is also the one place
+// the two pending slots diverge — LineTee.Flush clears its own held frame
+// unconditionally, then hands the tail to onFrame, which arms f.pending — and
+// the divergence is a window under f.mu that no frame can enter.
+// Idempotency does not come for free the way it does for LineTee (whose buffer
+// simply empties) — it is the explicit clear below.
 //
 // It returns the destination's write error because this is the ONLY path that
 // emits a frame the caller never saw fail: a step whose whole output is an
@@ -246,6 +254,26 @@ func JoinWriters(ws ...io.Writer) io.Writer {
 // scanning so callbacks see plain text; use NewLineTeePreserveANSI when the
 // caller needs to forward colours (e.g. captured failure dumps). Trailing
 // un-terminated bytes are flushed via Flush() as `(tail, false)`.
+//
+// A CRLF split across two writes is handled too, but by re-emitting rather
+// than collapsing: the `\r`-closed frame is held and substituted for the blank
+// final frame the `\n` would otherwise produce (see holdOrSubstitute). The
+// consumer therefore sees such a frame TWICE — once as `(frame, false)` when
+// the `\r` arrives, then as `(frame, true)` when the `\n` does — and must
+// commit on final only, as both in-tree callbacks do (they repaint on the
+// non-final frame). Blankness is measured after an ANSI strip
+// (see frameIsBlank), so NewLineTeePreserveANSI behaves the same as the plain
+// constructor instead of leaving `"\x1b[K"` to the consumer's own strip.
+//
+// Accepted trade: `foo\r\x1b[K\n` is erase-the-line-then-newline on a real
+// terminal, i.e. a blank line, and this records `foo`. ANSI is stripped before
+// the frame is inspected, so a split CRLF and an erase-then-newline are
+// indistinguishable here and the content line wins. That is the same class of
+// deliberate approximation FrameLogWriter documents for `abc\rX\n` → `X`:
+// frame collapsing, not terminal emulation. It also matches what the intact
+// form already did — a plain tee fed `"foo\r\x1b[K\n"` in one write has always
+// emitted `[("foo",true)]`, because the per-write strip removes the erase
+// sequence and the CRLF then collapses in-scan.
 //
 // LineTee is safe for concurrent Write calls from a single source (one
 // sub-step) but is NOT designed for concurrent writes from multiple goroutines
@@ -374,6 +402,14 @@ func (t *LineTee) frameIsBlank(frame string) bool {
 // Flush emits any buffered un-terminated trailing bytes as a non-final frame.
 // The reporter's commitTrailingTail is responsible for committing the
 // tail to scrollback/log at step-finish time.
+//
+// Flush also drops the held `\r`-closed frame unconditionally — the
+// empty-buffer early return included — and never arms one from its own
+// `(tail, false)` emit. Callers flush mid-stream (pipeline's executor does so
+// three times per step, with PlainReporter.FlushOutput running in between), so
+// a tail the consumer has already committed must not be re-emitted by a later
+// `\n`: that would duplicate the line rather than blank it, and a duplicate is
+// the worse of the two.
 func (t *LineTee) Flush() {
 	t.mu.Lock()
 	// Drop any held frame unconditionally, the early return included: callers

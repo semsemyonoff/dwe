@@ -446,28 +446,28 @@ negative on `p/alpha\n\n` could never have matched).
 - Modify: `internal/shared/liveui/output.go`
 - Modify: `internal/core/execution/pipeline/executor.go`
 
-- [ ] update the `LineTee` doc comment: it currently claims CRLF collapses "within one
+- [x] update the `LineTee` doc comment: it currently claims CRLF collapses "within one
       buffer scan" — state that a CRLF split across writes is handled too, but by
       re-emitting the held frame rather than collapsing, that the frame is therefore
       delivered to the callback **twice** (non-final, then final), and that blankness is
       measured after an ANSI strip so the `preserveANSI` constructor behaves the same
-- [ ] record the accepted trade from Solution Overview on that comment: `foo\r\x1b[K\n`
+- [x] record the accepted trade from Solution Overview on that comment: `foo\r\x1b[K\n`
       is an erase-then-newline on a real terminal and this records `foo` — the same
       class of deliberate approximation `FrameLogWriter` already documents
-- [ ] document on `Flush` that it clears the held frame unconditionally, with the
+- [x] document on `Flush` that it clears the held frame unconditionally, with the
       reason (an early flush followed by more input must not re-emit a tail the
       consumer has already committed)
-- [ ] **add** a split-CRLF note to the `FrameLogWriter` doc comment rather than editing
+- [x] **add** a split-CRLF note to the `FrameLogWriter` doc comment rather than editing
       one — that comment covers only final / pending / `Flush`, and the type's sole
       split-CRLF prose is the inline comment Task 5 already deletes
-- [ ] the `onFrame` and `Flush` doc comments cite `output.go:196-199`, `:224-226` and
+- [x] the `onFrame` and `Flush` doc comments cite `output.go:196-199`, `:224-226` and
       `:225`; those line numbers are already stale and this change moves them further —
       drop them rather than re-deriving them
-- [ ] in `executor.go`, extend the "Do NOT give this callback pending-frame state"
+- [x] in `executor.go`, extend the "Do NOT give this callback pending-frame state"
       comment: the prohibition **stands**, and the split-CRLF case it used to describe
       is now resolved in `LineTee` — without this, the next reader concludes the bug is
       still live and re-opens it
-- [ ] no behaviour changes in this task; run
+- [x] no behaviour changes in this task; run
       `go test ./internal/shared/liveui/ ./internal/core/execution/pipeline/`
 
 ### Task 7: Update the repository docs and CHANGELOG
