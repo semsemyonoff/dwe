@@ -504,17 +504,38 @@ negative on `p/alpha\n\n` could never have matched).
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] every shape in the Overview reproduction produces identical committed output in
+- [x] every shape in the Overview reproduction produces identical committed output in
       its intact and its split form, **under both constructors**
-- [ ] the progress-bar path is unchanged (`"50%\r"` + `"60%\r"`, both constructors)
-- [ ] the nine `liveui` invariants are re-read and none is violated — in particular #6
+- [x] the progress-bar path is unchanged (`"50%\r"` + `"60%\r"`, both constructors)
+- [x] the nine `liveui` invariants are re-read and none is violated — in particular #6
       (`\r` is data): a CR still emits its frame immediately as non-final
-- [ ] neither consumer callback gained state: `git diff` touches no file under
+- [x] neither consumer callback gained state: `git diff` touches no file under
       `internal/core/usercommands/runtime/runners/workflow/`, and in
       `internal/core/execution/pipeline/` only a comment and the new test
-- [ ] run the full suite: `make test`
-- [ ] run `make test-race`
-- [ ] run `make lint`
+- [x] run the full suite: `make test`
+- [x] run `make test-race`
+- [x] run `make lint`
+
+**Verification result** (throwaway test in `internal/shared/liveui/`, deleted after the
+run — the permanent coverage is Tasks 1/3/4):
+
+- intact vs split committed output, every Overview shape, both constructors —
+  `foo\r\n`, `foo\r` + `\x1b[K\n`, `foo\r\x1b[` + `K\n` and `foo\r` + `\x1b[K\r` + `\n`
+  all commit exactly `"foo\n"` in both forms; the progress rows commit nothing in both.
+  No pair disagrees.
+- progress path unchanged: `"50%\r"` then `"60%\r"` yields
+  `[(50%,false) (60%,false)]` under `NewLineTee` and `NewLineTeePreserveANSI` alike —
+  one non-final frame per redraw, invariant #6 intact. The other eight invariants are
+  untouched by the change: no `tea.NewProgram`, no `term.MakeRaw`, no capability query,
+  no change to the termOut/screen/diag split, still one mutex (the new fields live under
+  the existing `t.mu`), no prompt-handoff or footer-teardown change, no non-TTY
+  divergence, no cursor-position change.
+- consumer callbacks: `git diff 7a6c1c2b..HEAD --stat` touches no file under
+  `internal/core/usercommands/runtime/runners/workflow/`, and under
+  `internal/core/execution/pipeline/` only `executor.go` (a comment-only hunk) and
+  `logframe_wiring_test.go` (the new test).
+- `make test` green, `make test-race` green (plus `go test -race
+  ./internal/shared/liveui/`, which the race target does not cover), `make lint` — 0 issues.
 
 ### Task 9: [Final] Update documentation
 
