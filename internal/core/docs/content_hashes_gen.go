@@ -23,7 +23,7 @@ var ContentHashes = map[string]string{
 	"guides/switching-tasks-with-snapshots.md": "83b43f46c197",
 	"guides/troubleshooting.md":                "32e3c8b81254",
 	"guides/upgrading.md":                      "e3098acde6f3",
-	"guides/write-snapshot-workflows.md":       "1b87b72a80f8",
+	"guides/write-snapshot-workflows.md":       "b02f8eabca3e",
 	"internals/architecture.md":                "cb1aa72beee3",
 	"internals/packages.md":                    "8fe317aabd4f",
 	"internals/tui-keymap.md":                  "739fe9a61f5d",

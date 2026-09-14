@@ -1,4 +1,4 @@
-> Translated from: guides/write-snapshot-workflows.md @ 1b87b72a80f8
+> Translated from: guides/write-snapshot-workflows.md @ b02f8eabca3e
 
 # Написание снапшот-воркфлоу
 
