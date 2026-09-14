@@ -1,4 +1,4 @@
-> Translated from: reference/config/tests.md @ 4307dfb509fb
+> Translated from: reference/config/tests.md @ cf6bc5db7e7d
 
 # workspace/tests/
 
