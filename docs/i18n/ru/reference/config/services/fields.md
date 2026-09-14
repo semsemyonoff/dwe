@@ -620,7 +620,7 @@ generated:
 
 Ключ карты (`app_key`) — это идентификатор `${generated.<name>}`. `dwe validate` отклоняет невалидный regex, отсутствие группы захвата, выходящий за пределы путь `file` или имя поля, которое не является валидным идентификатором `${generated.<name>}`.
 
-Шаг генерации сервиса обычно гейтится предикатом [`generated-missing <svc> <field>`](../conditions.md#type-builtin--predicates), так что он выполняется только при первом deploy (когда значение ещё не собрано), а затем собирается билтином [`service_generated_harvest`](../deploy/builtins.md#service_generated_harvest). Значение переживает `run` / передеплой и сохраняется при `reset`, если не передан `--clear-generated`. См. [render config](../../render/config.md) для полного потока deploy, схемы хранилища и бутстрапа уже закоммиченного секрета через `dwe render config <svc> --harvest`.
+Шаг генерации сервиса обычно гейтится предикатом [`generated-missing <svc> <field>`](../conditions.md#type-builtin--предикаты), так что он выполняется только при первом deploy (когда значение ещё не собрано), а затем собирается билтином [`service_generated_harvest`](../deploy/builtins.md#service_generated_harvest). Значение переживает `run` / передеплой и сохраняется при `reset`, если не передан `--clear-generated`. См. [render config](../../render/config.md) для полного потока deploy, схемы хранилища и бутстрапа уже закоммиченного секрета через `dwe render config <svc> --harvest`.
 
 ## Блок `bridge`
 

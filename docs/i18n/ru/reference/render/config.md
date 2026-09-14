@@ -9,22 +9,22 @@
 
 ## Содержание
 
-- [Обзор](#overview)
-- [Подложка шаблонов: сокращение `${...}`](#template-substrate--shorthand)
-- [Пространство имён `${generated.<name>}`](#the-generatedname-namespace)
-- [Хранилище сгенерированных значений](#generated-value-store)
-- [Декларация `generated:`](#generated-declaration)
-- [Собирать, а не выпускать](#harvest-not-mint)
-- [Разрешение пакета шаблонов](#template-pack-resolution)
-- [Схема manifest](#manifest-schema)
+- [Обзор](#обзор)
+- [Подложка шаблонов: сокращение `${...}`](#подложка-шаблонов-сокращение)
+- [Пространство имён `${generated.<name>}`](#пространство-имён-generatedname)
+- [Хранилище сгенерированных значений](#хранилище-сгенерированных-значений)
+- [Декларация `generated:`](#декларация-generated)
+- [Собирать, а не выпускать](#собирать-а-не-выпускать)
+- [Разрешение пакета шаблонов](#разрешение-пакета-шаблонов)
+- [Схема manifest](#схема-manifest)
 - [Зашифрованные источники `.age`](#зашифрованные-источники-age)
-- [Использование CLI](#cli-usage)
-- [Builtin-ы конвейера](#pipeline-builtins)
-- [Поток деплоя](#deploy-flow)
-- [Авто-рендер `dwe run`](#dwe-run-auto-render)
-- [Reset и `--clear-generated`](#reset-and---clear-generated)
-- [Миграция с копирования `configs:`](#migration-from-configs-copy)
-- [Связанные справочники](#related-references)
+- [Использование CLI](#использование-cli)
+- [Builtin-ы конвейера](#builtin-ы-конвейера)
+- [Поток деплоя](#поток-деплоя)
+- [Авто-рендер `dwe run`](#авто-рендер-dwe-run)
+- [Reset и `--clear-generated`](#reset-и---clear-generated)
+- [Миграция с копирования `configs:`](#миграция-с-копирования-configs)
+- [Связанные справочники](#связанные-справочники)
 
 ## Обзор
 
@@ -172,7 +172,7 @@ DWE (DWE лишь считывает строку обратно). Сбор:
 
 Пакеты конфигов живут под `workspace/templates/config/<pack>/` с тем же соглашением
 оверрайда shadow-пакета `<pack>.local/`, что у ide/ai/git (см.
-[Локальные оверрайды](index.md#local-overrides)). Порядок разрешения — используется первое
+[Локальные оверрайды](index.md#локальные-оверрайды)). Порядок разрешения — используется первое
 совпадение:
 
 1. `workspace/templates/config/<template>/`, когда задано `render.config.template`
@@ -190,7 +190,7 @@ DWE (DWE лишь считывает строку обратно). Сбор:
 
 Пакеты конфигов управляются manifest-ом, используя **общую** схему `manifest.yml` (ту
 же, что читают ide/ai/git, см.
-[Общая схема manifest](index.md#shared-manifest-schema)), с двумя ограничениями
+[Общая схема manifest](index.md#общая-схема-manifest)), с двумя ограничениями
 config-kind:
 
 ```yaml
@@ -353,7 +353,7 @@ phases:
 чтение способно испортить хранилище.
 
 Предикат `generated-missing <svc> <field>` (см.
-[conditions](../config/conditions.md#type-builtin--predicates)) читает
+[conditions](../config/conditions.md#type-builtin--предикаты)) читает
 `.dwe/generated.yml` и истинен, когда поле отсутствует или хранилища нет.
 
 ## Авто-рендер `dwe run`

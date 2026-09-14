@@ -25,15 +25,15 @@ checks:
 
 Теперь `dwe deploy run` откажется стартовать, пока pull не пройдёт, печатая твой `hint`, если не прошёл. Файл опционален — без `validate.yml` бегут только host-probe'ы.
 
-Тело — это либо `type: builtin` (встроенный вид инспекции: `shell`, `file_exists`, `env_keys_present`, `config_keys_present`, `tcp_reachable` — [полный список с параметрами](../reference/config/validate.md#available-builtins)), либо `type: command`, который диспатчит на пользовательскую команду `type: shell`/`script` из `workspace/commands/`.
+Тело — это либо `type: builtin` (встроенный вид инспекции: `shell`, `file_exists`, `env_keys_present`, `config_keys_present`, `tcp_reachable` — [полный список с параметрами](../reference/config/validate.md#доступные-билтины)), либо `type: command`, который диспатчит на пользовательскую команду `type: shell`/`script` из `workspace/commands/`.
 
 ## Когда проверка запускается
 
-`stages:` решает, на каком моменте жизненного цикла срабатывает проверка — `deploy`, `run`, `stop` или `post-setup` (полная таблица в [reference](../reference/config/validate.md#stages)). Один момент стоит выделить здесь:
+`stages:` решает, на каком моменте жизненного цикла срабатывает проверка — `deploy`, `run`, `stop` или `post-setup` (полная таблица в [reference](../reference/config/validate.md#стадии)). Один момент стоит выделить здесь:
 
 - Проверка, зависящая от значения, которое **setup-визард** пишет в `local.yml`, должна использовать `stages: [post-setup]`, а не `[deploy]`. Проверка `[deploy]` бежит ещё и на раннем pre-wizard gate, где это значение ещё не задано — поэтому заблокирует тебя до того, как ты доберёшься до визарда. `post-setup` бежит **только** на финальном preflight: после визарда либо прямо перед деплоем, когда визарда нет (например `dwe deploy run`).
 
-`services: [api]` дополнительно гейтит проверку на случай, когда включён названный сервис (семантика ИЛИ по списку). Gate по стадии и по сервису — независимые AND-фильтры; см. [привязку к сервисам](../reference/config/validate.md#service-gating).
+`services: [api]` дополнительно гейтит проверку на случай, когда включён названный сервис (семантика ИЛИ по списку). Gate по стадии и по сервису — независимые AND-фильтры; см. [привязку к сервисам](../reference/config/validate.md#привязка-к-сервисам).
 
 ## Рецепт: требовать значение перед деплоем
 
@@ -69,7 +69,7 @@ dwe validate --stage deploy      # только проверки, привяза
 
 `dwe validate env` — правильная первая команда, когда что-то ощущается не так; см. [`troubleshooting.md`](troubleshooting.md).
 
-> В `validate.yml` также есть блок `linters:` (shellcheck / hadolint / кастомные адаптеры). Линтеры бегут только на `dwe validate` — **никогда** в preflight, который отвечает «можем ли мы запуститься?», а не «чист ли код?». Схема: [внешние линтеры](../reference/config/validate.md#external-linters).
+> В `validate.yml` также есть блок `linters:` (shellcheck / hadolint / кастомные адаптеры). Линтеры бегут только на `dwe validate` — **никогда** в preflight, который отвечает «можем ли мы запуститься?», а не «чист ли код?». Схема: [внешние линтеры](../reference/config/validate.md#внешние-линтеры).
 
 ## Перекрёстные ссылки
 
