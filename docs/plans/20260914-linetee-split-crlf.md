@@ -318,24 +318,26 @@ package fails):
 **Files:**
 - Modify: `internal/shared/liveui/output.go`
 
-- [ ] add `pending string` + `hasPending bool` to `LineTee`
-- [ ] add the unexported `frameIsBlank(frame string) bool` method: `frame == ""` for a
+- [x] add `pending string` + `hasPending bool` to `LineTee`
+- [x] add the unexported `frameIsBlank(frame string) bool` method: `frame == ""` for a
       plain tee (no regex), `ANSIOnlyRe` strips to empty for a `preserveANSI` tee,
       evaluated only when `frame != ""`
-- [ ] in `Write`, between computing `frame`/`final` and the `t.mu.Unlock()` that
+- [x] in `Write`, between computing `frame`/`final` and the `t.mu.Unlock()` that
       precedes `t.cb(...)`, apply the transitions from Technical Details: a non-blank
       non-final frame sets pending; a blank non-final frame leaves it alone; a final
       frame substitutes pending when the frame is blank, and clears pending always
-- [ ] emit the substituted value, not the raw `frame`
-- [ ] in `Flush`, clear `pending`/`hasPending` before anything else, including on the
+      (the transitions live in the new `holdOrSubstitute` method, called with `t.mu`
+      held, so `Write`'s scan loop keeps its shape)
+- [x] emit the substituted value, not the raw `frame`
+- [x] in `Flush`, clear `pending`/`hasPending` before anything else, including on the
       empty-buffer early return
-- [ ] run `go test ./internal/shared/liveui/` — every Task 1 row passes and every
+- [x] run `go test ./internal/shared/liveui/` — every Task 1 row passes and every
       pre-existing `LineTee` / `FrameLogWriter` test stays green, in particular
       `TestLineTee_FrameParsing_Mixed`, `TestLineTee_FrameParsing_MultipleConsecutiveCRs`,
       `TestLineTee_FrameParsing_TrailingTail` and `TestFrameLogWriter_SplitWrites`
-- [ ] run `go test ./internal/core/usercommands/runtime/runners/workflow/` — the
+- [x] run `go test ./internal/core/usercommands/runtime/runners/workflow/` — the
       `preserveANSI` consumer's own live-line tests live there
-- [ ] run `go test -race ./internal/shared/liveui/`
+- [x] run `go test -race ./internal/shared/liveui/`
 
 ### Task 3: Prove the fix at the workflow-runner callback shape
 

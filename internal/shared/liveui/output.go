@@ -248,6 +248,8 @@ type LineTee struct {
 	preserveANSI bool
 	mu           sync.Mutex
 	buf          bytes.Buffer
+	pending      string // frame closed by a lone `\r`, awaiting its `\n`
+	hasPending   bool
 }
 
 // NewLineTee constructs a LineTee whose cb is invoked once per frame with
@@ -317,12 +319,49 @@ func (t *LineTee) Write(p []byte) (int, error) {
 			final = true
 		}
 		_ = t.buf.Next(consume)
+		emit := t.holdOrSubstitute(frame, final)
 		t.mu.Unlock()
-		t.cb(frame, final)
+		t.cb(emit, final)
 		t.mu.Lock()
 	}
 	t.mu.Unlock()
 	return len(p), nil
+}
+
+// holdOrSubstitute applies the split-CRLF rule and returns the frame to emit.
+// Called with t.mu held, before the callback runs.
+//
+// A CRLF only collapses inside one buffer scan; when the `\r` and the `\n`
+// land in different Write calls the `\r` closes a frame and the `\n` closes an
+// empty one, so a consumer committing on final records a blank line where the
+// content line belongs. The held frame is re-emitted in its place.
+func (t *LineTee) holdOrSubstitute(frame string, final bool) string {
+	if !final {
+		// A blank non-final frame is a bare `\r` with nothing but escape bytes
+		// before it: the cursor returned to column 0 but the screen still shows
+		// the previous frame, so it must not evict the held one.
+		if !t.frameIsBlank(frame) {
+			t.pending, t.hasPending = frame, true
+		}
+		return frame
+	}
+	out := frame
+	if t.hasPending && t.frameIsBlank(frame) {
+		out = t.pending
+	}
+	t.pending, t.hasPending = "", false
+	return out
+}
+
+// frameIsBlank reports whether a frame carries no text. A plain tee's frames
+// are already double-stripped, so this is a comparison and no regex runs on the
+// hot path; a preserveANSI frame is blank when it is nothing but escape
+// sequences — the consumer strips them itself and would record a blank line.
+func (t *LineTee) frameIsBlank(frame string) bool {
+	if frame == "" {
+		return true
+	}
+	return t.preserveANSI && ANSIOnlyRe.ReplaceAllString(frame, "") == ""
 }
 
 // Flush emits any buffered un-terminated trailing bytes as a non-final frame.
@@ -330,6 +369,11 @@ func (t *LineTee) Write(p []byte) (int, error) {
 // tail to scrollback/log at step-finish time.
 func (t *LineTee) Flush() {
 	t.mu.Lock()
+	// Drop any held frame unconditionally, the early return included: callers
+	// flush mid-stream (pipeline's executor does so three times per step) and a
+	// tail the consumer has already committed must not be re-emitted by a later
+	// `\n`, which would duplicate the line rather than blank it.
+	t.pending, t.hasPending = "", false
 	if t.buf.Len() == 0 {
 		t.mu.Unlock()
 		return
