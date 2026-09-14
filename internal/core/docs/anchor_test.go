@@ -120,6 +120,37 @@ func TestSliceByAnchor_LeadingHyphensBothWays(t *testing.T) {
 	}
 }
 
+// TestSliceByAnchor_HyphenEquivalenceBeatsPrefix pins the tier ORDER. Both
+// relations can fire on `parallel-n`, and prefix is the looser one: with it
+// first, the legacy spelling of the flag heading silently lands on a different
+// section — worse than not resolving, and a regression from before the flag's
+// hyphens entered its slug.
+func TestSliceByAnchor_HyphenEquivalenceBeatsPrefix(t *testing.T) {
+	doc := "# Title\n\n## `--parallel N`\n\nFlag body.\n\n## Parallel N details\n\nOther body.\n"
+
+	_, slug, _, ok := SliceByAnchor([]byte(doc), "parallel-n")
+	if !ok {
+		t.Fatalf("expected a match for the legacy spelling")
+	}
+	if slug != "--parallel-n" {
+		t.Errorf("slug = %q, want --parallel-n (prefix tier hijacked the match)", slug)
+	}
+}
+
+// TestMatchSlugIndex_AmbiguityRejected covers the shared policy directly: two
+// headings differing only in leading hyphens give no single right answer, and
+// guessing one would send `docs show` and the TUI to different places.
+func TestMatchSlugIndex_AmbiguityRejected(t *testing.T) {
+	slugs := []string{"--force", "-force"}
+	if got := MatchSlugIndex(slugs, "force"); got != -1 {
+		t.Errorf("MatchSlugIndex = %d, want -1 for an ambiguous hyphen-equivalent anchor", got)
+	}
+	// An exact hit is never ambiguous, whatever else is hyphen-equivalent.
+	if got := MatchSlugIndex(slugs, "--force"); got != 0 {
+		t.Errorf("MatchSlugIndex(exact) = %d, want 0", got)
+	}
+}
+
 func TestSliceByAnchor_H3StopsAtSiblingH2(t *testing.T) {
 	sliced, _, _, ok := SliceByAnchor([]byte(anchorDoc), "alpha-child")
 	if !ok {

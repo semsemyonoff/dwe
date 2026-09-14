@@ -164,11 +164,19 @@ func rootBySource(roots []DocRoot, source string) (DocRoot, bool) {
 
 // linkWithAnchorRE matches an inline markdown link whose target carries an
 // `#anchor`. Targets never contain whitespace or parentheses in this doc set.
-var linkWithAnchorRE = regexp.MustCompile(`\[[^\]]*\]\(([^()\s]+#[^()\s]+)\)`)
+//
+// The path part is `*`, not `+`: a same-document link is written `(#anchor)`
+// with nothing before the `#`, and requiring a character there silently skipped
+// 1421 of the tree's 1793 anchor links — including the one this guard was
+// written for. Group 1 captures a leading `!` so an image can be told apart
+// from a link; RE2 has no lookbehind.
+var linkWithAnchorRE = regexp.MustCompile(`(!?)\[[^\]]*\]\(([^()\s]*#[^()\s]+)\)`)
 
 var (
-	fenceLineRE = regexp.MustCompile("^(```|~~~)")
-	codeSpanRE  = regexp.MustCompile("`[^`\n]*`")
+	// Longest run first: ``…`` is a valid code span whose content may hold a
+	// single backtick, and matching the short form first would leave the inside
+	// exposed to the link scan.
+	codeSpanRE  = regexp.MustCompile("```[^\n]*?```|``[^\n]*?``|`[^`\n]*`")
 	urlSchemeRE = regexp.MustCompile(`^[a-z][a-z0-9+.-]*:`)
 )
 
@@ -187,14 +195,17 @@ var (
 func TestDocumentLinkAnchorsResolve(t *testing.T) {
 	files := embeddedMarkdownFiles(t)
 
-	checked := 0
+	checked, sameDoc := 0, 0
 	for _, docPath := range files {
 		content, err := fs.ReadFile(BuiltinFS, docPath)
 		if err != nil {
 			t.Fatalf("read %s: %v", docPath, err)
 		}
 		for _, m := range linkWithAnchorRE.FindAllStringSubmatch(stripCodeForLinkScan(string(content)), -1) {
-			target := m[1]
+			if m[1] == "!" {
+				continue // an image, not a link
+			}
+			target := m[2]
 			if urlSchemeRE.MatchString(target) {
 				continue
 			}
@@ -204,6 +215,12 @@ func TestDocumentLinkAnchorsResolve(t *testing.T) {
 			if relPath != "" {
 				if !strings.HasSuffix(relPath, ".md") {
 					continue
+				}
+				// The repo README is embedded FLAT as `README.md`, so its links
+				// keep the repo-relative `docs/` prefix the tree itself dropped.
+				// Without this the whole README is silently skipped as missing.
+				if docPath == "README.md" {
+					relPath = strings.TrimPrefix(relPath, "docs/")
 				}
 				targetPath = path.Join(path.Dir(docPath), relPath)
 				if strings.HasPrefix(targetPath, "..") {
@@ -216,6 +233,9 @@ func TestDocumentLinkAnchorsResolve(t *testing.T) {
 				continue // missing file: see the doc comment
 			}
 			checked++
+			if relPath == "" {
+				sameDoc++
+			}
 			if _, _, _, ok := SliceByAnchor(targetContent, anchor); !ok {
 				t.Errorf("%s links to %q, but %s has no such anchor", docPath, target, targetPath)
 			}
@@ -223,6 +243,43 @@ func TestDocumentLinkAnchorsResolve(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("no anchor links found; the embedded tree is likely not synced (run `make embedded-docs`)")
+	}
+	// Same-document links are the bulk of the corpus (every page's own table of
+	// contents) and were the class the first version of linkWithAnchorRE
+	// skipped wholesale while still reporting a healthy `checked`. Counting
+	// them separately is what makes that failure loud.
+	if sameDoc == 0 {
+		t.Error("no same-document (#anchor) links were checked — linkWithAnchorRE is skipping them")
+	}
+}
+
+// TestLinkWithAnchorRE_MatchesSameDocumentLinks pins the shape that the corpus
+// test cannot pin on its own: a corpus with zero same-document links and a
+// regex that cannot match one look identical from the outside.
+func TestLinkWithAnchorRE_MatchesSameDocumentLinks(t *testing.T) {
+	tests := []struct {
+		name       string
+		in         string
+		wantImage  bool
+		wantTarget string
+	}{
+		{name: "same document", in: "- [`--parallel N`](#--parallel-n)", wantTarget: "#--parallel-n"},
+		{name: "cross document", in: "see [vars](../config/vars.md#dwe-vars-set)", wantTarget: "../config/vars.md#dwe-vars-set"},
+		{name: "image is not a link", in: "![diagram](pic.md#frag)", wantTarget: "pic.md#frag", wantImage: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := linkWithAnchorRE.FindStringSubmatch(tt.in)
+			if m == nil {
+				t.Fatalf("no match for %q", tt.in)
+			}
+			if got := m[2]; got != tt.wantTarget {
+				t.Errorf("target = %q, want %q", got, tt.wantTarget)
+			}
+			if got := m[1] == "!"; got != tt.wantImage {
+				t.Errorf("image = %v, want %v", got, tt.wantImage)
+			}
+		})
 	}
 }
 
@@ -236,7 +293,7 @@ func stripCodeForLinkScan(s string) string {
 	b.Grow(len(s))
 	inFence := false
 	for line := range strings.SplitSeq(s, "\n") {
-		if fenceLineRE.MatchString(strings.TrimSpace(line)) {
+		if IsFenceLine(strings.TrimSpace(line)) {
 			inFence = !inFence
 			continue
 		}

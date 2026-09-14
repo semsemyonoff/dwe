@@ -10,8 +10,9 @@ import (
 // Slugify converts heading text to a GitHub-style anchor slug.
 //
 // Rules: lower-case the text, keep ASCII/Unicode letters, digits, hyphens,
-// and underscores, drop everything else, and turn whitespace runs into single
-// hyphens. Underscores are preserved (heading text like “ `on_enable` “ must
+// and underscores, drop everything else, and turn each space or tab into a
+// hyphen — one per character, not one per run, matching github-slugger (so
+// "a  b" slugs to "a--b"). Underscores are preserved (heading text like “ `on_enable` “ must
 // slug to `on_enable-and-...`, so we cannot use stripInlineMarkdown which
 // strips `_` as emphasis); markdown links and backtick code spans are
 // flattened to their inner text before the character pass.
@@ -85,17 +86,80 @@ func ParseHeadingSlugs(content []byte) []HeadingInfo {
 	return out
 }
 
-// SliceByAnchor returns the markdown sub-section identified by anchor.
+// MatchSlugIndex resolves anchor against slugs in document order and returns
+// the index it selects, or -1.
 //
-// Matching is tiered, mirroring topic resolution:
+// It is the SINGLE anchor-matching policy: `SliceByAnchor` (behind
+// `dwe docs show 'topic#anchor'`) and the docs TUI's link jumps both go through
+// it, so a link that opens one surface opens the other. The two grew separate
+// copies once and immediately drifted — the TUI took the first prefix hit where
+// the resolver demanded a unique one.
 //
-//  1. exact slug equality
+// Tiers, in order; every tier but the first requires a UNIQUE hit and otherwise
+// falls through:
+//
+//  1. exact slug equality — first wins, see below
 //  2. case-insensitive slug equality
-//  3. slug-prefix (the heading slug starts with anchor followed by `-`) — lets
-//     `#binaries` find a heading whose slug is `binaries-block` when no other
-//     heading slug starts with `binaries-`
-//  4. equality ignoring leading/trailing hyphens — lets `#parallel-n` find a
-//     flag heading whose slug is `--parallel-n`
+//  3. equality ignoring leading/trailing hyphens — lets `#parallel-n` find a
+//     flag heading whose slug is `--parallel-n`. Typing the dashes is
+//     unnatural, and it is what dwe advertised before Slugify stopped eating
+//     them.
+//  4. slug-prefix (the heading slug starts with anchor followed by `-`) — lets
+//     `#binaries` find a heading whose slug is `binaries-block`
+//
+// Hyphen-equivalence MUST stay above slug-prefix: it is the more specific
+// relation, and a document holding both "`--parallel N`" and "Parallel N
+// details" would otherwise resolve `#parallel-n` to the second by prefix and
+// never reach the tier meant for the first.
+//
+// Tier 1 keeps first-wins because duplicate slugs DO occur in this doc set —
+// five heading pairs in the English tree alone repeat a name like "Validation".
+// (github-slugger suffixes the repeat as `validation-1`, which dwe does not
+// derive and therefore cannot resolve; a link naming one would miss.)
+func MatchSlugIndex(slugs []string, anchor string) int {
+	if anchor == "" {
+		return -1
+	}
+
+	uniqueMatch := func(pred func(slug string) bool) int {
+		found := -1
+		for i, s := range slugs {
+			if !pred(s) {
+				continue
+			}
+			if found >= 0 {
+				return -1 // ambiguous
+			}
+			found = i
+		}
+		return found
+	}
+
+	for i, s := range slugs {
+		if s == anchor {
+			return i
+		}
+	}
+	if i := uniqueMatch(func(s string) bool { return strings.EqualFold(s, anchor) }); i >= 0 {
+		return i
+	}
+
+	anchorLower := strings.ToLower(anchor)
+	if trimmed := strings.Trim(anchorLower, "-"); trimmed != "" {
+		if i := uniqueMatch(func(s string) bool {
+			return strings.Trim(strings.ToLower(s), "-") == trimmed
+		}); i >= 0 {
+			return i
+		}
+	}
+
+	return uniqueMatch(func(s string) bool {
+		return strings.HasPrefix(strings.ToLower(s), anchorLower+"-")
+	})
+}
+
+// SliceByAnchor returns the markdown sub-section identified by anchor.
+// Matching is MatchSlugIndex's, over the document's H2/H3 slugs.
 //
 // The section spans from the matched heading line up to (but not including)
 // the next heading at the same or shallower depth, with content inside fenced
@@ -144,47 +208,16 @@ func SliceByAnchor(content []byte, anchor string) (sliced []byte, matchedSlug st
 	}
 	sort.Strings(candidates)
 
-	// Tier 1: exact equality.
-	exactMatches := filterHeadings(headings, func(h heading) bool { return h.slug == anchor })
-	if len(exactMatches) >= 1 {
-		// Multiple identical slugs in one doc shouldn't happen, but if it does,
-		// prefer the first occurrence.
-		return sliceSection(content, exactMatches[0].startOff, nextSectionOffset(headings, exactMatches[0], lines, content)), exactMatches[0].slug, candidates, true
+	slugs := make([]string, len(headings))
+	for i, h := range headings {
+		slugs[i] = h.slug
 	}
-
-	// Tier 2: case-insensitive equality.
-	ciMatches := filterHeadings(headings, func(h heading) bool { return strings.EqualFold(h.slug, anchor) })
-	if len(ciMatches) == 1 {
-		h := ciMatches[0]
-		return sliceSection(content, h.startOff, nextSectionOffset(headings, h, lines, content)), h.slug, candidates, true
+	idx := MatchSlugIndex(slugs, anchor)
+	if idx < 0 {
+		return nil, "", candidates, false
 	}
-
-	// Tier 3: slug-prefix (anchor + "-...").
-	anchorLower := strings.ToLower(anchor)
-	prefixMatches := filterHeadings(headings, func(h heading) bool {
-		s := strings.ToLower(h.slug)
-		return strings.HasPrefix(s, anchorLower+"-")
-	})
-	if len(prefixMatches) == 1 {
-		h := prefixMatches[0]
-		return sliceSection(content, h.startOff, nextSectionOffset(headings, h, lines, content)), h.slug, candidates, true
-	}
-
-	// Tier 4: equality ignoring leading/trailing hyphens on both sides, so a
-	// flag heading answers to the bare name — `#parallel-n` finds
-	// "`--parallel N`". Typing the dashes is unnatural, and it is what dwe
-	// itself advertised before Slugify stopped eating them.
-	if trimmedAnchor := strings.Trim(anchorLower, "-"); trimmedAnchor != "" {
-		trimMatches := filterHeadings(headings, func(h heading) bool {
-			return strings.Trim(strings.ToLower(h.slug), "-") == trimmedAnchor
-		})
-		if len(trimMatches) == 1 {
-			h := trimMatches[0]
-			return sliceSection(content, h.startOff, nextSectionOffset(headings, h, lines, content)), h.slug, candidates, true
-		}
-	}
-
-	return nil, "", candidates, false
+	h := headings[idx]
+	return sliceSection(content, h.startOff, nextSectionOffset(headings, h, lines, content)), h.slug, candidates, true
 }
 
 // nextSectionOffset returns the byte offset where the section starting at `h`
@@ -217,16 +250,6 @@ type heading struct {
 	slug     string
 	lineIdx  int
 	startOff int
-}
-
-func filterHeadings(hs []heading, pred func(heading) bool) []heading {
-	out := make([]heading, 0, len(hs))
-	for _, h := range hs {
-		if pred(h) {
-			out = append(out, h)
-		}
-	}
-	return out
 }
 
 func sliceSection(content []byte, start, end int) []byte {
