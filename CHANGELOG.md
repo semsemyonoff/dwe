@@ -18,7 +18,33 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **`dwe test` remaps compose host ports routed through `vars:`.** A host port
+  published as a single variable (`"${VALKEY_PORT:-6379}:6379"`) whose active
+  `exports.env` rule reads `from: vars.<path>` now gets a freshly allocated port
+  in every scenario copy, from the same batch as the modelled
+  `services.<name>.ports`. `env.vars: { <path>: auto }` is no longer required
+  (existing entries keep working); an explicit `env.vars: { <path>: <number> }`
+  **pins** the port and disables the remap for that path. See
+  [Upgrading DWE](docs/guides/upgrading.md).
+- **The `interpolated_host_port` finding no longer appears for a variable traced
+  to a `vars:` path** — in `dwe test run`, `dwe validate tests` or
+  `dwe test list --output json`'s `cost_profile.isolation_findings`. An untraced
+  variable, and one reading a service port a scenario does not remap, still
+  warn; the untraced message now points at the two ways to route the port
+  (a declared `services.<name>.ports` entry, or an `exports.env` rule
+  `from: vars.<path>`) instead of advising `env.vars: { …: auto }`.
+- **A scenario blocked by the compose isolation scanner creates nothing.** The
+  scan runs before the project is copied, so a blocking finding
+  (`container_name:`, a literal host port) no longer leaves a copy directory, a
+  compose project or a failure report directory behind. The scenario is still
+  reported `failed` (exit code 1).
+- **`dwe validate tests` and `dwe test list --output json` evaluate scenarios
+  without per-developer `compose.extra` overlays**, exactly as the test copy
+  runs them: `cost_profile.build_services` / `external_images` no longer count a
+  service that exists only in such an overlay, and an isolation finding from one
+  is no longer reported.
 
 ## [0.6.1] - 2026-09-15
 

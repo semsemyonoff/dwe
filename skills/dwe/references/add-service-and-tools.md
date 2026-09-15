@@ -75,7 +75,7 @@ hosts:
 
 Verify each field's meaning at `dwe docs show config/services/fields --lang en` (don't guess `ports`/`hosts` shape — see the `ports-field` / `hosts-field` anchors).
 
-**Model host ports under `services.<name>.ports`, not through a free-form var.** Only the modeled field is read by `ports_free` preflight and by `dwe test`'s automatic host-port isolation; a port routed to compose via `vars.*`/`${ENV}` instead binds the original host port in every test copy and silently collides across parallel/kept scenarios — **unless** each such port is declared per-scenario as `env.vars: auto`, the supported exception that gets it a freshly allocated port (see `integration-tests.md` § 6). Prefer keeping ports in `services.<name>.ports` and referencing them as `${services.<name>.ports.<x>}`; reach for `env.vars: auto` only when a port genuinely must reach compose through a var.
+**Model host ports under `services.<name>.ports`, not through a free-form var.** Only the modeled field is read by `ports_free` preflight; `dwe test`'s automatic host-port isolation reads it too, and additionally remaps a compose variable an active `exports.env` rule exports `from: vars.<path>`. A port routed to compose through anything dwe cannot trace — a free-form `${ENV}` with no such rule — binds the original host port in every test copy and silently collides across parallel/kept scenarios (see `integration-tests.md` § 6). Prefer keeping ports in `services.<name>.ports` and referencing them as `${services.<name>.ports.<x>}`; when a port genuinely must reach compose through a var, export it `from: vars.<path>` so `dwe test` can remap it.
 
 ## 3. app-only extras
 
