@@ -722,9 +722,24 @@ seam was added to bridge the last hop.
 
 ### Task 10: [Final] Update documentation
 
-- [ ] re-read both CHANGELOG entries and the Upgrading section together for consistent wording
-- [ ] `AGENTS.md`: no new critical pattern expected; if `ScenarioView` (three consumers, overlay stripping) or the scope option turns out to be a trap during implementation, add a one-line pointer there and the write-up to `packages.md`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] re-read both CHANGELOG entries and the Upgrading section together for consistent wording
+  — the `## [Unreleased]` `### Changed` (Change A, four bullets) / `### Fixed`
+  (Change B, two bullets) entries and `## Upgrading to 0.6.2` agree on the three
+  finding states, on the pin-vs-remap rule, on "blocked scenario creates
+  nothing / exit code still 1" and on the overlay-free scenario view; the RU
+  mirror matches the EN section paragraph for paragraph and its
+  `> Translated from: … @ feca012669f5` header is current. Change B is
+  changelog-only by design — it needs no user action, so it gets no Upgrading
+  entry.
+- [x] `AGENTS.md`: no new critical pattern expected; if `ScenarioView` (three consumers, overlay stripping) or the scope option turns out to be a trap during implementation, add a one-line pointer there and the write-up to `packages.md`
+  — two traps earned a pointer inside the EXISTING `dwe test` isolation &
+  cleanup bullet (no new bullet, file stays under `agentsMdBudget`): the single
+  `AllocatePorts` batch now also covers traced `vars:` paths, and the isolation
+  scan runs on `ScenarioView` before `CopyTree` with the never-mutate-the-input
+  rule. The write-ups were already in `packages.md` (§ `envtest/`) from tasks 5
+  and 8. The Change B scope option stays packages.md-only — a lifecycle command
+  that wants the narrowing opts in explicitly, which the preflight bullet covers.
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
