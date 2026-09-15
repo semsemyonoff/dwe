@@ -48,7 +48,8 @@ const EnvBridgeService = "DWE_BRIDGE_SERVICE"
 // MarkNestedRuntime by the process about to run a pipeline or dispatch a
 // command runtime, and every descendant inherits it however it was spawned.
 // A per-spawn list would keep missing spawn mechanisms — pipeline's
-// execShellAction never assigns cmd.Env at all.
+// execShellAction, for one, assigns cmd.Env only to add COMPOSE_PROJECT_NAME,
+// building it from os.Environ() at spawn time, so the marker still flows.
 const EnvNestedRuntime = "DWE_NESTED_RUNTIME"
 
 // NestedRuntime reports whether this dwe process was spawned by another dwe

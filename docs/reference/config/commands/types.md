@@ -172,6 +172,10 @@ The runner always injects the following env vars into the script process:
 | `DWE_PARAMS_JSON` | Resolved params as a JSON object |
 | `DWE_CONTEXT_JSON` | Resolved context as a JSON object |
 | `DWE_FILES_JSON` | JSON object mapping file IDs to `{path}` |
+| `COMPOSE_PROJECT_NAME` | Active compose project name (e.g. `dwe-laravel`) — `docker compose ...` picks this up without `-p` |
+| `COMPOSE_FILE` | Colon-joined list of active overlay paths, made absolute against the project root — `docker compose ...` picks this up without any `-f` flags |
+
+`COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` are the same pair the [shell env contract](#shell-env-contract) exports, with the same rules: `COMPOSE_FILE` is omitted when no overlay files are configured, `COMPOSE_PROJECT_NAME` is omitted when no project name is set, and a contract entry wins over a colliding key in the command's `env:` block.
 
 Use `DWE_BIN` instead of hard-coding `./bin/dwe`:
 
@@ -524,7 +528,9 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 
 #### Per-sub-step logs
 
-Each sub-step's combined stdout/stderr is captured to `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only newline-terminated frames are written to the log file (carriage-return progress frames stay on the live row and are dropped from logs), so the file stays readable without `\r`-spam.
+Each sub-step's combined stdout/stderr is captured to `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only the frame that closes a line is written to the log file — intermediate carriage-return progress frames stay on the live row, so `50%\r100%\n` logs a single `100%` and the file stays readable without `\r`-spam. A `\r`-closed frame *is* what gets logged when the frame that closes the line carries no text: a `\r\n` split across two reads, and the `\r\x1b[K\n` erase-then-newline idiom, both record the content line. The second case is a deliberate approximation — this is frame collapsing, not terminal emulation, so where a real terminal shows a blank line the log keeps the content instead (see [deploy → Reporter and logging](../deploy/examples.md#reporter-and-logging)).
+
+The one exception is the last line of output: when the child exits without a trailing newline (`printf 'error: x'; exit 1`), that line is still written to the log file and replayed in the failure dump. A trailing `\r` progress frame is still dropped, and so is a tail made only of ANSI escape sequences (a colour reset, a cursor-show).
 
 #### Sub-step naming and pipeline overrides
 

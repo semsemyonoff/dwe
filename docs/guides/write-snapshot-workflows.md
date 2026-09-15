@@ -7,7 +7,7 @@ This guide walks through the file from the smallest useful shape to the producti
 ## Sections
 
 - [The minimal workflow](#the-minimal-workflow)
-- [`${snapshot.*}` template namespace](#snapshot--template-namespace)
+- [`${snapshot.*}` template namespace](#snapshot-template-namespace)
 - [Workflows reuse your user commands](#workflows-reuse-your-user-commands)
 - [Variants — alternative step lists](#variants--alternative-step-lists)
 - [`require_matching_config` and `config_hash`](#require_matching_config-and-config_hash)

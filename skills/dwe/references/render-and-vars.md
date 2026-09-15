@@ -51,7 +51,7 @@ Schema: `dwe docs show render/config --lang en`, `dwe docs show templates --lang
 
 ## 3. Generated-secret lifecycle (harvest + replay)
 
-The engine is hermetic — it never mints secrets. The **service** generates them; DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render. Pattern (a Laravel `APP_KEY` flow):
+The render engine is hermetic — it never mints secrets. Either the **service** generates them and DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render, or — when the app does not mint the value itself — the developer writes one with `dwe vars set <path> --generate` (§ 5) and the template reads a plain `${vars.*}`; the harvest lifecycle is for the former. Pattern (a Laravel `APP_KEY` flow):
 
 1. **Declare** in `service.yml`: a `generated:` block with `{file, pattern}` — `pattern` is a regex whose capture group 1 is the harvested value.
    ```yaml
@@ -138,6 +138,15 @@ Schema: `dwe docs show config/vars --lang en`.
 dwe vars set vars.db.user appuser
 ```
 
+For a secret-like var (app key, session secret, Fernet key) the handoff is `--generate` — never invent the value or hand over a `python -c` one-liner:
+
+```shell
+# hand this to the user:
+dwe vars set vars.app.secret_key --generate hex          # or hex:N / base64url[:N] / uuid
+```
+
+`N` is bytes of entropy (default 32); `base64url` is padded, so `base64url:32` is a valid Fernet key. The value is always a string, is printed (never redacted), and an existing `local.yml` value is refused with `vars_value_exists` unless `--force` is added. A secret the whole team shares belongs in `dwe secrets set <vars.path> --stdin` instead.
+
 From inside a container, `set` is additionally gated by the top-level `bridge.vars_writable` allowlist (dot-boundary match, deny-by-default); on the host it is unrestricted. Schema: `dwe docs show config/vars --lang en`.
 
 ## 6. `.env` is generated — edit the export rule, not the file
@@ -161,7 +170,7 @@ Rule fields: `name`, `from` (dot-path into the **merged** config), optional `for
 Two traps in the write form:
 
 - **`--out` resolves against the caller's cwd**, not the project root — unlike every other dwe path. Run from `workspace/services/<name>/` it writes a stray `.env` there, exits 0, and leaves the real one stale. Always hand it over with an explicit project-root path.
-- **A rewritten `.env` does not reach running containers.** Compose reads it at up/recreate, so the new value lands only on the next `dwe run` — a plain `dwe deploy run` after a manual render can answer `already up-to-date` and return before `docker up` ever runs (§ 7). Verify against the file (`grep -E '^<NAME>=' <project-root>/.env`); `dwe shell <svc> -c 'printenv <NAME>'` reports the container's creation-time env and stays stale until it is recreated. Never reach for `docker compose exec`: it drops dwe's `-p`/`-f` argv and resolves a different compose project.
+- **A rewritten `.env` does not reach running containers.** Compose reads it at up/recreate, so the new value lands on the next `dwe run`, or on the next `dwe deploy run` of the built-in pipeline (its `up` step carries a `check:` and re-runs every deploy). A custom `deploy.yml` whose `up` step has no `check:` journal-skips it, so `dwe deploy run` there never re-ups (§ 7). Verify against the file (`grep -E '^<NAME>=' <project-root>/.env`); `dwe shell <svc> -c 'printenv <NAME>'` reports the container's creation-time env and stays stale until it is recreated. Never reach for `docker compose exec`: it drops dwe's `-p`/`-f` argv and resolves a different compose project.
 
 ```shell
 dwe render env | grep -E '^<NAME>='       # read: prints to stdout, writes nothing — always scoped
@@ -182,7 +191,7 @@ dwe render ide|ai|git [<svc>]             # hub dotfiles
 
 `.env` re-renders for free inside `dwe deploy run` (implicit first step), `dwe run` / `dwe restart`, `dwe services enable|disable` (written immediately, with or without `--apply`), and `dwe docker up|run|exec|restart|build` — **not** `docker down|stop|pull`. So a **`vars`** edit followed by any of those needs no separate render.
 
-An **`exports.env`-only** edit is the exception, and it fails on two layers: that block is in neither the project nor the service config hash (`vars` is in both), so `dwe deploy run` answers `already up-to-date` and returns — and on a run where some other always-run step defeats that early return, the implicit `render-env` step carries no `check:`, so the journal skips it on the still-matching hash anyway. Apply that one with `dwe run` (renders unconditionally, ahead of everything else) or `dwe deploy run --force`. The scoped `render env --out` is a last resort — it rewrites the file but leaves the running stack untouched (§ 6).
+An **`exports.env`-only** edit is the exception, and it fails on two layers: that block is in neither the project nor the service config hash (`vars` is in both), so the implicit `render-env` step, which carries no `check:`, is journal-skipped on the still-matching hash — the built-in pipeline's always-run `up` step then re-ups against the stale `.env`, and a custom pipeline without an always-run step answers `already up-to-date` and returns. Apply that one with `dwe run` (renders unconditionally, ahead of everything else) or `dwe deploy run --force`. The scoped `render env --out` is a last resort — it rewrites the file but leaves the running stack untouched (§ 6).
 
 `dwe render config --harvest` does NOT render — it write-if-absent stores declared `generated:` values into `.dwe/generated.yml`. It is a **host-only** mutation; never suggest it from inside a container.
 

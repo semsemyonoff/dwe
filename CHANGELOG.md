@@ -2,8 +2,10 @@
 
 All notable changes to `dwe` are recorded here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
-the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Version numbers do not follow Semantic Versioning before 1.0.0: a release is
+numbered by its weight, and a patch-looking number can still change something
+you have to act on. [Upgrading DWE](docs/guides/upgrading.md) lists what.
 
 Every change that a user can observe — a new or renamed flag, a changed default,
 a removed config key, a different message — belongs under `## [Unreleased]`
@@ -17,6 +19,51 @@ generated from commit subjects and stay on the
 ## [Unreleased]
 
 Nothing yet.
+
+## [0.6.1] - 2026-09-15
+
+### Changed
+
+- **Release binaries require macOS 13 or later**; building from source requires
+  Go 1.27.
+- **Templates move to go-sprout 1.1**: `get`, `set`, `unset`, `hasKey`, `pick`,
+  `omit`, `append`, `prepend`, `slice` and `without` fail on Sprig's argument
+  order; `regexFindAll`, `regexSplit`, `regexReplaceAll` and
+  `regexReplaceAllLiteral` take the string last; `div` by zero is an error. See
+  [Upgrading DWE](docs/guides/upgrading.md).
+
+### Added
+
+- `dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]` writes
+  a random value to `workspace/local.yml`.
+- `dwe validate` warns about a host script that builds its own compose project
+  name (`tests.host_project_name`) and about a compose host port `dwe test`
+  cannot remap (`interpolated_host_port`); both fail `--strict`.
+- Template functions `toUnix*`, `fromUnix*`, `escape`, `unescape`.
+
+### Removed
+
+- The deprecated `mustRegex*` template aliases.
+
+### Fixed
+
+- The built-in deploy pipeline brings a stopped stack back up: its `up` step
+  now carries `check: containers_running` and runs on every deploy. The first
+  deploy after upgrading reports a config change once; an ejected `deploy.yml`
+  needs the check added by hand — see [Upgrading DWE](docs/guides/upgrading.md).
+- Inside `dwe test`, shell steps and `type: script` commands get the copy's
+  `COMPOSE_PROJECT_NAME` instead of the live one; snapshot, reset and
+  service-toggle hooks honour `docker.yml` `project_name`.
+- `dwe test` remaps the ports of a `required: true` service listed under
+  `env.services.disable`.
+- Workflow output: a sub-step's last unterminated line, a `\r\n` split across a
+  read boundary and a `\r\x1b[K\n` redraw are logged correctly; a failure dump
+  no longer leaves the terminal coloured.
+- go-sprout diagnostics no longer print to stdout.
+- `dwe docs show 'topic#--flag'` resolves anchors with leading hyphens; Russian
+  docs link to Russian anchors.
+- The Homebrew cask uses `postflight_steps` instead of the deprecated
+  `postflight` block.
 
 ## [0.6.0] - 2026-09-07
 
@@ -245,5 +292,6 @@ Nothing yet.
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0

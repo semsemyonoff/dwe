@@ -16,7 +16,7 @@ The deploy state file (`.dwe/deploy/state.yml`) turns the deploy pipeline from "
 
 Every step executed during `dwe deploy run` is recorded: its status (ok, failed, skipped), the timestamp it finished, its `action_hash` (fingerprint of the step body), and how long it took to run.
 
-On the next `dwe deploy run`, each step's `action_hash` is compared to the recorded hash. Steps that succeeded with matching hashes are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency). Steps whose hash changed, or that previously failed, are **re-run**.
+On the next `dwe deploy run`, each step's `action_hash` is compared to the recorded hash. Steps that succeeded with matching hashes are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency — the journal never skips such a step; `check:` counts toward the scope's `config_hash`, not the step's `action_hash`, see [Hashing](hashing.md#skip-decision-table)). Steps whose hash changed, or that previously failed, are **re-run**.
 
 This mechanism ensures that:
 - Deploying an unchanged codebase is fast (unchanged steps skip)

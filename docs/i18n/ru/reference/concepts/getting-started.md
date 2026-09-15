@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/getting-started.md @ 195586fc7293
+> Translated from: reference/concepts/getting-started.md @ 75667afc4ae1
 
 # Начало работы
 
@@ -111,9 +111,12 @@ phases:
       - name: docker-up
         type: dwe
         cmd: docker up --wait
+        check:
+          type: builtin
+          cmd: containers_running
 ```
 
-Маркер `deploy_services: true` говорит оркестратору встроить в этой точке `workspace/services/<name>/deploy.yml` каждого включённого сервиса в топологическом порядке. Фаза `start` затем поднимает стек через Docker Compose. Все поддерживаемые типы шагов и билтины — см. в [`deploy.yml`](../config/deploy/index.md).
+Маркер `deploy_services: true` говорит оркестратору встроить в этой точке `workspace/services/<name>/deploy.yml` каждого включённого сервиса в топологическом порядке. Фаза `start` затем поднимает стек через Docker Compose; её `check:` после этого проверяет, что каждый контейнер поднят, и заодно заставляет шаг выполняться на каждом деплое, а не пропускаться после первой записи в журнал. Все поддерживаемые типы шагов и билтины — см. в [`deploy.yml`](../config/deploy/index.md).
 
 ## Первый `dwe run`
 

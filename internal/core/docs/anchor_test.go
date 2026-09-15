@@ -18,6 +18,13 @@ func TestSlugify(t *testing.T) {
 		{"Contents", "contents"},
 		{"  Padded  ", "padded"},
 		{"", ""},
+		// A heading's own leading hyphens belong to the slug — GitHub, the
+		// Starlight site and the doc's own TOC link all keep them, so eating
+		// them left `dwe docs show` unable to resolve a link the docs ship.
+		{"`--parallel N`", "--parallel-n"},
+		{"`--force`", "--force"},
+		{"`-y` / `--non-interactive`", "-y----non-interactive"},
+		{"  `--force`  ", "--force"},
 	}
 	for _, tt := range tests {
 		got := Slugify(tt.in)
@@ -51,7 +58,11 @@ const anchorDoc = "# Title\n" +
 	"\n" +
 	"## Gamma\n" +
 	"\n" +
-	"Gamma body.\n"
+	"Gamma body.\n" +
+	"\n" +
+	"### `--parallel N`\n" +
+	"\n" +
+	"Parallel body.\n"
 
 func TestSliceByAnchor_ExactSlug(t *testing.T) {
 	sliced, slug, _, ok := SliceByAnchor([]byte(anchorDoc), "binaries-block")
@@ -89,6 +100,75 @@ func TestSliceByAnchor_PrefixFallback(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(sliced), "## `binaries` block\n") {
 		t.Errorf("unexpected slice start: %q", first80(string(sliced)))
+	}
+}
+
+func TestSliceByAnchor_LeadingHyphensBothWays(t *testing.T) {
+	// The canonical slug keeps the flag's own hyphens, which is what the docs
+	// link to. Typing them is unnatural, so tier 4 resolves the bare name too.
+	for _, anchor := range []string{"--parallel-n", "parallel-n"} {
+		sliced, slug, _, ok := SliceByAnchor([]byte(anchorDoc), anchor)
+		if !ok {
+			t.Fatalf("SliceByAnchor(%q): expected match", anchor)
+		}
+		if slug != "--parallel-n" {
+			t.Errorf("SliceByAnchor(%q): slug = %q, want --parallel-n", anchor, slug)
+		}
+		if !strings.HasPrefix(string(sliced), "### `--parallel N`\n") {
+			t.Errorf("SliceByAnchor(%q): unexpected slice start: %q", anchor, first80(string(sliced)))
+		}
+	}
+}
+
+// TestSliceByAnchor_HyphenEquivalenceBeatsPrefix pins the tier ORDER. Both
+// relations can fire on `parallel-n`, and prefix is the looser one: with it
+// first, the legacy spelling of the flag heading silently lands on a different
+// section — worse than not resolving, and a regression from before the flag's
+// hyphens entered its slug.
+func TestSliceByAnchor_HyphenEquivalenceBeatsPrefix(t *testing.T) {
+	doc := "# Title\n\n## `--parallel N`\n\nFlag body.\n\n## Parallel N details\n\nOther body.\n"
+
+	_, slug, _, ok := SliceByAnchor([]byte(doc), "parallel-n")
+	if !ok {
+		t.Fatalf("expected a match for the legacy spelling")
+	}
+	if slug != "--parallel-n" {
+		t.Errorf("slug = %q, want --parallel-n (prefix tier hijacked the match)", slug)
+	}
+}
+
+// TestMatchSlugIndex_AmbiguityRejected covers the shared policy directly: two
+// headings differing only in leading hyphens give no single right answer, and
+// guessing one would send `docs show` and the TUI to different places.
+func TestMatchSlugIndex_AmbiguityRejected(t *testing.T) {
+	slugs := []string{"--force", "-force"}
+	if got := MatchSlugIndex(slugs, "force"); got != -1 {
+		t.Errorf("MatchSlugIndex = %d, want -1 for an ambiguous hyphen-equivalent anchor", got)
+	}
+	// An exact hit is never ambiguous, whatever else is hyphen-equivalent.
+	if got := MatchSlugIndex(slugs, "--force"); got != 0 {
+		t.Errorf("MatchSlugIndex(exact) = %d, want 0", got)
+	}
+
+	// The slug-prefix tier requires uniqueness too. docstui's
+	// headingIndexForAnchor used to take the first prefix hit; it now
+	// delegates here, so an ambiguous prefix must resolve nowhere rather
+	// than to whichever heading happens to come first in the document.
+	prefixes := []string{"binaries-block", "binaries-list"}
+	if got := MatchSlugIndex(prefixes, "binaries"); got != -1 {
+		t.Errorf("MatchSlugIndex = %d, want -1 for an ambiguous slug-prefix anchor", got)
+	}
+	if got := MatchSlugIndex(prefixes, "binaries-list"); got != 1 {
+		t.Errorf("MatchSlugIndex(exact) = %d, want 1", got)
+	}
+
+	// So does the case-insensitive tier.
+	folds := []string{"Setup", "setup"}
+	if got := MatchSlugIndex(folds, "SETUP"); got != -1 {
+		t.Errorf("MatchSlugIndex = %d, want -1 for an ambiguous case-insensitive anchor", got)
+	}
+	if got := MatchSlugIndex(folds, "setup"); got != 1 {
+		t.Errorf("MatchSlugIndex(exact) = %d, want 1", got)
 	}
 }
 
@@ -134,8 +214,8 @@ func TestSliceByAnchor_NotFoundReturnsCandidates(t *testing.T) {
 
 func TestParseHeadingSlugs(t *testing.T) {
 	got := ParseHeadingSlugs([]byte(anchorDoc))
-	if len(got) != 4 {
-		t.Fatalf("expected 4 H2/H3 headings, got %d: %+v", len(got), got)
+	if len(got) != 5 {
+		t.Fatalf("expected 5 H2/H3 headings, got %d: %+v", len(got), got)
 	}
 	// Verify level + slug + text for each.
 	want := []HeadingInfo{
@@ -143,6 +223,9 @@ func TestParseHeadingSlugs(t *testing.T) {
 		{Level: 3, Slug: "alpha-child", Text: "Alpha child"},
 		{Level: 2, Slug: "binaries-block", Text: "binaries block"},
 		{Level: 2, Slug: "gamma", Text: "Gamma"},
+		// The TOC surface advertises the flag's own hyphens, so it matches
+		// what the docs (and GitHub, and the site) link to.
+		{Level: 3, Slug: "--parallel-n", Text: "--parallel N"},
 	}
 	for i, h := range got {
 		if h != want[i] {

@@ -12,7 +12,7 @@ The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Te
 
 - **`internal/cli/`** — cobra command tree. Composition root in `cli/root.go`; no domain logic. One subpackage per command subtree, each exporting `NewCmd(groupID, flags)`.
 - **`internal/core/`** — domain logic, subclustered into `project/` (what is a DWE project), `execution/` (pipeline engine), `workflow/` (deploy / lifecycle / reset / snapshot / setup), `usercommands/` (declarative command system), `validate/` (static project validation), `docs/` (embedded docs subsystem), `ui/` (domain-aware renderers — sink layer, imported only by `cli/`), and `notify/` (desktop notifications).
-- **`internal/shared/`** — leaf infrastructure (`docker/`, `git/`, `daemon/`, `lock/`, `pathsafe/`, `envfile/`, `render/`, `liveui/`, `tpl/`, `i18n/`, `version/`, `prompt/`, `promptcache/`).
+- **`internal/shared/`** — leaf infrastructure (`docker/`, `git/`, `daemon/`, `lock/`, `pathsafe/`, `envfile/`, `render/`, `liveui/`, `tpl/`, `i18n/`, `version/`, `prompt/`, `promptcache/`, `randval/`).
 
 **Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering, cross-cutting CLI patterns) that are expensive to re-derive from the code.
 
@@ -245,6 +245,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 - **`dwe test` isolation & cleanup** — the runner takes a per-scenario flock only, never `lock.AcquireProjectLocks` on the original project, and writes its manifest before touching Docker so a half-dead run stays sweepable.
   Teardown goes strictly by the manifest's recorded identity and never appends `-v`; `dwe test clean` sweeps only what `validateManifestIdentity` re-derives, with `compose_project` pinned to the COPY's stamped identity, or a run kept across a `project.name` rename is stranded.
   Host ports come from one `AllocatePorts` batch so `ports_free` preflight and the compose bind move together; failure reports capture BEFORE teardown; at `--parallel` goroutines never return errors into the errgroup; per-step `timeout:` bounds the step **body** only, never its `check:`.
+  Copies stay apart only because pipeline shell steps get `COMPOSE_PROJECT_NAME` per spawn (`execShellAction` sets `cmd.Env`); never `os.Setenv` it — `--parallel` scenarios share one process.
   See § `internal/core/workflow/envtest/`, § `internal/cli/test/`, § `internal/core/project/config/compose_scan.go`, § `internal/core/validate/tests/` and § Core — Execution (`pipeline/`).
 
 - **Pipeline primitives: `argv_append_from` / `check: auto` / `source_clone`** — `argv_append_from` is argv-only host program text rendered ONLY via `runio.RenderArgvAppendFrom`, its shared `withoutArgs` helper stays unexported, and empty output skips via `spec.ErrArgvAppendEmpty` while the step still **journals as success**, so it needs a `files_gate`/`check:`.
@@ -273,6 +274,8 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **Anchor derivation + long-doc hint** — `parseHeadingSlugLabel` is the single derivation for every anchor surface, with the **slug from the RAW heading text and the label from the stripped one**.
   Never write `Slugify(stripInlineMarkdown(x))` and never re-slug `Heading.Text`: `stripEmphasis` ate `_` as an emphasis marker, so three surfaces advertised `servicedirsensure` while the resolver answered only to `service_dirs_ensure` — on every builtin name and snake_case key.
+  A slug also keeps the heading's OWN leading hyphens (`--parallel-n`) — trimming them made `docs show` reject a link its own docs ship — and matching is single-sourced through `MatchSlugIndex` (hyphen-equivalence ABOVE slug-prefix; `docstui` delegates, never re-implements).
+  `TestDocumentLinkAnchorsResolve` pins the surface the advertise-side tests cannot see: every `#anchor` a doc links to, same-document `(#a)` links included.
   `emitLongDocHint` writes to **stderr** because the target case is `docs show <topic> | head`, which truncates stdout only; its silence gates keep it from becoming a banner.
   See § Core — Docs.
 

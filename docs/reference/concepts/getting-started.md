@@ -109,9 +109,12 @@ phases:
       - name: docker-up
         type: dwe
         cmd: docker up --wait
+        check:
+          type: builtin
+          cmd: containers_running
 ```
 
-The `deploy_services: true` marker tells the orchestrator to inline every enabled service's `workspace/services/<name>/deploy.yml` at this point in topological order. The `start` phase then brings the stack up via Docker Compose. See [`deploy.yml`](../config/deploy/index.md) for every supported step type and builtin.
+The `deploy_services: true` marker tells the orchestrator to inline every enabled service's `workspace/services/<name>/deploy.yml` at this point in topological order. The `start` phase then brings the stack up via Docker Compose; its `check:` asserts every container is up afterwards, which also makes the step run on every deploy instead of being skipped once recorded. See [`deploy.yml`](../config/deploy/index.md) for every supported step type and builtin.
 
 ## First `dwe run`
 

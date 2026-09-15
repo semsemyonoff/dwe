@@ -69,7 +69,7 @@ colors:
 
 Для монохромного вида задайте `accent` и `success` в одном тоновом ряду, а контраст пусть дают `muted` / `border`.
 
-Полный справочник токенов и встроенных значений по умолчанию см. в [styles.yml reference — colors](../reference/config/styles.md#colors) и [Light / dark resolution](../reference/config/styles.md#light--dark-resolution).
+Полный справочник токенов и встроенных значений по умолчанию см. в [styles.yml reference — colors](../reference/config/styles.md#colors) и [Light / dark resolution](../reference/config/styles.md#разрешение-light--dark).
 
 ## Символ сепаратора
 
@@ -158,7 +158,7 @@ sections:
 footer: true
 ```
 
-Справочник полей по каждому элементу см. в [info.yml — item types](../reference/config/info.md#item-types).
+Справочник полей по каждому элементу см. в [info.yml — item types](../reference/config/info.md#типы-элементов).
 
 ## Условная видимость
 
@@ -182,7 +182,7 @@ footer: true
 - Доступ к полю сервиса идёт через синтаксис Go `text/template` — `(index .Services "main").Host "web"`, со скобками вокруг `index`.
 - `.Project`, `.Services`, `.Runtime` и `.State` доступны на верхнем уровне. Собственные ключи лежат под `.Raw` (доступ через `index .Raw "vars" "greeting"`); для свободных значений предпочитайте блок `vars:`.
 
-Полный набор доступных в шаблоне данных и сигнатуру хелпера `appURL` см. в [info.yml — template expressions](../reference/config/info.md#template-expressions).
+Полный набор доступных в шаблоне данных и сигнатуру хелпера `appURL` см. в [info.yml — template expressions](../reference/config/info.md#шаблонные-выражения).
 
 ## Замечание про иконки и emoji
 
@@ -190,11 +190,11 @@ footer: true
 
 Единственное техническое правило: **предпочитайте кодпоинты с `Emoji_Presentation=Yes`** (например, `📦`, `🐳`, `💾`). Кодпоинты с текстовым представлением по умолчанию вроде `🛢` (U+1F6E2), `🗄` (U+1F5C4) и `⚙` (U+2699) при рендеринге отбрасываются, чтобы колонки таблиц оставались выровненными, — измерения ширины в терминале расходятся между разными сочетаниями шрифта и терминала. `dwe validate` отметит такой кодпоинт, когда вы его добавите.
 
-Полное пояснение с разбором по символам — в [`icon` field — emoji caveat](../reference/config/services/fields.md#icon-field).
+Полное пояснение с разбором по символам — в [`icon` field — emoji caveat](../reference/config/services/fields.md#поле-icon).
 
 ## См. также
 
 - [styles.yml reference](../reference/config/styles.md) — полная схема, цветовые токены, выбор светлой/тёмной темы
 - [info.yml reference](../reference/config/info.md) — полная схема, типы элементов, шаблонные выражения
-- [services/fields reference — icon field](../reference/config/services/fields.md#icon-field) — безопасность emoji
+- [services/fields reference — icon field](../reference/config/services/fields.md#поле-icon) — безопасность emoji
 - [shared-ide-and-agent-config](shared-ide-and-agent-config.md) — общие template-паки тем же способом, что и брендинг

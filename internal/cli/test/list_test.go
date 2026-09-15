@@ -414,6 +414,101 @@ func TestRunTestList_CostProfileSharedKeyOmitted(t *testing.T) {
 	}
 }
 
+// TestRunTestList_CostProfileOmitsCoveredInterpolatedPort pins the scenario
+// filter on interpolated host ports: one exported from a service port the copy
+// remaps is dropped, one no rule traces is kept as interpolated_host_port.
+func TestRunTestList_CostProfileOmitsCoveredInterpolatedPort(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", `project:
+  name: demo
+compose:
+  base: compose.yaml
+exports:
+  env:
+    - name: APP_PORT
+      from: services.app.ports.http
+`)
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml",
+		"type: app\ncontainer: app\nrequired: true\nports:\n  http: 8080\n")
+	writeProjectFile(t, baseDir, "compose.yaml", `services:
+  app:
+    image: nginx:1
+    ports:
+      - "${APP_PORT:-8080}:80"
+  other:
+    image: nginx:1
+    ports:
+      - "${OTHER_PORT:-9000}:9000"
+`)
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+	flags := &cmdctx.RootFlags{Root: baseDir, Output: "json"}
+	cmd, out := newListTestCmd()
+	if err := runTestList(cmd, flags); err != nil {
+		t.Fatalf("runTestList: %v", err)
+	}
+	if !strings.Contains(out.String(), `"kind":"interpolated_host_port"`) {
+		t.Fatalf("expected an interpolated_host_port finding in %s", out.String())
+	}
+	var got testListJSON
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, out.String())
+	}
+	want := []testIsolationFindingJSON{{Kind: "interpolated_host_port", Resource: "other"}}
+	if p := got.Scenarios[0].CostProfile; p == nil || !reflect.DeepEqual(p.IsolationFindings, want) {
+		t.Fatalf("isolation_findings = %+v, want %+v", p, want)
+	}
+}
+
+// TestRunTestList_CostProfileWhenGateUsesScenarioView pins that an exports.env
+// when: gated on a service's enabled state is evaluated against the scenario's
+// overlay: with the service enabled the rule is active, its vars path is set to
+// auto and the finding is covered; with the service left off the rule is not
+// emitted, so the port falls back to its literal default and stays a hazard.
+func TestRunTestList_CostProfileWhenGateUsesScenarioView(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", `project:
+  name: demo
+compose:
+  base: compose.yaml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+      when: services.redis.enabled
+`)
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "workspace/services/redis/service.yml", "type: infra\ncontainer: redis\n")
+	writeProjectFile(t, baseDir, "compose.yaml", `services:
+  valkey:
+    image: valkey/valkey:8
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+`)
+	writeScenarioFile(t, baseDir, "on",
+		"description: Redis on\nenv:\n  services:\n    enable: [redis]\n  vars:\n    ports.valkey: auto\n")
+	writeScenarioFile(t, baseDir, "off", "description: Redis off\nenv:\n  vars:\n    ports.valkey: auto\n")
+
+	byName := map[string]*testCostProfileJSON{}
+	for _, r := range listProfiles(t, baseDir) {
+		byName[r.Name] = r.CostProfile
+	}
+	on, off := byName["on"], byName["off"]
+	if on == nil || off == nil {
+		t.Fatalf("expected a profile per scenario, got %+v", byName)
+	}
+	if len(on.IsolationFindings) != 0 {
+		t.Errorf("enabled scenario: rule active and path auto, want no findings, got %+v", on.IsolationFindings)
+	}
+	want := []testIsolationFindingJSON{{Kind: "interpolated_host_port", Resource: "valkey"}}
+	if !reflect.DeepEqual(off.IsolationFindings, want) {
+		t.Errorf("disabled scenario: rule inactive, want %+v, got %+v", want, off.IsolationFindings)
+	}
+}
+
 // TestRunTestList_CostProfileEnableOverlay covers the env.services.enable half
 // of the scenario overlay — the form the scaffolded smoke.yml documents.
 func TestRunTestList_CostProfileEnableOverlay(t *testing.T) {

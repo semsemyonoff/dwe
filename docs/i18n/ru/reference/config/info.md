@@ -1,4 +1,4 @@
-> Translated from: reference/config/info.md @ ca3d55c2ae1e
+> Translated from: reference/config/info.md @ 0349a6d0d4e2
 
 # info.yml
 
@@ -310,7 +310,7 @@ Subgroup'ы могут быть вложены произвольно.
 
 ### Функции шаблона
 
-Info-шаблонам доступен стандартный набор хелперов DWE-шаблонов: доменный хелпер `appURL` плюс реестры sprout (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). Полный справочник хелперов — в [Шаблонах](../templates.md).
+Info-шаблонам доступен стандартный набор хелперов DWE-шаблонов: доменный хелпер `appURL` плюс реестры sprout (`std`, `strings`, `numeric`, `slices`, `maps`, `regex`, `conversion`, `time`, `filesystem`, `semver`). Полный справочник хелперов — в [Шаблонах](../templates.md).
 
 Пример использования `appURL`:
 

@@ -14,7 +14,7 @@ import (
 // in validate/snapshot and validate/checks.
 func All(setupCfg *setup.Config, setupErr error, setupPath string) []validate.Validator {
 	return []validate.Validator{
-		&parseValidator{baseValidator: baseValidator{id: "parse"}, err: setupErr, path: setupPath},
+		&parseValidator{id: "parse", err: setupErr, path: setupPath},
 		&typeKnownValidator{newCfg("type_known", setupCfg)},
 		&idRequiredValidator{newCfg("id_required", setupCfg)},
 		&idUniqueValidator{newCfg("id_unique", setupCfg)},

@@ -1,4 +1,4 @@
-> Translated from: README.md @ 1e328aa5e19f
+> Translated from: README.md @ 93af0098060d
 
 # DWE — Dev Workspace Engine
 
@@ -23,7 +23,7 @@ CLI в виде одного бинарника для декларативно�
 
 DWE поставляется как один статический Go-бинарник. Выбирайте удобный канал.
 
-**Поддерживаемые платформы:** macOS (Intel + Apple Silicon) и Linux (x86_64 + arm64). Сборки под Windows нет — под Windows запускайте DWE внутри WSL2, установив его в дистрибутив.
+**Поддерживаемые платформы:** macOS 13 Ventura и новее (Intel + Apple Silicon) и Linux (x86_64 + arm64). Сборки под Windows нет — под Windows запускайте DWE внутри WSL2, установив его в дистрибутив.
 
 ### Через Homebrew
 
@@ -31,7 +31,7 @@ DWE поставляется как один статический Go-бина�
 brew install semsemyonoff/tap/dwe
 ```
 
-Устанавливает бинарник и completion для bash, zsh, fish по стандартным путям Homebrew. Работает на macOS (Intel + Apple Silicon) и Linux (linuxbrew).
+Устанавливает бинарник и completion для bash, zsh, fish по стандартным путям Homebrew. Работает на macOS 13 Ventura и новее (Intel + Apple Silicon) и Linux (linuxbrew).
 
 ### Из релизов
 
@@ -44,6 +44,8 @@ brew install semsemyonoff/tap/dwe
 Целостность файлов проверяется по опубликованному `checksums.txt`.
 
 ### Из исходников
+
+Требуется Go 1.27 или новее — директива `go` в `go.mod` равна `1.27`, и в коде используются возможности языка 1.27, поэтому на более старом тулчейне сборка не пройдёт.
 
 ```sh
 git clone https://github.com/semsemyonoff/dwe.git
@@ -72,7 +74,7 @@ dwe completion install zsh        # или явно указать шелл
 
 ### Runtime-зависимости
 
-`docker` (с `docker compose`), `git` и POSIX-shell на хосте. Если они лежат в нестандартных местах, переопределите их пути в пользовательском конфиге `~/.config/dwe/config` через записи `binary_<name> = <path>` — см. [`docs/reference/config/userconfig.md`](../../reference/config/userconfig.md#переопределения-бинарей).
+`docker` (с `docker compose`), `git` и POSIX-shell на хосте. Если они лежат в нестандартных местах, переопределите их пути в пользовательском конфиге `~/.config/dwe/config` через записи `binary_<name> = <path>` — см. [`reference/config/userconfig.md`](reference/config/userconfig.md#переопределения-бинарей).
 
 ### Опционально: скил для AI-агентов
 

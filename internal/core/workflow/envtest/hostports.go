@@ -1,6 +1,7 @@
 package envtest
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -39,8 +40,11 @@ type hostPortKey struct {
 // enabledHostPortKeys returns, sorted deterministically, every (service,
 // portName) host port declared by a service that will be ENABLED in the test:
 // the original merged enabled state, overridden by the scenario's
-// env.services.enable/disable. Ports outside 1..65535 are skipped (mirrors the
-// ports_free preflight's own guard in collectDeclaredPorts).
+// env.services.enable/disable. A disable does not turn off a required service,
+// mirroring the loader (Enabled = required || services.<name>.enabled): the
+// service still runs in the copy, so skipping it would bind its original port.
+// Ports outside 1..65535 are skipped (mirrors the ports_free preflight's own
+// guard in collectDeclaredPorts).
 func enabledHostPortKeys(cfg *config.DweConfig, scn *Scenario) []hostPortKey {
 	if cfg == nil {
 		return nil
@@ -61,7 +65,7 @@ func enabledHostPortKeys(cfg *config.DweConfig, scn *Scenario) []hostPortKey {
 		if enable[name] {
 			on = true
 		}
-		if disable[name] {
+		if disable[name] && !svc.Required {
 			on = false
 		}
 		if !on {
@@ -81,6 +85,32 @@ func enabledHostPortKeys(cfg *config.DweConfig, scn *Scenario) []hostPortKey {
 		return keys[i].portName < keys[j].portName
 	})
 	return keys
+}
+
+// RemappedHostPortServices returns the services whose declared host ports the
+// runner remaps in this scenario's copy — exactly the services behind
+// enabledHostPortKeys, i.e. the services enabled in the copy that declare at
+// least one host port.
+func RemappedHostPortServices(cfg *config.DweConfig, scn *Scenario) map[string]bool {
+	out := map[string]bool{}
+	for _, k := range enabledHostPortKeys(cfg, scn) {
+		out[k.service] = true
+	}
+	return out
+}
+
+// CoversInterpolatedHostPort reports whether scn's copy remaps the host port
+// behind a config.KindInterpolatedHostPort finding: its variable reads a port
+// of a service in RemappedHostPortServices(cfg, scn), or a vars: path the
+// scenario sets to AutoPortSentinel. Any other finding reports false.
+func CoversInterpolatedHostPort(cfg *config.DweConfig, scn *Scenario, f config.IsolationFinding) bool {
+	if f.Kind != config.KindInterpolatedHostPort {
+		return false
+	}
+	if f.SourceService != "" && RemappedHostPortServices(cfg, scn)[f.SourceService] {
+		return true
+	}
+	return f.VarPath != "" && slices.Contains(scn.AutoPortVarPaths(), f.VarPath)
 }
 
 // buildHostPortOverrides pairs keys[i] with allocated[i], carrying the original

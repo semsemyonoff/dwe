@@ -48,7 +48,7 @@
 | `final_message` | `Project is stopped. Have a nice day!` |
 | Фазы | Auto-reap фаза (см. ниже) + одна фаза `stop`: один шаг `type: dwe` с `cmd: "docker down"` |
 
-Всякий раз, когда запускается пайплайн `stop:` (дефолтный или пользовательский), автоматически прижимается фаза `_auto_reap_daemons`; opt-out нет, и она видна в plan output для прозрачности. Она останавливает все фоновые демоны, запущенные через команды [`type: daemon`](commands/types.md#type-daemon).
+Всякий раз, когда запускается пайплайн `stop:` (дефолтный или пользовательский), автоматически прижимается фаза `_auto_reap_daemons`; opt-out нет, и она видна в plan output для прозрачности. Она останавливает все фоновые демоны, запущенные через команды [`type: daemon`](commands/types.md#тип-daemon).
 
 `dwe docker up` и `dwe docker down` — тонкие проводники к Docker Compose и никогда не используют этот пайплайн; сырые `docker compose stop` / `restart` остаются доступны через `dwe docker stop` / `dwe docker restart`.
 
@@ -111,7 +111,7 @@ stop:
             key: value
 ```
 
-Фазы и шаги используют ту же форму, что [deploy.yml](deploy/index.md): `name`, `description`, `when`, `untracked`, `steps[]`, плюс per-step `type` / `cmd` / `with`, `when`, `check`, `files_gate`, `continue_on_error`. См. справочник deploy для полной грамматики шага, включая [`files_gate:` (предусловие для файлов)](deploy/conditions.md#files_gate-pre-condition-for-files).
+Фазы и шаги используют ту же форму, что [deploy.yml](deploy/index.md): `name`, `description`, `when`, `untracked`, `steps[]`, плюс per-step `type` / `cmd` / `with`, `when`, `check`, `files_gate`, `continue_on_error`. См. справочник deploy для полной грамматики шага, включая [`files_gate:` (предусловие для файлов)](deploy/conditions.md#files_gate-предусловие-по-файлам).
 
 `deploy_services: true` **не** разрешено в lifecycle-пайплайнах.
 
@@ -233,7 +233,7 @@ stop:
 
 ## Параллельные группы шагов
 
-Lifecycle-фазы используют тот же контейнер step-group `parallel:`, что и `deploy.yml`. Шаг может объявить `parallel: { max_concurrent, fail_fast, steps }` вместо листового тела, и внутренние под-шаги запускаются параллельно с той же семантикой отмены, журнала и репортёра. Схему, дефолты, правила валидации и модель выполнения см. в [deploy → Параллельные группы шагов](deploy/examples.md#parallel-step-groups).
+Lifecycle-фазы используют тот же контейнер step-group `parallel:`, что и `deploy.yml`. Шаг может объявить `parallel: { max_concurrent, fail_fast, steps }` вместо листового тела, и внутренние под-шаги запускаются параллельно с той же семантикой отмены, журнала и репортёра. Схему, дефолты, правила валидации и модель выполнения см. в [deploy → Параллельные группы шагов](deploy/examples.md#параллельные-группы-шагов).
 
 ## Частые ловушки
 

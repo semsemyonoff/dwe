@@ -81,7 +81,7 @@ auth-json:
   cmd: "printf '%s' \"$AUTH_JSON\" > ~/.composer/auth.json"
 ```
 
-**`script`** — runs `workspace/scripts/**.sh` with declarative `files:` resolution + `env:` (nested maps reach the script as `DWE_CONTEXT_JSON`):
+**`script`** — runs `workspace/scripts/**.sh` with declarative `files:` resolution + `env:` (nested maps reach the script as `DWE_CONTEXT_JSON`; inherits `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `shell`):
 
 ```yaml
 dump-create:

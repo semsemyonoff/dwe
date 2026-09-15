@@ -233,32 +233,22 @@ func (b *browser) resolveInternalLink(href string) (*TreeNode, int, bool) {
 }
 
 // headingIndexForAnchor maps a GitHub-style anchor slug to the index of the
-// matching H2/H3 heading, mirroring docs.SliceByAnchor's tiers: exact slug,
-// then case-insensitive, then slug-prefix (`anchor-…`). Returns −1 on no match.
-// The index is the source H2/H3 order, which aligns with currentHeadingLines.
+// matching H2/H3 heading. Returns −1 on no match. The index is the source H2/H3
+// order, which aligns with currentHeadingLines.
 //
-// Compares docs.Heading.Slug, never docs.Slugify(h.Text): Text is the
+// The tier policy is docs.MatchSlugIndex's, not a local copy: a re-implementation
+// here drifted from the resolver twice over — it took the first prefix hit where
+// the resolver demanded a unique one, and it never gained the hyphen-equivalence
+// tier, so a project doc linking `#parallel-n` opened the page and stayed at the
+// top while `dwe docs show` jumped to the section.
+//
+// Feeds docs.Heading.Slug, never docs.Slugify(h.Text): Text is the
 // markdown-stripped display label, and slugging it drops the `_` in every
 // builtin name and snake_case key, so `#service_dirs_ensure` would never match.
 func headingIndexForAnchor(headings []docs.Heading, anchor string) int {
-	if anchor == "" {
-		return -1
-	}
+	slugs := make([]string, len(headings))
 	for i, h := range headings {
-		if h.Slug == anchor {
-			return i
-		}
+		slugs[i] = h.Slug
 	}
-	for i, h := range headings {
-		if strings.EqualFold(h.Slug, anchor) {
-			return i
-		}
-	}
-	al := strings.ToLower(anchor)
-	for i, h := range headings {
-		if strings.HasPrefix(strings.ToLower(h.Slug), al+"-") {
-			return i
-		}
-	}
-	return -1
+	return docs.MatchSlugIndex(slugs, anchor)
 }

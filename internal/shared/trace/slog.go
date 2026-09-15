@@ -8,13 +8,15 @@ import (
 
 // slogHandler formats slog records and routes them through the same printer
 // precedence as the trace emit functions (ctx override → global printer →
-// fallback writer). It is installed via slog.SetDefault by the CLI root ONLY
-// when the level is LevelDebug, so existing Warn/Error behaviour is unchanged
-// when no diagnostic flags are set.
+// fallback writer). NewSlogHandler is installed via slog.SetDefault by the CLI
+// root ONLY when the level is LevelDebug, so existing Warn/Error behaviour is
+// unchanged when no diagnostic flags are set.
 //
-// Because it is installed only at Debug, Enabled always returns true: every
-// record that reaches the handler is meant to be emitted.
+// minLevel gates Enabled on the trace level read at record time. Its zero
+// value, LevelOff, accepts everything: the SetDefault install happens only at
+// Debug and needs no gate.
 type slogHandler struct {
+	minLevel     Level
 	preformatted string   // " key=val" pairs accumulated via WithAttrs
 	groups       []string // active group path applied to record attrs
 }
@@ -25,9 +27,18 @@ func NewSlogHandler() slog.Handler {
 	return &slogHandler{}
 }
 
-// Enabled reports whether records at the given level are handled. The handler is
-// only ever installed at Debug, so it accepts everything.
-func (h *slogHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+// NewSlogHandlerAt returns a trace-routed slog.Handler that drops every record
+// unless the trace level is at least minLevel when the record is logged. It is
+// for loggers built before the CLI root configures trace (a library handed a
+// logger at package init or behind a sync.Once): the level is never captured
+// at construction.
+func NewSlogHandlerAt(minLevel Level) slog.Handler {
+	return &slogHandler{minLevel: minLevel}
+}
+
+// Enabled reports whether records are handled: always for NewSlogHandler, and
+// for NewSlogHandlerAt only while the trace level is at least minLevel.
+func (h *slogHandler) Enabled(_ context.Context, _ slog.Level) bool { return Enabled(h.minLevel) }
 
 // Handle formats the record as "LEVEL message key=val …" and emits it through
 // the trace printer precedence using the record's context.
@@ -58,7 +69,7 @@ func (h *slogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	for _, a := range attrs {
 		writeAttr(&b, prefix, a)
 	}
-	return &slogHandler{preformatted: b.String(), groups: h.groups}
+	return &slogHandler{minLevel: h.minLevel, preformatted: b.String(), groups: h.groups}
 }
 
 // WithGroup returns a handler that nests subsequent attrs under name.
@@ -69,7 +80,7 @@ func (h *slogHandler) WithGroup(name string) slog.Handler {
 	groups := make([]string, len(h.groups)+1)
 	copy(groups, h.groups)
 	groups[len(h.groups)] = name
-	return &slogHandler{preformatted: h.preformatted, groups: groups}
+	return &slogHandler{minLevel: h.minLevel, preformatted: h.preformatted, groups: groups}
 }
 
 // writeAttr appends " key=value" to b, qualifying key with prefix and expanding

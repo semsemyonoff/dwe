@@ -70,6 +70,10 @@ var stdoutIsTTY = func() bool {
 //     "cannot attach stdin to a TTY-enabled container because stdin is
 //     not a terminal". Without PTY the child sees a pipe and falls back
 //     to non-TTY output, which is what the live-block expects.
+//     Both streams are the SAME writer value on purpose: os/exec hands the
+//     child one pipe and one copy goroutine only when stdout and stderr
+//     compare equal as interfaces (exec.Cmd.childStderr → interfaceEqual),
+//     which is what keeps the lineTee behind stepWriter single-writer.
 func childIO(stepWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
 	if parallel {
 		if stepWriter == nil {
@@ -247,12 +251,29 @@ func runChildCmd(cmd *exec.Cmd, actx ActionContext) error {
 }
 
 // execShellAction runs a shell command via sh -c.
+//
+// The child gets COMPOSE_PROJECT_NAME derived per spawn from the config the
+// step runs with, not from the process env: `dwe test` scrubs every COMPOSE_*
+// from the process and runs scenarios concurrently in one process, each over a
+// copy with its own name, so no process-global value can carry it. Where .env
+// was sourced (deploy, run) the value is the one already in the process — the
+// reserved export is ResolveComposeProjectName over the same configs.
+//
+// Injected only with a DockerCfg: without it ComposeProjectName falls back to
+// project.prefix/name and would overwrite a correct .env-sourced value that
+// came from docker.yml project_name. Callers that pass none (the deprecated
+// Run / ExecStep wrappers) keep inheriting the process env unchanged.
 func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
 	trace.Command(ctx, shell, "-c", strings.TrimSpace(a.Cmd))
 	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
+	if actx.DockerCfg != nil {
+		if name := config.ComposeProjectName(actx.DockerCfg, actx.Cfg); name != "" {
+			cmd.Env = append(os.Environ(), "COMPOSE_PROJECT_NAME="+name)
+		}
+	}
 	return runChildCmd(cmd, actx)
 }
 
@@ -853,20 +874,32 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			// boundaries are reassembled and double-stripped before reaching
 			// disk (a stateless per-Write logSanitizer cannot handle split
 			// sequences); the final gate keeps a `\r` redraw run from landing
-			// one line per frame. Precedent:
-			// usercommands/runtime/runners/workflow/parallel.go:216-234 applies
-			// the same guard to the workflow runner's sub-step logs.
+			// one line per frame. The workflow runner's sub-step logs
+			// (usercommands/runtime/runners/workflow/parallel.go) use the
+			// same guard.
 			//
 			// What the guard costs: lineTee.Flush delivers an un-terminated
-			// tail as final=false (liveui/output.go:225), so ANY tail the child
-			// left without a closing newline — `\r`-terminated or not — never
-			// reaches this file, in both implementations alike.
-			// Here it is not lost, because the same frame also reaches
+			// tail as final=false (liveui/output.go, LineTee.Flush), so a tail
+			// the child left without a closing newline never reaches this
+			// file. It is not lost, because the same frame also reaches
 			// Reporter.StepOutput → entry.inProgress → commitTrailingTail →
-			// the global pipeline log (plain.go:659-668, :700-718).
-			// parallel.go has no such second sink. Do NOT give this callback
-			// pending-frame state to "fix" that: it would be a new composite
-			// flush hook on a path that already has one.
+			// the global pipeline log (plain.go, commitTrailingTail).
+			// parallel.go has no such second sink and commits the tail itself
+			// through an atEOF flag set after the child exits; that does not
+			// port here as-is, because flushTee is called early on several
+			// paths below. Do NOT give this callback pending-frame state to
+			// "fix" it: that would be a new composite flush hook on a path
+			// that already has one.
+			//
+			// The prohibition stands, but the split-CRLF case it used to
+			// cover is gone: a `\r\n` landing in two different reads no
+			// longer blanks the line here, because LineTee holds the
+			// `\r`-closed frame and re-emits it in place of the blank final
+			// frame (liveui/output.go, LineTee.holdOrSubstitute). That state
+			// belongs one level down, where a single Flush owns its
+			// lifecycle. The cost is that such a frame arrives twice —
+			// non-final, then final — which StepOutput already handles by
+			// repainting on the non-final one and committing on the final.
 			if subLog != nil && final {
 				_, _ = fmt.Fprintln(subLog, frame)
 			}

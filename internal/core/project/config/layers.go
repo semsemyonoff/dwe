@@ -154,7 +154,7 @@ func CollectMarkers(layers []Layer) []Marker {
 	for _, layer := range layers {
 		walkScalars(layer.Data, "", func(path, s string) (string, bool) {
 			if secrets.IsMarker(s) {
-				out = append(out, Marker{SecretRef: SecretRef{Layer: layer.Path, Path: path}, Value: s})
+				out = append(out, Marker{Layer: layer.Path, Path: path, Value: s})
 			}
 			return s, false
 		})

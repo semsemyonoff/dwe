@@ -1,10 +1,16 @@
 package docker
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestServiceContainerPSArgs(t *testing.T) {
@@ -180,6 +186,157 @@ func TestLookupServiceContainer_EmptyWhenNoMatch(t *testing.T) {
 	name, err := LookupServiceContainer("docker", nil, "proj", "svc")
 	if err != nil || name != "" {
 		t.Fatalf(`got (%q,%v), want ("",nil)`, name, err)
+	}
+}
+
+func TestProjectContainerPSArgs(t *testing.T) {
+	project := "--filter label=" + ComposeProjectLabel + "=shop"
+	names := "--format {{.Names}}"
+	cases := []struct {
+		name string
+		q    ProjectContainerQuery
+		want string
+	}{
+		{"oneoff probe", ProjectContainerQuery{Project: "shop", Oneoff: OneoffLabelled},
+			"ps --all " + project + " --filter label=" + ComposeOneoffLabel + " " + names},
+		{"all, oneoff excluded", ProjectContainerQuery{Project: "shop", Oneoff: OneoffExcluded},
+			"ps --all " + project + " --filter label=" + ComposeOneoffLabel + "=False " + names},
+		{"all, unfiltered", ProjectContainerQuery{Project: "shop"},
+			"ps --all " + project + " " + names},
+		{"running needs no --all", ProjectContainerQuery{Project: "shop", Oneoff: OneoffExcluded, State: StateRunning},
+			"ps " + project + " --filter label=" + ComposeOneoffLabel + "=False --filter status=running " + names},
+		{"exited 0", ProjectContainerQuery{Project: "shop", State: StateExitedZero},
+			"ps --all " + project + " --filter exited=0 " + names},
+		{"per service", ProjectContainerQuery{Project: "shop", Service: "db", Oneoff: OneoffExcluded},
+			"ps --all " + project + " --filter label=" + ComposeServiceLabel + "=db --filter label=" + ComposeOneoffLabel + "=False " + names},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(projectContainerPSArgs(tc.q), " "); got != tc.want {
+				t.Errorf("argv:\n got: %s\nwant: %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestProjectContainerNames_RunsArgvWithEnv(t *testing.T) {
+	// The stub prints its argv one per line, then the env var — each line
+	// comes back as a "name", which exposes the exact argv and env.
+	stub := writeStub(t, `printf '%s\n' "$@"; echo "host=$DOCKER_HOST"`)
+	q := ProjectContainerQuery{Project: "shop", State: StateRunning}
+	got, err := ProjectContainerNames(context.Background(), stub, []string{"DOCKER_HOST=tcp://remote:2375"}, q)
+	if err != nil {
+		t.Fatalf("ProjectContainerNames: %v", err)
+	}
+	want := append(projectContainerPSArgs(q), "host=tcp://remote:2375")
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestProjectContainerNames_EmptyProjectIsError(t *testing.T) {
+	stub := writeStub(t, "echo should-not-run")
+	if _, err := ProjectContainerNames(context.Background(), stub, nil, ProjectContainerQuery{}); err == nil {
+		t.Fatal("expected an error for an empty project name")
+	}
+}
+
+func TestProjectContainerNames_SurfacesStderr(t *testing.T) {
+	stub := writeStub(t, `echo "Cannot connect to the Docker daemon" >&2; exit 1`)
+	_, err := ProjectContainerNames(context.Background(), stub, nil, ProjectContainerQuery{Project: "shop"})
+	if err == nil || !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
+		t.Fatalf("error must surface stderr, got %v", err)
+	}
+}
+
+func TestConfigProjectName(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := writeStub(t, `echo "$@" > `+argsFile+`; echo '{"name":"shop","services":{}}'`)
+	c := &Compose{Bin: stub, Files: []string{"a.yml"}, GlobalArgs: []string{"--dry-run"}}
+	name, err := c.ConfigProjectName(context.Background())
+	if err != nil {
+		t.Fatalf("ConfigProjectName: %v", err)
+	}
+	if name != "shop" {
+		t.Errorf("name = %q, want shop", name)
+	}
+	args, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Internal args: no global args, no -p (ProjectName is empty).
+	if got, want := strings.TrimSpace(string(args)), "compose -f a.yml config --format json"; got != want {
+		t.Errorf("argv = %q, want %q", got, want)
+	}
+}
+
+func TestConfigProjectName_Errors(t *testing.T) {
+	t.Run("probe failure surfaces stderr", func(t *testing.T) {
+		c := &Compose{Bin: writeStub(t, `echo "unknown flag: --format" >&2; exit 1`)}
+		if _, err := c.ConfigProjectName(context.Background()); err == nil || !strings.Contains(err.Error(), "unknown flag: --format") {
+			t.Fatalf("want stderr in error, got %v", err)
+		}
+	})
+	t.Run("invalid json", func(t *testing.T) {
+		c := &Compose{Bin: writeStub(t, "echo 'services: {}'")}
+		if _, err := c.ConfigProjectName(context.Background()); err == nil || !strings.Contains(err.Error(), "parsing compose config json") {
+			t.Fatalf("want parse error, got %v", err)
+		}
+	})
+	t.Run("no name", func(t *testing.T) {
+		c := &Compose{Bin: writeStub(t, `echo '{"services":{}}'`)}
+		name, err := c.ConfigProjectName(context.Background())
+		if err != nil || name != "" {
+			t.Fatalf(`got (%q, %v), want ("", nil)`, name, err)
+		}
+	})
+}
+
+func TestConfigServices(t *testing.T) {
+	c := &Compose{Bin: writeStub(t, `printf '%s\n' "$@"`), ProjectName: "shop", GlobalArgs: []string{"--profile", "x"}}
+	got, err := c.ConfigServices(context.Background())
+	if err != nil {
+		t.Fatalf("ConfigServices: %v", err)
+	}
+	if want := []string{"compose", "-p", "shop", "config", "--services"}; !slices.Equal(got, want) {
+		t.Errorf("argv = %v, want %v", got, want)
+	}
+
+	failing := &Compose{Bin: writeStub(t, `echo "no configuration file provided" >&2; exit 1`)}
+	if _, err := failing.ConfigServices(context.Background()); err == nil || !strings.Contains(err.Error(), "no configuration file provided") {
+		t.Fatalf("want stderr in error, got %v", err)
+	}
+}
+
+func TestProjectProbes_EchoOnlyAtDebug(t *testing.T) {
+	stub := writeStub(t, `echo '{"name":"shop"}'`)
+	c := &Compose{Bin: stub}
+	probe := func(t *testing.T) {
+		t.Helper()
+		if _, err := ProjectContainerNames(context.Background(), stub, nil, ProjectContainerQuery{Project: "shop"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.ConfigProjectName(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.ConfigServices(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, lvl := range []trace.Level{trace.LevelOff, trace.LevelVerbose} {
+		buf := captureTrace(t, lvl)
+		probe(t)
+		if buf.Len() != 0 {
+			t.Fatalf("read-only probes must not echo at level %v, got %q", lvl, buf.String())
+		}
+	}
+	buf := captureTrace(t, trace.LevelDebug)
+	probe(t)
+	out := buf.String()
+	for _, want := range []string{"$ ", "ps --all", "config --format json", "config --services"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("debug echo %q missing %q", out, want)
+		}
 	}
 }
 

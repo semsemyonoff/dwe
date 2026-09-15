@@ -1,6 +1,7 @@
 package deploy_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -21,6 +22,7 @@ func TestDefaultDeployConfig_Shape(t *testing.T) {
 		stepTypes      []string
 		stepCmds       []string
 		stepUntracked  []bool
+		stepChecks     []*config.Action
 	}{
 		{
 			name:           "services",
@@ -32,6 +34,9 @@ func TestDefaultDeployConfig_Shape(t *testing.T) {
 			stepTypes:     []string{"dwe"},
 			stepCmds:      []string{"docker up --wait"},
 			stepUntracked: []bool{true},
+			// The check is what keeps the journal from skipping up on later
+			// deploys, so a stopped stack comes back.
+			stepChecks: []*config.Action{{Type: "builtin", Cmd: "containers_running"}},
 		},
 		{
 			name:      "post-deploy",
@@ -77,6 +82,13 @@ func TestDefaultDeployConfig_Shape(t *testing.T) {
 			}
 			if j < len(wp.stepUntracked) && s.Untracked != wp.stepUntracked[j] {
 				t.Errorf("phase[%d].steps[%d].Untracked = %v, want %v", i, j, s.Untracked, wp.stepUntracked[j])
+			}
+			var wantCheck *config.Action
+			if j < len(wp.stepChecks) {
+				wantCheck = wp.stepChecks[j]
+			}
+			if !reflect.DeepEqual(s.Check, wantCheck) {
+				t.Errorf("phase[%d].steps[%d].Check = %+v, want %+v", i, j, s.Check, wantCheck)
 			}
 		}
 	}

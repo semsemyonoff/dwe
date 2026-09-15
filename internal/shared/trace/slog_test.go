@@ -52,6 +52,38 @@ func TestSlogHandler_EnabledAlwaysTrue(t *testing.T) {
 	}
 }
 
+func TestSlogHandlerAt_GatesOnTraceLevel(t *testing.T) {
+	tests := []struct {
+		name  string
+		level Level
+		want  bool
+	}{
+		{name: "off", level: LevelOff, want: false},
+		{name: "verbose", level: LevelVerbose, want: false},
+		{name: "debug", level: LevelDebug, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reset(t)
+			var buf bytes.Buffer
+			Configure(&buf, tt.level)
+
+			h := NewSlogHandlerAt(LevelDebug)
+			derived := h.WithAttrs([]slog.Attr{slog.String("k", "v")}).WithGroup("g")
+			for _, hh := range []slog.Handler{h, derived} {
+				if got := hh.Enabled(context.Background(), slog.LevelWarn); got != tt.want {
+					t.Errorf("Enabled = %v, want %v", got, tt.want)
+				}
+			}
+
+			slog.New(derived).Warn("gated")
+			if emitted := strings.Contains(buf.String(), "gated"); emitted != tt.want {
+				t.Errorf("emitted = %v, want %v (buf %q)", emitted, tt.want, buf.String())
+			}
+		})
+	}
+}
+
 func TestSlogHandler_WithAttrsAndGroup(t *testing.T) {
 	reset(t)
 	var buf bytes.Buffer

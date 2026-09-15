@@ -29,11 +29,12 @@ import (
 //   - it reports whether there IS an image build, never what the build costs.
 //     The dominant factor — whether the Docker layer cache is warm, seconds
 //     versus many minutes — has no static source and is not modelled;
-//   - isolation_findings carries only the shared-resource hazards (named /
-//     external volumes and networks). The blocking kinds (container_name,
-//     raw_host_port) are omitted on purpose: they abort the scenario before
-//     deploy anyway, so they are not part of an "is this safe to run
-//     unattended" decision.
+//   - isolation_findings carries only the non-blocking hazards: shared
+//     resources (named / external volumes and networks) and host ports
+//     interpolated from a variable this scenario's copy does not remap. The
+//     blocking kinds (container_name, raw_host_port) are omitted on purpose:
+//     they abort the scenario before deploy anyway, so they are not part of
+//     an "is this safe to run unattended" decision.
 type testCostProfileJSON struct {
 	// EnabledServices counts the dwe services enabled AFTER this scenario's
 	// env.services overlay — the number that actually differs between two
@@ -51,8 +52,9 @@ type testCostProfileJSON struct {
 	// resolve to their verbatim names and are written into by a test run.
 	SharedVolumes int `json:"shared_volumes"`
 	// IsolationFindings are the non-blocking compose isolation hazards —
-	// resources shared with the working environment. Full messages come from
-	// `dwe validate tests`.
+	// resources shared with the working environment, and interpolated host
+	// ports this scenario leaves unremapped. Full messages come from `dwe
+	// validate tests`.
 	IsolationFindings []testIsolationFindingJSON `json:"isolation_findings"`
 	// HostSteps counts the steps this scenario would run that execute on the
 	// HOST, outside the container sandbox the disposable copy provides: its own
@@ -67,7 +69,7 @@ type testCostProfileJSON struct {
 	HostSteps int `json:"host_steps"`
 }
 
-// testIsolationFindingJSON is one shared-resource hazard in the profile.
+// testIsolationFindingJSON is one non-blocking isolation hazard in the profile.
 type testIsolationFindingJSON struct {
 	Kind     string `json:"kind"`
 	Resource string `json:"resource"`
@@ -188,9 +190,14 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 
 	costs := config.ScanComposeCost(&view, p.baseDir)
 
+	// The scanner evaluates exports.env when: on Raw, so the isolation scan
+	// sees the scenario's enabled state there too. Whether a port is remapped
+	// is decided on the unpatched project config, as the runner does.
+	isoView := view
+	isoView.Raw = scenarioRaw(p.cfg.Raw, services, scn)
 	findings := make([]testIsolationFindingJSON, 0)
-	for _, f := range config.ScanComposeIsolation(&view, p.baseDir) {
-		if f.Blocking {
+	for _, f := range config.ScanComposeIsolation(&isoView, p.baseDir) {
+		if f.Blocking || envtest.CoversInterpolatedHostPort(p.cfg, scn, f) {
 			continue
 		}
 		findings = append(findings, testIsolationFindingJSON{Kind: string(f.Kind), Resource: f.Resource, Shared: f.Shared})
@@ -240,6 +247,40 @@ func (p *costProfiler) scenarioServices(scn *envtest.Scenario) map[string]config
 		out[name] = svc
 	}
 
+	return out
+}
+
+// scenarioRaw returns raw with services.<n>.enabled patched from services for
+// every service the scenario toggles, mirroring the loader's Raw mirror. raw,
+// raw["services"] and each patched entry are cloned — the project config is
+// never mutated. With no toggles raw itself is returned.
+func scenarioRaw(raw map[string]any, services map[string]config.ServiceConfig, scn *envtest.Scenario) map[string]any {
+	toggled := slices.Concat(scn.Env.Services.Enable, scn.Env.Services.Disable)
+	if len(toggled) == 0 {
+		return raw
+	}
+
+	existing, _ := raw["services"].(map[string]any)
+	rawServices := maps.Clone(existing)
+	if rawServices == nil {
+		rawServices = map[string]any{}
+	}
+	for _, name := range toggled {
+		svc, ok := services[name]
+		if !ok {
+			continue
+		}
+		entry := map[string]any{}
+		if e, ok := rawServices[name].(map[string]any); ok {
+			maps.Copy(entry, e)
+		}
+		entry["enabled"] = svc.Enabled
+		rawServices[name] = entry
+	}
+
+	out := make(map[string]any, len(raw)+1)
+	maps.Copy(out, raw)
+	out["services"] = rawServices
 	return out
 }
 

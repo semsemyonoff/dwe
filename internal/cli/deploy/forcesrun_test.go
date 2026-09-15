@@ -7,6 +7,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 )
 
@@ -131,6 +132,40 @@ func TestHasAlwaysRunSteps(t *testing.T) {
 				t.Errorf("hasAlwaysRunSteps() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestHasAlwaysRunSteps_BuiltinPipeline pins that the built-in deploy pipeline
+// never exits "already up-to-date": its up step carries a check:, so a deploy
+// of a stopped but journaled stack still runs up and brings it back.
+func TestHasAlwaysRunSteps_BuiltinPipeline(t *testing.T) {
+	cfg := &config.DweConfig{}
+	var steps []pipeline.ResolvedStep
+	for _, phase := range deploy.DefaultDeployConfig().Phases {
+		if phase.DeployServices {
+			continue
+		}
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, nil, phase, "")
+		if err != nil {
+			t.Fatalf("resolve phase %q: %v", phase.Name, err)
+		}
+		steps = append(steps, resolved...)
+	}
+
+	var up *pipeline.ResolvedStep
+	for i := range steps {
+		if steps[i].Step.Name == "up" {
+			up = &steps[i]
+		}
+	}
+	if up == nil {
+		t.Fatal("built-in pipeline resolved without an up step")
+	}
+	if !pipeline.StepForcesRun(*up) {
+		t.Error("StepForcesRun(up) = false, want true")
+	}
+	if !hasAlwaysRunSteps(steps) {
+		t.Error("hasAlwaysRunSteps(built-in pipeline) = false, want true")
 	}
 }
 

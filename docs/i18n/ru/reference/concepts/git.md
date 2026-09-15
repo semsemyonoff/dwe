@@ -36,7 +36,7 @@ CLI вызывает хостовый бинарник `git` через shell. �
 
 1. **Гейт активации.** И `services.<name>.enabled`, и `services.<name>.render.git.enabled` должны быть true (политический дефолт зависит от типа сервиса).
 2. **Преflight хаба.** `<svc.Dir>` должен разрешаться внутрь корня проекта и не достигаться через симлинк.
-3. **Проба директории git.** `<svc.Dir>/src/.git` должен быть директорией. Обычный файл (указатель `gitdir:` от `git worktree` или субмодуль) приводит к пропуску сервиса с предупреждением — см. [Worktrees and submodules](../render/git.md#worktrees-and-submodules) в справочнике команд. Отсутствующий `.git/` тоже пропускается с предупреждением.
+3. **Проба директории git.** `<svc.Dir>/src/.git` должен быть директорией. Обычный файл (указатель `gitdir:` от `git worktree` или субмодуль) приводит к пропуску сервиса с предупреждением — см. [Worktrees and submodules](../render/git.md#worktree-и-submodule) в справочнике команд. Отсутствующий `.git/` тоже пропускается с предупреждением.
 4. **Разрешение коллизий.** Когда два сервиса делят один `<svc.Dir>` (обычно базовый `main` и `extends:`-потомок `main-debug`), побеждает самый глубокий extender.
 5. **Разрешение пака.** `render.git.template` фиксирует пак; иначе цепочка пробует `workspace/templates/git/<service-name>/`, затем `workspace/templates/git/default/`.
 6. **Рендер по каждому файлу.** Каждая запись в `manifest.yml` пака читается, вычисляется как [строгий Go text template](../templates.md), пишется в `<svc.Dir>/src/.git/hooks/<basename>` и получает `chmod 0755` на каждом запуске.

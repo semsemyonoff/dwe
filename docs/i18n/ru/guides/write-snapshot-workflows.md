@@ -1,4 +1,4 @@
-> Translated from: guides/write-snapshot-workflows.md @ 1b87b72a80f8
+> Translated from: guides/write-snapshot-workflows.md @ b02f8eabca3e
 
 # Написание снапшот-воркфлоу
 
@@ -86,7 +86,7 @@ restore:
       with: { in: ${snapshot.path}/search/index.tar }
 ```
 
-Полный справочник workflow-шага — в [`../reference/config/commands/types.md`](../reference/config/commands/types.md#type-workflow).
+Полный справочник workflow-шага — в [`../reference/config/commands/types.md`](../reference/config/commands/types.md#тип-workflow).
 
 ## Варианты — альтернативные списки шагов
 
@@ -236,5 +236,5 @@ remove:
 
 - [switching-tasks-with-snapshots.md](switching-tasks-with-snapshots.md) — взгляд со стороны потребителя: когда создавать, восстанавливать, откатывать, упаковывать
 - [`../reference/config/snapshot.md`](../reference/config/snapshot.md) — полный справочник по `snapshot.yml`
-- [`../reference/config/commands/types.md`](../reference/config/commands/types.md#type-workflow) — форма workflow-шага, переиспользуемая блоками снапшота
+- [`../reference/config/commands/types.md`](../reference/config/commands/types.md#тип-workflow) — форма workflow-шага, переиспользуемая блоками снапшота
 - [author-project-commands.md](author-project-commands.md) — написание команд `db.dump` / `db.restore`, которые вызывают снапшот-воркфлоу

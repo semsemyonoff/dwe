@@ -99,7 +99,7 @@ pass validation either way, and are the ones a fresh project gets wrong.
 | Read logs | `dwe logs <service> --output json` |
 | Diagnose configuration | `dwe validate --output json` |
 | Search docs / read one topic | `dwe docs search <term> --lang en` · `dwe docs show <topic> --lang en` |
-| Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` — that writes `local.yml` (this dev only). Hand-edit `defaults.yml` **only** when the new value is right for everyone who clones the repo; a machine-local one there breaks every clean deploy. |
+| Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` — that writes `local.yml` (this dev only); for a secret-like var hand over `dwe vars set <path> --generate hex[:N]\|base64url[:N]\|uuid` instead of inventing a value. Hand-edit `defaults.yml` **only** when the new value is right for everyone who clones the repo; a machine-local one there breaks every clean deploy. |
 | Read the encrypted-secret inventory | `dwe secrets status --output json` — read-only; a missing or broken key is DATA (exit 0), only a config that does not load — or whose layer roots fail validation, e.g. a `secrets:` block outside `workspace.yml` — is an error. Reports every `ENC[age:…]` marker and `*.age` pack source as `decrypted`/`decryptable` or `unresolved: no_identity\|wrong_identity\|invalid_identity\|corrupt` (`invalid_identity` = a source IS set but holds no key — fix that source, not the missing key; `corrupt` = a damaged payload, a per-value verdict only). Run it FIRST when `dwe vars` shows `<encrypted>` or a lifecycle command is blocked by `secrets.unresolved`: `identity.reason` says which of the three key states it is (`no_identity` / `invalid_identity` / `wrong_identity`) and `identity.hint` is the sentence to hand the user. `dwe secrets key list --output json` (also read-only, no key material) shows which identities this machine has. |
 | **Populate a fresh repo from git URL(s)** | `references/populate-init-repo.md` (ends in user-run `dwe deploy run`) |
 | **Add a service / tool / infra** | `references/add-service-and-tools.md` |
@@ -148,7 +148,7 @@ After editing yml, the apply command depends on **what** changed (never run it y
 - `workspace/lifecycle.yml` or the compose base/overlays → `dwe run`
 - toggled a service → `dwe services enable|disable <name> --apply`
 - only icon / host / display strings → `dwe validate` (then `run`/`deploy run` if it affects runtime)
-- `exports.env` **only** → `dwe run` (or `dwe deploy run --force`) — that block is in no config hash, so a plain `dwe deploy run` never re-renders `.env`: it either returns `already up-to-date` or journal-skips the implicit render step (`references/render-and-vars.md` § 7)
+- `exports.env` **only** → `dwe run` (or `dwe deploy run --force`) — that block is in no config hash, so a plain `dwe deploy run` never re-renders `.env`: it journal-skips the implicit render step and the built-in pipeline's always-run `up` step re-ups against the stale file (only a custom pipeline with no always-run step returns `already up-to-date`) (`references/render-and-vars.md` § 7)
 - mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart)
 - authored/edited a `workspace/tests/<scenario>.yml` → verify read-only with `dwe validate tests`, then run or hand off `dwe test run <scenario>` (a clean deploy in a throwaway copy — does not touch the live stack). Whether you may run it yourself is decided by that scenario's cost profile — see **The `dwe test run` gate** below. Propose it for **substantial** changes (new service, reworked deploy pipeline), not after display-only edits. See `references/integration-tests.md`.
 
@@ -218,7 +218,9 @@ Each scenario carries a `cost_profile`. Two groups, judged differently:
 outside its own copy, so a failure is not confined to it:
 
 - `isolation_findings` non-empty **after dropping entries carrying `"shared": true`** — named /
-  `external:` volumes or networks, reused verbatim. A `"shared": true` entry is a volume the
+  `external:` volumes or networks, reused verbatim, or a host port interpolated from a
+  variable this scenario's copy does not remap (`interpolated_host_port`; the fix is
+  `env.vars: { <path>: auto }` in the scenario). A `"shared": true` entry is a volume the
   project itself declares `shared: true` in `docker.yml`; it is already counted by
   `shared_volumes` and must not stop you twice
 - `shared_volumes` > 0 — `shared: true` volumes carry the real cache/data

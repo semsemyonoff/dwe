@@ -73,7 +73,7 @@ func runVarsBrowser(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		// shared set write path (no value → the huh form opens with inspect-style
 		// per-layer info); the fallback returns ActionRun rather than ActionEdit,
 		// so the intent is taken from a valid Idx, not the Action.
-		committed, err := runVarsSet(cmd, flags, leaves[res.Idx], "", false)
+		committed, err := runVarsSet(cmd, flags, leaves[res.Idx], "", false, varSetGenerate{})
 		if err != nil {
 			return err
 		}

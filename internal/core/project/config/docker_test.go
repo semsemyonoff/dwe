@@ -395,6 +395,57 @@ func TestComposeProjectName(t *testing.T) {
 	}
 }
 
+// TestComposeProjectName_MatchesResolver pins the invariant pipeline shell
+// steps rely on: the in-memory name injected as COMPOSE_PROJECT_NAME equals
+// the reserved .env export (ResolveComposeProjectName), so deploy/run — which
+// source .env — see no change. A non-string project_name is a known divergence
+// between the two readers and deliberately absent here.
+func TestComposeProjectName_MatchesResolver(t *testing.T) {
+	cfg := func(prefix, name string) *DweConfig {
+		c := &DweConfig{Raw: map[string]any{
+			"project": map[string]any{"name": name, "prefix": prefix},
+			"vars":    map[string]any{"scope": "feature"},
+		}}
+		c.Project.Name = name
+		c.Project.Prefix = prefix
+		return c
+	}
+	tests := []struct {
+		name   string
+		docker string // "" = no docker.yml
+		local  string
+		cfg    *DweConfig
+	}{
+		{"no_docker_yml", "", "", cfg("dwe", "tbm")},
+		{"no_docker_yml_uppercase_full_name", "", "", cfg("Dwe", "CueBreaker")},
+		{"project_name", "project_name: custom\n", "", cfg("dwe", "tbm")},
+		{"empty_project_name", "args: {}\n", "", cfg("dwe", "tbm")},
+		{"local_override", "project_name: base-name\n", "project_name: override-name\n", cfg("dwe", "tbm")},
+		{"vars_template", "project_name: \"dwe-${vars.scope}\"\n", "", cfg("dwe", "tbm")},
+		{"project_template", "project_name: \"${project.prefix}_${project.name}\"\n", "", cfg("dwe", "tbm")},
+		{"uppercase_project_name", "project_name: Dwe-CueBreaker\n", "", cfg("dwe", "tbm")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tc.docker != "" {
+				root = writeDockerFixture(t, tc.docker, tc.local)
+			}
+			want, err := ResolveComposeProjectName(root, tc.cfg)
+			if err != nil {
+				t.Fatalf("ResolveComposeProjectName: %v", err)
+			}
+			dcfg, err := LoadDockerConfigOrEmpty(root, tc.cfg)
+			if err != nil {
+				t.Fatalf("LoadDockerConfigOrEmpty: %v", err)
+			}
+			if got := ComposeProjectName(dcfg, tc.cfg); got != want {
+				t.Errorf("ComposeProjectName = %q, ResolveComposeProjectName = %q", got, want)
+			}
+		})
+	}
+}
+
 func TestComposeProjectNameCandidates(t *testing.T) {
 	mk := func(name, prefix string) *DweConfig {
 		c := &DweConfig{}

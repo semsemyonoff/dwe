@@ -1,8 +1,15 @@
 package tpl
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"text/template"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestSproutFunctions(t *testing.T) {
@@ -74,7 +81,7 @@ func TestSproutFunctions(t *testing.T) {
 		// maps registry
 		{
 			name:     "dict and hasKey",
-			template: `{{ hasKey (dict "a" 1) "a" }}`,
+			template: `{{ dict "a" 1 | hasKey "a" }}`,
 			want:     "true",
 		},
 		// conversion registry
@@ -103,6 +110,236 @@ func TestSproutFunctions(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSproutSignatures pins the argument order sprout v1.1 enforces: the value
+// a function operates on goes last. The legacy cases catch a sprout release
+// quietly reintroducing Sprig-order tolerance; the regex cases are written so
+// the pre-1.1 `regexp` order would render a different string.
+func TestSproutSignatures(t *testing.T) {
+	cases := []struct {
+		name     string
+		template string
+		want     string
+		wantErr  bool
+	}{
+		// maps registry
+		{
+			name:     "get",
+			template: `{{ dict "a" 1 | get "a" }}`,
+			want:     "1",
+		},
+		{
+			name:     "get legacy order",
+			template: `{{ get (dict "a" 1) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "set",
+			template: `{{ dict "a" 1 | set "b" 2 | get "b" }}`,
+			want:     "2",
+		},
+		{
+			name:     "set legacy order",
+			template: `{{ set (dict "a" 1) "b" 2 }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "unset",
+			template: `{{ dict "a" 1 | unset "a" | hasKey "a" }}`,
+			want:     "false",
+		},
+		{
+			name:     "unset legacy order",
+			template: `{{ unset (dict "a" 1) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "hasKey",
+			template: `{{ dict "a" 1 | hasKey "a" }}`,
+			want:     "true",
+		},
+		{
+			name:     "hasKey legacy order",
+			template: `{{ hasKey (dict "a" 1) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "pick",
+			template: `{{ dict "a" 1 "b" 2 | pick "a" | len }}`,
+			want:     "1",
+		},
+		{
+			name:     "pick legacy order",
+			template: `{{ pick (dict "a" 1 "b" 2) "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "omit",
+			template: `{{ dict "a" 1 "b" 2 | omit "a" | hasKey "a" }}`,
+			want:     "false",
+		},
+		{
+			name:     "omit legacy order",
+			template: `{{ omit (dict "a" 1 "b" 2) "a" }}`,
+			wantErr:  true,
+		},
+		// slices registry
+		{
+			name:     "append",
+			template: `{{ list "a" | append "b" | join "," }}`,
+			want:     "a,b",
+		},
+		{
+			name:     "append legacy order",
+			template: `{{ append (list "a") "b" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "prepend",
+			template: `{{ list "b" | prepend "a" | join "," }}`,
+			want:     "a,b",
+		},
+		{
+			name:     "prepend legacy order",
+			template: `{{ prepend (list "b") "a" }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "slice",
+			template: `{{ list "a" "b" "c" | slice 1 2 | join "," }}`,
+			want:     "b",
+		},
+		{
+			name:     "slice legacy order",
+			template: `{{ slice (list "a" "b" "c") 1 2 }}`,
+			wantErr:  true,
+		},
+		{
+			name:     "without",
+			template: `{{ list "a" "b" "c" | without "b" | join "," }}`,
+			want:     "a,c",
+		},
+		{
+			name:     "without legacy order",
+			template: `{{ without (list "a" "b" "c") "b" }}`,
+			wantErr:  true,
+		},
+		// regex registry: the four functions whose order changed from regexp
+		{
+			name:     "regexReplaceAll",
+			template: `{{ regexReplaceAll "a" "o" "banana" }}`,
+			want:     "bonono",
+		},
+		{
+			name:     "regexReplaceAllLiteral",
+			template: `{{ regexReplaceAllLiteral "a" "$1" "banana" }}`,
+			want:     "b$1n$1n$1",
+		},
+		{
+			name:     "regexSplit",
+			template: `{{ regexSplit "," -1 "a,b,c" | join "|" }}`,
+			want:     "a|b|c",
+		},
+		{
+			name:     "regexFindAll",
+			template: `{{ regexFindAll "[0-9]" -1 "a1b2" | join "," }}`,
+			want:     "1,2",
+		},
+		// numeric registry
+		{
+			name:     "div by zero",
+			template: `{{ div 1 0 }}`,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Render(tt.template, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected a render error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Render failed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSproutNoticesRouteThroughTrace pins that sprout's own diagnostics never
+// reach stdout. Not parallel: it swaps os.Stdout and the process-global trace
+// level.
+func TestSproutNoticesRouteThroughTrace(t *testing.T) {
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+	var offBuf, debugBuf bytes.Buffer
+	var offErr, debugErr error
+	stdout := captureStdout(t, func() {
+		// Built inside the capture: sprout's default logger binds os.Stdout at
+		// construction, so a map cached before the swap would hide a leak.
+		fm := buildFuncMap()
+		// addf carries a deprecation notice, logged on every call.
+		trace.Configure(&offBuf, trace.LevelOff)
+		offErr = execTemplate(fm, `{{ addf 1 2 }}`)
+		trace.Configure(&debugBuf, trace.LevelDebug)
+		debugErr = execTemplate(fm, `{{ addf 1 2 }}`)
+	})
+
+	if offErr != nil || debugErr != nil {
+		t.Fatalf("render failed: off=%v debug=%v", offErr, debugErr)
+	}
+	if stdout != "" {
+		t.Errorf("sprout wrote to stdout: %q", stdout)
+	}
+	if offBuf.Len() != 0 {
+		t.Errorf("notice emitted without --debug: %q", offBuf.String())
+	}
+	if got := debugBuf.String(); !strings.Contains(got, "addf") {
+		t.Errorf("notice missing from the debug trace: %q", got)
+	}
+}
+
+func execTemplate(fm template.FuncMap, src string) error {
+	tmpl, err := template.New("").Funcs(fm).Parse(src)
+	if err != nil {
+		return err
+	}
+	return tmpl.Execute(io.Discard, nil)
+}
+
+// captureStdout returns everything written to os.Stdout while fn runs.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	out := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		out <- string(b)
+	}()
+
+	orig := os.Stdout
+	os.Stdout = w
+	func() {
+		defer func() { os.Stdout = orig }()
+		fn()
+	}()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close pipe: %v", err)
+	}
+	return <-out
 }
 
 func TestTimeRenderingSmoke(t *testing.T) {

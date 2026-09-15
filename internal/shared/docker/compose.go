@@ -5,6 +5,7 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -286,12 +287,18 @@ func splitNonEmptyLines(out []byte) []string {
 // ProcessEnv is applied so that daemon/context overrides (e.g. DOCKER_HOST)
 // are consistent with Exec-based lifecycle commands.
 func (c *Compose) output(args []string) ([]byte, error) {
-	cmd := exec.Command(c.BinName(), args...)
+	return c.outputContext(context.Background(), args)
+}
+
+// outputContext is output with a caller context. A failure that captured
+// stderr is wrapped with it so the caller sees why compose refused the probe.
+func (c *Compose) outputContext(ctx context.Context, args []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, c.BinName(), args...) //nolint:gosec
 	cmd.Dir = c.BaseDir
 	cmd.Env = c.BuildEnv()
 	// Read-only probe — echo only at Debug to keep `dwe status -v` quiet.
 	if trace.Enabled(trace.LevelDebug) {
-		trace.Command(context.Background(), c.BinName(), args...)
+		trace.Command(ctx, c.BinName(), args...)
 	}
 	return cmd.Output()
 }
@@ -345,6 +352,44 @@ func (c *Compose) RunningServices(ctx context.Context, services []string) ([]str
 	}
 
 	return splitNonEmptyLines(out), nil
+}
+
+// ConfigProjectName returns the effective top-level `name` compose resolves
+// for this project (`compose config --format json`) — the name compose picks
+// itself when ProjectName is empty (COMPOSE_PROJECT_NAME, the file's `name:`,
+// the directory basename). Returns "" when the output carries no name.
+func (c *Compose) ConfigProjectName(ctx context.Context) (string, error) {
+	out, err := c.outputContext(ctx, c.BuildInternalArgs("config", "--format", "json"))
+	if err != nil {
+		return "", probeError(c.BinName()+" compose config", err)
+	}
+	var parsed struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		return "", fmt.Errorf("parsing compose config json: %w", err)
+	}
+	return parsed.Name, nil
+}
+
+// ConfigServices returns the services active in the current compose config
+// (`compose config --services`): profile-gated services whose profile is not
+// enabled are absent, `scale: 0` services are present.
+func (c *Compose) ConfigServices(ctx context.Context) ([]string, error) {
+	out, err := c.outputContext(ctx, c.BuildInternalArgs("config", "--services"))
+	if err != nil {
+		return nil, probeError(c.BinName()+" compose config --services", err)
+	}
+	return splitNonEmptyLines(out), nil
+}
+
+// probeError wraps a failed probe, appending the captured stderr when there
+// is any — without it the caller only ever sees "exit status 1".
+func probeError(what string, err error) error {
+	if ee, ok := errors.AsType[*exec.ExitError](err); ok && len(ee.Stderr) > 0 {
+		return fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(string(ee.Stderr)))
+	}
+	return fmt.Errorf("%s: %w", what, err)
 }
 
 // ContainerIDsFor returns the IDs of running containers for the given services.

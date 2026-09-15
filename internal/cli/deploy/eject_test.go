@@ -54,7 +54,7 @@ func TestDeployEject_Stdout(t *testing.T) {
 	if stdout != string(deploy.DefaultDeployYAML()) {
 		t.Fatalf("stdout does not match the asset verbatim:\n%s", stdout)
 	}
-	for _, want := range []string{"name: services", "name: start", "name: post-deploy", "# workspace/deploy.yml"} {
+	for _, want := range []string{"name: services", "name: start", "name: post-deploy", "cmd: containers_running", "# workspace/deploy.yml"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
 		}

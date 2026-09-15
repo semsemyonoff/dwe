@@ -5,6 +5,7 @@ package tpl
 
 import (
 	"fmt"
+	"log/slog"
 	"maps"
 	"strings"
 	"sync"
@@ -15,12 +16,14 @@ import (
 	"github.com/go-sprout/sprout/registry/filesystem"
 	mapsr "github.com/go-sprout/sprout/registry/maps"
 	"github.com/go-sprout/sprout/registry/numeric"
-	regexpr "github.com/go-sprout/sprout/registry/regexp"
+	"github.com/go-sprout/sprout/registry/regex"
 	"github.com/go-sprout/sprout/registry/semver"
 	slicesr "github.com/go-sprout/sprout/registry/slices"
 	"github.com/go-sprout/sprout/registry/std"
 	stringsr "github.com/go-sprout/sprout/registry/strings"
 	timer "github.com/go-sprout/sprout/registry/time"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // funcMapOnce caches the base sprout-built FuncMap. Building 10 sprout
@@ -35,7 +38,7 @@ var funcMapOnce = sync.OnceValue(buildFuncMap)
 // templates and race under -race. A shallow clone of a ~200-entry map is one
 // small alloc — negligible vs template parse/execute.
 //
-// Registers sprout std, strings, numeric, slices, maps, regexp, conversion,
+// Registers sprout std, strings, numeric, slices, maps, regex, conversion,
 // time, filesystem, semver. Hermetic: no env, no FS reads, no network, no
 // crypto/random.
 func FuncMap() template.FuncMap {
@@ -43,14 +46,19 @@ func FuncMap() template.FuncMap {
 }
 
 func buildFuncMap() template.FuncMap {
-	h := sprout.New()
+	// sprout's default logger writes to os.Stdout, and a deprecated function
+	// logs a notice on every call — straight into --output json and the prompt.
+	// Route sprout's records through trace, visible only under --debug. The
+	// level is read per record, so this map may be built before the CLI root
+	// configures trace.
+	h := sprout.New(sprout.WithLogger(slog.New(trace.NewSlogHandlerAt(trace.LevelDebug))))
 	if err := h.AddRegistries(
 		std.NewRegistry(),
 		stringsr.NewRegistry(),
 		numeric.NewRegistry(),
 		slicesr.NewRegistry(),
 		mapsr.NewRegistry(),
-		regexpr.NewRegistry(),
+		regex.NewRegistry(),
 		conversion.NewRegistry(),
 		timer.NewRegistry(),
 		filesystem.NewRegistry(),
@@ -62,9 +70,9 @@ func buildFuncMap() template.FuncMap {
 	}
 	fm := h.Build()
 	fm["appURL"] = appURL
-	// shuffle is exposed by the strings registry but uses a package-level
-	// math/rand.Source seeded from crypto/rand — not goroutine-safe and
-	// violates the hermetic/no-random contract. Remove it explicitly.
+	// shuffle is exposed by the strings registry. It is goroutine-safe since
+	// sprout v1.1.1, but its output is still random, which violates the
+	// hermetic/no-random contract. Remove it explicitly.
 	delete(fm, "shuffle")
 	// hello is exposed by the std registry as a debug/test artifact ("Hello!").
 	// It is not a useful helper for dwe templates and pollutes the API surface.

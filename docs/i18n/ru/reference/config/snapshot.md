@@ -96,7 +96,7 @@ dwe snapshot rollback                       # быстро: восстанови
 | Поле | Тип | Назначение |
 |---|---|---|
 | `description` | string | Свободное описание, показываемое `inspect` и `list`. |
-| `steps` | `[]WorkflowStep` | Список шагов — та же форма, что и блок `workflow:` в декларативной команде. Синтаксис шага см. в [commands/types.md](commands/types.md#type-workflow). |
+| `steps` | `[]WorkflowStep` | Список шагов — та же форма, что и блок `workflow:` в декларативной команде. Синтаксис шага см. в [commands/types.md](commands/types.md#тип-workflow). |
 | `variants` | `map[string]Workflow` | Именованные альтернативные списки шагов (см. [Варианты](#варианты)). |
 
 Форма `steps:` — это существующий тип `model.WorkflowStep`. Workflow'ы снапшотов — это workflow'ы пользовательских команд, выполняемые в рантайме из другого исходного файла; поддерживается каждая форма и фича шага (`command:`, `with:`, `when:`, `confirm:`, `parallel:`, `continue_on_error:`).
@@ -391,4 +391,4 @@ Lifecycle-команды захватывают проектные блокир�
 - `dwe snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
 - `dwe validate snapshot [<name>] [--verify]`
 
-См. [commands/types.md](commands/types.md#type-workflow) для формы `WorkflowStep`, переиспользуемой workflow'ами снапшотов, и [state/index.md](state/index.md) для журнала состояния деплоя, который снапшоты бэкапят рядом с `workspace/local.yml`.
+См. [commands/types.md](commands/types.md#тип-workflow) для формы `WorkflowStep`, переиспользуемой workflow'ами снапшотов, и [state/index.md](state/index.md) для журнала состояния деплоя, который снапшоты бэкапят рядом с `workspace/local.yml`.
