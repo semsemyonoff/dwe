@@ -1,4 +1,4 @@
-> Translated from: guides/upgrading.md @ feca012669f5
+> Translated from: guides/upgrading.md @ 694924d66dbd
 
 # Обновление DWE
 
