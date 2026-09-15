@@ -615,9 +615,9 @@ func TestPortsFreeValidator_ServicesScope(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		name        string
-		services    []string
-		wantConflct bool
+		name         string
+		services     []string
+		wantConflict bool
 	}{
 		{"out-of-scope busy port yields no diagnostic", []string{"web"}, false},
 		{"in-scope busy port yields the diagnostic", []string{"db"}, true},
@@ -644,7 +644,7 @@ func TestPortsFreeValidator_ServicesScope(t *testing.T) {
 			v := &portsFreeValidator{cfg: cfg}
 			diags := v.Run(validate.Context{Stage: "deploy", Cfg: cfg, Services: tt.services})
 
-			if tt.wantConflct {
+			if tt.wantConflict {
 				if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
 					t.Fatalf("want 1 error diag, got %+v", diags)
 				}

@@ -21,6 +21,14 @@ import (
 // filtering here would hide a caller mistake behind a silent empty scope.
 // A depends_on cycle terminates on the visited set. The result is sorted so the
 // scope is stable across runs.
+//
+// Known limitation: the closure follows service.yml depends_on only. A
+// dependency declared solely in a compose file, or a service a per-service
+// deploy.yml step starts on its own, stays out of scope — a conflict on its host
+// port then surfaces as a compose bind error mid-run instead of as the
+// ports_free diagnostic. Widening the scope back to the whole project is the
+// wrong trade: it is what made an untouched service's busy port block every
+// per-service deploy.
 func preflightScope(cfg *config.DweConfig, names []string) []string {
 	if cfg == nil || len(names) == 0 {
 		return nil

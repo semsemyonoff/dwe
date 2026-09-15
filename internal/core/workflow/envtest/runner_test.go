@@ -1477,6 +1477,74 @@ func TestRunScenario_UntracedVarPort_WarnsAndAllocatesNothing(t *testing.T) {
 	}
 }
 
+// TestRunScenario_ServiceAndTracedVarPorts_ShareOneBatch pins the split of the
+// SINGLE allocation batch across its two consumers: the leading len(keys) ports
+// go to the enabled services' declared host ports and the remainder to the
+// traced vars: paths. Every other port test drives one side with the other
+// empty, so an off-by-one in that split (writing a service's port into a vars:
+// path or vice versa) would leave the copy binding the wrong host ports while
+// still handing out free ones — invisible to a per-side assertion.
+func TestRunScenario_ServiceAndTracedVarPorts_ShareOneBatch(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", `project:
+  name: runnertest
+  prefix: dwe
+compose:
+  base: docker-compose.yml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+`)
+	writeFixtureFile(t, dir, "docker-compose.yml",
+		"services:\n  valkey:\n    image: valkey/valkey:8\n    ports:\n      - \"${VALKEY_PORT:-6379}:6379\"\n")
+	writeFixtureFile(t, dir, "workspace/services/db/service.yml",
+		"type: infra\ncontainer: db\nrequired: true\nports:\n  mysql: 13306\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	allocate, allocCalls := countingAllocator()
+	var execCalls []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: allocate,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	if *allocCalls != 1 {
+		t.Fatalf("allocatePorts called %d times, want 1 (both kinds share one batch)", *allocCalls)
+	}
+
+	m := loadCopyLocalYAML(t, dir, "smoke")
+	svcPort := digToInt(t, m, "services", "db", "ports", "mysql")
+	varPort := digToInt(t, m, "vars", "ports", "valkey")
+	if svcPort != 10010 {
+		t.Errorf("services.db.ports.mysql = %d, want 10010 (the batch's first slot)", svcPort)
+	}
+	if varPort != 10011 {
+		t.Errorf("vars.ports.valkey = %d, want 10011 (the batch's slot after the service ports)", varPort)
+	}
+	if svcPort == varPort {
+		t.Errorf("service and var ports must differ, both = %d", svcPort)
+	}
+}
+
 // loadCopyLocalYAML reads the generated local.yml of a scenario's copy.
 // recordingTeardownDeps.RemoveCopy is a no-op, so it survives the run.
 func loadCopyLocalYAML(t *testing.T, baseDir, scenario string) map[string]any {

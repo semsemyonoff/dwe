@@ -225,6 +225,23 @@ func TestBuildLocalOverlayImplicitVarPort(t *testing.T) {
 			ports: map[string]int{"ports.valkey": 41234},
 			want:  map[string]any{"ports": map[string]any{"valkey": 41234, "other": 7000}},
 		},
+		{
+			// The declared path EXTENDS the allocated one, so it is not a pin
+			// (pinnedVarPath sees a map at ports.valkey) and the plan allocates.
+			// In plain sorted order the deeper path would be written last and
+			// replace the allocated int with a fresh map — dropping the
+			// allocation and leaving the copy on the live stack's port.
+			name:  "a deeper declared path does not swallow the allocation",
+			vars:  map[string]any{"ports.valkey.x": 1},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a deeper nested declaration does not swallow the allocation",
+			vars:  map[string]any{"ports": map[string]any{"valkey": map[string]any{"x": 1}}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

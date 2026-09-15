@@ -118,14 +118,11 @@ func ServicesFor(opts ...Option) []string {
 	return applyOptions(opts...).services
 }
 
-// applyOptions folds opts into an options value. Nil entries are tolerated so a
-// caller can pass a conditional option without branching at the call site.
+// applyOptions folds opts into an options value.
 func applyOptions(opts ...Option) options {
 	var o options
 	for _, opt := range opts {
-		if opt != nil {
-			opt(&o)
-		}
+		opt(&o)
 	}
 	return o
 }

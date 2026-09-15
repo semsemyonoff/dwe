@@ -42,7 +42,7 @@ func TestCostProfile_ScenarioRawDoesNotMutateProjectConfig(t *testing.T) {
 func TestCostProfile_IgnoresLocalComposeExtra(t *testing.T) {
 	baseDir := t.TempDir()
 	writeMinimalProject(t, baseDir)
-	writeProjectFile(t, baseDir, "local.compose.yml", "services:\n  extra:\n    build: .\n")
+	writeProjectFile(t, baseDir, "local.compose.yml", "services:\n  extra:\n    build: .\n  cache:\n    image: redis:7\n")
 	writeProjectFile(t, baseDir, "workspace/local.yml", "compose:\n  extra:\n    - local.compose.yml\n")
 
 	p := newCostProfiler(baseDir, "")
@@ -59,6 +59,9 @@ func TestCostProfile_IgnoresLocalComposeExtra(t *testing.T) {
 	}
 	if len(got.BuildServices) != 0 {
 		t.Errorf("build_services = %v, want none (the overlay is not part of the copy)", got.BuildServices)
+	}
+	if len(got.ExternalImages) != 0 {
+		t.Errorf("external_images = %v, want none (the overlay is not part of the copy)", got.ExternalImages)
 	}
 }
 

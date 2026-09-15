@@ -51,8 +51,9 @@ type IsolationFinding struct {
 	// EnvVar is the compose variable the host port is interpolated from.
 	EnvVar string
 	// VarPath is the vars:-relative path the variable's active exports.env
-	// rule reads (`from: vars.<VarPath>`); a scenario setting it to `auto`
-	// covers the finding.
+	// rule reads (`from: vars.<VarPath>`), and is always well-formed — a
+	// malformed from: leaves it empty (see classifyExportSource). dwe test
+	// remaps a traced path automatically unless the scenario pins it.
 	VarPath string
 	// SourceService is the dwe service whose declared port the variable's
 	// active rule reads (`from: services.<n>.ports.<p>`). The scanner never
@@ -905,9 +906,9 @@ func scanPublishedToken(service, token, file string, exports *composeExports) (I
 }
 
 // exportTarget is what one active exports.env rule reads, as far as the test
-// copy's port remap is concerned: a vars: path (covered by `env.vars: auto`),
-// a declared dwe service port (covered while the runner remaps that service),
-// or neither.
+// copy's port remap is concerned: a vars: path (always remapped, unless the
+// scenario pins the path to a concrete value), a declared dwe service port
+// (covered while the runner remaps that service), or neither.
 type exportTarget struct {
 	from          string
 	varPath       string
@@ -948,9 +949,16 @@ func newComposeExports(cfg *DweConfig, projectRoot string) *composeExports {
 // (`.port`) never resolves, and an undeclared or out-of-range port is not one
 // the runner remaps — both export the rule's default instead. Enabled is
 // deliberately not consulted: whether the port is remapped is per scenario.
+//
+// A malformed vars path (`vars.`, `vars.ports.`, `vars.a..b`) classifies as
+// NEITHER, exactly like a from: nothing traces: it resolves to no value, so the
+// rule exports its default and dwe test has no path to remap. Letting it through
+// as a varPath would instead have the runner allocate a port for an
+// unwritable path and abort every scenario (BuildLocalOverlay rejects it) over a
+// typo `dwe validate` only warns about.
 func classifyExportSource(cfg *DweConfig, from string) exportTarget {
 	t := exportTarget{from: from}
-	if path, ok := strings.CutPrefix(from, "vars."); ok && path != "" {
+	if path, ok := strings.CutPrefix(from, "vars."); ok && IsWellFormedDotPath(path) {
 		t.varPath = path
 		return t
 	}

@@ -261,3 +261,33 @@ func TestScenarioView_DoesNotMutateInput(t *testing.T) {
 		t.Error("the toggle view's enable leaked into the plain view")
 	}
 }
+
+// TestScenarioView_DoesNotMutateScenarioEnv pins the other half of the
+// no-shared-state promise: the env the view is built FROM. expandVarPaths
+// descends into an existing map at a prefix, so a nested declaration plus a
+// dot-path under it used to make the view's substituted value (the
+// AutoPortPlaceholder) land in the caller's own env.vars — a pin the scenario
+// author never wrote, on the map the runner reuses for the deploy retry.
+func TestScenarioView_DoesNotMutateScenarioEnv(t *testing.T) {
+	env := ScenarioEnv{Vars: map[string]any{
+		"ports":        map[string]any{"other": 7000},
+		"ports.valkey": AutoPortSentinel,
+	}}
+
+	view := ScenarioView(viewFixture(), env)
+
+	want := map[string]any{
+		"ports":        map[string]any{"other": 7000},
+		"ports.valkey": AutoPortSentinel,
+	}
+	if !reflect.DeepEqual(env.Vars, want) {
+		t.Errorf("scenario env.vars = %#v, want unchanged %#v", env.Vars, want)
+	}
+	// The view itself still carries both, with the sentinel substituted.
+	if got, _ := config.ResolvePath(view.Raw, "vars.ports.valkey"); got != AutoPortPlaceholder {
+		t.Errorf("view vars.ports.valkey = %v, want the placeholder", got)
+	}
+	if got, _ := config.ResolvePath(view.Raw, "vars.ports.other"); got != 7000 {
+		t.Errorf("view vars.ports.other = %v, want 7000", got)
+	}
+}

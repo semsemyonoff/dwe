@@ -159,12 +159,21 @@ func scenarioVarsOverlay(vars map[string]any) map[string]any {
 // callers here inspect rather than run, and the same path is rejected with an
 // error by BuildLocalOverlay before anything runs, while validate's render pass
 // reports the resulting unresolved ${vars.*} reference itself.
+//
+// A map value is deep-copied first: setDotPath descends INTO an existing map at
+// a prefix, so storing the caller's own map would let a later dot-path under
+// that prefix write through into vars — the same hazard scenarioEnvOverlay
+// guards against, and the reason this function can promise its callers that no
+// view shares state with the scenario it was built from.
 func expandVarPaths(vars map[string]any, subst func(any) any) map[string]any {
 	out := make(map[string]any, len(vars))
 	for _, path := range slices.Sorted(maps.Keys(vars)) {
 		value := vars[path]
 		if subst != nil {
 			value = subst(value)
+		}
+		if nested, isMap := value.(map[string]any); isMap {
+			value = deepCopyMap(nested)
 		}
 		_ = setDotPath(out, path, value)
 	}

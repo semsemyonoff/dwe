@@ -529,12 +529,11 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	}
 	// A per-service run can only bind the requested services' ports and those
 	// of what compose starts alongside them; scope ports_free to that set so a
-	// foreign holder of an untouched service's port cannot block the run.
-	var preflightOpts []preflight.Option
-	if len(opts.Services) > 0 {
-		preflightOpts = append(preflightOpts, preflight.WithServices(preflightScope(cfg, opts.Services)))
-	}
-	if err := runPreflight(ctx, cfg, reg, workDir, "deploy", opts.SkipPreflight, cmd.ErrOrStderr(), preflightOpts...); err != nil {
+	// foreign holder of an untouched service's port cannot block the run. A
+	// whole-project run yields an empty scope, which WithServices carries as the
+	// unscoped case — no branch needed here.
+	scope := preflight.WithServices(preflightScope(cfg, opts.Services))
+	if err := runPreflight(ctx, cfg, reg, workDir, "deploy", opts.SkipPreflight, cmd.ErrOrStderr(), scope); err != nil {
 		return err
 	}
 	if regErr != nil {

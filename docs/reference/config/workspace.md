@@ -365,6 +365,10 @@ exports:
 | `when` | string | Dot-path; rule skipped when value is falsy |
 | `comment` | string | Written as `# comment` above the variable |
 
+#### Second consumer: `dwe test` port isolation
+
+These rules are also what lets `dwe test` keep a scenario copy off the working environment's host ports. A compose host port written as a single variable (`"${VALKEY_PORT:-6379}:6379"`) is remapped in every scenario copy when the rule behind that variable reads `from: vars.<path>` (always remapped, unless the scenario pins the path) or `from: services.<name>.ports.<port>` (remapped while that service is remapped). Any other `from:`, or a `when:` that is falsy in the scenario, leaves the copy binding your own environment's port — reported as an isolation warning. Retargeting a rule's `from:` or adding a `when:` therefore changes test-copy isolation as well as `.env`; see [Interpolated host ports](tests.md#interpolated-host-ports).
+
 #### Implicit system variables
 
 `dwe render env` emits four variables before any rule runs, regardless of `exports.env`:

@@ -3,7 +3,6 @@ package preflight
 import (
 	"bytes"
 	"context"
-	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,8 +120,8 @@ func TestApplyOptions(t *testing.T) {
 	if got := applyOptions(); got.services != nil {
 		t.Errorf("no options must leave services nil, got %v", got.services)
 	}
-	if got := applyOptions(nil); got.services != nil {
-		t.Errorf("a nil option must be tolerated, got %v", got.services)
+	if got := applyOptions(WithServices(nil)); got.services != nil {
+		t.Errorf("an empty scope must stay unscoped, got %v", got.services)
 	}
 	got := applyOptions(WithServices([]string{"web", "db"}))
 	if !reflect.DeepEqual(got.services, []string{"web", "db"}) {
@@ -138,22 +137,23 @@ func TestApplyOptions(t *testing.T) {
 // Only the ports_free line is asserted: the other env probes report whatever
 // this host looks like under the isolated PATH and are not this test's subject.
 func TestRun_WithServicesScopesPortsFree(t *testing.T) {
-	// Hold a real port for the duration of the test so the listen probe sees
-	// EADDRINUSE on the wildcard address ports_free binds.
-	l, err := net.Listen("tcp", ":0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	defer func() { _ = l.Close() }()
-	busy := l.Addr().(*net.TCPAddr).Port
+	const busy = 54321
 
 	// A `docker` stub ahead of the real PATH: ports_free needs the binary to
-	// resolve, an empty `docker ps` sends every declared port through the listen
-	// probe, and the rest of PATH stays intact so the other env probes (git, sh)
-	// do not add unrelated error rows.
+	// resolve, and its `docker ps` reports the busy port as published by a
+	// FOREIGN compose project. That is deliberately not a held socket — an
+	// owner known from `docker ps` classifies immediately, while a real
+	// EADDRINUSE would drag every busy-port subtest through the full
+	// portReleaseRetries×portReleaseBackoff budget (~1.5s each) for no added
+	// coverage of the scope, which is this test's subject. The rest of PATH
+	// stays intact so the other env probes (git, sh) add no unrelated error rows.
 	binDir := t.TempDir()
 	stub := filepath.Join(binDir, "docker")
-	body := "#!/bin/sh\ncase \"$1\" in\n  compose) echo 'Docker Compose version v2.29.0';;\nesac\nexit 0\n"
+	psLine := `{"Names":"foreign-db","Ports":"0.0.0.0:` + strconv.Itoa(busy) + `->5432/tcp","Labels":"com.docker.compose.project=foreign"}`
+	body := "#!/bin/sh\ncase \"$1\" in\n" +
+		"  compose) echo 'Docker Compose version v2.29.0';;\n" +
+		"  ps) echo '" + psLine + "';;\n" +
+		"esac\nexit 0\n"
 	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
 		t.Fatalf("write docker stub: %v", err)
 	}
@@ -180,12 +180,17 @@ func TestRun_WithServicesScopesPortsFree(t *testing.T) {
 
 	t.Run("scope excluding the owner silences it", func(t *testing.T) {
 		var errOut bytes.Buffer
-		// Only the absence of the ports_free row is asserted: whether the run
-		// blocks overall depends on the host's other env probes.
+		// Only the absence of the ports_free FAILURE is asserted: whether the run
+		// blocks overall depends on the host's other env probes. The two sibling
+		// subtests pin that the same inputs do produce the row when the owner is
+		// in scope, so this is not a vacuous negative.
 		_ = Run(context.Background(), cfg, nil, root, "deploy", false, &errOut,
 			WithServices([]string{"web"}))
 		if strings.Contains(errOut.String(), want) {
 			t.Errorf("scoped preflight must not report the out-of-scope port:\n%s", errOut.String())
+		}
+		if strings.Contains(errOut.String(), "foreign") {
+			t.Errorf("scoped preflight must not name the out-of-scope port's holder:\n%s", errOut.String())
 		}
 	})
 

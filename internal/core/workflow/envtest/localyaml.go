@@ -3,6 +3,7 @@ package envtest
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -126,16 +127,27 @@ func scenarioEnvOverlay(scn *Scenario, ports map[string]int) (map[string]any, er
 	overlay := make(map[string]any)
 
 	if len(scn.Env.Vars) > 0 || len(ports) > 0 {
-		paths := make([]string, 0, len(scn.Env.Vars)+len(ports))
+		declaredPaths := make([]string, 0, len(scn.Env.Vars))
 		for path := range scn.Env.Vars {
-			paths = append(paths, path)
+			declaredPaths = append(declaredPaths, path)
 		}
+		implicitPaths := make([]string, 0, len(ports))
 		for path := range ports {
 			if _, declared := scn.Env.Vars[path]; !declared {
-				paths = append(paths, path)
+				implicitPaths = append(implicitPaths, path)
 			}
 		}
-		sort.Strings(paths)
+		sort.Strings(declaredPaths)
+		sort.Strings(implicitPaths)
+		// Implicit allocations are written LAST, after every declared path. Plain
+		// sorted order would let a declared path that extends an allocated one
+		// ("ports.valkey.x" over an allocated "ports.valkey") replace the
+		// allocated int with a fresh map — silently dropping the allocation and
+		// leaving the copy on the live stack's host port, which is exactly what
+		// pinsPortValue exists to prevent. Writing the allocation afterwards
+		// applies the documented map-wins collision rule in the direction that
+		// keeps the copy isolated.
+		paths := slices.Concat(declaredPaths, implicitPaths)
 
 		vars := make(map[string]any)
 		for _, path := range paths {

@@ -2,7 +2,6 @@ package envtest
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
@@ -114,24 +113,11 @@ func pinsPortValue(value any) bool {
 
 // resolveVarPath walks a dot-path through a nested map, returning the value and
 // whether it resolved. A malformed path (empty, or with an empty segment) never
-// resolves.
+// resolves — config.ResolvePath alone would accept a trailing dot, and the same
+// shape test gates what reaches here in the first place (classifyExportSource).
 func resolveVarPath(m map[string]any, path string) (any, bool) {
-	if path == "" {
+	if !config.IsWellFormedDotPath(path) {
 		return nil, false
 	}
-	var current any = m
-	for part := range strings.SplitSeq(path, ".") {
-		if part == "" {
-			return nil, false
-		}
-		node, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		current, ok = node[part]
-		if !ok {
-			return nil, false
-		}
-	}
-	return current, true
+	return config.ResolvePath(m, path)
 }

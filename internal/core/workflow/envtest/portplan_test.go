@@ -184,6 +184,82 @@ func TestBuildPortPlanUntracedAndServicePortFindings(t *testing.T) {
 	}
 }
 
+// TestBuildPortPlanMalformedExportPath pins that a truncated `from: vars.<path>`
+// never becomes an allocation. The plan feeds BuildLocalOverlay, whose
+// setDotPath rejects an empty segment with an error — so classifying such a rule
+// as traced would abort EVERY scenario of the project over a typo `dwe validate`
+// only warns about. It must classify as untraced instead: nothing is allocated,
+// and the isolation warning still fires because the copy really does bind the
+// live stack's port.
+func TestBuildPortPlanMalformedExportPath(t *testing.T) {
+	files := map[string]string{
+		"workspace.yml": `project:
+  name: demo
+compose:
+  base: compose.yaml
+vars:
+  ports:
+    valkey: 6379
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.
+`,
+		"compose.yaml": `services:
+  valkey:
+    image: valkey/valkey:8
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+`,
+	}
+	root := t.TempDir()
+	for rel, content := range files {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg, err := config.LoadConfig(filepath.Join(root, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	scn := &Scenario{}
+	plan := buildPortPlan(cfg, scn, root)
+	if len(plan.autoPaths) != 0 {
+		t.Errorf("autoPaths = %v, want none for a malformed from:", plan.autoPaths)
+	}
+
+	var finding config.IsolationFinding
+	for _, f := range plan.findings {
+		if f.EnvVar == "VALKEY_PORT" {
+			finding = f
+		}
+	}
+	if finding.Kind != config.KindInterpolatedHostPort {
+		t.Fatalf("no interpolated finding for VALKEY_PORT: %+v", plan.findings)
+	}
+	if finding.VarPath != "" {
+		t.Errorf("VarPath = %q, want empty for a malformed from:", finding.VarPath)
+	}
+	if CoversInterpolatedHostPort(cfg, scn, finding) {
+		t.Error("a malformed from: must leave the finding uncovered — nothing remaps the port")
+	}
+
+	// The end-to-end guarantee: the plan's paths are all writable, so the copy's
+	// local.yml still generates.
+	ports := map[string]int{}
+	for i, p := range plan.autoPaths {
+		ports[p] = 41234 + i
+	}
+	if _, err := BuildLocalOverlay(nil, scn, "demo-t-s-abc", ports, nil); err != nil {
+		t.Errorf("BuildLocalOverlay: %v", err)
+	}
+}
+
 // TestBuildPortPlanStableAcrossRuns pins that neither the scan nor the union
 // leaks map iteration order into the plan.
 func TestBuildPortPlanStableAcrossRuns(t *testing.T) {
