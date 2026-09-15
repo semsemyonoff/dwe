@@ -619,11 +619,13 @@ resources:
 
 // TestScenariosValidator_InterpolatedHostPort pins the project-wide filter on
 // interpolated host ports: validate has no scenario of its own, so a finding is
-// silent only when EVERY scenario remaps its port (vars path set to auto, or
-// the source service in the runner's remap set), and otherwise names the
-// scenarios that still lack the fix. An unloadable scenario covers nothing, a
-// required service a scenario disables stays remapped, and a finding with no
-// VarPath/SourceService always warns without a scenario list.
+// silent only when EVERY scenario remaps its port, and otherwise names the
+// scenarios that still lack the fix. A vars-traced port is remapped in every
+// scenario with no scenario config at all, so it only ever appears through an
+// unloadable scenario (which covers nothing). A source service is remapped only
+// where the scenario keeps it in the runner's remap set — a required service a
+// scenario disables stays remapped — and a finding with no VarPath/SourceService
+// always warns without a scenario list.
 func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
 	const valkeyAuto = "env:\n  vars:\n    ports.valkey: auto\n" + steps
@@ -642,9 +644,23 @@ func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
 		},
 		{
-			name:      "vars path auto in some scenarios",
+			// The traced path is remapped in b too, even though b says
+			// nothing about it — that is what auto stopped being needed for.
+			name:      "vars path auto in only one scenario",
 			scenarios: map[string]string{"a.yml": valkeyAuto, "b.yml": steps},
-			want:      map[string][]string{"VALKEY_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name:      "vars path traced, no scenario mentions it",
+			scenarios: map[string]string{"a.yml": steps, "b.yml": steps},
+			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
+		},
+		{
+			// An explicit number pins the copy's port: the author's decision,
+			// not a collision validate should nag about.
+			name:      "vars path pinned to a number",
+			scenarios: map[string]string{"a.yml": "env:\n  vars:\n    ports.valkey: 6390\n" + steps},
+			want:      map[string][]string{"CACHE_PORT": {"a"}},
 		},
 		{
 			name:      "unloadable scenario counts as uncovered",
@@ -667,7 +683,7 @@ func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 		{
 			name:      "service enabled by only one scenario",
 			scenarios: map[string]string{"a.yml": enableCache, "b.yml": steps},
-			want:      map[string][]string{"VALKEY_PORT": {"a", "b"}, "CACHE_PORT": {"b"}},
+			want:      map[string][]string{"CACHE_PORT": {"b"}},
 		},
 		{
 			name: "source service disabled by one scenario",

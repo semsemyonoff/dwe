@@ -1,7 +1,6 @@
 package envtest
 
 import (
-	"slices"
 	"sort"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -99,18 +98,26 @@ func RemappedHostPortServices(cfg *config.DweConfig, scn *Scenario) map[string]b
 	return out
 }
 
-// CoversInterpolatedHostPort reports whether scn's copy remaps the host port
-// behind a config.KindInterpolatedHostPort finding: its variable reads a port
-// of a service in RemappedHostPortServices(cfg, scn), or a vars: path the
-// scenario sets to AutoPortSentinel. Any other finding reports false.
+// CoversInterpolatedHostPort reports whether scn's copy takes care of the host
+// port behind a config.KindInterpolatedHostPort finding. Any other finding
+// reports false.
+//
+// A traced vars: path (VarPath != "") is ALWAYS covered, with no scenario
+// config: buildPortPlan allocates a free port for every traced path, and the
+// one case where it does not — the scenario pins the path to an explicit
+// number — is the author deciding which port the copy binds. Either way the
+// collision the finding warns about is not the scenario's to fix.
+//
+// A variable reading a declared service port stays conditional: the runner
+// remaps only the services in RemappedHostPortServices(cfg, scn).
 func CoversInterpolatedHostPort(cfg *config.DweConfig, scn *Scenario, f config.IsolationFinding) bool {
 	if f.Kind != config.KindInterpolatedHostPort {
 		return false
 	}
-	if f.SourceService != "" && RemappedHostPortServices(cfg, scn)[f.SourceService] {
+	if f.VarPath != "" {
 		return true
 	}
-	return f.VarPath != "" && slices.Contains(scn.AutoPortVarPaths(), f.VarPath)
+	return f.SourceService != "" && RemappedHostPortServices(cfg, scn)[f.SourceService]
 }
 
 // buildHostPortOverrides pairs keys[i] with allocated[i], carrying the original

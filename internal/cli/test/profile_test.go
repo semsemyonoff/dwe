@@ -61,3 +61,50 @@ func TestCostProfile_IgnoresLocalComposeExtra(t *testing.T) {
 		t.Errorf("build_services = %v, want none (the overlay is not part of the copy)", got.BuildServices)
 	}
 }
+
+// TestCostProfile_IsolationFindingsOmitTracedVarPorts pins that a host port
+// traced to a vars: path never reaches isolation_findings: the runner remaps
+// it with no scenario config, so listing it would be advice with no action.
+// An untraced variable in the same compose file still shows up.
+func TestCostProfile_IsolationFindingsOmitTracedVarPorts(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", `project:
+  name: demo
+compose:
+  base: compose.yaml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+`)
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "compose.yaml", `services:
+  valkey:
+    image: valkey/valkey:8
+    ports: ["${VALKEY_PORT:-6379}:6379"]
+  other:
+    image: redis:7
+    ports: ["${OTHER_PORT:-6390}:6379"]
+`)
+
+	p := newCostProfiler(baseDir, "")
+	if p == nil {
+		t.Fatal("expected a profiler for a loadable project")
+	}
+	got := p.profile(&envtest.Scenario{})
+	if got == nil {
+		t.Fatal("expected a profile")
+	}
+	var resources []string
+	for _, f := range got.IsolationFindings {
+		if f.Kind == "interpolated_host_port" {
+			resources = append(resources, f.Resource)
+		}
+	}
+	if len(resources) != 1 || resources[0] != "other" {
+		t.Errorf("interpolated_host_port findings = %v, want only the untraced [other]", resources)
+	}
+}

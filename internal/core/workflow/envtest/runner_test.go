@@ -1120,11 +1120,11 @@ func TestScanComposeIsolationGate_NoFindings(t *testing.T) {
 }
 
 // TestScanComposeIsolationGate_InterpolatedHostPort pins the scenario filter on
-// interpolated host ports: a vars-sourced port warns until the scenario sets
-// its path to auto; a service-sourced port is silent while the runner remaps
-// the service and warns once the scenario disables it — except a required
-// service, which stays enabled in the copy and so stays remapped. The kind
-// never blocks.
+// interpolated host ports: a vars-sourced port is always silent (the runner
+// remaps every traced path, or the scenario pinned it); a service-sourced port
+// is silent while the runner remaps the service and warns once the scenario
+// disables it — except a required service, which stays enabled in the copy and
+// so stays remapped. The kind never blocks.
 func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
 	disableRedis := &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"redis"}}}}
 	tests := []struct {
@@ -1134,13 +1134,17 @@ func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
 		wantValkey    bool
 		wantRedis     bool
 	}{
-		{name: "no overrides", scn: &Scenario{}, wantValkey: true},
+		{name: "no overrides", scn: &Scenario{}},
 		{
 			name: "vars path set to auto",
 			scn:  &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": AutoPortSentinel}}},
 		},
-		{name: "source service disabled", scn: disableRedis, wantValkey: true, wantRedis: true},
-		{name: "required source service disabled", redisRequired: true, scn: disableRedis, wantValkey: true},
+		{
+			name: "vars path pinned to a number",
+			scn:  &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": 6380}}},
+		},
+		{name: "source service disabled", scn: disableRedis, wantRedis: true},
+		{name: "required source service disabled", redisRequired: true, scn: disableRedis},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1197,9 +1201,6 @@ exports:
 			if got := has("VALKEY_PORT"); got != tt.wantValkey {
 				t.Errorf("VALKEY_PORT warning = %v, want %v; warnings: %v", got, tt.wantValkey, warnings)
 			}
-			if tt.wantValkey && !has("env.vars: { ports.valkey: auto }") {
-				t.Errorf("vars warning must carry the fix line, got %v", warnings)
-			}
 			if got := has("REDIS_PORT"); got != tt.wantRedis {
 				t.Errorf("REDIS_PORT warning = %v, want %v; warnings: %v", got, tt.wantRedis, warnings)
 			}
@@ -1207,17 +1208,20 @@ exports:
 	}
 }
 
-// TestRunScenario_InterpolatedHostPortFilteredByScenario pins that RunScenario
-// hands the loaded scenario to the isolation gate: without it the gate would
-// ignore env.vars: auto and warn about a port the copy does remap.
+// TestRunScenario_InterpolatedHostPortFilteredByScenario pins that a compose
+// host port traced to a vars: path never warns end to end, whatever the
+// scenario says about it: the runner allocates a port for it with no scenario
+// config, an explicit auto means the same thing, and an explicit number is the
+// author pinning the copy's port.
 func TestRunScenario_InterpolatedHostPortFilteredByScenario(t *testing.T) {
 	tests := []struct {
 		name     string
 		scenario string
 		wantWarn bool
 	}{
-		{name: "vars path not auto", scenario: noStepsScenario, wantWarn: true},
+		{name: "no scenario port config", scenario: noStepsScenario},
 		{name: "vars path auto", scenario: noStepsScenario + "env:\n  vars:\n    ports.valkey: auto\n"},
+		{name: "vars path pinned", scenario: noStepsScenario + "env:\n  vars:\n    ports.valkey: 6390\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

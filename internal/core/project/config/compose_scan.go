@@ -965,9 +965,11 @@ func classifyExportSource(cfg *DweConfig, from string) exportTarget {
 }
 
 // interpolatedFinding builds the KindInterpolatedHostPort finding for a host
-// port interpolated from variable name. Non-blocking: the collision is real
-// only in scenarios that neither remap the source service nor set the vars
-// path to auto, and that filtering is each consumer's job.
+// port interpolated from variable name. Non-blocking, and a pure statement of
+// fact: a variable traced to a vars: path is always remapped by dwe test, one
+// reading a declared service port only in scenarios that remap that service,
+// and an untraced one never. Deciding which of those still collides is each
+// consumer's job (envtest.CoversInterpolatedHostPort).
 func (e *composeExports) interpolatedFinding(service, token, name, file string) IsolationFinding {
 	var target exportTarget
 	display := file
@@ -983,8 +985,7 @@ func (e *composeExports) interpolatedFinding(service, token, name, file string) 
 	var message string
 	switch {
 	case target.varPath != "":
-		message = head + " (exports.env from: " + target.from + ") — dwe test does not remap it, so " + collides +
-			"; add `env.vars: { " + target.varPath + ": auto }` to the scenario"
+		message = head + " (exports.env from: " + target.from + ") — dwe test remaps it through vars." + target.varPath
 	case target.sourceService != "":
 		message = head + " (exports.env from: " + target.from + ") — dwe test remaps service " + target.sourceService +
 			"'s ports only in scenarios where " + target.sourceService + " is enabled and not listed under env.services.disable" +
@@ -992,7 +993,7 @@ func (e *composeExports) interpolatedFinding(service, token, name, file string) 
 	default:
 		message = head + ", which no active exports.env rule traces to a port dwe test remaps — " + collides +
 			"; export it from a declared service port (`from: services.<name>.ports.<port>`) or from" +
-			" `vars.<path>` with `env.vars: { <path>: auto }` in the scenario"
+			" `vars.<path>` through an exports.env rule (dwe test then remaps it automatically)"
 	}
 
 	return IsolationFinding{

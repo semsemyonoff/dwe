@@ -101,6 +101,10 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		if f.Kind == config.KindInterpolatedHostPort {
 			uncovered := uncoveredScenarios(ctx.Cfg, scenarios, f)
 			switch {
+			// The VarPath half never produces an uncovered scenario — the
+			// runner remaps every traced path — but it keeps the branch honest
+			// for a finding that carries both, and SourceService still depends
+			// on each scenario's own service state.
 			case f.VarPath != "" || f.SourceService != "":
 				if len(uncovered) == 0 {
 					continue

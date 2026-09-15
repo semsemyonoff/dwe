@@ -594,11 +594,18 @@ config, so an unloadable one never reaches it.
 - Modify: `internal/core/validate/tests/tests_test.go`
 - Modify: `internal/cli/test/profile_test.go`
 
-- [ ] `CoversInterpolatedHostPort`: any non-empty `VarPath` is covered; rewrite the doc comment (auto-remapped or pinned — the author's decision)
-- [ ] rewrite the varPath and untraced message branches per Technical Details; keep `Blocking: false` and the sourceService branch verbatim
-- [ ] `validate/tests`: keep the `VarPath || SourceService` branch (it still matters for `SourceService`), rewrite its comment to say the VarPath half is always covered since the runner remaps it
-- [ ] write/update tests: `CoversInterpolatedHostPort` table (traced without scenario config → true; pinned → true; sourceService remapped/not; other kinds false); scanner message goldens for both rewritten branches; `tests.isolation` no longer warns for a traced var in a project with scenarios that set nothing; still warns for an untraced var; `SourceService` cases unchanged; `cost_profile.isolation_findings` excludes traced entries
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/workflow/envtest/... ./internal/core/validate/tests/... ./internal/cli/test/...` - must pass before task 5
+- [x] `CoversInterpolatedHostPort`: any non-empty `VarPath` is covered; rewrite the doc comment (auto-remapped or pinned — the author's decision)
+- [x] rewrite the varPath and untraced message branches per Technical Details; keep `Blocking: false` and the sourceService branch verbatim
+- [x] `validate/tests`: keep the `VarPath || SourceService` branch (it still matters for `SourceService`), rewrite its comment to say the VarPath half is always covered since the runner remaps it
+- [x] write/update tests: `CoversInterpolatedHostPort` table (traced without scenario config → true; pinned → true; sourceService remapped/not; other kinds false); scanner message goldens for both rewritten branches; `tests.isolation` no longer warns for a traced var in a project with scenarios that set nothing; still warns for an untraced var; `SourceService` cases unchanged; `cost_profile.isolation_findings` excludes traced entries
+- [x] run `go test ./internal/core/project/config/... ./internal/core/workflow/envtest/... ./internal/core/validate/tests/... ./internal/cli/test/...` - must pass before task 5
+
+➕ `interpolatedFinding`'s own doc comment was rewritten too (it described the
+old "neither remaps the source service nor sets the vars path to auto" filter).
+`TestRunScenario_InterpolatedHostPortFilteredByScenario` was repurposed into the
+end-to-end "a traced port never warns, whatever the scenario says" assertion the
+Task 3 ⚠️ deferred here, and `TestScanComposeIsolationGate_InterpolatedHostPort`
+lost its `env.vars` fix-line assertion and gained a pinned-number case.
 
 ### Task 5: Document Change A and commit
 
