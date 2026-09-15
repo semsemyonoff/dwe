@@ -49,12 +49,13 @@ name order. Passing scenario names runs exactly those (an unknown name fails
 before anything runs). Ctrl+C cancels the scenario currently running, tears it
 down, and skips the rest.
 
-Before deploying, the copy's raw compose files are scanned for constructs
-that bypass Docker-Compose project-name scoping (container_name:, literal
-host ports, external/named volumes & networks). A blocking hazard
-(container_name:, a literal host port) fails the scenario before anything is
-deployed; pass --skip-isolation-check to downgrade every finding to a warning
-and proceed anyway.
+Before the copy is made, the project's raw compose files are scanned — as the
+scenario will run them — for constructs that bypass Docker-Compose
+project-name scoping (container_name:, literal host ports, external/named
+volumes & networks). A blocking hazard (container_name:, a literal host port)
+fails the scenario before anything is created, so no copy and no failure
+report are left behind; pass --skip-isolation-check to downgrade every finding
+to a warning and proceed anyway.
 
 Exit codes: 0 = every scenario passed, 1 = at least one scenario failed,
 2 = a scenario (or the run itself) could not be prepared.`,

@@ -560,13 +560,28 @@ placeholder overlay and the plan's raw pin overlay) and `isAutoPort(value)` in
 - Modify: `internal/cli/test/run.go` (`Long` help text :52-57: the scan now runs on the scenario's view of the project before the copy is made)
 - Modify: `internal/cli/test/run_test.go` (JSON-mode status of a blocked scenario)
 
-- [ ] build `plan := buildPortPlan(origCfg, scn, req.BaseDir)` right after `origCfg` loads; call the gate BEFORE `CopyTree`; on block return `&ScenarioResult{Name, Status: StatusFailed, Duration}` with nil error and empty `ComposeProject`/`CopyPath`
-- [ ] rewrite the `RunScenario` doc contract (blocked finding = `StatusFailed` with nothing created), the `StatusFailed` constant comment (:79-81, no longer implies the copy deployed), the `scanComposeIsolationGate` comment (takes findings, runs pre-copy, warns through `warn` only, no report directory) and the `dwe test run` `Long` help text (:52-57)
-- [ ] `scanComposeIsolationGate` takes findings instead of `copyRoot` and drops the `LoadConfigOrWrap` call
-- [ ] `writeCopyLocalYAML` and `retryDeployWithFreshPorts` take `plan`; the retry re-allocates `len(keys)+len(autoPaths)` from the same plan; the deploy-retry gate uses `plan.hasAllocatedPorts()`; delete the old free function; update the `writeCopyLocalYAML` doc comment (spec §5/§9 references stay) to describe the traced paths
-- [ ] write runner tests (stub `execDwe` and `allocatePorts`): traced path written into the copy's `local.yml` `vars` with the allocated number; explicit pin not overwritten; retry re-allocates and rewrites the same set; blocking finding → `StatusFailed`, nil error, empty `ComposeProject`/`CopyPath`, no `copyRoot` on disk, no manifest; non-blocking traced finding produces no warning; untraced finding still warns
-- [ ] write a `cli/test` test: a blocked scenario exits 1 in text mode and reports `"status": "failed"` with no `kept:` line under `--keep` and under `--output json`
-- [ ] run `go test ./internal/core/workflow/envtest/... ./internal/cli/test/...` - must pass before task 4
+- [x] build `plan := buildPortPlan(origCfg, scn, req.BaseDir)` right after `origCfg` loads; call the gate BEFORE `CopyTree`; on block return `&ScenarioResult{Name, Status: StatusFailed, Duration}` with nil error and empty `ComposeProject`/`CopyPath`
+- [x] rewrite the `RunScenario` doc contract (blocked finding = `StatusFailed` with nothing created), the `StatusFailed` constant comment (:79-81, no longer implies the copy deployed), the `scanComposeIsolationGate` comment (takes findings, runs pre-copy, warns through `warn` only, no report directory) and the `dwe test run` `Long` help text (:52-57)
+- [x] `scanComposeIsolationGate` takes findings instead of `copyRoot` and drops the `LoadConfigOrWrap` call
+- [x] `writeCopyLocalYAML` and `retryDeployWithFreshPorts` take `plan`; the retry re-allocates `len(keys)+len(autoPaths)` from the same plan; the deploy-retry gate uses `plan.hasAllocatedPorts()`; delete the old free function; update the `writeCopyLocalYAML` doc comment (spec §5/§9 references stay) to describe the traced paths
+- [x] write runner tests (stub `execDwe` and `allocatePorts`): traced path written into the copy's `local.yml` `vars` with the allocated number; explicit pin not overwritten; retry re-allocates and rewrites the same set; blocking finding → `StatusFailed`, nil error, empty `ComposeProject`/`CopyPath`, no `copyRoot` on disk, no manifest; non-blocking traced finding produces no warning; untraced finding still warns
+- [x] write a `cli/test` test: a blocked scenario exits 1 in text mode and reports `"status": "failed"` with no `kept:` line under `--keep` and under `--output json`
+- [x] run `go test ./internal/core/workflow/envtest/... ./internal/cli/test/...` - must pass before task 4
+
+⚠️ "non-blocking traced finding produces no warning" cannot hold until Task 4:
+the gate filters through `CoversInterpolatedHostPort`, which in this task still
+requires the path in `scn.AutoPortVarPaths()`. The runner already remaps such a
+path, so between tasks 3 and 4 a traced finding is remapped AND warned about
+(stale advice, no behavioural harm). The assertion lands in Task 4 together with
+the predicate change; Task 3's tests pin the current branch
+(`TestRunScenario_InterpolatedHostPortFilteredByScenario`) plus the new
+allocation/pin/retry/untraced cases.
+
+➕ two gate tests rewritten to the new shape: the `copyRoot`-argument tests now
+build their findings through `gateFindings` (loads the project, calls
+`buildPortPlan`), and `TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped`
+became `TestScanComposeIsolationGate_NoFindings` — the gate no longer loads a
+config, so an unloadable one never reaches it.
 
 ### Task 4: Traced findings are covered everywhere; scanner messages tell the truth
 

@@ -527,6 +527,61 @@ func TestRunTest_Seq_Keep_ExactOutput(t *testing.T) {
 	}
 }
 
+// TestRunTest_Seq_BlockedScenario_NoKeptLine pins the CLI side of the
+// gate-before-copy contract: a scenario the isolation gate blocked comes back
+// as StatusFailed with no compose project and no copy, so it exits 1 and — even
+// under --keep — prints no "kept:" line for an environment that was never
+// created. Under --output json the only signal is the failed status.
+func TestRunTest_Seq_BlockedScenario_NoKeptLine(t *testing.T) {
+	blocked := func() *fakeRunner {
+		return &fakeRunner{results: map[string]*envtest.ScenarioResult{
+			"smoke": {Name: "smoke", Status: envtest.StatusFailed, Duration: time.Second},
+		}}
+	}
+
+	t.Run("text with --keep", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+		withFakeRunner(t, blocked())
+		flags := &cmdctx.RootFlags{Root: baseDir}
+		cmd, out, errW := newRunTestCmd()
+
+		err := runTest(cmd, flags, nil, true, 0, false, 1)
+		var oe *testRunOutcomeError
+		if !errors.As(err, &oe) || oe.ExitCode() != 1 {
+			t.Fatalf("expected exit-code-1 error, got %v", err)
+		}
+		const want = "smoke: failed [1s]\n\n0 passed, 1 failed (smoke: failed)\n"
+		if out.String() != want {
+			t.Errorf("stdout mismatch:\n got: %q\nwant: %q", out.String(), want)
+		}
+		if errW.String() != "" {
+			t.Errorf("stderr must be empty, got %q", errW.String())
+		}
+	})
+
+	t.Run("json", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+		withFakeRunner(t, blocked())
+		flags := &cmdctx.RootFlags{Root: baseDir, Output: "json"}
+		cmd, out, errW := newRunTestCmd()
+
+		err := runTest(cmd, flags, nil, false, 0, false, 1)
+		var oe *testRunOutcomeError
+		if !errors.As(err, &oe) || oe.ExitCode() != 1 {
+			t.Fatalf("expected exit-code-1 error, got %v", err)
+		}
+		const want = `{"scenarios":[{"name":"smoke","status":"failed","duration_seconds":1}],"summary":"0 passed, 1 failed (smoke: failed)"}` + "\n"
+		if out.String() != want {
+			t.Errorf("stdout mismatch:\n got: %q\nwant: %q", out.String(), want)
+		}
+		if errW.String() != "" {
+			t.Errorf("stderr must be empty, got %q", errW.String())
+		}
+	})
+}
+
 func TestRunTest_Seq_NoScenarios_ExactOutput(t *testing.T) {
 	baseDir := t.TempDir()
 	withFakeRunner(t, &fakeRunner{})
