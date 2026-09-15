@@ -44,7 +44,7 @@ What to check in your scenarios:
 
 **A scenario blocked by the compose isolation scanner leaves nothing behind.** The scan now runs before the copy is made, so a blocking finding (`container_name:`, a literal host port) fails the scenario with no copy directory, no compose project and no failure report directory. The exit code is unchanged (1). `--keep` has nothing to keep for such a scenario.
 
-**`dwe validate tests` and `dwe test list --output json` ignore per-developer compose overlays.** `compose.extra` / `services.<name>.compose.extra` from your own `workspace/local.yml` reference gitignored files the copy never receives, so both commands now evaluate scenarios without them, as the copy runs. Cost numbers (`build_services`, `external_images`) drop those services, and an isolation finding that exists only in such an overlay is no longer reported.
+**`dwe test list --output json` ignores per-developer compose overlays.** `compose.extra` / `services.<name>.compose.extra` from your own `workspace/local.yml` reference gitignored files the copy never receives, so the command now evaluates scenarios without them, as the copy runs: cost numbers (`build_services`, `external_images`) drop those services, and so does `cost_profile.isolation_findings`. `dwe validate tests` builds the same view per scenario, so an `interpolated_host_port` finding that exists only in such an overlay is no longer reported — its other finding kinds (`container_name`, a literal host port, the volume and network kinds) still come from a project-wide scan and warn regardless of overlays.
 
 ## Upgrading to 0.6.1
 

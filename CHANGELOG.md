@@ -40,11 +40,15 @@ generated from commit subjects and stay on the
   (`container_name:`, a literal host port) no longer leaves a copy directory, a
   compose project or a failure report directory behind. The scenario is still
   reported `failed` (exit code 1).
-- **`dwe validate tests` and `dwe test list --output json` evaluate scenarios
-  without per-developer `compose.extra` overlays**, exactly as the test copy
-  runs them: `cost_profile.build_services` / `external_images` no longer count a
-  service that exists only in such an overlay, and an isolation finding from one
-  is no longer reported.
+- **`dwe test list --output json` evaluates scenarios without per-developer
+  `compose.extra` overlays**, exactly as the test copy runs them:
+  `cost_profile.build_services` / `external_images` no longer count a service
+  that exists only in such an overlay, and neither does
+  `cost_profile.isolation_findings`. `dwe validate tests` builds the same view
+  per scenario, so an `interpolated_host_port` finding that exists only in such
+  an overlay is no longer reported; its other finding kinds
+  (`container_name`, `raw_host_port`, the volume and network kinds) still come
+  from a project-wide scan and warn regardless of overlays.
 
 ### Fixed
 
