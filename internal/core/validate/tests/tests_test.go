@@ -878,6 +878,56 @@ services:
 	}
 }
 
+// TestScenariosValidator_InterpolatedHostPortInLocalOverlay pins that the
+// scenario view drops the per-developer compose overlays, as the copy's seeded
+// local.yml does: an interpolated host port declared only in such an overlay
+// binds nothing in any copy, so it must not warn — while a finding of another
+// kind from the same file still comes from the project-wide scan and warns.
+func TestScenariosValidator_InterpolatedHostPortInLocalOverlay(t *testing.T) {
+	root := t.TempDir()
+	writeScenario(t, root, "smoke.yml", "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n")
+
+	composePath := filepath.Join(root, "docker-compose.yml")
+	if err := os.WriteFile(composePath, []byte(`
+services:
+  web:
+    image: busybox
+`), 0o644); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+	overlayPath := filepath.Join(root, "local.compose.yml")
+	if err := os.WriteFile(overlayPath, []byte(`
+services:
+  web:
+    container_name: fixed-name
+    ports: ["${LOCAL_PORT:-9001}:6379"]
+`), 0o644); err != nil {
+		t.Fatalf("write overlay file: %v", err)
+	}
+
+	cfg := baseCfg()
+	cfg.Compose.Base = composePath
+	cfg.Compose.Extra = []string{overlayPath}
+
+	var iso, other []string
+	for _, d := range warningDiags(runFor(root, cfg)) {
+		if d.Target != "tests.isolation" {
+			continue
+		}
+		if strings.Contains(d.Message, "LOCAL_PORT") {
+			iso = append(iso, d.Message)
+			continue
+		}
+		other = append(other, d.Message)
+	}
+	if len(iso) != 0 {
+		t.Errorf("an interpolated port from a per-developer overlay must stay silent, got %v", iso)
+	}
+	if len(other) != 1 || !strings.Contains(other[0], "container_name") {
+		t.Errorf("want the container_name finding from the same file, got %v", other)
+	}
+}
+
 // TestScenariosValidator_ScenarioViewDoesNotMutateProjectConfig pins that
 // resolving a scenario's compose chain works on a copy: a scenario disabling a
 // service must not rewrite the project's Raw["services"], which the isolation

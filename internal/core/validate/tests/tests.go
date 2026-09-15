@@ -9,7 +9,6 @@ package tests
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,14 +21,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 )
-
-// autoPortPlaceholder substitutes any scenario env.vars entry equal to
-// envtest.AutoPortSentinel ("auto") when rendering steps at validate time, so
-// a ${vars.x} reference used in a strict-int builtin param (e.g.
-// tcp_reachable's port:) renders to a valid placeholder instead of the empty
-// string. The concrete value is arbitrary — validate-time resolution never
-// dials it, it only needs to satisfy an int/port-range check.
-const autoPortPlaceholder = 1
 
 // All returns the tests domain's validators.
 func All() []validate.Validator {
@@ -143,27 +134,20 @@ type scenarioView struct {
 }
 
 // newScenarioView resolves the compose chain scn's copy would run.
-// ScanComposeIsolation scans the project's chain, but ComposeFiles gates each
-// service's own files on Enabled, and applyServiceToggles keeps a disabled
-// service Enabled only when it is required — so a file the scenario drops
-// binds nothing in that copy. Paths resolve as parseComposeFiles does, so they
+// ScanComposeIsolation scans the project's chain, but envtest.ScenarioView
+// gates each service's own files on the scenario's own enabled state (a
+// disabled service stays enabled only when it is required) and drops the
+// per-developer compose overlays the copy's seeded local.yml strips — so a
+// file the scenario drops, or one only this developer's local.yml adds, binds
+// nothing in that copy. Paths resolve as parseComposeFiles does, so they
 // compare against IsolationFinding.File.
 func newScenarioView(cfg *config.DweConfig, root, name string, scn *envtest.Scenario) scenarioView {
 	v := scenarioView{name: name, scn: scn}
 	if scn == nil {
 		return v
 	}
-	// applyServiceToggles writes Raw["services"] into the map it is given, and
-	// a struct copy shares cfg.Raw — without a fresh map one scenario's toggles
-	// leak into ctx.Cfg and into every later scenario's view.
-	view := *cfg
-	view.Raw = maps.Clone(cfg.Raw)
-	if view.Raw == nil {
-		view.Raw = map[string]any{}
-	}
-	applyServiceToggles(&view, scn.Env.Services)
 	v.composeFiles = make(map[string]bool)
-	for _, f := range view.ComposeFiles() {
+	for _, f := range envtest.ScenarioView(cfg, scn.Env).ComposeFiles() {
 		if !filepath.IsAbs(f) {
 			f = filepath.Join(root, f)
 		}
@@ -325,150 +309,21 @@ func validateCommandRefs(cfg *config.DweConfig, steps []config.DeployStep, targe
 	return diags
 }
 
-// renderConfigFor builds a throwaway *config.DweConfig whose Raw carries cfg's
-// merged config overlaid with the scenario's own env.vars (dot-paths rooted at
-// vars:), substituting any value equal to envtest.AutoPortSentinel with
-// autoPortPlaceholder. This lets ${vars.x} used in a strict-int builtin param
-// render to a valid placeholder at validate time — the same "auto" magic value
-// the runner substitutes with a real allocated port, just resolved early since
-// validate never allocates ports or deploys anything.
-//
-// It ALSO overlays the scenario's env.services enable/disable toggles onto the
-// throwaway config's service-enabled state (see applyServiceToggles), so a
+// renderConfigFor returns the config the scenario's copy would render steps
+// against: envtest.ScenarioView applied to the project config. That gives the
+// render and resolve passes the scenario's own env.vars (dot-paths rooted at
+// vars:, with envtest.AutoPortSentinel substituted by
+// envtest.AutoPortPlaceholder so a ${vars.x} reference used in a strict-int
+// builtin param renders to a valid number) and its env.services toggles, so a
 // step's template `when:` (e.g. `{{ (index .Services "x").Enabled }}` or
-// `${services.x.enabled}`) resolves against the scenario's state, exactly as
-// runtime does after loading the copy's generated local.yml.
+// `${services.x.enabled}`) resolves exactly as runtime does after loading the
+// copy's generated local.yml.
 //
-// The returned config is a shallow copy of cfg with Raw and Services replaced
-// by freshly built maps (cfg.Raw, its "vars"/"services" entries, and
-// cfg.Services are never mutated), safe to discard after the render pass.
+// The view also drops the per-developer compose overlays, which is irrelevant
+// to rendering — no step body reads compose.extra — and keeps this config
+// identical to the one the isolation scan sees.
 func renderConfigFor(cfg *config.DweConfig, env envtest.ScenarioEnv) *config.DweConfig {
-	overlayVars := make(map[string]any, len(env.Vars))
-	paths := make([]string, 0, len(env.Vars))
-	for path := range env.Vars {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	for _, path := range paths {
-		value := env.Vars[path]
-		if s, ok := value.(string); ok && s == envtest.AutoPortSentinel {
-			value = autoPortPlaceholder
-		}
-		setDotPath(overlayVars, path, value)
-	}
-
-	raw := make(map[string]any, len(cfg.Raw)+1)
-	maps.Copy(raw, cfg.Raw)
-	existingVars, _ := cfg.Raw["vars"].(map[string]any)
-	raw["vars"] = mergeMaps(existingVars, overlayVars)
-
-	cfgCopy := *cfg
-	cfgCopy.Raw = raw
-	applyServiceToggles(&cfgCopy, env.Services)
-	return &cfgCopy
-}
-
-// applyServiceToggles overlays the scenario's env.services enable/disable
-// toggles onto cfg's service-enabled state, mutating only the throwaway config
-// (cfg.Services and cfg.Raw["services"] are replaced with clones — the caller's
-// maps are never touched). Both the typed cfg.Services[name].Enabled and the
-// curated cfg.Raw["services"][name]["enabled"] mirror are updated so the two
-// template access paths (`.Services[x].Enabled` and `${services.x.enabled}`)
-// stay in agreement.
-//
-// Enable is applied before disable so disable wins on a service listed in both,
-// matching the runtime overlay order (scenarioEnvOverlay). A disabled service
-// keeps Enabled == Required, mirroring the loader's Enabled = required ||
-// services.<name>.enabled computation, so a required service a scenario
-// "disables" stays enabled here too. Unknown service names are skipped (they
-// are already reported as their own SeverityError).
-func applyServiceToggles(cfg *config.DweConfig, svcs envtest.ScenarioServices) {
-	if len(svcs.Enable) == 0 && len(svcs.Disable) == 0 {
-		return
-	}
-
-	services := make(map[string]config.ServiceConfig, len(cfg.Services))
-	maps.Copy(services, cfg.Services)
-
-	overrides := make(map[string]bool)
-	for _, name := range svcs.Enable {
-		if svc, ok := services[name]; ok {
-			svc.Enabled = true
-			services[name] = svc
-			overrides[name] = true
-		}
-	}
-	for _, name := range svcs.Disable {
-		if svc, ok := services[name]; ok {
-			svc.Enabled = svc.Required
-			services[name] = svc
-			overrides[name] = svc.Enabled
-		}
-	}
-	cfg.Services = services
-
-	if len(overrides) == 0 {
-		return
-	}
-
-	rawServices := make(map[string]any)
-	if existing, ok := cfg.Raw["services"].(map[string]any); ok {
-		maps.Copy(rawServices, existing)
-	}
-	for name, enabled := range overrides {
-		entry := map[string]any{}
-		if existing, ok := rawServices[name].(map[string]any); ok {
-			maps.Copy(entry, existing)
-		}
-		entry["enabled"] = enabled
-		rawServices[name] = entry
-	}
-	cfg.Raw["services"] = rawServices
-}
-
-// setDotPath inserts value at the dot-path in m, creating intermediate maps as
-// needed. A path segment already holding a non-map value is overwritten
-// wholesale (mirrors envtest's own setDotPath collision rule). An empty path
-// or path segment is silently dropped — a malformed scenario var path is
-// reported downstream when the render/resolve pass sees the unresolved ref.
-func setDotPath(m map[string]any, path string, value any) {
-	if path == "" {
-		return
-	}
-	parts := strings.Split(path, ".")
-	for i, part := range parts {
-		if part == "" {
-			return
-		}
-		if i == len(parts)-1 {
-			m[part] = value
-			return
-		}
-		next, ok := m[part].(map[string]any)
-		if !ok {
-			next = make(map[string]any)
-			m[part] = next
-		}
-		m = next
-	}
-}
-
-// mergeMaps returns a new map holding dst's entries overlaid with src's
-// (src wins on conflict; nested maps present on both sides merge
-// recursively). Neither dst nor src is mutated.
-func mergeMaps(dst, src map[string]any) map[string]any {
-	out := make(map[string]any, len(dst)+len(src))
-	maps.Copy(out, dst)
-	for k, sv := range src {
-		if dm, ok := out[k].(map[string]any); ok {
-			if sm, ok := sv.(map[string]any); ok {
-				out[k] = mergeMaps(dm, sm)
-				continue
-			}
-		}
-		out[k] = sv
-	}
-	return out
+	return envtest.ScenarioView(cfg, env)
 }
 
 // relPath returns path relative to root, falling back to path unchanged when
