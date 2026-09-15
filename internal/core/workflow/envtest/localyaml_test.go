@@ -161,6 +161,58 @@ func TestBuildLocalOverlayAutoPortReplacement(t *testing.T) {
 	}
 }
 
+// TestBuildLocalOverlayImplicitVarPort covers the paths buildPortPlan
+// allocates from a traced compose variable: the scenario never mentions them,
+// so the overlay must create them from ports alone.
+func TestBuildLocalOverlayImplicitVarPort(t *testing.T) {
+	tests := []struct {
+		name  string
+		seed  map[string]any
+		vars  map[string]any
+		ports map[string]int
+		want  map[string]any
+	}{
+		{
+			name:  "implicit path only",
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "implicit and explicit auto paths mix",
+			vars:  map[string]any{"app.http_port": AutoPortSentinel},
+			ports: map[string]int{"app.http_port": 41235, "ports.valkey": 41234},
+			want: map[string]any{
+				"app":   map[string]any{"http_port": 41235},
+				"ports": map[string]any{"valkey": 41234},
+			},
+		},
+		{
+			name:  "an explicit value wins over an allocation for the same path",
+			vars:  map[string]any{"ports.valkey": 6380},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 6380}},
+		},
+		{
+			name:  "an allocated port replaces the developer's seeded value",
+			seed:  map[string]any{"vars": map[string]any{"ports": map[string]any{"valkey": 6379, "other": 7000}}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234, "other": 7000}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scn := &Scenario{Env: ScenarioEnv{Vars: tt.vars}}
+			overlay, err := BuildLocalOverlay(tt.seed, scn, "proj-t-s-abc", tt.ports, nil)
+			if err != nil {
+				t.Fatalf("BuildLocalOverlay: %v", err)
+			}
+			if got := overlay["vars"]; !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("vars = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildLocalOverlayAutoPortMissingAllocation(t *testing.T) {
 	scn := &Scenario{
 		Env: ScenarioEnv{Vars: map[string]any{"app.http_port": AutoPortSentinel}},

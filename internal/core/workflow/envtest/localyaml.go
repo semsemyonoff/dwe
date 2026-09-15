@@ -116,22 +116,34 @@ func stripComposeExtra(seed map[string]any, warn func(string)) map[string]any {
 }
 
 // scenarioEnvOverlay builds the vars:/services: overlay from a scenario's
-// env block. ports is keyed by the var's dot-path (relative to vars:) for
-// every var whose value is AutoPortSentinel.
+// env block. ports is keyed by the var's dot-path (relative to vars:) and
+// holds a port for every var the scenario set to AutoPortSentinel PLUS every
+// path the runner allocated implicitly — a path a compose host port reads
+// through an active exports.env rule (see buildPortPlan). An implicit path is
+// written into vars: even though the scenario never mentions it; a path the
+// scenario pinned to a concrete value never reaches ports, so the pin stands.
 func scenarioEnvOverlay(scn *Scenario, ports map[string]int) (map[string]any, error) {
 	overlay := make(map[string]any)
 
-	if len(scn.Env.Vars) > 0 {
-		paths := make([]string, 0, len(scn.Env.Vars))
+	if len(scn.Env.Vars) > 0 || len(ports) > 0 {
+		paths := make([]string, 0, len(scn.Env.Vars)+len(ports))
 		for path := range scn.Env.Vars {
 			paths = append(paths, path)
+		}
+		for path := range ports {
+			if _, declared := scn.Env.Vars[path]; !declared {
+				paths = append(paths, path)
+			}
 		}
 		sort.Strings(paths)
 
 		vars := make(map[string]any)
 		for _, path := range paths {
-			value := scn.Env.Vars[path]
-			if s, ok := value.(string); ok && s == AutoPortSentinel {
+			value, declared := scn.Env.Vars[path]
+			switch {
+			case !declared:
+				value = ports[path]
+			case isAutoPort(value):
 				port, ok := ports[path]
 				if !ok {
 					return nil, fmt.Errorf("envtest: scenario var %q is %q but no port was allocated for it", path, AutoPortSentinel)

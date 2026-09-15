@@ -540,12 +540,17 @@ func CollectPortConflicts(ctx context.Context, cfg *config.DweConfig, baseDir st
 - Modify: `internal/core/workflow/envtest/localyaml.go` (`scenarioEnvOverlay` :121)
 - Modify: `internal/core/workflow/envtest/localyaml_test.go`
 
-- [ ] implement `portPlan`, `buildPortPlan(origCfg, scn, baseDir)`, `pinnedVarPath` and `hasAllocatedPorts()` per Technical Details (union rule, effective-pin predicate over the normalised overlay, sorted + compacted)
-- [ ] `scenarioEnvOverlay`: iterate the sorted union of `scn.Env.Vars` keys and `ports` keys so an implicit path lands in `vars`; keep the "auto but no port" error for explicit sentinels
-- [ ] write table-driven tests for `buildPortPlan` against a temp project tree: traced path added; explicit `auto` + traced de-duplicated to one entry; two compose entries on the same path → one entry; a finding from a service the scenario disables is absent (its compose file is not in the view's chain); a rule gated `when: vars.<x>` that the scenario sets through `env.vars` is classified as the copy would; untraced finding contributes nothing; order stable across runs
-- [ ] write table-driven tests for `pinnedVarPath`: int pins; `"6380"` pins; `float64` pins; `auto` does not; `null` does not; `""` does not; nested form `ports: {valkey: 6380}` pins `ports.valkey`; a map at the path does not pin; a value present only in the seed `local.yml` does not pin
-- [ ] write tests for `scenarioEnvOverlay` with an implicit path (written as int at the dot-path), mixed explicit/implicit paths, and an implicit path whose seed `local.yml` already carries a developer value (the allocated port replaces it after `BuildLocalOverlay`)
-- [ ] run `go test ./internal/core/workflow/envtest/...` - must pass before task 3
+- [x] implement `portPlan`, `buildPortPlan(origCfg, scn, baseDir)`, `pinnedVarPath` and `hasAllocatedPorts()` per Technical Details (union rule, effective-pin predicate over the normalised overlay, sorted + compacted)
+- [x] `scenarioEnvOverlay`: iterate the sorted union of `scn.Env.Vars` keys and `ports` keys so an implicit path lands in `vars`; keep the "auto but no port" error for explicit sentinels
+- [x] write table-driven tests for `buildPortPlan` against a temp project tree: traced path added; explicit `auto` + traced de-duplicated to one entry; two compose entries on the same path → one entry; a finding from a service the scenario disables is absent (its compose file is not in the view's chain); a rule gated `when: vars.<x>` that the scenario sets through `env.vars` is classified as the copy would; untraced finding contributes nothing; order stable across runs
+- [x] write table-driven tests for `pinnedVarPath`: int pins; `"6380"` pins; `float64` pins; `auto` does not; `null` does not; `""` does not; nested form `ports: {valkey: 6380}` pins `ports.valkey`; a map at the path does not pin; a value present only in the seed `local.yml` does not pin
+- [x] write tests for `scenarioEnvOverlay` with an implicit path (written as int at the dot-path), mixed explicit/implicit paths, and an implicit path whose seed `local.yml` already carries a developer value (the allocated port replaces it after `BuildLocalOverlay`)
+- [x] run `go test ./internal/core/workflow/envtest/...` - must pass before task 3
+
+➕ shared helpers extracted while implementing: `expandVarPaths(vars, subst)` in
+`scenarioview.go` (the one dot-path expansion, used by both the view's
+placeholder overlay and the plan's raw pin overlay) and `isAutoPort(value)` in
+`scenario.go` (the single sentinel test).
 
 ### Task 3: Runner wiring — gate before `CopyTree`, plan through allocation and retry
 

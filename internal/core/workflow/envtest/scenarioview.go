@@ -137,23 +137,34 @@ func withoutComposeExtra(compose map[string]any) map[string]any {
 }
 
 // scenarioVarsOverlay expands a scenario's env.vars dot-paths into a nested
-// map, substituting AutoPortSentinel with AutoPortPlaceholder. Paths are
-// applied in sorted order so two paths colliding on a prefix resolve the same
-// way on every run.
-//
-// A malformed path (empty, or with an empty segment) is silently skipped: the
-// view is inspection-only, and the same path is rejected with an error by
-// BuildLocalOverlay before anything runs, while validate's render pass reports
-// the resulting unresolved ${vars.*} reference itself.
+// map, substituting AutoPortSentinel with AutoPortPlaceholder.
 func scenarioVarsOverlay(vars map[string]any) map[string]any {
 	if len(vars) == 0 {
 		return nil
 	}
+	return expandVarPaths(vars, func(value any) any {
+		if isAutoPort(value) {
+			return AutoPortPlaceholder
+		}
+		return value
+	})
+}
+
+// expandVarPaths expands env.vars dot-path keys into a nested map, passing each
+// value through subst first (nil stores it as written). Paths are applied in
+// sorted order so two paths colliding on a prefix resolve the same way on every
+// run.
+//
+// A malformed path (empty, or with an empty segment) is silently skipped:
+// callers here inspect rather than run, and the same path is rejected with an
+// error by BuildLocalOverlay before anything runs, while validate's render pass
+// reports the resulting unresolved ${vars.*} reference itself.
+func expandVarPaths(vars map[string]any, subst func(any) any) map[string]any {
 	out := make(map[string]any, len(vars))
 	for _, path := range slices.Sorted(maps.Keys(vars)) {
 		value := vars[path]
-		if s, ok := value.(string); ok && s == AutoPortSentinel {
-			value = AutoPortPlaceholder
+		if subst != nil {
+			value = subst(value)
 		}
 		_ = setDotPath(out, path, value)
 	}
