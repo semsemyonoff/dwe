@@ -658,12 +658,18 @@ and the sourceService message are unchanged; an untraced variable always warns.
 - Create: `internal/cli/deploy/preflight_scope_test.go`
 - Modify: `internal/cli/deploy/bridge_test.go` (or a new focused test file) for the option and ordering assertions
 
-- [ ] move the "service %q not found in config" loop above the preflight call; keep the `svcDeploys` extra-loading where it is
-- [ ] implement `preflightScope(cfg, names)` per Technical Details (BFS over `DependsOn`, enabled-only for dependencies, requested names included as given, cycle-safe, sorted)
-- [ ] pass `preflight.WithServices(preflightScope(cfg, opts.Services))` only when `len(opts.Services) > 0`
-- [ ] write table-driven tests for `preflightScope`: no deps; transitive chain; diamond; cycle; disabled dependency skipped; unknown dependency name ignored; requested disabled service passed through unchanged
-- [ ] write tests through `Opts.PreflightFn` (this covers both `deploy run --service` and the toggle executor, which share `RunHelper`): the option carries the closure for a `--service` run and is absent for a whole-project run; an unknown `--service` fails before the preflight stub is called
-- [ ] run `go test ./internal/cli/deploy/... ./internal/cli/service/...` - must pass before task 8
+- [x] move the "service %q not found in config" loop above the preflight call; keep the `svcDeploys` extra-loading where it is
+- [x] implement `preflightScope(cfg, names)` per Technical Details (BFS over `DependsOn`, enabled-only for dependencies, requested names included as given, cycle-safe, sorted)
+- [x] pass `preflight.WithServices(preflightScope(cfg, opts.Services))` only when `len(opts.Services) > 0`
+- [x] write table-driven tests for `preflightScope`: no deps; transitive chain; diamond; cycle; disabled dependency skipped; unknown dependency name ignored; requested disabled service passed through unchanged
+- [x] write tests through `Opts.PreflightFn` (this covers both `deploy run --service` and the toggle executor, which share `RunHelper`): the option carries the closure for a `--service` run and is absent for a whole-project run; an unknown `--service` fails before the preflight stub is called
+- [x] run `go test ./internal/cli/deploy/... ./internal/cli/service/...` - must pass before task 8
+
+➕ `preflight.Option` is opaque outside its package (`func(*options)` over an
+unexported struct), so the `Opts.PreflightFn` test asserts the option's
+PRESENCE/ABSENCE only; the scope VALUE is pinned by `TestPreflightScope` and,
+end to end, by preflight's own `TestRun_WithServicesScopesPortsFree`. No test
+seam was added to bridge the last hop.
 
 ### Task 8: Document Change B and commit
 
