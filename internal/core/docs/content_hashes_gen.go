@@ -25,7 +25,7 @@ var ContentHashes = map[string]string{
 	"guides/upgrading.md":                      "694924d66dbd",
 	"guides/write-snapshot-workflows.md":       "b02f8eabca3e",
 	"internals/architecture.md":                "cb1aa72beee3",
-	"internals/packages.md":                    "050e90a1c550",
+	"internals/packages.md":                    "fa432dfe5a60",
 	"internals/tui-keymap.md":                  "739fe9a61f5d",
 	"reference/concepts/architecture.md":       "0fa38ae667ca",
 	"reference/concepts/bridge.md":             "f21a702ba0e5",
