@@ -46,6 +46,18 @@ generated from commit subjects and stay on the
   service that exists only in such an overlay, and an isolation finding from one
   is no longer reported.
 
+### Fixed
+
+- **A per-service deploy no longer fails `ports_free` on a port it never
+  binds.** `dwe deploy run --service <name>` and the deploy
+  `dwe services enable|disable --apply` performs now check only the named
+  services plus the transitive `depends_on` closure of their `service.yml`
+  declarations — what `docker compose up <name>` actually starts — instead of
+  every enabled service in the project. Whole-project runs and `dwe validate`
+  are unchanged.
+- An unknown `--service` name is rejected before preflight runs, so a typo
+  fails fast instead of narrowing the port scope to nothing.
+
 ## [0.6.1] - 2026-09-15
 
 ### Changed

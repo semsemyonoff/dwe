@@ -679,12 +679,12 @@ seam was added to bridge the last hop.
 - Modify: `docs/internals/packages.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] `validate.md` (:85) + RU (:87): under a per-service deploy (`dwe deploy run --service <name>`, and the deploy `dwe services enable|disable --apply` performs) `env.ports_free` checks only the named services and the transitive `depends_on` closure of their `service.yml` declarations; whole-project runs and `dwe validate` are unchanged
-- [ ] `troubleshooting.md` (:31) + RU (:33): one sentence on the narrowed scope for per-service deploys
-- [ ] `packages.md`: `preflight/` bullet (:103) — `WithServices` option, `Context.Services` contract (only `ports_free` reads it; the deploy CLI computes the closure, preflight never derives it; the pre-wizard gate filters `ports_free` out and needs no scope); `validate/env/` bullet (:164) — `CollectPortConflictsScoped` is the implementation, the exported unscoped probe and `WaitPortsReleased` delegate with nil; deploy bullet — existence check precedes preflight, both `deploy run --service` and the service toggle executor pass the scope
-- [ ] `CHANGELOG.md` `## [Unreleased]` `### Fixed`: a per-service deploy (`dwe deploy run --service <name>`, `dwe services enable|disable --apply`) no longer fails `ports_free` on a port held for a service the run does not start; the probe checks the named services and their `depends_on` closure; an unknown `--service` name is rejected before preflight runs
-- [ ] `make build`, refresh RU hash headers, `make lint && make test && (cd web && npm run build)` - must pass
-- [ ] commit `fix(preflight): scope ports_free to the services a per-service deploy brings up`
+- [x] `validate.md` (:85) + RU (:87): under a per-service deploy (`dwe deploy run --service <name>`, and the deploy `dwe services enable|disable --apply` performs) `env.ports_free` checks only the named services and the transitive `depends_on` closure of their `service.yml` declarations; whole-project runs and `dwe validate` are unchanged
+- [x] `troubleshooting.md` (:31) + RU (:33): one sentence on the narrowed scope for per-service deploys
+- [x] `packages.md`: `preflight/` bullet (:103) — `WithServices` option, `Context.Services` contract (only `ports_free` reads it; the deploy CLI computes the closure, preflight never derives it; the pre-wizard gate filters `ports_free` out and needs no scope); `validate/env/` bullet (:164) — `CollectPortConflictsScoped` is the implementation, the exported unscoped probe and `WaitPortsReleased` delegate with nil; deploy bullet — existence check precedes preflight, both `deploy run --service` and the service toggle executor pass the scope
+- [x] `CHANGELOG.md` `## [Unreleased]` `### Fixed`: a per-service deploy (`dwe deploy run --service <name>`, `dwe services enable|disable --apply`) no longer fails `ports_free` on a port held for a service the run does not start; the probe checks the named services and their `depends_on` closure; an unknown `--service` name is rejected before preflight runs
+- [x] `make build`, refresh RU hash headers, `make lint && make test && (cd web && npm run build)` - must pass
+- [x] commit `fix(preflight): scope ports_free to the services a per-service deploy brings up`
 
 ### Task 9: Verify acceptance criteria
 
