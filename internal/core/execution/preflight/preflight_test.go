@@ -3,9 +3,11 @@ package preflight
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -111,6 +113,90 @@ func TestRun_secretsUnresolvedBlocks(t *testing.T) {
 			if strings.Contains(errOut.String(), unwanted) {
 				t.Errorf("preflight printed the OK row (%q):\n%s", unwanted, errOut.String())
 			}
+		}
+	})
+}
+
+func TestApplyOptions(t *testing.T) {
+	if got := applyOptions(); got.services != nil {
+		t.Errorf("no options must leave services nil, got %v", got.services)
+	}
+	if got := applyOptions(nil); got.services != nil {
+		t.Errorf("a nil option must be tolerated, got %v", got.services)
+	}
+	got := applyOptions(WithServices([]string{"web", "db"}))
+	if !reflect.DeepEqual(got.services, []string{"web", "db"}) {
+		t.Errorf("WithServices = %v", got.services)
+	}
+}
+
+// TestRun_WithServicesScopesPortsFree pins the option end to end: the scope
+// reaches validate.Context.Services, where env.ports_free reads it. A port held
+// by a service outside the scope must produce no diagnostic; the same port with
+// no option (whole-project run) must still block.
+//
+// Only the ports_free line is asserted: the other env probes report whatever
+// this host looks like under the isolated PATH and are not this test's subject.
+func TestRun_WithServicesScopesPortsFree(t *testing.T) {
+	// Hold a real port for the duration of the test so the listen probe sees
+	// EADDRINUSE on the wildcard address ports_free binds.
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+	busy := l.Addr().(*net.TCPAddr).Port
+
+	// A `docker` stub ahead of the real PATH: ports_free needs the binary to
+	// resolve, an empty `docker ps` sends every declared port through the listen
+	// probe, and the rest of PATH stays intact so the other env probes (git, sh)
+	// do not add unrelated error rows.
+	binDir := t.TempDir()
+	stub := filepath.Join(binDir, "docker")
+	body := "#!/bin/sh\ncase \"$1\" in\n  compose) echo 'Docker Compose version v2.29.0';;\nesac\nexit 0\n"
+	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
+		t.Fatalf("write docker stub: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	root := t.TempDir()
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"db":  {Enabled: true, Ports: map[string]config.ServicePortSpec{"sql": {Port: busy}}},
+			"web": {Enabled: true},
+		},
+	}
+	want := "port " + strconv.Itoa(busy)
+
+	t.Run("no option keeps the whole project in scope", func(t *testing.T) {
+		var errOut bytes.Buffer
+		if err := Run(context.Background(), cfg, nil, root, "deploy", false, &errOut); err == nil {
+			t.Error("preflight must block on the busy port with no scope")
+		}
+		if !strings.Contains(errOut.String(), want) {
+			t.Errorf("unscoped preflight must report the busy port:\n%s", errOut.String())
+		}
+	})
+
+	t.Run("scope excluding the owner silences it", func(t *testing.T) {
+		var errOut bytes.Buffer
+		// Only the absence of the ports_free row is asserted: whether the run
+		// blocks overall depends on the host's other env probes.
+		_ = Run(context.Background(), cfg, nil, root, "deploy", false, &errOut,
+			WithServices([]string{"web"}))
+		if strings.Contains(errOut.String(), want) {
+			t.Errorf("scoped preflight must not report the out-of-scope port:\n%s", errOut.String())
+		}
+	})
+
+	t.Run("scope including the owner still blocks", func(t *testing.T) {
+		var errOut bytes.Buffer
+		if err := Run(context.Background(), cfg, nil, root, "deploy", false, &errOut,
+			WithServices([]string{"db"})); err == nil {
+			t.Error("preflight must block on an in-scope busy port")
+		}
+		if !strings.Contains(errOut.String(), want) {
+			t.Errorf("scoped preflight must report the in-scope port:\n%s", errOut.String())
 		}
 	})
 }

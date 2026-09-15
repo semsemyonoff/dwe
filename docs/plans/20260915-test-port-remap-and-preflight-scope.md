@@ -643,12 +643,12 @@ and the sourceService message are unchanged; an untraced variable always warns.
 - Modify: `internal/core/validate/env/ports_test.go`
 - Modify: the nine stubs: `internal/core/workflow/lifecycle/helpers_test.go:24`, `internal/core/workflow/lifecycle/preflight_test.go:39,64,91,117`, `internal/cli/lifecycle/testhelpers_test.go:24`, `internal/cli/lifecycle/reset_test.go:432`, `internal/cli/deploy/bridge_test.go:108,186`
 
-- [ ] add `Services []string` to `validate.Context` with the doc comment from Technical Details
-- [ ] add `preflight.Option`, `WithServices`, the variadic on `Run` and the `RunFn` alias; `Run` copies the option into `vctx.Services`
-- [ ] `ports.go`: `collectDeclaredPorts(cfg, scope)`; `CollectPortConflictsScoped` as the implementation, `CollectPortConflicts` delegating with nil; `WaitPortsReleased` passes nil; `portsFreeValidator.Run` uses the scoped pair; doc comments say the wizard seam and `WaitPortsReleased` stay unscoped by design
-- [ ] fix the nine stubs (add `...preflight.Option`)
-- [ ] write tests: `WithServices` reaches `Context.Services` and a call without options leaves it nil (preflight_test); `collectDeclaredPorts` table — nil scope keeps all enabled, scope keeps only listed, a listed disabled service stays excluded, unknown name in scope ignored; **diagnostic-level** `portsFreeValidator.Run` test through `dockerPSOutFn` / `portListenFn`: an out-of-scope busy port yields no diagnostic, an in-scope busy port yields the same diagnostic as before, nil scope unchanged; `CollectPortConflicts` unscoped behaviour pinned
-- [ ] run `go test ./internal/core/execution/preflight/... ./internal/core/validate/... ./internal/cli/... ./internal/core/workflow/lifecycle/...` - must pass before task 7
+- [x] add `Services []string` to `validate.Context` with the doc comment from Technical Details
+- [x] add `preflight.Option`, `WithServices`, the variadic on `Run` and the `RunFn` alias; `Run` copies the option into `vctx.Services`
+- [x] `ports.go`: `collectDeclaredPorts(cfg, scope)`; `CollectPortConflictsScoped` as the implementation, `CollectPortConflicts` delegating with nil; `WaitPortsReleased` passes nil; `portsFreeValidator.Run` uses the scoped pair; doc comments say the wizard seam and `WaitPortsReleased` stay unscoped by design
+- [x] fix the nine stubs (add `...preflight.Option`)
+- [x] write tests: `WithServices` reaches `Context.Services` and a call without options leaves it nil (preflight_test); `collectDeclaredPorts` table — nil scope keeps all enabled, scope keeps only listed, a listed disabled service stays excluded, unknown name in scope ignored; **diagnostic-level** `portsFreeValidator.Run` test through `dockerPSOutFn` / `portListenFn`: an out-of-scope busy port yields no diagnostic, an in-scope busy port yields the same diagnostic as before, nil scope unchanged; `CollectPortConflicts` unscoped behaviour pinned
+- [x] run `go test ./internal/core/execution/preflight/... ./internal/core/validate/... ./internal/cli/... ./internal/core/workflow/lifecycle/...` - must pass before task 7
 
 ### Task 7: Deploy CLI computes the scope and validates `--service` first
 

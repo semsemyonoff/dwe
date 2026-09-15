@@ -89,7 +89,37 @@ func stagesForPreflight(stage string) []string {
 // RunFn is the signature of Run. Commands that want a swappable preflight
 // (e.g. for tests, or to override the implementation) accept a RunFn and
 // default to Run when nil.
-type RunFn = func(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error
+type RunFn = func(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer, opts ...Option) error
+
+// options collects the optional, caller-supplied narrowing of a preflight run.
+type options struct {
+	services []string
+}
+
+// Option customizes a preflight run.
+type Option func(*options)
+
+// WithServices narrows service-scoped probes (today: env.ports_free) to names —
+// the services the command acts on plus whatever they bring up. Preflight is a
+// dumb carrier here: it never derives the set itself, the caller passes the
+// ready list (see internal/cli/deploy's preflightScope, which adds the
+// depends_on closure). Omitting the option, or passing an empty slice, keeps
+// the whole-project behavior.
+func WithServices(names []string) Option {
+	return func(o *options) { o.services = names }
+}
+
+// applyOptions folds opts into an options value. Nil entries are tolerated so a
+// caller can pass a conditional option without branching at the call site.
+func applyOptions(opts ...Option) options {
+	var o options
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&o)
+		}
+	}
+	return o
+}
 
 // Run executes env + checks (filtered by stage) and renders diagnostics to
 // errOut. Returns *Error on any error-severity diagnostic.
@@ -101,7 +131,10 @@ type RunFn = func(ctx context.Context, cfg *config.DweConfig, cmdRegistry *userc
 //
 // cmdRegistry is nil-tolerant: checks.AllForStages produces unknown-command
 // diagnostics for any type: command entry when nil.
-func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error {
+//
+// opts narrow the run; see WithServices.
+func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer, opts ...Option) error {
+	o := applyOptions(opts...)
 	if errOut == nil {
 		errOut = io.Discard
 	}
@@ -123,6 +156,7 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 		ValidateCfgWarnings: warnings,
 		ValidateCfgLoadErr:  loadErr,
 		Stage:               stage,
+		Services:            o.services,
 	}
 
 	reg := validate.NewRegistry()

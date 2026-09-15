@@ -91,11 +91,26 @@ var portListenFn = listenTCP
 // This exported function is the canonical port-conflict probe. Both the
 // validator (portsFreeValidator) and the setup wizard use it — there is no
 // second port enumeration path.
+//
+// It probes every enabled service. The setup wizard's port-fix step never runs
+// in a per-service context, so it stays on this unscoped entry point; a
+// lifecycle command that acts on a subset calls CollectPortConflictsScoped.
 func CollectPortConflicts(ctx context.Context, cfg *config.DweConfig, baseDir string) ([]PortConflict, error) {
+	return CollectPortConflictsScoped(ctx, cfg, baseDir, nil)
+}
+
+// CollectPortConflictsScoped is CollectPortConflicts narrowed to scope — the
+// services a lifecycle command acts on plus whatever they bring up (the caller
+// computes the closure). A nil or empty scope probes every enabled service.
+//
+// The scope is applied at enumeration, not to the returned slice: an
+// out-of-scope busy port must not draw from the pass-wide EADDRINUSE retry
+// budget, which would add ~1.5s of sleep for a port nobody is going to bind.
+func CollectPortConflictsScoped(ctx context.Context, cfg *config.DweConfig, baseDir string, scope []string) ([]PortConflict, error) {
 	if cfg == nil {
 		return nil, nil
 	}
-	declared := collectDeclaredPorts(cfg)
+	declared := collectDeclaredPorts(cfg, scopeSet(scope))
 	if len(declared) == 0 {
 		return nil, nil
 	}
@@ -169,6 +184,10 @@ type PortWait struct {
 // Linux ports free synchronously, so the seed probe already finds them free and
 // this returns nil with no wait.
 //
+// The wait is deliberately unscoped: it runs after a whole-stack `docker
+// compose down`, never in a per-service context, so there is no subset to
+// narrow to.
+//
 // The wait honors ctx: if it is cancelled (deadline/parent cancel) the loop
 // stops at the next poll boundary and returns whatever is still busy.
 //
@@ -181,7 +200,7 @@ func WaitPortsReleased(ctx context.Context, cfg *config.DweConfig, timeout time.
 	if cfg == nil || timeout <= 0 {
 		return nil
 	}
-	declared := collectDeclaredPorts(cfg)
+	declared := collectDeclaredPorts(cfg, nil)
 	if len(declared) == 0 {
 		return nil
 	}
@@ -286,7 +305,12 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		return nil
 	}
 
-	declared := collectDeclaredPorts(v.cfg)
+	// vctx.Services is the set the command actually brings up (preflight's
+	// WithServices; nil for a whole-project run). A port declared outside it
+	// cannot be bound by this run, so probing it would block on a conflict the
+	// command never causes.
+	scope := scopeSet(vctx.Services)
+	declared := collectDeclaredPorts(v.cfg, scope)
 	if len(declared) == 0 {
 		return nil
 	}
@@ -301,9 +325,12 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	if parent == nil {
 		parent = context.Background()
 	}
-	// CollectPortConflicts never returns a non-nil error; docker ps failures are
-	// encoded in the conflict result as "unknown (docker ps failed)" instead.
-	conflicts, _ := CollectPortConflicts(parent, v.cfg, vctx.ProjectRoot)
+	// CollectPortConflictsScoped never returns a non-nil error; docker ps
+	// failures are encoded in the conflict result as "unknown (docker ps
+	// failed)" instead. The same scope goes to the probe, not just to the guard
+	// above: diagnostics come from there, and filtering at enumeration keeps an
+	// out-of-scope busy port out of the shared retry budget.
+	conflicts, _ := CollectPortConflictsScoped(parent, v.cfg, vctx.ProjectRoot, vctx.Services)
 
 	var diags []validate.Diagnostic
 	for _, pc := range conflicts {
@@ -332,14 +359,21 @@ type declaredPort struct {
 // collectDeclaredPorts walks cfg.Services and produces one entry per declared
 // host port on an enabled service. Disabled services are skipped — they do not
 // bind ports, so a conflict on their declared port does not block startup.
+//
+// scope, when non-nil, keeps only the services it lists: a per-service
+// lifecycle command binds nothing outside it. A nil scope keeps every enabled
+// service. Names in scope that are not in cfg.Services simply match nothing.
 // Output is sorted (service, portName) for deterministic diagnostics.
-func collectDeclaredPorts(cfg *config.DweConfig) []declaredPort {
+func collectDeclaredPorts(cfg *config.DweConfig, scope map[string]bool) []declaredPort {
 	if cfg == nil {
 		return nil
 	}
 	var out []declaredPort
 	for name, svc := range cfg.Services {
 		if !svc.Enabled {
+			continue
+		}
+		if scope != nil && !scope[name] {
 			continue
 		}
 		for portName, spec := range svc.Ports {
@@ -360,6 +394,20 @@ func collectDeclaredPorts(cfg *config.DweConfig) []declaredPort {
 		return out[i].PortName < out[j].PortName
 	})
 	return out
+}
+
+// scopeSet turns a service scope slice into the lookup collectDeclaredPorts
+// wants. An empty slice means "no narrowing" and maps to nil, not to an empty
+// set that would filter everything out.
+func scopeSet(names []string) map[string]bool {
+	if len(names) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
 }
 
 // portOwner describes who owns a host port observed via `docker ps`.

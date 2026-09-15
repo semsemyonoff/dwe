@@ -107,7 +107,7 @@ func TestCollectDeclaredPorts(t *testing.T) {
 			},
 		},
 	}
-	got := collectDeclaredPorts(cfg)
+	got := collectDeclaredPorts(cfg, nil)
 	// Expect sorted by (service, portName); disabled and out-of-range filtered out.
 	want := []declaredPort{
 		{Service: "bad-ports", PortName: "ok", HostPort: 1234},
@@ -121,8 +121,73 @@ func TestCollectDeclaredPorts(t *testing.T) {
 }
 
 func TestCollectDeclaredPorts_NilCfg(t *testing.T) {
-	if got := collectDeclaredPorts(nil); got != nil {
+	if got := collectDeclaredPorts(nil, nil); got != nil {
 		t.Errorf("nil cfg should produce nil slice, got %v", got)
+	}
+}
+
+func TestCollectDeclaredPorts_Scope(t *testing.T) {
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}}},
+			"db":  {Enabled: true, Ports: map[string]config.ServicePortSpec{"sql": {Port: 5432}}},
+			"off": {Enabled: false, Ports: map[string]config.ServicePortSpec{"sql": {Port: 5433}}},
+		},
+	}
+	tests := []struct {
+		name  string
+		scope map[string]bool
+		want  []declaredPort
+	}{
+		{
+			name:  "nil scope keeps every enabled service",
+			scope: nil,
+			want: []declaredPort{
+				{Service: "db", PortName: "sql", HostPort: 5432},
+				{Service: "web", PortName: "http", HostPort: 8080},
+			},
+		},
+		{
+			name:  "scope keeps only the listed service",
+			scope: map[string]bool{"db": true},
+			want:  []declaredPort{{Service: "db", PortName: "sql", HostPort: 5432}},
+		},
+		{
+			name:  "listed disabled service stays excluded",
+			scope: map[string]bool{"off": true},
+			want:  nil,
+		},
+		{
+			name:  "unknown name in scope matches nothing",
+			scope: map[string]bool{"ghost": true},
+			want:  nil,
+		},
+		{
+			name:  "unknown name alongside a real one is ignored",
+			scope: map[string]bool{"ghost": true, "web": true},
+			want:  []declaredPort{{Service: "web", PortName: "http", HostPort: 8080}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := collectDeclaredPorts(cfg, tt.scope)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("collectDeclaredPorts = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScopeSet(t *testing.T) {
+	if got := scopeSet(nil); got != nil {
+		t.Errorf("nil names must map to a nil set (no narrowing), got %v", got)
+	}
+	if got := scopeSet([]string{}); got != nil {
+		t.Errorf("empty names must map to a nil set (no narrowing), got %v", got)
+	}
+	got := scopeSet([]string{"web", "db"})
+	if !reflect.DeepEqual(got, map[string]bool{"web": true, "db": true}) {
+		t.Errorf("scopeSet = %v", got)
 	}
 }
 
@@ -534,6 +599,120 @@ func TestPortsFreeValidator_ConflictReported(t *testing.T) {
 	}
 	if !strings.Contains(diags[0].Message, "rival") {
 		t.Errorf("conflict should name foreign container: %q", diags[0].Message)
+	}
+}
+
+// TestPortsFreeValidator_ServicesScope pins the per-service narrowing: a
+// lifecycle command that brings up only some services must not be blocked by a
+// port it will never bind. The busy port belongs to "db"; the scope names
+// "web".
+func TestPortsFreeValidator_ServicesScope(t *testing.T) {
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}}},
+			"db":  {Enabled: true, Ports: map[string]config.ServicePortSpec{"sql": {Port: 5432}}},
+		},
+	}
+	tests := []struct {
+		name        string
+		services    []string
+		wantConflct bool
+	}{
+		{"out-of-scope busy port yields no diagnostic", []string{"web"}, false},
+		{"in-scope busy port yields the diagnostic", []string{"db"}, true},
+		{"both in scope yields the diagnostic", []string{"db", "web"}, true},
+		{"nil scope unchanged", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeStubBinary(t, dir, "docker", 0, "")
+			withIsolatedPath(t, dir)
+
+			origOut := dockerPSOutFn
+			origListen := portListenFn
+			t.Cleanup(func() {
+				dockerPSOutFn = origOut
+				portListenFn = origListen
+			})
+			dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) {
+				return []byte(`{"Names":"rival","Ports":"0.0.0.0:5432->5432/tcp","Labels":{"com.docker.compose.project":"rival"}}` + "\n"), nil
+			}
+			var probed []int
+			portListenFn = func(port int) error {
+				probed = append(probed, port)
+				return nil
+			}
+
+			v := &portsFreeValidator{cfg: cfg}
+			diags := v.Run(validate.Context{Stage: "deploy", Cfg: cfg, Services: tt.services})
+
+			if tt.wantConflct {
+				if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+					t.Fatalf("want 1 error diag, got %+v", diags)
+				}
+				if !strings.Contains(diags[0].Message, "5432") {
+					t.Errorf("diagnostic should name the busy port: %q", diags[0].Message)
+				}
+			} else {
+				if len(diags) != 1 || diags[0].Severity != validate.SeverityOK {
+					t.Fatalf("want 1 OK diag, got %+v", diags)
+				}
+				// Filtering happens at enumeration: an out-of-scope port must
+				// not even be probed (it would draw from the retry budget).
+				for _, p := range probed {
+					if p == 5432 {
+						t.Errorf("out-of-scope port 5432 was probed: %v", probed)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestCollectPortConflictsScoped_FiltersAtEnumeration pins that the exported
+// scoped probe never reports — and never probes — a port outside its scope,
+// while the unscoped entry point still sees everything.
+func TestCollectPortConflictsScoped_FiltersAtEnumeration(t *testing.T) {
+	dir := t.TempDir()
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	origOut := dockerPSOutFn
+	origListen := portListenFn
+	t.Cleanup(func() {
+		dockerPSOutFn = origOut
+		portListenFn = origListen
+	})
+	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) { return nil, nil }
+	portListenFn = func(port int) error {
+		if port == 5432 {
+			return errors.New("listen tcp :5432: bind: address already in use")
+		}
+		return nil
+	}
+
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}}},
+			"db":  {Enabled: true, Ports: map[string]config.ServicePortSpec{"sql": {Port: 5432}}},
+		},
+	}
+
+	scoped, err := CollectPortConflictsScoped(context.Background(), cfg, dir, []string{"web"})
+	if err != nil {
+		t.Fatalf("CollectPortConflictsScoped: %v", err)
+	}
+	if len(scoped) != 0 {
+		t.Errorf("out-of-scope busy port must not be reported, got %+v", scoped)
+	}
+
+	// CollectPortConflicts delegates with a nil scope — unchanged behaviour.
+	all, err := CollectPortConflicts(context.Background(), cfg, dir)
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if len(all) != 1 || all[0].Service != "db" || all[0].RequestedPort != 5432 {
+		t.Errorf("unscoped probe should still report db:5432, got %+v", all)
 	}
 }
 
