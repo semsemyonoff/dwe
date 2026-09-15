@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -638,11 +639,7 @@ func TestPortsFreeValidator_ServicesScope(t *testing.T) {
 			dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) {
 				return []byte(`{"Names":"rival","Ports":"0.0.0.0:5432->5432/tcp","Labels":{"com.docker.compose.project":"rival"}}` + "\n"), nil
 			}
-			var probed []int
-			portListenFn = func(port int) error {
-				probed = append(probed, port)
-				return nil
-			}
+			portListenFn = func(int) error { return nil }
 
 			v := &portsFreeValidator{cfg: cfg}
 			diags := v.Run(validate.Context{Stage: "deploy", Cfg: cfg, Services: tt.services})
@@ -654,17 +651,8 @@ func TestPortsFreeValidator_ServicesScope(t *testing.T) {
 				if !strings.Contains(diags[0].Message, "5432") {
 					t.Errorf("diagnostic should name the busy port: %q", diags[0].Message)
 				}
-			} else {
-				if len(diags) != 1 || diags[0].Severity != validate.SeverityOK {
-					t.Fatalf("want 1 OK diag, got %+v", diags)
-				}
-				// Filtering happens at enumeration: an out-of-scope port must
-				// not even be probed (it would draw from the retry budget).
-				for _, p := range probed {
-					if p == 5432 {
-						t.Errorf("out-of-scope port 5432 was probed: %v", probed)
-					}
-				}
+			} else if len(diags) != 1 || diags[0].Severity != validate.SeverityOK {
+				t.Fatalf("want 1 OK diag, got %+v", diags)
 			}
 		})
 	}
@@ -684,7 +672,9 @@ func TestCollectPortConflictsScoped_FiltersAtEnumeration(t *testing.T) {
 		portListenFn = origListen
 	})
 	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) { return nil, nil }
+	var probed []int
 	portListenFn = func(port int) error {
+		probed = append(probed, port)
 		if port == 5432 {
 			return errors.New("listen tcp :5432: bind: address already in use")
 		}
@@ -704,6 +694,14 @@ func TestCollectPortConflictsScoped_FiltersAtEnumeration(t *testing.T) {
 	}
 	if len(scoped) != 0 {
 		t.Errorf("out-of-scope busy port must not be reported, got %+v", scoped)
+	}
+	// No docker binding holds 5432 here, so a port that reached the probe would
+	// be listen-tested — and, being busy, would drain the pass-wide EADDRINUSE
+	// retry budget in real sleeps. Never probing it is what "filtered at
+	// enumeration" means; a post-hoc filter on the returned slice would pass the
+	// assertion above but fail this one.
+	if slices.Contains(probed, 5432) {
+		t.Errorf("out-of-scope port 5432 was probed: %v", probed)
 	}
 
 	// CollectPortConflicts delegates with a nil scope — unchanged behaviour.

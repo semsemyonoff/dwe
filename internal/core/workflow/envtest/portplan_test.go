@@ -96,14 +96,14 @@ func TestBuildPortPlanAutoPaths(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "traced var path is allocated with no scenario config",
-			env:  ScenarioEnv{},
-			want: []string{"ports.valkey"},
-		},
-		{
-			name: "two compose entries reading one variable yield one path",
-			// valkey and valkey-admin both publish ${VALKEY_PORT}; the scan
-			// reports two findings, the plan one path.
+			// One row covers three claims about the bare scenario, since they
+			// share an input: the traced path is allocated without the scenario
+			// mentioning it; valkey and valkey-admin both publish ${VALKEY_PORT},
+			// so two findings de-duplicate to one path; and REDIS_PORT — published
+			// only by compose/redis.yml, outside the view's -f chain while redis is
+			// off — contributes nothing. The redis half is what the enable case
+			// below flips.
+			name: "a bare scenario allocates exactly the traced, enabled var paths",
 			env:  ScenarioEnv{},
 			want: []string{"ports.valkey"},
 		},
@@ -124,13 +124,6 @@ func TestBuildPortPlanAutoPaths(t *testing.T) {
 				"misc.port":    AutoPortSentinel,
 			}},
 			want: []string{"misc.port"},
-		},
-		{
-			name: "a disabled service's compose file contributes nothing",
-			// REDIS_PORT is published only by compose/redis.yml, which is not
-			// in the view's -f chain while redis is off.
-			env:  ScenarioEnv{},
-			want: []string{"ports.valkey"},
 		},
 		{
 			name: "enabling the service activates its when-gated rule and its port",

@@ -91,6 +91,15 @@ func pinnedVarPath(overlay map[string]any, path string) bool {
 	if !ok {
 		return false
 	}
+	return pinsPortValue(value)
+}
+
+// pinsPortValue is pinnedVarPath's decision on an already-resolved value. It is
+// shared with scenarioEnvOverlay so the plan and the overlay can never disagree
+// about which declared values count as a pin: a value the plan allocated a port
+// for must not be left standing in the generated local.yml, or the copy binds
+// the ORIGINAL port with nothing warning about it.
+func pinsPortValue(value any) bool {
 	switch v := value.(type) {
 	case nil:
 		return false

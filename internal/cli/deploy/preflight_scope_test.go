@@ -164,14 +164,14 @@ func writeScopeWorkspace(t *testing.T) (dir, cfgPath string) {
 }
 
 // recordingPreflight captures what RunHelper passes to the preflight seam and
-// stops the run there with stop. preflight.Option is an opaque functional
-// option outside its own package, so the recorded count is the only thing a
-// caller can assert about it — the scope VALUE is pinned by TestPreflightScope
-// and by preflight's own TestRun_WithServicesScopesPortsFree.
-func recordingPreflight(stop error, optCount *int, calls *int) preflight.RunFn {
+// stops the run there with stop. The options are folded back through
+// preflight.ServicesFor, so the recorded scope is the exact list the real
+// preflight.Run would narrow env.ports_free to.
+func recordingPreflight(stop error, scope *[]string, optCount *int, calls *int) preflight.RunFn {
 	return func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, opts ...preflight.Option) error {
 		*calls++
 		*optCount = len(opts)
+		*scope = preflight.ServicesFor(opts...)
 		return stop
 	}
 }
@@ -179,16 +179,24 @@ func recordingPreflight(stop error, optCount *int, calls *int) preflight.RunFn {
 // TestRunHelper_PreflightScopeOption pins the wiring shared by
 // `dwe deploy run --service` and the `dwe services enable|disable --apply`
 // executor (both drive RunHelper with Opts.Services): a scoped run carries the
-// WithServices option, a whole-project run carries none.
+// WithServices option holding preflightScope's closure — not the raw request —
+// and a whole-project run carries none. The fixture's app depends_on db, so
+// dropping the closure is observable here.
 func TestRunHelper_PreflightScopeOption(t *testing.T) {
 	stop := errors.New("stop after preflight")
 
 	tests := []struct {
-		name     string
-		services []string
-		wantOpts int
+		name      string
+		services  []string
+		wantOpts  int
+		wantScope []string
 	}{
-		{name: "per-service run scopes preflight", services: []string{"app"}, wantOpts: 1},
+		{
+			name:      "per-service run scopes preflight to the depends_on closure",
+			services:  []string{"app"},
+			wantOpts:  1,
+			wantScope: []string{"app", "db"},
+		},
 		{name: "whole-project run stays unscoped", services: nil, wantOpts: 0},
 	}
 
@@ -196,12 +204,13 @@ func TestRunHelper_PreflightScopeOption(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, cfgPath := writeScopeWorkspace(t)
 			var optCount, calls int
+			var scope []string
 			flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
 			err := RunHelper(context.Background(), &cobra.Command{}, flags, Opts{
 				Services:       tt.services,
 				NonInteractive: true,
 				Silent:         true,
-				PreflightFn:    recordingPreflight(stop, &optCount, &calls),
+				PreflightFn:    recordingPreflight(stop, &scope, &optCount, &calls),
 			})
 			if !errors.Is(err, stop) {
 				t.Fatalf("err = %v, want %v", err, stop)
@@ -211,6 +220,9 @@ func TestRunHelper_PreflightScopeOption(t *testing.T) {
 			}
 			if optCount != tt.wantOpts {
 				t.Errorf("preflight options = %d, want %d", optCount, tt.wantOpts)
+			}
+			if !slices.Equal(scope, tt.wantScope) {
+				t.Errorf("preflight scope = %v, want %v", scope, tt.wantScope)
 			}
 		})
 	}
@@ -222,12 +234,13 @@ func TestRunHelper_PreflightScopeOption(t *testing.T) {
 func TestRunHelper_UnknownServiceRejectedBeforePreflight(t *testing.T) {
 	_, cfgPath := writeScopeWorkspace(t)
 	var optCount, calls int
+	var scope []string
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
 	err := RunHelper(context.Background(), &cobra.Command{}, flags, Opts{
 		Services:       []string{"ghost"},
 		NonInteractive: true,
 		Silent:         true,
-		PreflightFn:    recordingPreflight(nil, &optCount, &calls),
+		PreflightFn:    recordingPreflight(nil, &scope, &optCount, &calls),
 	})
 	if err == nil || err.Error() != `service "ghost" not found in config` {
 		t.Fatalf("err = %v, want service-not-found", err)

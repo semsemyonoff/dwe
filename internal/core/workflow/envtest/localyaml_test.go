@@ -198,6 +198,33 @@ func TestBuildLocalOverlayImplicitVarPort(t *testing.T) {
 			ports: map[string]int{"ports.valkey": 41234},
 			want:  map[string]any{"ports": map[string]any{"valkey": 41234, "other": 7000}},
 		},
+		{
+			// pinnedVarPath treats these as NOT pinned (a string-format export
+			// rule falls back to its default for both), so the plan allocates a
+			// port and the overlay must write it rather than the declared value.
+			name:  "a path declared with no value takes the allocation",
+			vars:  map[string]any{"ports.valkey": nil},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a path declared empty takes the allocation",
+			vars:  map[string]any{"ports.valkey": ""},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a path declared as a structure takes the allocation",
+			vars:  map[string]any{"ports.valkey": map[string]any{"nested": 1}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a nested declaration takes the implicit sibling allocation",
+			vars:  map[string]any{"ports": map[string]any{"other": 7000}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234, "other": 7000}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,6 +237,26 @@ func TestBuildLocalOverlayImplicitVarPort(t *testing.T) {
 				t.Errorf("vars = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestBuildLocalOverlayDoesNotMutateScenario pins that an implicit allocation
+// never writes through into the caller's Scenario: RunScenario reuses the same
+// *Scenario for the deploy retry and the steps run, so a runner-allocated port
+// smuggled into env.vars would make a later read see a pin the author never
+// wrote.
+func TestBuildLocalOverlayDoesNotMutateScenario(t *testing.T) {
+	scn := &Scenario{
+		Env: ScenarioEnv{Vars: map[string]any{"ports": map[string]any{"other": 7000}}},
+	}
+
+	if _, err := BuildLocalOverlay(nil, scn, "proj-t-s-abc", map[string]int{"ports.valkey": 41234}, nil); err != nil {
+		t.Fatalf("BuildLocalOverlay: %v", err)
+	}
+
+	want := map[string]any{"ports": map[string]any{"other": 7000}}
+	if !reflect.DeepEqual(scn.Env.Vars, want) {
+		t.Errorf("scenario env.vars = %#v, want unchanged %#v", scn.Env.Vars, want)
 	}
 }
 

@@ -140,15 +140,27 @@ func scenarioEnvOverlay(scn *Scenario, ports map[string]int) (map[string]any, er
 		vars := make(map[string]any)
 		for _, path := range paths {
 			value, declared := scn.Env.Vars[path]
+			port, allocated := ports[path]
 			switch {
 			case !declared:
-				value = ports[path]
+				value = port
 			case isAutoPort(value):
-				port, ok := ports[path]
-				if !ok {
+				if !allocated {
 					return nil, fmt.Errorf("envtest: scenario var %q is %q but no port was allocated for it", path, AutoPortSentinel)
 				}
 				value = port
+			case allocated && !pinsPortValue(value):
+				// The scenario named the path but gave it no port (nil, "", or a
+				// nested structure), so buildPortPlan allocated one for it. Keeping
+				// the declared value here would silently drop that allocation and
+				// leave the copy binding the original host port.
+				value = port
+			}
+			if nested, isMap := value.(map[string]any); isMap {
+				// A value taken straight from scn.Env.Vars is stored by reference,
+				// and a later dot-path descending into it would write through into
+				// the caller's Scenario.
+				value = deepCopyMap(nested)
 			}
 			if err := setDotPath(vars, path, value); err != nil {
 				return nil, fmt.Errorf("envtest: scenario var %q: %w", path, err)

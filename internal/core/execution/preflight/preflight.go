@@ -109,6 +109,15 @@ func WithServices(names []string) Option {
 	return func(o *options) { o.services = names }
 }
 
+// ServicesFor reports the service scope a set of options carries — the read-back
+// side of WithServices, folded exactly as Run folds it. An Option is an opaque
+// closure outside this package, so without this a caller (or a test pinning the
+// wiring between a command and preflight) can only count the options it passed,
+// never check that the right scope reached them.
+func ServicesFor(opts ...Option) []string {
+	return applyOptions(opts...).services
+}
+
 // applyOptions folds opts into an options value. Nil entries are tolerated so a
 // caller can pass a conditional option without branching at the call site.
 func applyOptions(opts ...Option) options {

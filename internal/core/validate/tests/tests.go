@@ -257,7 +257,17 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 	// that once, per leaf step, before validating the step. A pre-pass here
 	// would render a second time, and rendering is not idempotent — see
 	// runSteps in envtest for the two ways that diverges from a real deploy.
-	renderCfg := renderConfigFor(ctx.Cfg, scn.Env)
+	//
+	// ScenarioView carries env.vars (dot-paths rooted at vars:, with
+	// envtest.AutoPortSentinel substituted by envtest.AutoPortPlaceholder so a
+	// ${vars.x} reference used in a strict-int builtin param renders to a valid
+	// number) and the env.services toggles, so a step's template `when:` (e.g.
+	// `{{ (index .Services "x").Enabled }}` or `${services.x.enabled}`) resolves
+	// exactly as runtime does after loading the copy's generated local.yml. The
+	// view also drops the per-developer compose overlays — irrelevant to
+	// rendering (no step body reads compose.extra), and it keeps this config
+	// identical to the one the isolation scan sees.
+	renderCfg := envtest.ScenarioView(ctx.Cfg, scn.Env)
 
 	phase := config.DeployPhase{Name: "tests", Steps: scn.Steps}
 	if _, err := pipeline.ResolvePhaseSteps(renderCfg, reg, phase, ""); err != nil {
@@ -311,23 +321,6 @@ func validateCommandRefs(cfg *config.DweConfig, steps []config.DeployStep, targe
 		}
 	}
 	return diags
-}
-
-// renderConfigFor returns the config the scenario's copy would render steps
-// against: envtest.ScenarioView applied to the project config. That gives the
-// render and resolve passes the scenario's own env.vars (dot-paths rooted at
-// vars:, with envtest.AutoPortSentinel substituted by
-// envtest.AutoPortPlaceholder so a ${vars.x} reference used in a strict-int
-// builtin param renders to a valid number) and its env.services toggles, so a
-// step's template `when:` (e.g. `{{ (index .Services "x").Enabled }}` or
-// `${services.x.enabled}`) resolves exactly as runtime does after loading the
-// copy's generated local.yml.
-//
-// The view also drops the per-developer compose overlays, which is irrelevant
-// to rendering — no step body reads compose.extra — and keeps this config
-// identical to the one the isolation scan sees.
-func renderConfigFor(cfg *config.DweConfig, env envtest.ScenarioEnv) *config.DweConfig {
-	return envtest.ScenarioView(cfg, env)
 }
 
 // relPath returns path relative to root, falling back to path unchanged when
