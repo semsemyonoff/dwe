@@ -476,7 +476,7 @@ The runner remaps a host port only through the value it writes into the copy, so
 | The variable's rule | Covered in a scenario when | Message |
 |---|---|---|
 | `from: vars.<path>` | the scenario sets `env.vars: { <path>: auto }` | names the compose file, service and variable, and gives the fix line `env.vars: { <path>: auto }` |
-| `from: services.<name>.ports.<x>`, with `<x>` declared under `services.<name>.ports` | the runner remaps `<name>`'s ports — the service is enabled in the scenario and not listed under `env.services.disable` | says `<name>`'s ports are remapped only in scenarios where it is enabled and not listed under `env.services.disable` |
+| `from: services.<name>.ports.<x>`, with `<x>` declared under `services.<name>.ports` | the runner remaps `<name>`'s ports — the service is enabled in the scenario and not listed under `env.services.disable` (a `required: true` service cannot be disabled, so it stays covered) | says `<name>`'s ports are remapped only in scenarios where it is enabled and not listed under `env.services.disable` |
 | anything else — another path, a `.port` sub-path, an undeclared port, a falsy `when:`, no rule at all (host environment, a hand-written `.env`, the `:-` default) | only when its compose file is not in the scenario's stack (see below) | names both remedies |
 
 A `required: true` service listed under `env.services.disable` stays enabled in the copy, exactly as the config loader resolves the generated `local.yml`, so its ports are still remapped and the finding is covered.
@@ -491,7 +491,6 @@ The finding is never blocking. Each caller filters it by its own view:
 
 Because `dwe test run` runs `dwe validate` inside the copy, and the copy carries every scenario file, `dwe test run a` still streams this project-wide warning while scenario `b` lacks the fix. It does not block the run.
 
-A project that fixes every scenario stays green under `dwe validate --strict`.
 
 ## Exit codes
 

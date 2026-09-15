@@ -26,7 +26,7 @@ Both `workspace/deploy.yml` and `workspace/reset.yml` are optional. When absent,
 
 To start from that default instead of writing a pipeline from scratch, run `dwe deploy eject` (or `dwe reset eject`) — it emits the built-in pipeline as a commented, editable file. See [Related commands](#related-commands).
 
-**Default deploy pipeline** (fires when `workspace/deploy.yml` is absent):
+**Default deploy pipeline** (fires when `workspace/deploy.yml` is absent, or present but declares no phases — empty, all comments, `phases: []`):
 
 Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: dwe`, `cmd: "docker up --wait"`, with `check: {type: builtin, cmd: containers_running}`) → `post-deploy` (info display + success message). The `check:` makes the `up` step run on every deploy, so a stack stopped since the last deploy comes back up and the built-in pipeline never exits `already up-to-date` — see [Idempotent deploy and state](#idempotent-deploy-and-state).
 

@@ -302,7 +302,7 @@ With no `services` (absent or `[]`) the builtin checks the compose project as a 
     cmd: containers_running
 ```
 
-It passes when every non-one-off container of the project is running or has exited with code 0 (a finished init or migrate one-shot). `compose run` containers — the containers of [`type: daemon`](../commands/types.md#type-daemon) commands among them — are not evaluated.
+It passes when every non-one-off container of the project is running or has exited with code 0 (a finished init or migrate one-shot). That tolerance is for a one-shot other services reach through `depends_on: {condition: service_completed_successfully}` or that is scaled to 0 — a one-shot nothing depends on already fails `docker compose up --wait` itself, before this check runs. `compose run` containers — the containers of [`type: daemon`](../commands/types.md#type-daemon) commands among them — are not evaluated.
 
 - **The expected set is the containers that exist**, not the service list of the compose config. A `scale: 0` / `deploy.replicas: 0` service has no container and never fails the check, and a project with no containers at all passes — nothing should be running.
 - **Only services active in the current compose config count.** A container that is neither running nor exited 0 (exited non-zero, stuck in `created` or `restarting`) fails the step with `containers not running: <comma-separated container names>` when its service is in `docker compose config --services`. The stopped container of an inactive-profile service, which `up --remove-orphans` does not remove, and an orphan container are ignored.

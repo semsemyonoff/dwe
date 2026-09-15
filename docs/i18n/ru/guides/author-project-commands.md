@@ -123,7 +123,7 @@ commands:
 
 Для one-off инструментов, которым всегда нужен свежий контейнер (artisan tinker, php -a, irb), берите `type: service_run` — те же поля, но всегда `docker compose run --rm`.
 
-Полный справочник: [`../reference/config/commands/types.md#type-service_exec`](../reference/config/commands/types.md#тип-service_exec).
+Полный справочник: [`../reference/config/commands/types.md#тип-service_exec`](../reference/config/commands/types.md#тип-service_exec).
 
 ## `type: workflow` — компонуем несколько команд
 
@@ -168,7 +168,7 @@ commands:
 
 Предпочитайте builtin-предикаты, когда они подходят — они дешевле и не плодят шелл.
 
-Полный справочник: [`../reference/config/commands/types.md#type-workflow`](../reference/config/commands/types.md#тип-workflow).
+Полный справочник: [`../reference/config/commands/types.md#тип-workflow`](../reference/config/commands/types.md#тип-workflow).
 
 ## Params: типизированные входы
 

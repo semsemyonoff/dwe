@@ -141,7 +141,7 @@ Example file `workspace/commands/services/<name>/artisan.yml` — see `authoring
 
 ## Step 6 — Render packs, generated secrets, vars + exports
 
-If the app needs a rendered runtime config (`.env`, `env.php`, `config.yaml`) or a minted secret that must survive re-render, wire a `config` pack and the harvest lifecycle. Verify:
+If the app needs a rendered runtime config (`.env`, `env.php`, `config.yaml`) or a minted secret that must survive re-render, wire a `config` pack and the harvest lifecycle. A secret the app does not mint itself is a `dwe vars set <path> --generate base64url:32` handoff plus a plain `${vars.*}` reference instead. Verify:
 
 ```shell
 dwe docs show render/config --lang en

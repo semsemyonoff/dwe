@@ -14,6 +14,7 @@ enumerate, read, edit, and trace those values.
   - [`dwe vars get`](#dwe-vars-get)
   - [`dwe vars inspect`](#dwe-vars-inspect)
   - [`dwe vars set`](#dwe-vars-set)
+  - [Generating a random value](#generating-a-random-value)
   - [`dwe vars` (no args) — TUI browser](#dwe-vars-no-args--tui-browser)
 - [Encrypted values](#encrypted-values)
 - [Output is not redacted](#output-is-not-redacted)
@@ -140,7 +141,7 @@ and formatting (see [comment-preserving writes](#comment-preserving-localyml-wri
 - **`--generate SPEC` (random value)** — writes a fresh random value instead of
   a positional one; see [Generating a random value](#generating-a-random-value).
 
-#### Generating a random value
+### Generating a random value
 
 `--generate` fills a var that needs a random secret-like value — an app key, a
 session secret, a Fernet key — without a one-liner in another language:

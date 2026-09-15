@@ -25,7 +25,7 @@ phases:
     steps:
       - name: up
         type: dwe
-        cmd: "docker up"
+        cmd: "docker up --wait"
         check:
           type: builtin
           cmd: containers_running

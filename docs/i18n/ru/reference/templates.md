@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ bdf846b9ee51
+> Translated from: reference/templates.md @ c4e0f9f52a1d
 
 # Шаблоны
 
@@ -198,15 +198,15 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | `std` | `default`, `ternary`, `empty`, `coalesce` | Дефолты, условия, проверки на пустоту |
 | `strings` | `hasSuffix`, `hasPrefix`, `toLower`, `toUpper`, `trim`, `replace`, `split` | Манипуляции со строками |
 | `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Числовые операции |
-| `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | Операции над списками/массивами |
-| `maps` | `keys`, `values`, `has`, `pick`, `omit` | Операции над map'ами/объектами |
+| `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq`, `has` | Операции над списками/массивами |
+| `maps` | `keys`, `values`, `hasKey`, `pick`, `omit` | Операции над map'ами/объектами |
 | `regex` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Сопоставление по регулярным выражениям |
 | `conversion` | `toInt`, `toFloat64`, `toString`, `toBool` | Преобразование типов |
 | `time` | `now`, `date`, `dateInZone`, `duration` | Операции с датой/временем |
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Манипуляции с путями |
 | `semver` | `semver`, `semverCompare` | Операции над семантическими версиями |
 
-**Значение — последним аргументом.** Функции sprout принимают map, список или строку, над которыми работают, *последним* аргументом, поэтому естественно ложатся в пайп: `{{ $m | pick "a" }}`, `{{ $list | append "x" }}`, `{{ $name | regexReplaceAll "-" "_" }}`. Шаблоны, написанные под порядок аргументов Sprig, нужно переписать — см. [Обновление DWE](../guides/upgrading.md).
+**Значение — последним аргументом.** Почти все функции sprout принимают map, список или строку, над которыми работают, *последним* аргументом (`merge`, `mergeOverwrite` и `concat` берут целевой map первым), поэтому естественно ложатся в пайп: `{{ $m | pick "a" }}`, `{{ $list | append "x" }}`, `{{ $name | regexReplaceAll "-" "_" }}`. Шаблоны, написанные под порядок аргументов Sprig, нужно переписать — см. [Обновление DWE](../guides/upgrading.md).
 
 **Герметичность по построению.** Набор хелперов собран без единой функции, которая обращалась бы к окружению, файловой системе, сети или random/crypto-источникам. Sprout-функции `shuffle` (случайный результат) и `hello` (debug-заглушка) намеренно удалены.
 

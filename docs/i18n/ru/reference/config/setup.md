@@ -1,4 +1,4 @@
-> Translated from: reference/config/setup.md @ b9bf8a048cac
+> Translated from: reference/config/setup.md @ b2d1fb6d9adc
 
 # setup.yml
 
@@ -113,11 +113,11 @@ questions:
 
 Для ответа, похожего на секрет, чей `writes:` указывает на лист внутри `vars.*`,
 — ключ приложения, секрет сессии, ключ Fernet — отправляйте разработчика в
-`description:` к `dwe vars set <path> --generate hex|base64url[:N]|uuid`, а не к
-однострочнику вроде `python -c 'import secrets; …'`. Команде не нужно ничего,
-кроме dwe, она пишет тот же путь в `local.yml` — и всегда резолвит его под
-`vars.`, поэтому указывайте значение `writes:` без этого префикса — и не
-перезаписывает существующее значение без `--force`
+`description:` к `dwe vars set <path> --generate hex[:N]|base64url[:N]|uuid`, а не
+к однострочнику вроде `python -c 'import secrets; …'`. Команде не нужно ничего,
+кроме dwe, она пишет тот же путь в `local.yml` — префикс `vars.` необязателен,
+значение `writes:` подходит и с ним, и без него — и не перезаписывает
+существующее значение без `--force`
 (см. [`vars.md`](vars.md#dwe-vars-set)).
 
 Схемные правила, форсируемые на загрузке:

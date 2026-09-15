@@ -2,8 +2,10 @@
 
 All notable changes to `dwe` are recorded here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
-the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Version numbers do not follow Semantic Versioning before 1.0.0: a release is
+numbered by its weight, and a patch-looking number can still change something
+you have to act on. [Upgrading DWE](docs/guides/upgrading.md) lists what.
 
 Every change that a user can observe — a new or renamed flag, a changed default,
 a removed config key, a different message — belongs under `## [Unreleased]`
@@ -18,135 +20,46 @@ generated from commit subjects and stay on the
 
 ### Changed
 
-- **Release binaries are built with Go 1.27, which requires macOS 13 Ventura or
-  later.** The darwin archives and the Homebrew cask no longer start on macOS 12
-  or earlier. Linux requirements are unchanged.
-- **Building from source requires Go 1.27.** The `go` directive in `go.mod` is
-  the minimum toolchain for `go install` and `make build`.
-- **Templates move to go-sprout 1.1, which no longer accepts Sprig's argument
-  order.** `get`, `set`, `unset`, `hasKey`, `pick`, `omit`, `append`,
-  `prepend`, `slice` and `without` fail to render unless the map or list is the
-  last argument; the old order used to be reordered silently with a warning.
-- **`regexFindAll`, `regexSplit`, `regexReplaceAll` and `regexReplaceAllLiteral`
-  take the string they work on last.** A template written for the old order
-  still renders, to a wrong result. [Upgrading DWE](docs/guides/upgrading.md)
-  has the before/after table and a search command.
-- **`div` by zero is a render error** instead of an arbitrary number.
+- **Release binaries require macOS 13 or later**; building from source requires
+  Go 1.27.
+- **Templates move to go-sprout 1.1**: `get`, `set`, `unset`, `hasKey`, `pick`,
+  `omit`, `append`, `prepend`, `slice` and `without` fail on Sprig's argument
+  order; `regexFindAll`, `regexSplit`, `regexReplaceAll` and
+  `regexReplaceAllLiteral` take the string last; `div` by zero is an error. See
+  [Upgrading DWE](docs/guides/upgrading.md).
 
 ### Added
 
-- Template functions `toUnix`, `toUnixMilli`, `toUnixMicro`, `fromUnix`,
-  `fromUnixMilli`, `fromUnixMicro`, `escape` and `unescape`, from go-sprout 1.1.
-- **`dwe validate` warns when a host script or shell step passes compose a
-  project name not derived from `$COMPOSE_PROJECT_NAME`**
-  (`tests.host_project_name`). A name such as
-  `-p "${PROJECT_PREFIX:-dwe}-${PROJECT_NAME:-myproj}"` addresses the live stack
-  from inside `dwe test`. The warning appears only in projects with
-  `workspace/tests/`, fails `dwe validate --strict`, and its hint is the fix,
-  `${COMPOSE_PROJECT_NAME:-<current value>}` — see
-  [Upgrading DWE](docs/guides/upgrading.md).
-- **`dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]`**
-  writes a random value to `workspace/local.yml`, so a setup step no longer
-  needs a `python -c` one-liner for an app key or a Fernet key. `N` counts bytes
-  of entropy (default 32); `base64url` is padded, and the value is always a
-  string. A value already in `local.yml` is kept — the command refuses with
-  `vars_value_exists` — unless `--force` is given. See
-  [`dwe vars set`](docs/reference/config/vars.md#dwe-vars-set).
+- `dwe vars set <var> --generate hex[:N]|base64url[:N]|uuid [--force]` writes
+  a random value to `workspace/local.yml`.
+- `dwe validate` warns about a host script that builds its own compose project
+  name (`tests.host_project_name`) and about a compose host port `dwe test`
+  cannot remap (`interpolated_host_port`); both fail `--strict`.
+- Template functions `toUnix*`, `fromUnix*`, `escape`, `unescape`.
 
 ### Removed
 
-- **`mustRegexFind`, `mustRegexFindAll`, `mustRegexMatch`, `mustRegexSplit`,
-  `mustRegexReplaceAll` and `mustRegexReplaceAllLiteral`.** They were deprecated
-  aliases; a template still calling one fails to parse. Drop the `must` prefix,
-  and mind the new argument order where it applies.
+- The deprecated `mustRegex*` template aliases.
 
 ### Fixed
 
-- **`dwe docs show 'topic#anchor'` resolves an anchor whose heading starts with
-  a hyphen.** A heading such as `` `--parallel N` `` was advertised as
-  `--parallel-n` by GitHub, by the documentation site, and by the page's own
-  table of contents, but the resolver trimmed the flag's leading hyphens and
-  answered only to `parallel-n` — so following a link the docs themselves ship
-  failed. The slug now keeps them, and the trimmed form still resolves, so both
-  spellings work.
-- **Cross-references in the Russian documentation point at the Russian
-  anchors.** The mirror translates headings but kept the English anchors, so 140
-  links across the reference and guides resolved to nothing — worst in
-  `render/ai`, `git`, `ide`, `config`, `env` and `index`, where no entry in the
-  page's own table of contents was navigable.
-- **go-sprout's own diagnostics no longer print to stdout.** A deprecated
-  template function or a Sprig-order call logged a `level=WARN` line into
-  standard output, corrupting `--output json` and `dwe prompt`. They now go
-  through the diagnostic trace and appear only under `--debug`.
-- **A parallel workflow sub-step no longer loses its last line of output when
-  that line has no trailing newline.** A sub-step ending in
-  `printf 'error: x'; exit 1` used to drop `error: x` from both the failure dump
-  and `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log` — in CI the
-  dump is the only output, so the line explaining the failure was the one that
-  disappeared. It now appears in both.
-- **A line whose `\r\n` is split across a read boundary is no longer recorded as
-  an empty line.** When the carriage return and the newline arrived in separate
-  reads from the child process, the line was replaced by a blank one in
-  `.dwe/logs/<pipeline>.log`, in the per-sub-step logs under
-  `.dwe/logs/parallel/` and in the parallel failure dump — in CI, where the log
-  is the only output, the swallowed line was exactly the one being read. The
-  same now applies to the `\r\x1b[K\n` redraw idiom, which the workflow
-  runner's log blanked even when it arrived in one write. In a parallel block
-  the live row now keeps showing that line instead of briefly blanking; nothing
-  else in the live view changes.
-- **A parallel workflow failure dump no longer leaves the terminal coloured.**
-  The dump forwards the sub-step's own ANSI so its colours survive, but the
-  child's closing reset does not always reach it — a reset written after the
-  last newline is dropped as carrying no line, one written between a `\r` and
-  its `\n` is replaced by the content line, and a killed child never writes one
-  at all. The colour then bled into the dump's closing bar and every later
-  message. The dump now closes the colour state itself; a dump whose output
-  carries no escape bytes stays escape-free for log scrapers.
-- **`dwe test` now warns about a compose host port it cannot remap because the
-  port comes from a variable.** A port such as `"${VALKEY_PORT:-6379}:6379"`,
-  exported `from: vars.ports.valkey`, kept its original value in the test copy
-  and collided with the live stack at bind time, with nothing said beforehand.
-  `dwe test run` and `dwe validate` now warn with the fix line,
-  `env.vars: { ports.valkey: auto }`, and `dwe test list --output json` reports
-  it as an `interpolated_host_port` entry in `cost_profile.isolation_findings`.
-  The warning fails `dwe validate --strict` until every scenario is covered —
-  see [Upgrading DWE](docs/guides/upgrading.md). A port whose variable no
-  `exports.env` rule traces names no scenarios and needs such a rule first. A
-  literal host port behind an interpolated bind address
-  (`"${BIND:-127.0.0.1}:8080:80"`) is now recognised and blocks `dwe test run`
-  like any other literal host port.
-- **`dwe test` remaps the host ports of a `required: true` service a scenario
-  lists under `env.services.disable`.** A required service cannot be disabled,
-  so it still ran in the test copy, but on its original ports — colliding with
-  the live stack and with other scenarios under `--parallel`. It now gets free
-  ports like every other service that runs in the copy.
-- **The built-in deploy pipeline brings a stopped stack back up.** After a
-  `dwe stop`, `dwe deploy run` printed `Phase: start` and `✓ Done`, and the
-  stack stayed down: the `up` step had no `check:`, so the journal skipped it on
-  every deploy after the first. It now carries
-  `check: {type: builtin, cmd: containers_running}`, runs on every deploy, and
-  the built-in pipeline no longer exits `already up-to-date`.
-  `containers_running` accepts an absent or empty `services` list, which checks
-  that every non-one-off container of the compose project is running or exited
-  0. The first deploy after upgrading sees the project config as changed once —
-  pick `Apply changes` in the selector — and an ejected or hand-written
-  `workspace/deploy.yml` needs the `check:` added by hand; see
-  [Upgrading DWE](docs/guides/upgrading.md).
-- **Inside `dwe test`, a scenario's shell steps see the copy's
-  `COMPOSE_PROJECT_NAME`.** A host script written as
-  `${COMPOSE_PROJECT_NAME:-dwe-myproj}` used to fall back to the live name there
-  and address the live stack; it now gets the disposable copy's name, also when
-  scenarios run with `--parallel`. Shell steps and shell `check:` of
-  `dwe stop`, `dwe restart` and `dwe reset` also get dwe's own name — the one
-  it passes as `-p` — instead of one inherited from your shell.
-- **`type: script` commands receive `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE`**,
-  like `type: shell` commands always have.
-- **Commands run from snapshot workflows, service-toggle hooks and reset hooks
-  honour `docker.yml` `project_name`.** They used to fall back to
-  `<prefix>-<name>`, so on a project with a custom `project_name` a container
-  command there exec'd into the wrong compose project and missed the
-  `docker.yml` `args`; the shell and script contract carried the same wrong
-  name.
+- The built-in deploy pipeline brings a stopped stack back up: its `up` step
+  now carries `check: containers_running` and runs on every deploy. The first
+  deploy after upgrading reports a config change once; an ejected `deploy.yml`
+  needs the check added by hand — see [Upgrading DWE](docs/guides/upgrading.md).
+- Inside `dwe test`, shell steps and `type: script` commands get the copy's
+  `COMPOSE_PROJECT_NAME` instead of the live one; snapshot, reset and
+  service-toggle hooks honour `docker.yml` `project_name`.
+- `dwe test` remaps the ports of a `required: true` service listed under
+  `env.services.disable`.
+- Workflow output: a sub-step's last unterminated line, a `\r\n` split across a
+  read boundary and a `\r\x1b[K\n` redraw are logged correctly; a failure dump
+  no longer leaves the terminal coloured.
+- go-sprout diagnostics no longer print to stdout.
+- `dwe docs show 'topic#--flag'` resolves anchors with leading hyphens; Russian
+  docs link to Russian anchors.
+- The Homebrew cask uses `postflight_steps` instead of the deprecated
+  `postflight` block.
 
 ## [0.6.0] - 2026-09-07
 

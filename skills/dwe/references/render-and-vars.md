@@ -51,7 +51,7 @@ Schema: `dwe docs show render/config --lang en`, `dwe docs show templates --lang
 
 ## 3. Generated-secret lifecycle (harvest + replay)
 
-The engine is hermetic — it never mints secrets. The **service** generates them; DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render. Pattern (a Laravel `APP_KEY` flow):
+The render engine is hermetic — it never mints secrets. Either the **service** generates them and DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render, or — when the app does not mint the value itself — the developer writes one with `dwe vars set <path> --generate` (§ 5) and the template reads a plain `${vars.*}`; the harvest lifecycle is for the former. Pattern (a Laravel `APP_KEY` flow):
 
 1. **Declare** in `service.yml`: a `generated:` block with `{file, pattern}` — `pattern` is a regex whose capture group 1 is the harvested value.
    ```yaml
@@ -142,7 +142,7 @@ For a secret-like var (app key, session secret, Fernet key) the handoff is `--ge
 
 ```shell
 # hand this to the user:
-dwe vars set vars.app.secret_key --generate hex          # or base64url[:N] / uuid
+dwe vars set vars.app.secret_key --generate hex          # or hex:N / base64url[:N] / uuid
 ```
 
 `N` is bytes of entropy (default 32); `base64url` is padded, so `base64url:32` is a valid Fernet key. The value is always a string, is printed (never redacted), and an existing `local.yml` value is refused with `vars_value_exists` unless `--force` is added. A secret the whole team shares belongs in `dwe secrets set <vars.path> --stdin` instead.

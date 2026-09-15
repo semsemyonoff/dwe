@@ -111,10 +111,10 @@ Unknown top-level fields are rejected at load time (strict decoding).
 
 For a secret-like answer whose `writes:` target is a `vars.*` leaf — an app key,
 a session secret, a Fernet key — point the developer at
-`dwe vars set <path> --generate hex|base64url[:N]|uuid` in `description:` rather
-than a one-liner such as `python -c 'import secrets; …'`. The command needs
-nothing beyond dwe, writes the same `local.yml` path — it always resolves under
-`vars.`, so quote the `writes:` value without that prefix — and refuses to
+`dwe vars set <path> --generate hex[:N]|base64url[:N]|uuid` in `description:`
+rather than a one-liner such as `python -c 'import secrets; …'`. The command
+needs nothing beyond dwe, writes the same `local.yml` path — the `vars.` prefix
+is optional, so the `writes:` value works with or without it — and refuses to
 overwrite an existing value without `--force` (see
 [`vars.md`](vars.md#dwe-vars-set)).
 
