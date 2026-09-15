@@ -688,12 +688,37 @@ seam was added to bridge the last hop.
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] Change A: a project fixture with `"${VALKEY_PORT:-6379}:6379"` + `exports.env` rule `from: vars.ports.valkey` and a scenario with no `env.vars` — the copy's generated `local.yml` carries `vars.ports.valkey: <allocated>`, no isolation warning is printed, `dwe validate` emits no `tests.isolation` diagnostic; the same fixture with `env.vars: { ports.valkey: 6380 }` keeps 6380 and stays silent; with the rule's `when:` falsy the warning and the literal default remain
-- [ ] Change A: `dwe test list --output json` `cost_profile.isolation_findings` omits the traced entry; a blocked scenario exits 1 with `status: failed` and leaves no `.dwe/tests/runs/<scenario>/` directory
-- [ ] Change B: `Opts.PreflightFn` receives `WithServices` with the closure for `--service`; an out-of-scope busy port produces no `ports_free` diagnostic; whole-project `deploy run`, `dwe run`, `dwe stop`, `dwe reset run`, the setup wizard's port-fix step and `dwe validate` behave as before
-- [ ] verify no test, doc, commit message or comment references an internal task tracker
-- [ ] run full test suite: `make lint && make test && make test-race`
-- [ ] confirm `git status` is clean apart from the intended files and `content_hashes_gen.go`
+- [x] Change A: a project fixture with `"${VALKEY_PORT:-6379}:6379"` + `exports.env` rule `from: vars.ports.valkey` and a scenario with no `env.vars` — the copy's generated `local.yml` carries `vars.ports.valkey: <allocated>`, no isolation warning is printed, `dwe validate` emits no `tests.isolation` diagnostic; the same fixture with `env.vars: { ports.valkey: 6380 }` keeps 6380 and stays silent; with the rule's `when:` falsy the warning and the literal default remain
+  — pinned by `TestRunScenario_TracedVarPort_Allocated`,
+  `TestRunScenario_InterpolatedHostPortFilteredByScenario`,
+  `TestRunScenario_TracedVarPort_ExplicitPinKept`,
+  `TestScenariosValidator_InterpolatedHostPort` (the "no scenario mentions it"
+  and "pinned to a number" cases keep `VALKEY_PORT` silent) and, for the falsy
+  `when:`, `TestScanComposeIsolation_InterpolatedHostPort` ("vars rule with
+  falsy when" leaves the finding untraced) plus `TestRunScenario_UntracedVarPort_WarnsAndAllocatesNothing`.
+  The same check against the real magento project stays in Post-Completion.
+- [x] Change A: `dwe test list --output json` `cost_profile.isolation_findings` omits the traced entry; a blocked scenario exits 1 with `status: failed` and leaves no `.dwe/tests/runs/<scenario>/` directory
+  — pinned by `TestCostProfile_IsolationFindingsOmitTracedVarPorts`,
+  `TestRunTestList_CostProfileOmitsCoveredInterpolatedPort`,
+  `TestRunTest_Seq_BlockedScenario_NoKeptLine` (exit 1 + `"status":"failed"` in
+  both text-with-`--keep` and JSON) and
+  `TestRunScenario_IsolationGate_BlocksOnContainerName` (no `RunDir`, no
+  manifest, empty `CopyPath`/`ComposeProject`/`ReportDir`, no teardown).
+- [x] Change B: `Opts.PreflightFn` receives `WithServices` with the closure for `--service`; an out-of-scope busy port produces no `ports_free` diagnostic; whole-project `deploy run`, `dwe run`, `dwe stop`, `dwe reset run`, the setup wizard's port-fix step and `dwe validate` behave as before
+  — pinned by `TestRunHelper_PreflightScopeOption`, `TestPreflightScope`,
+  `TestRun_WithServicesScopesPortsFree`, `TestApplyOptions`,
+  `TestPortsFreeValidator_ServicesScope`,
+  `TestCollectPortConflictsScoped_FiltersAtEnumeration` and the unchanged
+  `TestCollectPortConflicts_*` / `TestWaitPortsReleased_*` /
+  `TestPortsFreeValidator_StopStageSkips` set. The live per-project check on
+  beetDeck stays in Post-Completion.
+- [x] verify no test, doc, commit message or comment references an internal task tracker
+  — `git diff --name-only main..HEAD` (49 files) and every commit body on the
+  branch are clean. ⚠️ Pre-existing, untouched by this branch: several
+  `docs/plans/completed/*.md` carry "Vikunja task 170" / "Wave 1" lines; out of
+  scope here, flagged for a separate cleanup.
+- [x] run full test suite: `make lint && make test && make test-race` — lint 0 issues, both suites exit 0
+- [x] confirm `git status` is clean apart from the intended files and `content_hashes_gen.go` — tree clean
 
 ### Task 10: [Final] Update documentation
 
