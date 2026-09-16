@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packroot"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // maxDepth bounds every extends-chain walk (defense-in-depth cycle guard).
@@ -93,14 +95,83 @@ func ExtendsRoot(services map[string]config.ServiceConfig, name string) string {
 // rendering service (the collision-policy winner) and equals Service when the
 // rendering service has no extends chain. ServiceCfg is the merged service
 // block of the rendering service (Resolved).
+//
+// Commands and CommandGroups are the project-wide declared command index
+// (usercommands.CommandIndex, built without ApplyVisibility so a rendered file
+// does not flip with stack state); empty when the registry failed to load.
 type TemplateData struct {
-	Project    config.ProjectConfig
-	Service    string
-	Resolved   string
-	ServiceCfg config.ServiceConfig
-	Runtime    config.RuntimeConfig
-	Services   map[string]config.ServiceConfig
-	Cfg        *config.DweConfig
+	Project       config.ProjectConfig
+	Service       string
+	Resolved      string
+	ServiceCfg    config.ServiceConfig
+	Runtime       config.RuntimeConfig
+	Services      map[string]config.ServiceConfig
+	Cfg           *config.DweConfig
+	Commands      []model.CommandSummary
+	CommandGroups []model.CommandGroupSummary
+}
+
+// ServiceCommands returns the declared commands that target this service.
+//
+// The join is on ServiceCfg.Container, never Resolved: a command's `service:`
+// is the compose service name, and the services map key may differ (magento:
+// key `magento`, `container: app-magento`) — the same reason
+// config.ServiceByContainer exists. A templated `service:` (`app-${param.x}`)
+// cannot be resolved at render time and matches nothing.
+func (d TemplateData) ServiceCommands() []model.CommandSummary {
+	container := d.ServiceCfg.Container
+	if container == "" {
+		return nil
+	}
+	var out []model.CommandSummary
+	for _, c := range d.Commands {
+		if c.Service == container {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// ServiceCommandGroups returns the groups owning at least one of
+// ServiceCommands, collapsed to the shallowest: a qualifying group nested under
+// another qualifying group is dropped, since listing the ancestor covers it.
+// CommandGroups holds authored groups only, so the collapse never lands on a
+// synthetic ancestor such as magento's `services`. Order follows CommandGroups.
+func (d TemplateData) ServiceCommandGroups() []model.CommandGroupSummary {
+	cmds := d.ServiceCommands()
+	if len(cmds) == 0 {
+		return nil
+	}
+	var qualifying []model.CommandGroupSummary
+	for _, g := range d.CommandGroups {
+		for _, c := range cmds {
+			if underPrefix(c.ID, g.ID) {
+				qualifying = append(qualifying, g)
+				break
+			}
+		}
+	}
+	var out []model.CommandGroupSummary
+	for _, g := range qualifying {
+		nested := false
+		for _, a := range qualifying {
+			if a.ID != g.ID && underPrefix(g.ID, a.ID) {
+				nested = true
+				break
+			}
+		}
+		if !nested {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// underPrefix reports whether id equals prefix or sits below it on a dot
+// boundary — the rule registry.list applies, so `admin` never owns
+// `administration`.
+func underPrefix(id, prefix string) bool {
+	return id == prefix || strings.HasPrefix(id, prefix+".")
 }
 
 // AppServices returns services whose Type is "app".

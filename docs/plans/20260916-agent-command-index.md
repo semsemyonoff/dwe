@@ -605,11 +605,11 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 - Modify: `internal/core/execution/templates/packcommon/packcommon.go` (`TemplateData` :96-104, accessors beside `AppServices` :107)
 - Modify: `internal/core/execution/templates/packcommon/packcommon_test.go`
 
-- [ ] add `Commands` / `CommandGroups` fields and the two accessors; `ServiceCommands` joins on `ServiceCfg.Container` with a comment naming the magento key≠container case and pointing at `config.ServiceByContainer`
-- [ ] implement `ServiceCommandGroups` with the shallowest-group collapse over the builder's authored-only group set (descendant dropped when an ancestor qualifies; dot-boundary prefix match, the same rule `registry.list` already applies at `:242-243`)
-- [ ] write table-driven tests for `ServiceCommands`: key == container; key ≠ container (magento shape — the whole hub must be found; podlapka's `map` / `map-edit` is a second real case); a command with an unrendered `${param.*}` service is excluded without error; a command with no service is excluded; `extends` chain where `Resolved` differs from `Service`
-- [ ] write table-driven tests for `ServiceCommandGroups`: two-level collapse (`admin` + `admin.lint` → `admin`); **the magento shape with the synthetic ancestor present in the registry** (`services` + `services.magento` + 17 leaves → exactly `services.magento`, with a non-empty description); two independent groups both kept; dot-boundary non-collision (`admin` vs `administration`); hub with zero qualifying groups → empty slice
-- [ ] run `go test ./internal/core/execution/templates/...` - must pass before task 4b
+- [x] add `Commands` / `CommandGroups` fields and the two accessors; `ServiceCommands` joins on `ServiceCfg.Container` with a comment naming the magento key≠container case and pointing at `config.ServiceByContainer`
+- [x] implement `ServiceCommandGroups` with the shallowest-group collapse over the builder's authored-only group set (descendant dropped when an ancestor qualifies; dot-boundary prefix match, the same rule `registry.list` already applies at `:242-243`)
+- [x] write table-driven tests for `ServiceCommands`: key == container; key ≠ container (magento shape — the whole hub must be found; podlapka's `map` / `map-edit` is a second real case); a command with an unrendered `${param.*}` service is excluded without error; a command with no service is excluded; `extends` chain where `Resolved` differs from `Service`
+- [x] write table-driven tests for `ServiceCommandGroups`: two-level collapse (`admin` + `admin.lint` → `admin`); **the magento shape with the synthetic ancestor present in the registry** (`services` + `services.magento` + 17 leaves → exactly `services.magento`, with a non-empty description); two independent groups both kept; dot-boundary non-collision (`admin` vs `administration`); hub with zero qualifying groups → empty slice
+- [x] run `go test ./internal/core/execution/templates/...` - must pass before task 4b
 
 ### Task 4b: six sites thread the index; one warn-once failure policy
 
