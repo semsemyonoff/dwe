@@ -669,12 +669,12 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 
 ### Task 7: verify acceptance criteria
 
-- [ ] `dwe commands list --output json` on a project carries `description` and `service`; `--pretty` unchanged in shape; `inspect` output byte-identical to before
-- [ ] `dwe render ai` on a scaffolded fixture project with commands writes the block; on one without commands writes no block
-- [ ] all three `dwe render` pack commands on a project with a broken command file succeed with exactly one warning naming the file, and the hub file comes out without the block
-- [ ] `dwe validate` on that project reports the failure once, in the `commands` domain only
-- [ ] `dwe docs llms-txt` output on a fixture is byte-identical to `release/0.6.2`
-- [ ] `make test`, `make lint` clean
+- [x] `dwe commands list --output json` on a project carries `description` and `service`; `--pretty` unchanged in shape; `inspect` output byte-identical to before
+- [x] `dwe render ai` on a scaffolded fixture project with commands writes the block; on one without commands writes no block
+- [x] all three `dwe render` pack commands on a project with a broken command file succeed with exactly one warning naming the file, and the hub file comes out without the block
+- [x] `dwe validate` on that project reports the failure once, in the `commands` domain only
+- [x] `dwe docs llms-txt` output on a fixture is byte-identical to `release/0.6.2`
+- [x] `make test`, `make lint` clean
 
 ### Task 8: [Final] Update documentation
 
