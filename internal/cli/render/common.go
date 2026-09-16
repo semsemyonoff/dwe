@@ -7,8 +7,33 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packcommon"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
+
+// loadCommandIndex builds the declared command index for one render
+// invocation. Callers run it once, before their per-service loop, so a broken
+// command file warns once rather than once per service.
+//
+// A load failure warns and yields an empty index instead of failing the render:
+// ide/git templates never read the index, and `dwe validate` is where the
+// failure is reported properly. The warning goes to w (stdout), in order with
+// the per-file lines; these commands have no JSON mode, so there is no
+// flags.Output gate.
+//
+// The index is built with the nop translator and never runs ApplyVisibility:
+// the rendered files are on disk, so they must not depend on the active locale
+// or on the state of the Docker stack.
+func loadCommandIndex(w *render.Writer, configPath string) ([]model.CommandSummary, []model.CommandGroupSummary) {
+	reg, err := usercommands.LoadRegistryFromConfigPath(configPath)
+	if err != nil {
+		w.Warning(fmt.Sprintf("command index unavailable: %v — .Commands and .CommandGroups render empty (run `dwe validate commands` for details)", err))
+		return nil, nil
+	}
+	return usercommands.CommandIndex(reg, i18n.NopTranslator{}, "")
+}
 
 // validateExplicitRenderArg validates the explicit service argument for a
 // `dwe render <kind> <service>` command. Checks in priority order:

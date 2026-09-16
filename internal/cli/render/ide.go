@@ -9,6 +9,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/ide"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
@@ -97,9 +98,10 @@ the IDE collision-policy winner (deepest extends) is rendered. This means
 				}
 			}
 
+			commands, groups := loadCommandIndex(w, flags.ConfigPath)
 			for _, name := range serviceNames {
 				svc := cfg.Services[name]
-				if err := renderIDEConfigs(projectRoot, name, svc, cfg, w); err != nil {
+				if err := renderIDEConfigs(projectRoot, name, svc, cfg, commands, groups, w); err != nil {
 					return fmt.Errorf("service %s: %w", name, err)
 				}
 			}
@@ -158,7 +160,7 @@ func validateExplicitIDEArg(name string, services map[string]config.ServiceConfi
 
 // renderIDEConfigs generates IDE config files for a single service using the
 // manifest-driven pack flow (parity with `render ai`).
-func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, w *render.Writer) error {
+func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, commands []model.CommandSummary, groups []model.CommandGroupSummary, w *render.Writer) error {
 	if cfg == nil {
 		return fmt.Errorf("ide: nil cfg")
 	}
@@ -167,13 +169,15 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	}
 
 	data := ide.TemplateData{
-		Project:    cfg.Project,
-		Service:    ide.ExtendsRoot(cfg.Services, name),
-		Resolved:   name,
-		ServiceCfg: svc,
-		Runtime:    cfg.Runtime,
-		Services:   cfg.Services,
-		Cfg:        cfg,
+		Project:       cfg.Project,
+		Service:       ide.ExtendsRoot(cfg.Services, name),
+		Resolved:      name,
+		ServiceCfg:    svc,
+		Runtime:       cfg.Runtime,
+		Services:      cfg.Services,
+		Cfg:           cfg,
+		Commands:      commands,
+		CommandGroups: groups,
 	}
 
 	serviceDir := filepath.Join(projectRoot, svc.Dir)

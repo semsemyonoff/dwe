@@ -530,7 +530,7 @@ func TestRenderIDEConfigs_missingManifest(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w)
 	if err == nil {
 		t.Fatal("expected error for missing manifest.yml")
 	}
@@ -555,7 +555,7 @@ func TestRenderIDEConfigs_packResolution(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, w); err != nil {
+	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w); err != nil {
 		t.Fatalf("renderIDEConfigs: %v", err)
 	}
 	for _, rel := range []string{".devcontainer/devcontainer.json", ".vscode/settings.json"} {
@@ -573,7 +573,7 @@ func TestRenderIDEConfigs_packNotFound(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w)
 	if err != nil {
 		t.Fatalf("expected implicit missing pack to warn and skip, got error: %v", err)
 	}
@@ -592,7 +592,7 @@ func TestRenderIDEConfigs_explicitPackNotFound(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w)
 	if err == nil {
 		t.Fatal("expected error for explicit missing template pack")
 	}
@@ -613,7 +613,7 @@ func TestRenderIDEConfigs_dotDirRejected(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w)
 	if err == nil {
 		t.Fatal("expected error for dir '.'")
 	}
@@ -637,7 +637,7 @@ func TestRenderIDEConfigs_perServiceOverride(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, w); err != nil {
+	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w); err != nil {
 		t.Fatalf("renderIDEConfigs: %v", err)
 	}
 	content, err := os.ReadFile(filepath.Join(projectRoot, "services", "main", ".vscode", "settings.json"))
@@ -663,7 +663,7 @@ func TestRenderIDEConfigs_serviceNameFallback(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, w); err != nil {
+	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w); err != nil {
 		t.Fatalf("renderIDEConfigs: %v", err)
 	}
 	content, err := os.ReadFile(filepath.Join(projectRoot, "services", "main", ".vscode", "settings.json"))
@@ -686,7 +686,7 @@ func TestRenderIDEConfigs_defaultOnly(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	if err := renderIDEConfigs(projectRoot, "unknown", svc, cfg, w); err != nil {
+	if err := renderIDEConfigs(projectRoot, "unknown", svc, cfg, nil, nil, w); err != nil {
 		t.Fatalf("renderIDEConfigs: %v", err)
 	}
 	content, err := os.ReadFile(filepath.Join(projectRoot, "services", "unknown", ".vscode", "settings.json"))
@@ -709,7 +709,7 @@ func TestRenderIDEConfigs_substitutesTemplateValues(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, w); err != nil {
+	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w); err != nil {
 		t.Fatalf("renderIDEConfigs: %v", err)
 	}
 	content, err := os.ReadFile(filepath.Join(projectRoot, "services", "main", ".devcontainer", "devcontainer.json"))
@@ -748,7 +748,7 @@ func TestRenderIDEConfigs_overrideEmitsInfo(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, w); err != nil {
+	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, nil, nil, w); err != nil {
 		t.Fatalf("renderIDEConfigs: %v", err)
 	}
 	out := buf.String()

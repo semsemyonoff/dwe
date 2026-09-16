@@ -7,7 +7,10 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // sanitizedCfg returns the config the ide/ai/git dry-run renders must see.
@@ -28,6 +31,16 @@ func sanitizedCfg(ctx validate.Context) *config.DweConfig {
 		return ctx.Cfg
 	}
 	return cfg
+}
+
+// commandIndex projects the registry the validate run already loaded into the
+// pack command index. A nil or absent registry yields an empty index and no
+// diagnostic: the commands domain owns reporting a broken command file. Built
+// with the nop translator and without ApplyVisibility, exactly as the render
+// commands build it, so the dry run sees the data the real render will.
+func commandIndex(ctx validate.Context) ([]model.CommandSummary, []model.CommandGroupSummary) {
+	reg, _ := ctx.CommandRegistry.(*usercommands.Registry)
+	return usercommands.CommandIndex(reg, i18n.NopTranslator{}, "")
 }
 
 // overrideSink returns a sink and a getter that collects rels with fromOverride=true.
