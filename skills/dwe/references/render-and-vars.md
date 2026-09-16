@@ -20,7 +20,7 @@ dwe docs show templates --lang en        # template mechanics
 
 ## 2. Generated-secret lifecycle (harvest, never mint)
 
-DWE never mints secrets. Either the **service** mints one and DWE harvests it once into `.dwe/generated.yml` (write-if-absent) and replays it on every render, or the developer sets one with `dwe vars set <path> --generate` (§ 4) and the template reads `${vars.*}`. The harvest flow (Laravel `APP_KEY`):
+DWE never mints a secret on its own. Either the **service** mints one and DWE harvests it once into `.dwe/generated.yml` (write-if-absent) and replays it on every render, or the developer explicitly generates a developer-owned one with `dwe vars set <path> --generate hex` (§ 4) and the template reads `${vars.*}`. The harvest flow (Laravel `APP_KEY`):
 
 1. `service.yml`: `generated: { app_key: { file: src/.env, pattern: "^APP_KEY=(.*)$" } }` — capture group 1 is the value.
 2. Template: `${generated.app_key}`.

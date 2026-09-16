@@ -66,7 +66,7 @@ phases:
         cmd: services.<name>.install
         when:
           type: builtin
-          cmd: "file-missing services/<name>/src/vendor/autoload.php"
+          cmd: "file-missing services/<name>/src/<install-marker>"  # vendor/autoload.php, node_modules/.package-lock.json, .venv/bin/python
   - name: finalize
     steps:
       - name: up

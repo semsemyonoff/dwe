@@ -65,7 +65,7 @@ One file per framework namespace, each entry a `service_exec` wrapping the binar
 
 ## Step 6 — Render packs, generated secrets, vars, exports
 
-Only if the app needs a rendered runtime config or a minted secret that must survive re-render: wire a `config` pack (`workspace/templates/config/<name>/manifest.yml` → `{from: env.tmpl, to: src/.env}`), reference `${vars.x}` / `${generated.x}`, declare `generated:` + the harvest steps. A secret the app does not mint is a `dwe vars set <path> --generate` handoff. Every free-form value goes under `vars:`; surface values in `.env` with `exports.env` rules. Full detail: `render-and-vars.md`.
+Only if the app needs a rendered runtime config or a minted secret that must survive re-render: wire a `config` pack (`workspace/templates/config/<name>/manifest.yml` → `{from: env.tmpl, to: src/.env}`), reference `${vars.x}` / `${generated.x}`, declare `generated:` + the harvest steps. A secret the app does not mint is a `dwe vars set <path> --generate hex` handoff. Every free-form value goes under `vars:`; surface values in `.env` with `exports.env` rules. Full detail: `render-and-vars.md`.
 
 ## Step 7 — Validate (read)
 
