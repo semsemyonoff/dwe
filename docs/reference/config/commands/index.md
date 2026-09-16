@@ -310,7 +310,7 @@ When `dwe commands` is invoked without an exact command ID on an interactive ter
 | `id`, `title`, `type` | always present; `title` is the last segment of `id` |
 | `group` | omitted for a command outside any group |
 | `description` | omitted when empty. **Localized**: with a non-English locale it carries the translation from `workspace/i18n/<lang>.yml`, so match commands on `id`, never on this text |
-| `service` | omitted when the command declares none. The **declared** value, not a rendered one — a templated `service: app-${param.service}` is printed verbatim, so it is not always a literal container name |
+| `service` | omitted when the command declares none. The **declared** value, not a rendered one — a templated `service: app-${param.service}` is printed verbatim, so it is not always a literal container name. The `.start` / `.logs` / `.stop` / `.restart` commands a `type: daemon` expands into carry the daemon's own service |
 | `private` | only with `--all` |
 | `params` | omitted when the command has none; full parameter details are in `dwe commands -i <id> --output json` |
 

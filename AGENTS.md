@@ -71,6 +71,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **Display-string localization** — never read `def.Description` in display code; thread `rflags.I18n` (`i18n.TranslatorOrNop` on completion paths) and use the typed `store.*` helpers.
   Storage and hashing sites stay English — a locale reaching `journal/hash.go` makes the deployment hash language-dependent.
+  Render packs' command index stays English and hide-blind too (`NopTranslator`, no `ApplyVisibility`): tracked files must not vary by locale or stack — § `internal/cli/render/`.
   See § CLI (cross-cutting behaviors).
 
 - **Binary accessors** — never read `cfg.Binaries.*`; use the nil-safe `config.DweBin / DockerBin / ShellBin / GitBin / MmdcBin`.

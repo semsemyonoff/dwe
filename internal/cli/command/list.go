@@ -120,10 +120,14 @@ func newCommandListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `List all available declarative commands from workspace/commands/.
 
 An optional group filter narrows the output to a specific command group (e.g. 'db', 'services.main').
-Use --all to include private commands.`,
+Use --all to include private commands.
+
+--output json emits one entry per command with its id, params, description and
+declared service; the description is localized, so match commands on id.`,
 		Example: `  dwe commands list
   dwe commands list db
-  dwe commands list --all`,
+  dwe commands list --all
+  dwe commands list db --output json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			groupFilter := ""

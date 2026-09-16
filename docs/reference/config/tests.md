@@ -111,7 +111,7 @@ Each key is a dot-path relative to `vars.` (`app.http_port` → `vars: { app: { 
 
 `auto` is **not** required to isolate a host port. Every host port an enabled service declares under `services.<name>.ports` is remapped automatically, and so is every `vars:` path a compose host port reads through an [`exports.env`](workspace.md#exportsenv) rule (see **Automatic host-port isolation** below) — a scenario that mentions neither still gets a free port for both. `env.vars: { …: auto }` remains for the residual case: a var that **no** compose port reads, which the runner would otherwise have no reason to allocate. Writing `auto` for a path the runner already remaps is harmless and changes nothing.
 
-Writing a concrete number instead **pins** the path: the copy binds exactly that port and the automatic remap steps aside. `null`, `""` and a missing key do not pin — the export would fall back to its own default and bind the live stack's port, so those still get an allocated port.
+Writing a concrete number instead **pins** the path: the copy binds exactly that port and the automatic remap steps aside. `null`, `""` and a missing key do not pin — the export would fall back to its own default and bind the live stack's port, so those still get an allocated port. Neither does a map or a list at the path: it is structure, not a port, and the allocated port replaces it.
 
 ### `timeout`
 
@@ -529,7 +529,7 @@ dwe test list --output json
 }
 ```
 
-`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario, a `--keep` run, a scenario stopped by the [isolation gate](#compose-isolation-scanner) before the copy was made (no collection is attempted), or when collection could not create the report directory. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
+`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario, a `--keep` run, a scenario stopped by the [isolation gate](#compose-isolation-scanner) before the copy was made (no collection is attempted), or when collection could not create the report directory. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything. The isolation gate is the exception: it fires before the run log exists, so under `--output json` a scenario it stops shows up only as `failed` with neither `failed_step` nor `report_dir`, and its finding messages are not recorded anywhere — re-run without `--output json`, or run `dwe validate tests`, to read them.
 
 `dwe test list --output json` additionally carries a per-scenario [cost profile](#cost-profile---output-json).
 

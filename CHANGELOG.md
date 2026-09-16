@@ -18,80 +18,41 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.6.2] - 2026-09-16
+
 ### Added
 
-- **Template packs receive the project's declared commands.** Every
-  `dwe render ai|ide|git` template can read `.Commands` and `.CommandGroups`,
-  plus `.ServiceCommands` / `.ServiceCommandGroups`, which keep the commands and
-  groups whose `service:` is the rendered service's container. The data is what
-  the command files *declare*: `hide:` is not evaluated, so a rendered file does
-  not change as containers start and stop, and a group's count can be larger
-  than what `dwe commands list <group>` prints while a `hide:` applies.
-  Descriptions are never translated, so the output does not depend on the locale.
-  When the command files fail to load, rendering still succeeds, with one
-  warning carrying the load error and the command data empty. See
+- Render templates can read the project's declared commands: `.Commands`,
+  `.CommandGroups`, and per service `.ServiceCommands` /
+  `.ServiceCommandGroups`. See
   [`dwe render ai`](docs/reference/render/ai.md#declared-command-index).
-- **Scaffolded agent files tell agents to use declared commands.** The hub
-  `AGENTS.md` from the `default` AI pack gains a `Declared commands` block that
-  names the service's command groups with their declared counts and the exact
-  `dwe commands list <group> --output json` call, followed by the rule: look up
-  declared commands before tests, linters, builds, migrations and similar tasks,
-  prefer a matching one, and run a full listing before falling back to
-  `dwe shell`. The root `AGENTS.md` gets the same rule without the group data.
-  This applies to projects created with `dwe init` from now on — existing packs
-  are project files and are not changed; the block is published as a copyable
-  snippet in [`dwe render ai`](docs/reference/render/ai.md#shipped-declared-commands-block).
+- The `default` AI pack gives `AGENTS.md` a `Declared commands` block that tells
+  agents to use a declared command before falling back to `dwe shell`. Existing
+  projects can copy the
+  [snippet](docs/reference/render/ai.md#shipped-declared-commands-block).
 
 ### Changed
 
-- **`dwe commands list --output json` entries carry `description` and
-  `service`.** Both are omitted when empty; no existing key changed.
-  `description` is localized like the text listing, so match commands on `id`.
-  `service` is the declared value and can be an unrendered expression such as
-  `app-${param.service}`. See
-  [commands § JSON listing](docs/reference/config/commands/index.md#json-listing).
-- **`dwe test` remaps compose host ports routed through `vars:`.** A host port
-  published as a single variable (`"${VALKEY_PORT:-6379}:6379"`) whose active
-  `exports.env` rule reads `from: vars.<path>` now gets a freshly allocated port
-  in every scenario copy, from the same batch as the modelled
-  `services.<name>.ports`. `env.vars: { <path>: auto }` is no longer required
-  (existing entries keep working); an explicit `env.vars: { <path>: <number> }`
-  **pins** the port and disables the remap for that path. See
+- **`dwe test` remaps compose host ports routed through `vars:`** — a port
+  variable exported `from: vars.<path>` gets a free port in every scenario copy
+  without `env.vars: { <path>: auto }`; a numeric `env.vars` value pins it. A
+  step that hardcodes the original port now misses — see
   [Upgrading DWE](docs/guides/upgrading.md).
-- **The `interpolated_host_port` finding no longer appears for a variable traced
-  to a `vars:` path** — in `dwe test run`, `dwe validate tests` or
-  `dwe test list --output json`'s `cost_profile.isolation_findings`. An untraced
-  variable, and one reading a service port a scenario does not remap, still
-  warn; the untraced message now points at the two ways to route the port
-  (a declared `services.<name>.ports` entry, or an `exports.env` rule
-  `from: vars.<path>`) instead of advising `env.vars: { …: auto }`.
-- **A scenario blocked by the compose isolation scanner creates nothing.** The
-  scan runs before the project is copied, so a blocking finding
-  (`container_name:`, a literal host port) no longer creates a copy directory or
-  a compose project, and no failure report is collected for that run — a report
-  left by an **earlier** failure of the same scenario stays in place. The
-  scenario is still reported `failed` (exit code 1).
-- **`dwe test list --output json` evaluates scenarios without per-developer
-  `compose.extra` overlays**, exactly as the test copy runs them:
-  `cost_profile.build_services` / `external_images` no longer count a service
-  that exists only in such an overlay, and neither does
-  `cost_profile.isolation_findings`. `dwe validate tests` builds the same view
-  per scenario, so an `interpolated_host_port` finding that exists only in such
-  an overlay is no longer reported; its other finding kinds
-  (`container_name`, `raw_host_port`, the volume and network kinds) still come
-  from a project-wide scan and warn regardless of overlays.
+- `dwe commands list --output json` entries carry `description` and `service`.
+- `interpolated_host_port` is no longer reported for a port traced to `vars:`.
+- A scenario blocked by the compose isolation scanner fails before creating a
+  copy or a compose project.
+- `dwe test list --output json` and the `interpolated_host_port` check of
+  `dwe validate tests` ignore `local.yml` `compose.extra` overlays, as the test
+  copy does.
 
 ### Fixed
 
-- **A per-service deploy no longer fails `ports_free` on a port it never
-  binds.** `dwe deploy run --service <name>` and the deploy
-  `dwe services enable|disable --apply` performs now check only the named
-  services plus the transitive `depends_on` closure of their `service.yml`
-  declarations — what `docker compose up <name>` actually starts — instead of
-  every enabled service in the project. Whole-project runs and `dwe validate`
-  are unchanged.
-- An unknown `--service` name is rejected before preflight runs, so a typo
-  fails fast instead of narrowing the port scope to nothing.
+- `dwe deploy run --service` and `dwe services enable|disable --apply` check
+  `ports_free` only for the named services and their `depends_on` closure.
+- `dwe deploy run --service` rejects an unknown service before preflight.
 
 ## [0.6.1] - 2026-09-15
 
@@ -365,6 +326,7 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0
