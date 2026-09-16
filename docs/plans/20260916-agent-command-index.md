@@ -638,14 +638,14 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 - Modify: `internal/core/workflow/scaffold/starter_artefacts_test.go` (:245-257 asserts substrings of the rendered hub file)
 - Modify: `internal/cli/render/ai_test.go`
 
-- [ ] add the `## Declared commands` block to the hub template per Technical Details, entirely under `{{ if .ServiceCommandGroups }}`, with the four load-bearing properties intact, the count labelled `N declared` and the shell fallback using `{{ .Resolved }}`
-- [ ] rewrite the root template's first "Useful commands" bullet into the generic form of the rule; leave the "Data as JSON" bullet unchanged
-- [ ] regenerate `golden_default.txt` (`-update` flag, not `UPDATE_GOLDEN`)
-- [ ] write a render test on a fixture project with two hubs: each hub's block names only its own groups, the counts match `CommandIndex`, and the exact scoped call string is present verbatim
-- [ ] write the byte-stability test **through the render command's RunE** with `rflags.I18n` set to a Russian-populated `*i18n.Store` (the field is `*Store`, not the interface), and assert the bytes equal the run with no store. Asserting it at the `packcommon`/`CommandIndex` level is vacuous — the nop translator is hard-coded inside that call, so there is no injection point below RunE. It is also NOT about `$LANG`: the render path never reads it
-- [ ] write a test that a project with zero declared commands renders no `## Declared commands` heading at all, and the same assertion for the broken-registry project from Task 4b (the index is empty there for a different reason, and this is where the heading exists to be absent)
-- [ ] write the group-line fallback tests: a group with a description prints it; a group with only a title prints the title; neither case ever renders a line with an empty text segment (`- **id** —  — N declared`)
-- [ ] run `make test` - must pass before task 6
+- [x] add the `## Declared commands` block to the hub template per Technical Details, entirely under `{{ if .ServiceCommandGroups }}`, with the four load-bearing properties intact, the count labelled `N declared` and the shell fallback using `{{ .Resolved }}`
+- [x] rewrite the root template's first "Useful commands" bullet into the generic form of the rule; leave the "Data as JSON" bullet unchanged
+- [x] regenerate `golden_default.txt` (`-update` flag, not `UPDATE_GOLDEN`)
+- [x] write a render test on a fixture project with two hubs: each hub's block names only its own groups, the counts match `CommandIndex`, and the exact scoped call string is present verbatim
+- [x] write the byte-stability test **through the render command's RunE** with `rflags.I18n` set to a Russian-populated `*i18n.Store` (the field is `*Store`, not the interface), and assert the bytes equal the run with no store. Asserting it at the `packcommon`/`CommandIndex` level is vacuous — the nop translator is hard-coded inside that call, so there is no injection point below RunE. It is also NOT about `$LANG`: the render path never reads it
+- [x] write a test that a project with zero declared commands renders no `## Declared commands` heading at all, and the same assertion for the broken-registry project from Task 4b (the index is empty there for a different reason, and this is where the heading exists to be absent)
+- [x] write the group-line fallback tests: a group with a description prints it; a group with only a title prints the title; neither case ever renders a line with an empty text segment (`- **id** —  — N declared`)
+- [x] run `make test` - must pass before task 6
 
 ### Task 6: documentation and CHANGELOG
 
