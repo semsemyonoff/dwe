@@ -138,17 +138,21 @@ func (d TemplateData) ServiceCommands() []model.CommandSummary {
 // CommandGroups holds authored groups only, so the collapse never lands on a
 // synthetic ancestor such as magento's `services`.
 //
-// Only a group scoped to this service absorbs its descendants: an authored
-// `services` parent that also holds another service's commands would otherwise
-// replace `services.magento` in every hub with one listing of all of them.
-// Such a parent is kept only while it owns a hub command no qualifying
-// descendant covers. Order follows CommandGroups.
+// A group absorbs its descendants only while it does not span another hub:
+// no command under it targets the container of a service rendered into a
+// different hub directory. An authored `services` parent holding node's
+// commands — in a `services.node` subgroup or in its own file — would
+// otherwise replace `services.magento` in every hub with one listing of all of
+// them. Such a parent is kept only while it owns a hub command no qualifying
+// descendant covers. Commands for containers without a hub of their own are
+// helpers, not another hub: magento's `services.magento.config.set` targets
+// `db`, and counting it disabled the collapse and listed all 16 subgroups.
+// Order follows CommandGroups.
 func (d TemplateData) ServiceCommandGroups() []model.CommandGroupSummary {
 	cmds := d.ServiceCommands()
 	if len(cmds) == 0 {
 		return nil
 	}
-	container := d.ServiceCfg.Container
 	var qualifying []model.CommandGroupSummary
 	for _, g := range d.CommandGroups {
 		for _, c := range cmds {
@@ -158,9 +162,10 @@ func (d TemplateData) ServiceCommandGroups() []model.CommandGroupSummary {
 			}
 		}
 	}
+	otherHubs := d.otherHubContainers()
 	scoped := func(g model.CommandGroupSummary) bool {
 		for _, c := range d.Commands {
-			if c.Service != "" && c.Service != container && underPrefix(c.ID, g.ID) {
+			if otherHubs[c.Service] && underPrefix(c.ID, g.ID) {
 				return false
 			}
 		}
@@ -181,6 +186,24 @@ func (d TemplateData) ServiceCommandGroups() []model.CommandGroupSummary {
 		if scoped(g) || ownsUncovered(g, cmds, qualifying) {
 			out = append(out, g)
 		}
+	}
+	return out
+}
+
+// otherHubContainers returns the containers of services rendered into a hub
+// directory other than this service's. Services sharing this hub (an extends
+// sibling such as magento-debug inherits `dir:`) are not another hub.
+func (d TemplateData) otherHubContainers() map[string]bool {
+	own := filepath.Clean(d.ServiceCfg.Dir)
+	out := make(map[string]bool)
+	for _, svc := range d.Services {
+		if svc.Dir == "" || svc.Container == "" || svc.Container == d.ServiceCfg.Container {
+			continue
+		}
+		if d.ServiceCfg.Dir != "" && filepath.Clean(svc.Dir) == own {
+			continue
+		}
+		out[svc.Container] = true
 	}
 	return out
 }

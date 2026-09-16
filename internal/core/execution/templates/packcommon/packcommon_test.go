@@ -220,6 +220,18 @@ func TestTemplateDataServiceCommands(t *testing.T) {
 	}
 }
 
+// magentoHub and hubServices model magento's layout: magento-debug extends
+// magento and shares its hub directory, node is a second hub, db has no hub.
+var (
+	magentoHub  = config.ServiceConfig{Container: "app-magento", Dir: "./services/magento"}
+	hubServices = map[string]config.ServiceConfig{
+		"magento":       magentoHub,
+		"magento-debug": {Container: "app-magento-debug", Dir: "./services/magento", Extends: "magento"},
+		"node":          {Container: "app-node", Dir: "./services/node"},
+		"db":            {Container: "db"},
+	}
+)
+
 func TestTemplateDataServiceCommandGroups(t *testing.T) {
 	tests := []struct {
 		name string
@@ -272,9 +284,10 @@ func TestTemplateDataServiceCommandGroups(t *testing.T) {
 			want: []string{"administration"},
 		},
 		{
-			name: "authored parent shared with another service does not absorb",
+			name: "shared parent over another hub's subgroup does not absorb",
 			data: TemplateData{
-				ServiceCfg: config.ServiceConfig{Container: "app-magento"},
+				ServiceCfg: magentoHub,
+				Services:   hubServices,
 				Commands: []model.CommandSummary{
 					{ID: "services.magento.reindex", Service: "app-magento"},
 					{ID: "services.magento.db.dump", Service: "app-magento"},
@@ -290,9 +303,85 @@ func TestTemplateDataServiceCommandGroups(t *testing.T) {
 			want: []string{"services.magento"},
 		},
 		{
+			// magento's real shape: config.set targets db, which has no hub.
+			name: "commands for a container without a hub do not block the collapse",
+			data: TemplateData{
+				ServiceCfg: magentoHub,
+				Services:   hubServices,
+				Commands: []model.CommandSummary{
+					{ID: "services.magento.bootstrap", Type: "workflow"},
+					{ID: "services.magento.dbdump", Service: "db"},
+					{ID: "services.magento.cache.flush", Service: "app-magento"},
+					{ID: "services.magento.config.get", Service: "app-magento"},
+					{ID: "services.magento.config.set", Service: "db"},
+					{ID: "services.magento.dbtools.dump", Service: "db"},
+				},
+				CommandGroups: []model.CommandGroupSummary{
+					{ID: "services.magento", Description: "Magento", Count: 6},
+					{ID: "services.magento.cache", Description: "Cache", Count: 1},
+					{ID: "services.magento.config", Description: "Config", Count: 2},
+					{ID: "services.magento.dbtools", Description: "DB tools", Count: 1},
+				},
+			},
+			want: []string{"services.magento"},
+		},
+		{
+			name: "shared parent declaring another hub's command itself does not absorb",
+			data: TemplateData{
+				ServiceCfg: magentoHub,
+				Services:   hubServices,
+				Commands: []model.CommandSummary{
+					{ID: "services.node-build", Service: "app-node"},
+					{ID: "services.magento.reindex", Service: "app-magento"},
+					{ID: "services.magento.cache.flush", Service: "app-magento"},
+				},
+				CommandGroups: []model.CommandGroupSummary{
+					{ID: "services", Description: "Per-service commands", Count: 3},
+					{ID: "services.magento", Description: "Magento", Count: 2},
+					{ID: "services.magento.cache", Description: "Cache", Count: 1},
+				},
+			},
+			want: []string{"services.magento"},
+		},
+		{
+			// A file mixing both hubs' commands must not read as this hub's.
+			name: "shared parent mixing this hub's and another hub's commands does not absorb",
+			data: TemplateData{
+				ServiceCfg: magentoHub,
+				Services:   hubServices,
+				Commands: []model.CommandSummary{
+					{ID: "services.magento-status", Service: "app-magento"},
+					{ID: "services.node-build", Service: "app-node"},
+					{ID: "services.magento.reindex", Service: "app-magento"},
+				},
+				CommandGroups: []model.CommandGroupSummary{
+					{ID: "services", Description: "Per-service commands", Count: 3},
+					{ID: "services.magento", Description: "Magento", Count: 1},
+				},
+			},
+			want: []string{"services", "services.magento"},
+		},
+		{
+			name: "extends sibling sharing the hub directory is not another hub",
+			data: TemplateData{
+				ServiceCfg: magentoHub,
+				Services:   hubServices,
+				Commands: []model.CommandSummary{
+					{ID: "services.magento.reindex", Service: "app-magento"},
+					{ID: "services.magento.debug.xdebug", Service: "app-magento-debug"},
+				},
+				CommandGroups: []model.CommandGroupSummary{
+					{ID: "services.magento", Description: "Magento", Count: 2},
+					{ID: "services.magento.debug", Description: "Debug", Count: 1},
+				},
+			},
+			want: []string{"services.magento"},
+		},
+		{
 			name: "shared parent kept for a hub command no descendant covers",
 			data: TemplateData{
-				ServiceCfg: config.ServiceConfig{Container: "app-magento"},
+				ServiceCfg: magentoHub,
+				Services:   hubServices,
 				Commands: []model.CommandSummary{
 					{ID: "services.status", Service: "app-magento"},
 					{ID: "services.magento.reindex", Service: "app-magento"},
