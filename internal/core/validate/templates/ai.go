@@ -7,6 +7,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
@@ -42,6 +43,7 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// `dwe render ai` uses, so the validator scope matches what would be
 	// rendered.
 	cfg := sanitizedCfg(ctx)
+	commands, groups := commandIndex(ctx)
 	services := cfg.Services
 	selected, skipped := ai.SelectServices(services)
 
@@ -75,7 +77,7 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// Validate each selected service's template pack
 	for _, name := range selected {
 		svc := services[name]
-		diags = append(diags, v.validateService(name, svc, cfg, ctx.ProjectRoot)...)
+		diags = append(diags, v.validateService(name, svc, cfg, commands, groups, ctx.ProjectRoot)...)
 	}
 
 	// If no errors/infos, emit a single OK diagnostic
@@ -95,7 +97,7 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 }
 
 // validateService validates one service's AI template pack.
-func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, projectRoot string) []validate.Diagnostic {
+func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, commands []model.CommandSummary, groups []model.CommandGroupSummary, projectRoot string) []validate.Diagnostic {
 	services := cfg.Services
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
@@ -178,13 +180,15 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg
 	// variables, parse errors, or other execution-time failures surface here
 	// instead of at `dwe render ai` time.
 	data := ai.TemplateData{
-		Project:    cfg.Project,
-		Service:    ai.ExtendsRoot(services, name),
-		Resolved:   name,
-		ServiceCfg: svc,
-		Runtime:    cfg.Runtime,
-		Services:   services,
-		Cfg:        cfg,
+		Project:       cfg.Project,
+		Service:       ai.ExtendsRoot(services, name),
+		Resolved:      name,
+		ServiceCfg:    svc,
+		Runtime:       cfg.Runtime,
+		Services:      services,
+		Cfg:           cfg,
+		Commands:      commands,
+		CommandGroups: groups,
 	}
 	failures := ai.DryRunRender(absRoot, packName, m, data)
 	fromKeys := make([]string, 0, len(failures))

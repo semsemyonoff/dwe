@@ -37,11 +37,17 @@ The most common thing you will do in an existing project. Prefer a declared
 command over an ad-hoc one — it carries the right service, workdir, user and env,
 so it behaves the same for you, the user, and CI.
 
-1. Find the ID (one call, greppable — `<group>.<cmd>  [type]  — description`):
+1. Find the ID. One call, done once per session (and again after
+   `workspace/commands/` changes); each entry carries `id`, `title` and `type`,
+   plus `description` and the `service` it runs in when declared, so pick by
+   `description` / `service` rather than by guessing id patterns:
    ```shell
-   dwe commands list
-   dwe commands list | grep -E '<service>\.(test|lint|check)'
+   dwe commands list --output json
+   dwe commands list <group> --output json   # when a hub AGENTS.md names the group
    ```
+   A scoped listing that finds nothing is not proof of absence — commands with no
+   `service:` (project-wide scripts, workflows) live outside the hub's groups, so
+   run the full listing once before falling back to `dwe shell`.
 2. Read it before running anything unfamiliar. This also tells you whether it
    takes `--set key=value` params or `${args}` pass-through — do **not** open the
    YAML to find out:
@@ -69,7 +75,8 @@ dwe shell site -c 'npx vitest run src/x.test.ts'
 dwe shell backend -c 'make generate' --tty     # --tty for long-running output
 ```
 
-- Check `dwe commands list` first — a declared command is better when one exists.
+- Check `dwe commands list --output json` first — a declared command that matches
+  the intent outranks the direct invocation.
 - **`--tty` for anything long-running.** Without it the child's stdout is a pipe,
   so it block-buffers and prints nothing until it exits; that reads as a hang and
   has cost real debugging time. Leave it off when parsing output — a PTY turns

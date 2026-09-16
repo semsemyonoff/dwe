@@ -896,6 +896,10 @@ type CommandDef struct {
 	// command this synthetic was expanded from. Populated by the registry
 	// expander; used by inspect to render the "derived from" line.
 	DerivedFromDaemon string `yaml:"-"`
+	// DaemonService is the source daemon's EffectiveService, carried onto its
+	// synthetics for DeclaredService only. Service itself must stay empty:
+	// validateBuiltinType/validateWorkflowType reject it.
+	DaemonService string `yaml:"-"`
 
 	// Computed fields — not part of YAML, populated by the loader.
 
@@ -1035,6 +1039,17 @@ func (c *CommandDef) EffectiveService() string {
 		return c.Runner.Service
 	}
 	return c.Service
+}
+
+// DeclaredService is the service the command is declared against, for
+// agent-facing listings: EffectiveService, or for a daemon's synthetic
+// .start/.logs/.stop/.restart the source daemon's service. Never use it to
+// run anything — the synthetics resolve their container through `with:`.
+func (c *CommandDef) DeclaredService() string {
+	if svc := c.EffectiveService(); svc != "" {
+		return svc
+	}
+	return c.DaemonService
 }
 
 // EffectiveUser returns the container user: Runner.User when set, else User.

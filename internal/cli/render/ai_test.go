@@ -1,14 +1,20 @@
 package render
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	aipkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	yamlPkg "gopkg.in/yaml.v3"
 )
@@ -1829,5 +1835,317 @@ func TestRenderAgentsTemplateFile_backwardCompat(t *testing.T) {
 	populated := render(&config.DweConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
 	if string(empty) != string(populated) {
 		t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
+	}
+}
+
+const declaredCommandsHeading = "## Declared commands"
+
+// shippedHubAgentsTemplate returns the hub AGENTS.md template `dwe init`
+// scaffolds. The scaffold renders it with [[ ]] delimiters and it carries none,
+// so the file on disk is byte-identical to the project's pack template.
+func shippedHubAgentsTemplate(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("module root not found")
+		}
+		dir = parent
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "internal", "core", "workflow", "scaffold", "templates",
+		"workspace", "templates", "ai", "default", "AGENTS.md.tmpl.tmpl"))
+	if err != nil {
+		t.Fatalf("read shipped hub template: %v", err)
+	}
+	if strings.Contains(string(data), "[[") {
+		t.Fatal("shipped hub template now uses scaffold delimiters; render it through the scaffold instead")
+	}
+	return string(data)
+}
+
+// writeDeclaredCommandsProject builds a two-hub project on the shipped ai
+// template. `web` has key != container (the magento shape). commandFiles maps
+// paths under workspace/commands/ to YAML; nil means no commands dir.
+func writeDeclaredCommandsProject(t *testing.T, commandFiles map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("schema_version: \"2\"\nproject:\n  name: p\nservices:\n  api:\n    enabled: true\n  web:\n    enabled: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	setupServicesConfig(t, root, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: p-api
+  web:
+    type: app
+    dir: services/web
+    container: app-web
+`)
+	setupAgentsPackTemplates(t, root, "default", map[string]string{
+		"manifest.yml":   "render:\n  - from: AGENTS.md.tmpl\n    to: AGENTS.md\n",
+		"AGENTS.md.tmpl": shippedHubAgentsTemplate(t),
+	})
+	for _, svc := range []string{"api", "web"} {
+		if err := os.MkdirAll(filepath.Join(root, "services", svc), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for rel, body := range commandFiles {
+		abs := filepath.Join(root, "workspace", "commands", filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func twoHubCommandFiles() map[string]string {
+	return map[string]string{
+		"api.yml": `
+group:
+  description: API tasks
+commands:
+  test:
+    type: service_exec
+    description: Run the API tests
+    service: p-api
+    cmd: go test ./...
+  lint:
+    type: service_exec
+    service: p-api
+    cmd: golangci-lint run
+`,
+		"api/db.yml": `
+group:
+  description: API database
+commands:
+  migrate:
+    type: service_exec
+    service: p-api
+    cmd: migrate up
+`,
+		"web.yml": `
+group:
+  description: Web frontend tasks
+commands:
+  build:
+    type: service_exec
+    description: Build the bundle
+    service: app-web
+    cmd: npm run build
+`,
+		"tools.yml": `
+group:
+  description: Project-wide tools
+commands:
+  fmt:
+    type: shell
+    cmd: echo fmt
+`,
+	}
+}
+
+func runRenderAI(t *testing.T, flags *cmdctx.RootFlags) {
+	t.Helper()
+	cmd := newAICmd(flags)
+	if _, err := captureStdout(t, func() error { return cmd.RunE(cmd, nil) }); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+}
+
+func readHubAgents(t *testing.T, root, svc string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, "services", svc, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read %s AGENTS.md: %v", svc, err)
+	}
+	return string(data)
+}
+
+// TestNewAICmd_declaredCommandsBlockScopedPerHub renders the shipped hub
+// template for two hubs: each block names only its own (collapsed) groups,
+// with the counts CommandIndex reports and the exact scoped call.
+func TestNewAICmd_declaredCommandsBlockScopedPerHub(t *testing.T) {
+	root := writeDeclaredCommandsProject(t, twoHubCommandFiles())
+	configPath := filepath.Join(root, "workspace.yml")
+	runRenderAI(t, &cmdctx.RootFlags{ConfigPath: configPath})
+
+	reg, err := usercommands.LoadRegistryFromConfigPath(configPath)
+	if err != nil {
+		t.Fatalf("LoadRegistryFromConfigPath: %v", err)
+	}
+	_, groups := usercommands.CommandIndex(reg, i18n.NopTranslator{}, "")
+	count := func(id string) int {
+		for _, g := range groups {
+			if g.ID == id {
+				return g.Count
+			}
+		}
+		t.Fatalf("group %q not in CommandIndex", id)
+		return 0
+	}
+	if count("api") != 3 {
+		t.Fatalf("api count = %d, want 3 (fixture drift)", count("api"))
+	}
+
+	tests := []struct {
+		svc      string
+		want     []string
+		wantNone []string
+	}{
+		{
+			svc: "api",
+			want: []string{
+				declaredCommandsHeading,
+				fmt.Sprintf("- **api** — API tasks — %d declared: `dwe commands list api --output json`\n", count("api")),
+				"use `dwe shell api -c '<cmd>'`",
+			},
+			wantNone: []string{"**api.db**", "**web**", "**tools**"},
+		},
+		{
+			svc: "web",
+			want: []string{
+				declaredCommandsHeading,
+				fmt.Sprintf("- **web** — Web frontend tasks — %d declared: `dwe commands list web --output json`\n", count("web")),
+				"use `dwe shell web -c '<cmd>'`",
+			},
+			wantNone: []string{"**api", "**tools**", "dwe shell app-web"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.svc, func(t *testing.T) {
+			got := readHubAgents(t, root, tc.svc)
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("missing %q in:\n%s", w, got)
+				}
+			}
+			for _, w := range tc.wantNone {
+				if strings.Contains(got, w) {
+					t.Errorf("unexpected %q in:\n%s", w, got)
+				}
+			}
+		})
+	}
+}
+
+// TestNewAICmd_declaredCommandsLocaleIndependent pins that a generated
+// AGENTS.md does not depend on the active locale: the render path hard-codes
+// the nop translator, so a Russian-populated store threaded through RunE must
+// not change a single byte.
+func TestNewAICmd_declaredCommandsLocaleIndependent(t *testing.T) {
+	root := writeDeclaredCommandsProject(t, twoHubCommandFiles())
+	const ruGroup = "Задачи API"
+	i18nDir := filepath.Join(root, "workspace", "i18n")
+	if err := os.MkdirAll(i18nDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ru := "groups:\n  api:\n    title: АПИ\n    description: " + ruGroup + "\ncommands:\n  api.test:\n    description: Запустить тесты\n"
+	if err := os.WriteFile(filepath.Join(i18nDir, "ru.yml"), []byte(ru), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := i18n.Load(root)
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	if got := store.GroupDescription("ru", "api", ""); got != ruGroup {
+		t.Fatalf("store not populated: GroupDescription = %q", got)
+	}
+	configPath := filepath.Join(root, "workspace.yml")
+
+	runRenderAI(t, &cmdctx.RootFlags{ConfigPath: configPath})
+	plain := readHubAgents(t, root, "api")
+
+	runRenderAI(t, &cmdctx.RootFlags{ConfigPath: configPath, I18n: store, Locale: "ru"})
+	localized := readHubAgents(t, root, "api")
+
+	if !strings.Contains(plain, declaredCommandsHeading) {
+		t.Fatalf("fixture renders no block; the comparison would be vacuous:\n%s", plain)
+	}
+	if plain != localized {
+		t.Errorf("AGENTS.md differs under a ru store:\n--- no store ---\n%s\n--- ru ---\n%s", plain, localized)
+	}
+}
+
+// TestNewAICmd_declaredCommandsHeadingAbsent: no index for this hub means no
+// block at all — whether nothing is declared or the registry failed to load.
+func TestNewAICmd_declaredCommandsHeadingAbsent(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+	}{
+		{name: "no commands dir", files: nil},
+		{name: "commands without service", files: map[string]string{"tools.yml": twoHubCommandFiles()["tools.yml"]}},
+		{name: "broken registry", files: map[string]string{"api.yml": "commands: [unclosed\n"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := writeDeclaredCommandsProject(t, tc.files)
+			runRenderAI(t, &cmdctx.RootFlags{ConfigPath: filepath.Join(root, "workspace.yml")})
+			for _, svc := range []string{"api", "web"} {
+				got := readHubAgents(t, root, svc)
+				if strings.Contains(got, declaredCommandsHeading) {
+					t.Errorf("%s: unexpected block:\n%s", svc, got)
+				}
+				if !strings.Contains(got, "## Working on this service") {
+					t.Errorf("%s: template did not render:\n%s", svc, got)
+				}
+			}
+		})
+	}
+}
+
+// TestShippedHubTemplate_groupLineFallback executes the shipped template
+// directly, since authored group text reaches TemplateData only through the
+// builder: description wins, title is the fallback, and a group with neither
+// prints no line rather than `- **id** —  — N declared`.
+func TestShippedHubTemplate_groupLineFallback(t *testing.T) {
+	tmpl, err := template.New("AGENTS.md").Option("missingkey=error").Parse(shippedHubAgentsTemplate(t))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	data := aipkg.TemplateData{
+		Resolved:   "hub",
+		ServiceCfg: config.ServiceConfig{Container: "c"},
+		Commands: []model.CommandSummary{
+			{ID: "desc.x", Service: "c"},
+			{ID: "title.x", Service: "c"},
+			{ID: "bare.x", Service: "c"},
+		},
+		CommandGroups: []model.CommandGroupSummary{
+			{ID: "bare", Count: 1},
+			{ID: "desc", Title: "Desc title", Description: "Desc text", Count: 1},
+			{ID: "title", Title: "Title only", Count: 1},
+		},
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := buf.String()
+	for _, w := range []string{
+		"- **desc** — Desc text — 1 declared: `dwe commands list desc --output json`\n",
+		"- **title** — Title only — 1 declared: `dwe commands list title --output json`\n",
+	} {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+	for _, w := range []string{"Desc title", "**bare**", "—  —"} {
+		if strings.Contains(got, w) {
+			t.Errorf("unexpected %q in:\n%s", w, got)
+		}
 	}
 }

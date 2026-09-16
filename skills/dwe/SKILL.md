@@ -93,7 +93,7 @@ pass validation either way, and are the ones a fresh project gets wrong.
 | Goal | Command / reference |
 | --- | --- |
 | Project overview (start here) | `dwe docs llms-txt --lang en` |
-| **Run a project task** (tests, lint, migrate, …) | `dwe commands list` to find the ID → `dwe cmd <id>` · `dwe cmd -i <id>` first if unsure what it does |
+| **Run a project task** (tests, lint, migrate, …) | `dwe commands list --output json` to find the ID (match on `description` / `service`) → `dwe cmd <id>` · `dwe cmd -i <id> --output json` first if unsure what it does |
 | **Run a one-off command in a service container** | `dwe shell <service> -c '<cmd>'` — see **Running things** below |
 | Inspect state | `dwe status --output json` |
 | Read logs | `dwe logs <service> --output json` |
@@ -118,9 +118,11 @@ own tasks. Two commands cover it, and they are not interchangeable.
 **`dwe cmd <id>` — a task the project already declares.** Prefer it. It carries the
 right service, workdir, user, env and compose flags, so it works identically for
 you and for CI, and it keeps working when those details change. Find IDs with
-`dwe commands list`; read one with `dwe cmd -i <id>` before running something
-unfamiliar — that also tells you whether it takes `--set key=value` params or
-`${args}` pass-through after `--`.
+`dwe commands list --output json` — each entry carries `id`, `description` and
+the `service` it runs in; read one with `dwe cmd -i <id> --output json` before
+running something unfamiliar — that also tells you whether it takes
+`--set key=value` params or `${args}` pass-through after `--`. Match on `id`, not
+`description`: the description follows the project locale.
 
 **`dwe shell <service> -c '<cmd>'` — anything not declared.** This is the escape
 hatch, and it is legitimate: not every one-off belongs in `workspace/commands/`.
@@ -128,8 +130,19 @@ But treat repetition as a signal — if you run the same gate through `dwe shell
 more than a couple of times, it wants to be a declared command, and saying so is
 more useful than running it a third time.
 
-- Prefer `dwe cmd <id>` when one exists. Check the registry before assuming it
-  does not — `dwe commands list | grep <service>` is one call.
+- **Check the registry before any task a declared command may cover** — tests,
+  linters, formatters, builds, codegen, migrations, seeds, cache or token
+  management, package-manager scripts. Make the call once per session, and again
+  after `workspace/commands/` changes. A declared command that matches the intent
+  outranks the direct invocation; do not run the underlying
+  npm/composer/make/docker command until that check has been made.
+- **Scoped first, full before giving up.** When a hub `AGENTS.md` has a
+  `Declared commands` block, it names this service's groups with the exact call —
+  `dwe commands list <group> --output json`. That is a fast first lookup, not
+  proof of absence: before falling back to `dwe shell`, run one full
+  `dwe commands list --output json`, because project-wide and workflow commands
+  declare no `service:` and are not in any hub's groups. The block's counts are
+  *declared* counts; a `hide:` condition can make the live listing shorter.
 - Long-running command? Add `--tty` — **a `dwe shell` flag; `dwe cmd` does not
   take it.** Without it the child's stdout is a pipe, so it block-buffers and
   prints nothing until it exits, which reads as a hang. The cost is that a PTY

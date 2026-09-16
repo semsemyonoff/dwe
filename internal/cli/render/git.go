@@ -8,6 +8,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	gitpkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/git"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
@@ -81,9 +82,10 @@ is rendered.`,
 				}
 			}
 
+			commands, groups := loadCommandIndex(w, flags.ConfigPath)
 			for _, name := range serviceNames {
 				svc := cfg.Services[name]
-				if err := renderGitHooksForService(projectRoot, name, svc, cfg, w); err != nil {
+				if err := renderGitHooksForService(projectRoot, name, svc, cfg, commands, groups, w); err != nil {
 					return fmt.Errorf("service %s: %w", name, err)
 				}
 			}
@@ -100,7 +102,7 @@ func validateExplicitGitArg(name string, services map[string]config.ServiceConfi
 }
 
 // renderGitHooksForService renders all hooks for a single service.
-func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, w *render.Writer) error {
+func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, commands []model.CommandSummary, groups []model.CommandGroupSummary, w *render.Writer) error {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return fmt.Errorf("resolve project root: %w", err)
@@ -158,16 +160,18 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 	}
 
 	return gitpkg.RenderHooks(gitpkg.Context{
-		ProjectRoot: absRoot,
-		Cfg:         cfg,
-		Service:     gitpkg.ExtendsRoot(cfg.Services, name),
-		Resolved:    name,
-		ServiceCfg:  svc,
-		PackName:    packName,
-		Manifest:    m,
-		HooksDir:    absHooks,
-		HubDir:      absHub,
-		Writer:      w,
+		ProjectRoot:   absRoot,
+		Cfg:           cfg,
+		Service:       gitpkg.ExtendsRoot(cfg.Services, name),
+		Resolved:      name,
+		ServiceCfg:    svc,
+		Commands:      commands,
+		CommandGroups: groups,
+		PackName:      packName,
+		Manifest:      m,
+		HooksDir:      absHooks,
+		HubDir:        absHub,
+		Writer:        w,
 	})
 }
 

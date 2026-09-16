@@ -11,6 +11,7 @@ Declarative command definitions for the DWE project.
 - [Visibility, registration, and discovery](#visibility-registration-and-discovery)
 - [End-to-end examples](#end-to-end-examples)
 - [Related commands](#related-commands)
+  - [JSON listing](#json-listing)
 - [Interactive browser](#interactive-browser)
 - [Further reading](#further-reading)
 
@@ -292,6 +293,28 @@ db.start:
 When `dwe commands` is invoked without an exact command ID on an interactive terminal — and without `--inspect`, which requires one — an interactive two-panel command browser opens; see [Interactive browser](#interactive-browser).
 
 `--inspect` / `-i` is mutually exclusive with `--set` and `--yes`; it requires an exact command id and prints the definition without running it.
+
+### JSON listing
+
+`dwe commands list [group] --output json` prints an object whose `commands` field is one flat, id-sorted array. The optional `group` narrows it to that group and everything nested under it (`admin` matches `admin.lint`, not `administration`):
+
+```json
+{"commands":[
+  {"id":"app.install","group":"app","title":"install","description":"Install application dependencies","type":"service_exec","service":"app-main","params":[{"name":"env","type":"string","required":true}]},
+  {"id":"db.migrate","group":"db","title":"migrate","description":"Run database migrations","type":"shell"}
+]}
+```
+
+| Key | Notes |
+|-----|-------|
+| `id`, `title`, `type` | always present; `title` is the last segment of `id` |
+| `group` | omitted for a command outside any group |
+| `description` | omitted when empty. **Localized**: with a non-English locale it carries the translation from `workspace/i18n/<lang>.yml`, so match commands on `id`, never on this text |
+| `service` | omitted when the command declares none. The **declared** value, not a rendered one — a templated `service: app-${param.service}` is printed verbatim, so it is not always a literal container name |
+| `private` | only with `--all` |
+| `params` | omitted when the command has none; full parameter details are in `dwe commands -i <id> --output json` |
+
+`description` and `service` let an agent pick a command from the listing alone: to find what runs in a container, filter on `service`; to find what a command is for, read `description`. Commands hidden by an active `hide:` are absent, as in the text listing.
 
 ## Interactive browser
 

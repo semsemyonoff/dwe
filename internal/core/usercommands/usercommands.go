@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/loader"
@@ -18,6 +19,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -173,6 +175,64 @@ func LoadRegistryFromConfigPath(configPath string) (*Registry, error) {
 		return nil, fmt.Errorf("command registry validation: %w", err)
 	}
 	return reg, nil
+}
+
+// CommandIndex projects reg into the shared agent-facing command and group
+// summaries, both sorted by ID. A nil registry yields two nil slices.
+//
+// It never evaluates `hide:`: a caller rendering a live document (llms-txt)
+// runs ApplyVisibility first, while a caller writing a file to disk (template
+// packs) must not, or the file would flip with the state of the Docker stack.
+//
+// Group counts come from reg.List, not GroupNode.Commands, so they inherit
+// List's Private/BridgeHidden (and, after ApplyVisibility, Hidden) filters.
+// Nodes with no printable text and no direct commands are skipped: ensureGroup
+// materializes every dotted ancestor, and a header-only file (e.g. only
+// `group: {bridge: …}`) leaves meta non-zero without giving the node a title.
+func CommandIndex(reg *Registry, tr i18n.Translator, locale string) ([]model.CommandSummary, []model.CommandGroupSummary) {
+	if reg == nil {
+		return nil, nil
+	}
+
+	defs := reg.List("")
+	commands := make([]model.CommandSummary, 0, len(defs))
+	for _, def := range defs {
+		commands = append(commands, model.CommandSummary{
+			ID:          def.ID,
+			Group:       def.Group,
+			Description: tr.CommandDescription(locale, def.ID, def.Description),
+			Type:        string(def.Type),
+			Service:     def.DeclaredService(),
+		})
+	}
+
+	var groups []model.CommandGroupSummary
+	var walk func(gn *GroupNode)
+	walk = func(gn *GroupNode) {
+		for _, child := range gn.Children {
+			walk(child)
+		}
+		if gn.ID == "" {
+			return
+		}
+		if gn.Meta.Title == "" && gn.Meta.Description == "" && len(gn.Commands) == 0 {
+			return
+		}
+		count := len(reg.List(gn.ID))
+		if count == 0 {
+			return
+		}
+		groups = append(groups, model.CommandGroupSummary{
+			ID:          gn.ID,
+			Title:       tr.GroupTitle(locale, gn.ID, gn.Name),
+			Description: tr.GroupDescription(locale, gn.ID, gn.Meta.Description),
+			Count:       count,
+		})
+	}
+	walk(reg.Groups())
+	sort.Slice(groups, func(i, j int) bool { return groups[i].ID < groups[j].ID })
+
+	return commands, groups
 }
 
 // ---- Functions (loader) ----

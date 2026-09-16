@@ -21,7 +21,7 @@ Inspect / list (read — run freely):
 
 ```shell
 dwe commands -i <id>                 # resolved shape: type, service, argv, params
-dwe commands list --all --output json
+dwe commands list --all --output json # id, group, description, type, service, private, params
 ```
 
 ## 2. Group header

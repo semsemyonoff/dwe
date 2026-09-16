@@ -465,3 +465,150 @@ func TestBuildCommandInspectJSON_argvAppendFrom(t *testing.T) {
 		})
 	}
 }
+
+// TestCommandEntryJSON_existingKeyOrder pins the pre-existing keys by name and
+// relative order: the description/service additions must stay additive.
+func TestCommandEntryJSON_existingKeyOrder(t *testing.T) {
+	def := &usercommands.CommandDef{
+		ID:          "app.install",
+		Group:       "app",
+		LocalName:   "install",
+		Type:        usercommands.CommandTypeServiceExec,
+		Description: "Install dependencies",
+		Service:     "app-main",
+		Private:     true,
+		Params: map[string]usercommands.ParamDef{
+			"env": {Type: model.ParamTypeString},
+		},
+	}
+	b, err := json.Marshal(commandDefToEntryJSON(def, i18n.NopTranslator{}, ""))
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	dec := json.NewDecoder(strings.NewReader(string(b)))
+	if _, err := dec.Token(); err != nil { // opening brace
+		t.Fatalf("decode: %v", err)
+	}
+	var keys []string
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			t.Fatalf("decode key: %v", err)
+		}
+		keys = append(keys, tok.(string))
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			t.Fatalf("decode value: %v", err)
+		}
+	}
+	want := []string{"id", "group", "title", "description", "type", "service", "private", "params"}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Fatalf("keys: got %v, want %v", keys, want)
+	}
+	existing := []string{"id", "group", "title", "type", "private", "params"}
+	var filtered []string
+	for _, k := range keys {
+		if k != "description" && k != "service" {
+			filtered = append(filtered, k)
+		}
+	}
+	if strings.Join(filtered, ",") != strings.Join(existing, ",") {
+		t.Errorf("existing keys changed: got %v, want %v", filtered, existing)
+	}
+}
+
+func TestCommandEntryJSON_descriptionAndService(t *testing.T) {
+	tests := []struct {
+		name        string
+		def         usercommands.CommandDef
+		wantDesc    string
+		wantService string
+	}{
+		{
+			name:     "description emitted",
+			def:      usercommands.CommandDef{Description: "Run tests"},
+			wantDesc: "Run tests",
+		},
+		{
+			name: "no description, no service",
+			def:  usercommands.CommandDef{},
+		},
+		{
+			name:        "top-level service",
+			def:         usercommands.CommandDef{Service: "app"},
+			wantService: "app",
+		},
+		{
+			name:        "runner service wins over top-level",
+			def:         usercommands.CommandDef{Service: "app", Runner: &usercommands.RunnerDef{Service: "worker"}},
+			wantService: "worker",
+		},
+		{
+			name:        "templated service emitted verbatim",
+			def:         usercommands.CommandDef{Service: "app-${param.svc}"},
+			wantService: "app-${param.svc}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			def := tt.def
+			def.ID = "x.y"
+			def.Group = "x"
+			def.LocalName = "y"
+			def.Type = usercommands.CommandTypeShell
+
+			b, err := json.Marshal(commandDefToEntryJSON(&def, i18n.NopTranslator{}, ""))
+			if err != nil {
+				t.Fatalf("json.Marshal: %v", err)
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(b, &raw); err != nil {
+				t.Fatalf("json.Unmarshal: %v", err)
+			}
+			assertOptionalKey(t, raw, "description", tt.wantDesc)
+			assertOptionalKey(t, raw, "service", tt.wantService)
+		})
+	}
+}
+
+func assertOptionalKey(t *testing.T, raw map[string]any, key, want string) {
+	t.Helper()
+	got, ok := raw[key]
+	if want == "" {
+		if ok {
+			t.Errorf("key %q: want absent, got %v", key, got)
+		}
+		return
+	}
+	if got != want {
+		t.Errorf("key %q: got %v, want %q", key, got, want)
+	}
+}
+
+// markerTranslator localizes command descriptions to a recognizable marker.
+type markerTranslator struct {
+	i18n.NopTranslator
+}
+
+func (markerTranslator) CommandDescription(locale, commandID, _ string) string {
+	return "L10N:" + locale + ":" + commandID
+}
+
+func TestCommandsListJSON_localizedDescription(t *testing.T) {
+	reg := buildTestRegistry(t)
+	data := buildCommandsListJSON(reg, "app", false, markerTranslator{}, "ru")
+	if len(data.Commands) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(data.Commands))
+	}
+	if got, want := data.Commands[0].Description, "L10N:ru:app.install"; got != want {
+		t.Errorf("JSON description: got %q, want %q", got, want)
+	}
+
+	def, err := reg.Get("app.install")
+	if err != nil {
+		t.Fatalf("app.install: %v", err)
+	}
+	if got, want := commandDefToTreeNode(def, markerTranslator{}, "ru").Desc, "L10N:ru:app.install"; got != want {
+		t.Errorf("text description: got %q, want %q", got, want)
+	}
+}

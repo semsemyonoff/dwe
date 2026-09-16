@@ -7,6 +7,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/git"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
@@ -42,6 +43,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// `dwe render git` uses, so the validator scope matches what would be
 	// rendered.
 	cfg := sanitizedCfg(ctx)
+	commands, groups := commandIndex(ctx)
 	services := cfg.Services
 	selected, skipped := git.SelectServices(services)
 
@@ -71,7 +73,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	for _, name := range selected {
 		svc := services[name]
-		serviceDiags := v.validateService(name, svc, cfg, ctx.ProjectRoot)
+		serviceDiags := v.validateService(name, svc, cfg, commands, groups, ctx.ProjectRoot)
 		diags = append(diags, serviceDiags...)
 	}
 
@@ -90,7 +92,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 // validateService validates one service's git template pack. Returns a slice so
 // the caller can surface both an error (pack/manifest issue) and an info
 // (missing src/.git or worktree pointer) for the same service.
-func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, projectRoot string) []validate.Diagnostic {
+func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, commands []model.CommandSummary, groups []model.CommandGroupSummary, projectRoot string) []validate.Diagnostic {
 	services := cfg.Services
 	var diags []validate.Diagnostic
 	_, gitExplicit := svc.GitRenderEnabledExplicit()
@@ -184,13 +186,15 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 	// variables, parse errors, or other execution-time failures surface here
 	// instead of at `dwe render git` time.
 	data := git.TemplateData{
-		Project:    cfg.Project,
-		Service:    git.ExtendsRoot(services, name),
-		Resolved:   name,
-		ServiceCfg: svc,
-		Runtime:    cfg.Runtime,
-		Services:   services,
-		Cfg:        cfg,
+		Project:       cfg.Project,
+		Service:       git.ExtendsRoot(services, name),
+		Resolved:      name,
+		ServiceCfg:    svc,
+		Runtime:       cfg.Runtime,
+		Services:      services,
+		Cfg:           cfg,
+		Commands:      commands,
+		CommandGroups: groups,
 	}
 	failures := git.DryRunRender(absRoot, packName, m, data)
 	fromKeys := make([]string, 0, len(failures))

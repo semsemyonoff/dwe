@@ -142,6 +142,7 @@ Same shape as `render ide` and `render ai`:
 | `.ServiceCfg` | effective service config of `.Resolved` (the rendering service), after `extends` resolution. Fields like `.ServiceCfg.Container` reflect the extender's overlay. |
 | `.Runtime` | merged `runtime` block |
 | `.Cfg` | merged `DweConfig` (advanced). `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Commands` / `.CommandGroups` | the project's **declared** commands and authored command groups; also `.ServiceCommands` / `.ServiceCommandGroups` for this service's container — see [Declared command index](ai.md#declared-command-index) |
 
 > **Why `.Service` and `.Resolved` differ.** When two services share the same `dir:` (typically a base + an `extends:` child like `main` and `main-debug`), the collision policy picks the deepest extender as the hub owner — that's `.Resolved`. But user-facing config sections keyed by service name (`git.hooks.<svc>`, `cs.<svc>`, …) are populated only on the base by convention, so raw-config lookups must use `.Service` (the chain root) to resolve. The two fields keep the *behavioral identity* (which container to attach to, which overlay applies) and the *config identity* (where to look up user values) distinguishable.
 
@@ -242,6 +243,7 @@ If `services/main/src/.git` had been a file (worktree/submodule pointer) or miss
 | warning | A selected service has no `src/.git` directory — skipped. |
 | warning | A selected service's `src/.git` is a worktree/submodule pointer file — skipped (see [Worktrees and submodules](#worktrees-and-submodules)). |
 | warning | A selected service was skipped because another service won the directory collision — the winner is named. |
+| warning | The command files failed to load — printed once per run, not per service; `.Commands` and `.CommandGroups` render empty. |
 | success | One line per rendered hook, naming the relative path inside the project. |
 | info | Nothing was selected after applying policy and collision rules. |
 

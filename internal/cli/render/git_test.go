@@ -65,7 +65,7 @@ func TestRenderGitHooksForService_implicitPackMissing(t *testing.T) {
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
-	err := renderGitHooksForService(projectRoot, "api", svc, cfg, w)
+	err := renderGitHooksForService(projectRoot, "api", svc, cfg, nil, nil, w)
 	if err != nil {
 		t.Fatalf("expected implicit missing pack to warn and skip, got error: %v", err)
 	}
