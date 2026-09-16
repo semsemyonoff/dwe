@@ -61,7 +61,7 @@ here, since the document is the payload.
 
 Examples:
   dwe docs show config/services/index
-  dwe docs show config/workspace#binary-overrides --lang en
+  dwe docs show config/userconfig#binary-overrides --lang en
   dwe docs show config/services/fields --lang en
   dwe docs show config/services/fields --anchors --lang en
   dwe docs show config/services/fields --toc --lang en`,

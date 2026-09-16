@@ -290,7 +290,8 @@ func newDeployRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Execute the full deploy pipeline from workspace/deploy.yml phase by phase.
 
 Steps are run in declaration order. The .env file is regenerated as the implicit
-first step. Use --service to run only the steps relevant to a specific service.
+first step. Use --service to run only the steps relevant to a specific service;
+the ports_free preflight then checks only that service and its depends_on closure.
 
 State tracking allows idempotent deploys: steps that previously succeeded with
 matching hashes are skipped on re-run. Use --force to ignore prior state and
