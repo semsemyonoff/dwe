@@ -60,18 +60,21 @@ func collectServiceSummaries(cfg *config.DweConfig) []llmstxt.ServiceSummary {
 	return result
 }
 
-// collectCommandSummaries returns non-private command summaries sorted by ID.
-// Descriptions are resolved via tr.CommandDescription for i18n support.
+// collectCommandSummaries maps the shared usercommands.CommandIndex into the
+// docs layer's own flat type: core/docs must not import usercommands, so no
+// shared type crosses that boundary. llms-txt has no group section, so the
+// group slice is discarded. Visibility is the caller's choice: runDocsLlmsTxt
+// applies it first, so hidden commands stay out of the agent snapshot.
 func collectCommandSummaries(reg *usercommands.Registry, tr i18n.Translator, locale string) []llmstxt.CommandSummary {
-	if reg == nil {
+	cmds, _ := usercommands.CommandIndex(reg, tr, locale)
+	if cmds == nil {
 		return nil
 	}
-	cmds := reg.List("")
 	result := make([]llmstxt.CommandSummary, 0, len(cmds))
-	for _, cmd := range cmds {
+	for _, c := range cmds {
 		result = append(result, llmstxt.CommandSummary{
-			ID:          cmd.ID,
-			Description: tr.CommandDescription(locale, cmd.ID, cmd.Description),
+			ID:          c.ID,
+			Description: c.Description,
 		})
 	}
 	return result

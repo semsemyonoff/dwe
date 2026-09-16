@@ -593,11 +593,11 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 - Modify: `internal/cli/docs/llmstxt_collectors.go` (`collectCommandSummaries` :65-78 becomes a mapper over `usercommands.CommandIndex`)
 - Modify: `internal/cli/docs/llmstxt_collectors_test.go`
 
-- [ ] `collectCommandSummaries` calls `usercommands.CommandIndex(reg, tr, locale)` and maps `ID`/`Description` into the existing `llmstxt.CommandSummary`; the group slice is discarded (llms-txt has no group section)
-- [ ] `internal/core/docs/**` is NOT touched: no new import, no type change, no output change — assert with `go list -deps ./internal/core/docs/...` showing no internal package **outside `internal/core/docs/...`** (today the set is exactly `core/docs`, `core/docs/export`, `core/docs/llmstxt`, `core/docs/mermaid`, `core/docs/render`)
-- [ ] keep the locale as the already-resolved `i18n.ResolveLocale(...)` value at `llmstxt.go:68`; do not "simplify" it to `rflags.Locale` (wrong namespace for this surface)
-- [ ] write a test pinning the Commands section output for a fixture registry, byte-identical to `release/0.6.2`
-- [ ] run `go test ./internal/core/docs/... ./internal/cli/docs/...` - must pass before task 4
+- [x] `collectCommandSummaries` calls `usercommands.CommandIndex(reg, tr, locale)` and maps `ID`/`Description` into the existing `llmstxt.CommandSummary`; the group slice is discarded (llms-txt has no group section)
+- [x] `internal/core/docs/**` is NOT touched: no new import, no type change, no output change — assert with `go list -deps ./internal/core/docs/...` showing no internal package **outside `internal/core/docs/...`** (today the set is exactly `core/docs`, `core/docs/export`, `core/docs/llmstxt`, `core/docs/mermaid`, `core/docs/render`)
+- [x] keep the locale as the already-resolved `i18n.ResolveLocale(...)` value at `llmstxt.go:68`; do not "simplify" it to `rflags.Locale` (wrong namespace for this surface)
+- [x] write a test pinning the Commands section output for a fixture registry, byte-identical to `release/0.6.2`
+- [x] run `go test ./internal/core/docs/... ./internal/cli/docs/...` - must pass before task 4
 
 ### Task 4a: `TemplateData` carries the index; the two accessors
 
