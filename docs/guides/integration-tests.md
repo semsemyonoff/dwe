@@ -10,7 +10,7 @@ A scenario step that needs a remapped port references it the normal way: `${serv
 
 A compose host port written as a variable (`"${VALKEY_PORT:-6379}:6379"`) is covered too, as long as dwe can trace the variable: an `exports.env` rule `from: vars.<path>` makes the runner allocate a free port for `<path>` and write it into the copy's `vars:` — again with no scenario config. The step reads it as `${vars.<path>}`. A scenario that wants a specific port pins it with `env.vars: { <path>: 6380 }`.
 
-The case this does *not* cover is a host port dwe cannot trace: hardcoded straight in a raw compose file (`8080:8080`), or interpolated from a variable no active `exports.env` rule routes to a port — it bypasses both the remap and the `ports_free` preflight, and the copy binds the same port as your working environment. Declare the port under `services.<name>.ports`, or export the variable from a `vars.<path>` through an `exports.env` rule. Miss that and `dwe test run` and `dwe validate` warn about it with an `interpolated_host_port` finding naming the variable and both routing fixes.
+Two shapes stay outside the remap, and they fail differently. A host port hardcoded straight in a raw compose file (`8080:8080`) is a **blocking** `raw_host_port` finding: `dwe test run` refuses the scenario before the copy exists, so nothing ever binds your working environment's port. A port interpolated from a variable that no active `exports.env` rule routes to a port is **not** blocking — it bypasses both the remap and the `ports_free` preflight, the copy binds the same port as your working environment, and `dwe test run` and `dwe validate` only warn, with an `interpolated_host_port` finding naming the variable and both routing fixes. The fix is the same for both: declare the port under `services.<name>.ports`, or export the variable from a `vars.<path>` through an `exports.env` rule.
 
 ## Your first scenario
 
@@ -169,7 +169,7 @@ It also surfaces [compose isolation](#resolving-an-isolation-failure) hazards as
 
 ## Resolving an isolation failure
 
-`dwe test run` scans the compose files the scenario's copy will run — the project's own, with the scenario's `env:` applied — for constructs that bypass compose's project-name scoping. `container_name:` and literal (non-templated) host ports are **blocking**; `external:`/explicitly-`name:`d volumes and networks are warnings only. The scan happens before the copy is made, so a blocking finding fails the scenario with nothing created — no copy, no containers, no teardown, no report directory — with a message naming the offending construct:
+`dwe test run` scans the compose files the scenario's copy will run — the project's own, with the scenario's `env:` applied — for constructs that bypass compose's project-name scoping. `container_name:` and literal (non-templated) host ports are **blocking**; `external:`/explicitly-`name:`d volumes and networks are warnings only. The scan happens before the copy is made, so a blocking finding fails the scenario with nothing created — no copy, no containers, no teardown, and no failure report collected for that run (one left by an **earlier** failure of the same scenario stays in place) — with a message naming the offending construct:
 
 ```
 blocking compose isolation hazard(s), refusing to run: service db sets container_name: myapp-db — bypasses compose project-name scoping and collides with any other project/run using the same fixed name — pass --skip-isolation-check to downgrade to a warning

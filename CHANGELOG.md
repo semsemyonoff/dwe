@@ -37,9 +37,10 @@ generated from commit subjects and stay on the
   `from: vars.<path>`) instead of advising `env.vars: { …: auto }`.
 - **A scenario blocked by the compose isolation scanner creates nothing.** The
   scan runs before the project is copied, so a blocking finding
-  (`container_name:`, a literal host port) no longer leaves a copy directory, a
-  compose project or a failure report directory behind. The scenario is still
-  reported `failed` (exit code 1).
+  (`container_name:`, a literal host port) no longer creates a copy directory or
+  a compose project, and no failure report is collected for that run — a report
+  left by an **earlier** failure of the same scenario stays in place. The
+  scenario is still reported `failed` (exit code 1).
 - **`dwe test list --output json` evaluates scenarios without per-developer
   `compose.extra` overlays**, exactly as the test copy runs them:
   `cost_profile.build_services` / `external_images` no longer count a service
