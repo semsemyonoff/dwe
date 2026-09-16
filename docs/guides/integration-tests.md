@@ -252,4 +252,4 @@ Each scenario's full deploy/pipeline log still goes to its own copy (`.dwe/tests
 - [`../reference/config/deploy/index.md`](../reference/config/deploy/index.md#step-fields) — the full step-field table, including the general `timeout:` field.
 - [`../reference/config/deploy/builtins.md`](../reference/config/deploy/builtins.md) — every builtin available to `steps:`, including `http_check` and predicate-as-assertion semantics.
 - [`author-project-commands.md`](author-project-commands.md) — authoring the `type: command` steps a scenario can call, including `private` commands.
-- [`preflight-checks.md`](preflight-checks.md) — the `ports_free` check that enforces the vars-routed-ports prerequisite.
+- [`preflight-checks.md`](preflight-checks.md) — the `ports_free` check, which reads `services.<name>.ports` and so moves together with the test copy's host-port remap.

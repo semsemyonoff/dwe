@@ -183,7 +183,7 @@ For `ide` and `ai`, the rendered output is typically a tracked file (`.vscode/se
 | `services/<name>/AGENTS.md`, `services/<name>/CLAUDE.md` | usually yes | Rendered output; same reasoning. |
 | `services/<name>/src/.git/hooks/<name>` | **never** | Lives inside `.git/`, which git itself ignores. |
 
-A typical project commits the rendered IDE and AI outputs so a fresh clone has working configs immediately, then re-runs `dwe render ide` / `dwe render ai` whenever the pack or `service.yml` changes. Git hooks are the exception — they live inside `.git/` and must be re-rendered after every clone.
+A typical project commits the rendered IDE and AI outputs so a fresh clone has working configs immediately, then re-runs `dwe render ide` / `dwe render ai` whenever the pack or `service.yml` changes — and, for a pack that lists the project's commands (the `default` AI pack's [`Declared commands` block](../reference/render/ai.md#declared-command-index) does), whenever `workspace/commands/` changes. Git hooks are the exception — they live inside `.git/` and must be re-rendered after every clone.
 
 ## See also
 

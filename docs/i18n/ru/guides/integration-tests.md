@@ -1,4 +1,4 @@
-> Translated from: guides/integration-tests.md @ 7ff832edd191
+> Translated from: guides/integration-tests.md @ c48a7e440867
 
 # Написание интеграционных тестов
 
@@ -254,4 +254,4 @@ running 2/3 scenarios…
 - [`../reference/config/deploy/index.md`](../reference/config/deploy/index.md#поля-шага) — полная таблица полей шага, включая общее поле `timeout:`.
 - [`../reference/config/deploy/builtins.md`](../reference/config/deploy/builtins.md) — каждый билтин, доступный `steps:`, включая `http_check` и семантику предиката-как-проверки.
 - [`author-project-commands.md`](author-project-commands.md) — авторство шагов `type: command`, которые может вызывать сценарий, включая `private`-команды.
-- [`preflight-checks.md`](preflight-checks.md) — проверка `ports_free`, которая обеспечивает предпосылку проведённых через vars портов.
+- [`preflight-checks.md`](preflight-checks.md) — проверка `ports_free`, которая читает `services.<name>.ports` и потому сдвигается вместе с переназначением host-портов тестовой копии.
