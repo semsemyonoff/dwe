@@ -1,11 +1,17 @@
 package docs
 
 import (
+	"os/exec"
+	"strings"
 	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/core/docs/llmstxt"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCollectServiceSummaries_NilCfg(t *testing.T) {
@@ -263,6 +269,73 @@ func TestCollectInfoSummary_HostsSortedDeterministically(t *testing.T) {
 					break
 				}
 			}
+		}
+	}
+}
+
+// TestCollectCommandSummaries_CommandsSectionPinned pins the rendered Commands
+// section byte-for-byte to the output of the hand-rolled walk that predates
+// usercommands.CommandIndex: moving llms-txt onto the shared builder must not
+// change a byte of what agents already consume. Covers grouped ids, a private
+// command, an empty description (no " — " separator) and a runner override
+// (Service is not part of this surface and must not leak into it).
+func TestCollectCommandSummaries_CommandsSectionPinned(t *testing.T) {
+	reg := usercommands.NewEmptyRegistry()
+	for _, def := range []*usercommands.CommandDef{
+		{ID: "test", Description: "run tests", Type: usercommands.CommandTypeShell},
+		{ID: "services.magento.cache-clean", Group: "services.magento", Description: "flush magento caches", Type: usercommands.CommandTypeServiceExec, Service: "php"},
+		{ID: "services.magento.reindex", Group: "services.magento", Type: usercommands.CommandTypeServiceExec, Runner: &usercommands.RunnerDef{Service: "php-cli"}},
+		{ID: "admin.lint", Group: "admin", Description: "lint everything", Type: usercommands.CommandTypeShell},
+		{ID: "admin.secret", Group: "admin", Description: "private helper", Type: usercommands.CommandTypeShell, Private: true},
+	} {
+		reg.AddCommandForTest(def)
+	}
+
+	out, err := llmstxt.Generate(llmstxt.Opts{
+		ProjectRoot: "/project",
+		ProjectName: "demo",
+		Commands:    collectCommandSummaries(reg, i18n.NopTranslator{}, "en"),
+	})
+	require.NoError(t, err)
+
+	start := strings.Index(out, "## Commands\n")
+	require.GreaterOrEqual(t, start, 0, "Commands section missing:\n%s", out)
+	section := out[start:]
+	if end := strings.Index(section[len("## Commands\n"):], "\n## "); end >= 0 {
+		section = section[:len("## Commands\n")+end+1]
+	}
+
+	const want = "## Commands\n\n" +
+		"- admin.lint — lint everything\n" +
+		"- services.magento.cache-clean — flush magento caches\n" +
+		"- services.magento.reindex\n" +
+		"- test — run tests\n" +
+		"\n"
+	require.Equal(t, want, section)
+}
+
+// TestCoreDocsImportsNoInternalPackageOutsideDocs guards the boundary the
+// command-summary mapping exists for: core/docs keeps its own flat
+// llmstxt.CommandSummary and never imports usercommands (or any other internal
+// package outside core/docs). The CLI layer maps the shared index into it.
+func TestCoreDocsImportsNoInternalPackageOutsideDocs(t *testing.T) {
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("go toolchain not on PATH")
+	}
+	cmd := exec.Command(goBin, "list", "-deps", "./internal/core/docs/...")
+	cmd.Dir = repoRoot(t)
+	out, err := cmd.Output()
+	require.NoError(t, err)
+
+	const internal = "github.com/semsemyonoff/dwe/internal/"
+	for pkg := range strings.FieldsSeq(string(out)) {
+		if !strings.HasPrefix(pkg, internal) {
+			continue
+		}
+		rel := strings.TrimPrefix(pkg, internal)
+		if rel != "core/docs" && !strings.HasPrefix(rel, "core/docs/") {
+			t.Errorf("core/docs depends on %s; pass the data in through llmstxt.Opts instead", pkg)
 		}
 	}
 }

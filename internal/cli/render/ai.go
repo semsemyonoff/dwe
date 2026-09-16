@@ -10,6 +10,7 @@ import (
 	aipkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
@@ -97,9 +98,10 @@ parent 'main' identity for the shared hub.`,
 				}
 			}
 
+			commands, groups := loadCommandIndex(w, flags.ConfigPath)
 			for _, name := range serviceNames {
 				svc := cfg.Services[name]
-				if err := renderAgentsForService(projectRoot, name, svc, cfg, w); err != nil {
+				if err := renderAgentsForService(projectRoot, name, svc, cfg, commands, groups, w); err != nil {
 					return fmt.Errorf("service %s: %w", name, err)
 				}
 			}
@@ -111,7 +113,7 @@ parent 'main' identity for the shared hub.`,
 // renderAgentsForService renders a single service's agents documentation.
 // It resolves the template pack, loads and validates the manifest, and renders
 // each entry in the manifest (files + symlinks).
-func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, w *render.Writer) error {
+func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, commands []model.CommandSummary, groups []model.CommandGroupSummary, w *render.Writer) error {
 	if cfg == nil {
 		return fmt.Errorf("ai: nil cfg")
 	}
@@ -159,13 +161,15 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 
 	// Prepare template data
 	data := aipkg.TemplateData{
-		Project:    cfg.Project,
-		Service:    aipkg.ExtendsRoot(cfg.Services, name),
-		Resolved:   name,
-		ServiceCfg: svc,
-		Runtime:    cfg.Runtime,
-		Services:   cfg.Services,
-		Cfg:        cfg,
+		Project:       cfg.Project,
+		Service:       aipkg.ExtendsRoot(cfg.Services, name),
+		Resolved:      name,
+		ServiceCfg:    svc,
+		Runtime:       cfg.Runtime,
+		Services:      cfg.Services,
+		Cfg:           cfg,
+		Commands:      commands,
+		CommandGroups: groups,
 	}
 
 	// Render each file in the manifest

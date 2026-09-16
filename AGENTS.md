@@ -71,6 +71,7 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **Display-string localization** — never read `def.Description` in display code; thread `rflags.I18n` (`i18n.TranslatorOrNop` on completion paths) and use the typed `store.*` helpers.
   Storage and hashing sites stay English — a locale reaching `journal/hash.go` makes the deployment hash language-dependent.
+  Render packs' command index stays English and hide-blind too (`NopTranslator`, no `ApplyVisibility`): tracked files must not vary by locale or stack — § `internal/cli/render/`.
   See § CLI (cross-cutting behaviors).
 
 - **Binary accessors** — never read `cfg.Binaries.*`; use the nil-safe `config.DweBin / DockerBin / ShellBin / GitBin / MmdcBin`.
@@ -244,7 +245,8 @@ New invariants go into `packages.md` and gain at most a pointer here; `TestAgent
 
 - **`dwe test` isolation & cleanup** — the runner takes a per-scenario flock only, never `lock.AcquireProjectLocks` on the original project, and writes its manifest before touching Docker so a half-dead run stays sweepable.
   Teardown goes strictly by the manifest's recorded identity and never appends `-v`; `dwe test clean` sweeps only what `validateManifestIdentity` re-derives, with `compose_project` pinned to the COPY's stamped identity, or a run kept across a `project.name` rename is stranded.
-  Host ports come from one `AllocatePorts` batch so `ports_free` preflight and the compose bind move together; failure reports capture BEFORE teardown; at `--parallel` goroutines never return errors into the errgroup; per-step `timeout:` bounds the step **body** only, never its `check:`.
+  Host ports — including every `vars:` path an `exports.env` rule traces to a compose port — come from one `AllocatePorts` batch so `ports_free` preflight and the compose bind move together; failure reports capture BEFORE teardown; at `--parallel` goroutines never return errors into the errgroup; per-step `timeout:` bounds the step **body** only, never its `check:`.
+  The isolation scan runs on `envtest.ScenarioView` BEFORE `CopyTree` (a blocking finding is `StatusFailed` with nothing created), and that one view serves all three consumers, so it must never mutate its input: rebuild every `Raw` subtree, untoggled service entries included.
   Copies stay apart only because pipeline shell steps get `COMPOSE_PROJECT_NAME` per spawn (`execShellAction` sets `cmd.Env`); never `os.Setenv` it — `--parallel` scenarios share one process.
   See § `internal/core/workflow/envtest/`, § `internal/cli/test/`, § `internal/core/project/config/compose_scan.go`, § `internal/core/validate/tests/` and § Core — Execution (`pipeline/`).
 

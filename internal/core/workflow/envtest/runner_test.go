@@ -900,9 +900,10 @@ func TestRunScenario_KeptRunGuard(t *testing.T) {
 // must ignore files that carry the prefix but not a valid <6-hex>.yml run-id
 // suffix.
 // TestRunScenario_IsolationGate_BlocksOnContainerName pins that a blocking
-// isolation finding (container_name:) fails the scenario BEFORE the `dwe
-// validate` subprocess is even spawned, warns with the finding's message, and
-// still runs teardown (removing the copy).
+// isolation finding (container_name:) fails the scenario BEFORE anything is
+// created: no copy tree, no manifest, no compose project, no teardown (there is
+// nothing to tear down) and no report directory — just StatusFailed, a nil
+// error and the finding's message on warn.
 func TestRunScenario_IsolationGate_BlocksOnContainerName(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
@@ -936,8 +937,17 @@ func TestRunScenario_IsolationGate_BlocksOnContainerName(t *testing.T) {
 	if len(execCalls) != 0 {
 		t.Fatalf("execCalls = %v, want none (isolation gate must block before validate)", execCalls)
 	}
-	if !containsStep(teardownOrder, "remove_copy") {
-		t.Fatalf("expected teardown to still run: %v", teardownOrder)
+	if len(teardownOrder) != 0 {
+		t.Fatalf("teardown ran for a scenario that created nothing: %v", teardownOrder)
+	}
+	if result.ComposeProject != "" || result.CopyPath != "" || result.ReportDir != "" {
+		t.Fatalf("blocked scenario must report no copy/compose project/report dir, got %+v", result)
+	}
+	if _, statErr := os.Stat(RunDir(dir, "smoke")); !os.IsNotExist(statErr) {
+		t.Fatalf("copy root must not exist for a blocked scenario: %v", statErr)
+	}
+	if manifests, mErr := existingManifestPaths(dir, "smoke"); mErr != nil || len(manifests) != 0 {
+		t.Fatalf("blocked scenario must leave no manifest: %v (err %v)", manifests, mErr)
 	}
 	found := false
 	for _, w := range warnings {
@@ -1057,7 +1067,7 @@ func TestScanComposeIsolationGate_SharedVolumeSilent(t *testing.T) {
 	writeFixtureFile(t, dir, "workspace/docker.yml", "resources:\n  volumes:\n    npm_cache:\n      name: dwe_npm_cache\n      shared: true\n")
 
 	var warnings []string
-	blocked := scanComposeIsolationGate(dir, nil, nil, false, func(msg string) { warnings = append(warnings, msg) })
+	blocked := scanComposeIsolationGate(gateFindings(t, dir, nil), nil, nil, false, func(msg string) { warnings = append(warnings, msg) })
 	if blocked {
 		t.Fatalf("non-blocking findings must never block, warnings: %v", warnings)
 	}
@@ -1077,32 +1087,44 @@ func TestScanComposeIsolationGate_SharedVolumeSilent(t *testing.T) {
 	}
 }
 
-// TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped pins that a
-// copy whose own workspace.yml fails to load simply skips the isolation scan
-// (never blocks) — exercised directly against scanComposeIsolationGate since
-// RunScenario loads the ORIGINAL project's config up front and would never
-// reach the copy in this state via the full flow.
-func TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped(t *testing.T) {
+// gateFindings loads the project at dir and builds the compose-isolation
+// findings exactly as RunScenario does — through the scenario's port plan — so
+// a gate test exercises the same scan the runner feeds it.
+func gateFindings(t *testing.T, dir string, scn *Scenario) []config.IsolationFinding {
+	t.Helper()
+	cfg, err := config.LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	return buildPortPlan(cfg, scn, dir).findings
+}
+
+// TestScanComposeIsolationGate_NoFindings pins that a project the scanner has
+// nothing to say about neither blocks nor warns. The gate no longer loads a
+// config of its own (the port plan scans once, before the copy exists), so a
+// project whose config cannot be loaded never reaches it: RunScenario fails on
+// the original config load with a bare error instead.
+func TestScanComposeIsolationGate_NoFindings(t *testing.T) {
 	dir := t.TempDir()
-	// binaries: is a rejected legacy top-level key — LoadConfigOrWrap fails.
-	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\nbinaries:\n  docker: /bin/docker\n")
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  app:\n    image: alpine\n")
 
 	var warnings []string
-	blocked := scanComposeIsolationGate(dir, nil, nil, false, func(msg string) { warnings = append(warnings, msg) })
+	blocked := scanComposeIsolationGate(gateFindings(t, dir, nil), nil, nil, false, func(msg string) { warnings = append(warnings, msg) })
 	if blocked {
-		t.Fatal("expected the gate not to block when the copy config fails to load")
+		t.Fatal("expected the gate not to block without findings")
 	}
 	if len(warnings) != 0 {
-		t.Fatalf("expected no warnings when the scan is skipped, got %v", warnings)
+		t.Fatalf("expected no warnings without findings, got %v", warnings)
 	}
 }
 
 // TestScanComposeIsolationGate_InterpolatedHostPort pins the scenario filter on
-// interpolated host ports: a vars-sourced port warns until the scenario sets
-// its path to auto; a service-sourced port is silent while the runner remaps
-// the service and warns once the scenario disables it — except a required
-// service, which stays enabled in the copy and so stays remapped. The kind
-// never blocks.
+// interpolated host ports: a vars-sourced port is always silent (the runner
+// remaps every traced path, or the scenario pinned it); a service-sourced port
+// is silent while the runner remaps the service and warns once the scenario
+// disables it — except a required service, which stays enabled in the copy and
+// so stays remapped. The kind never blocks.
 func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
 	disableRedis := &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"redis"}}}}
 	tests := []struct {
@@ -1112,13 +1134,17 @@ func TestScanComposeIsolationGate_InterpolatedHostPort(t *testing.T) {
 		wantValkey    bool
 		wantRedis     bool
 	}{
-		{name: "no overrides", scn: &Scenario{}, wantValkey: true},
+		{name: "no overrides", scn: &Scenario{}},
 		{
 			name: "vars path set to auto",
 			scn:  &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": AutoPortSentinel}}},
 		},
-		{name: "source service disabled", scn: disableRedis, wantValkey: true, wantRedis: true},
-		{name: "required source service disabled", redisRequired: true, scn: disableRedis, wantValkey: true},
+		{
+			name: "vars path pinned to a number",
+			scn:  &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": 6380}}},
+		},
+		{name: "source service disabled", scn: disableRedis, wantRedis: true},
+		{name: "required source service disabled", redisRequired: true, scn: disableRedis},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1164,7 +1190,8 @@ exports:
 			}
 
 			var warnings []string
-			blocked := scanComposeIsolationGate(dir, origCfg, tt.scn, false, func(msg string) { warnings = append(warnings, msg) })
+			findings := buildPortPlan(origCfg, tt.scn, dir).findings
+			blocked := scanComposeIsolationGate(findings, origCfg, tt.scn, false, func(msg string) { warnings = append(warnings, msg) })
 			if blocked {
 				t.Fatalf("interpolated host ports must never block, warnings: %v", warnings)
 			}
@@ -1174,9 +1201,6 @@ exports:
 			if got := has("VALKEY_PORT"); got != tt.wantValkey {
 				t.Errorf("VALKEY_PORT warning = %v, want %v; warnings: %v", got, tt.wantValkey, warnings)
 			}
-			if tt.wantValkey && !has("env.vars: { ports.valkey: auto }") {
-				t.Errorf("vars warning must carry the fix line, got %v", warnings)
-			}
 			if got := has("REDIS_PORT"); got != tt.wantRedis {
 				t.Errorf("REDIS_PORT warning = %v, want %v; warnings: %v", got, tt.wantRedis, warnings)
 			}
@@ -1184,17 +1208,20 @@ exports:
 	}
 }
 
-// TestRunScenario_InterpolatedHostPortFilteredByScenario pins that RunScenario
-// hands the loaded scenario to the isolation gate: without it the gate would
-// ignore env.vars: auto and warn about a port the copy does remap.
+// TestRunScenario_InterpolatedHostPortFilteredByScenario pins that a compose
+// host port traced to a vars: path never warns end to end, whatever the
+// scenario says about it: the runner allocates a port for it with no scenario
+// config, an explicit auto means the same thing, and an explicit number is the
+// author pinning the copy's port.
 func TestRunScenario_InterpolatedHostPortFilteredByScenario(t *testing.T) {
 	tests := []struct {
 		name     string
 		scenario string
 		wantWarn bool
 	}{
-		{name: "vars path not auto", scenario: noStepsScenario, wantWarn: true},
+		{name: "no scenario port config", scenario: noStepsScenario},
 		{name: "vars path auto", scenario: noStepsScenario + "env:\n  vars:\n    ports.valkey: auto\n"},
+		{name: "vars path pinned", scenario: noStepsScenario + "env:\n  vars:\n    ports.valkey: 6390\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1244,6 +1271,289 @@ exports:
 			}
 		})
 	}
+}
+
+// writeTracedPortProject writes a project whose compose host port is
+// interpolated from an exports.env variable traced to vars.ports.valkey — the
+// shape the runner must remap on its own, with no port config in the scenario.
+func writeTracedPortProject(t *testing.T, scenario string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", `project:
+  name: runnertest
+  prefix: dwe
+compose:
+  base: docker-compose.yml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+`)
+	writeFixtureFile(t, dir, "docker-compose.yml",
+		"services:\n  valkey:\n    image: valkey/valkey:8\n    ports:\n      - \"${VALKEY_PORT:-6379}:6379\"\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", scenario)
+	return dir
+}
+
+// countingAllocator returns an allocatePorts seam handing out a fresh
+// 10000+<batch>*10+i block per call, plus a pointer to the call count.
+func countingAllocator() (func(int) ([]int, error), *int) {
+	calls := new(int)
+	return func(n int) ([]int, error) {
+		*calls++
+		ports := make([]int, n)
+		for i := range ports {
+			ports[i] = 10000 + *calls*10 + i
+		}
+		return ports, nil
+	}, calls
+}
+
+// TestRunScenario_TracedVarPort_Allocated pins the implicit remap: a compose
+// host port read through an active exports.env rule from a vars: path gets a
+// freshly allocated port written into the copy's local.yml even though the
+// scenario says nothing about ports.
+func TestRunScenario_TracedVarPort_Allocated(t *testing.T) {
+	dir := writeTracedPortProject(t, noStepsScenario)
+
+	allocate, allocCalls := countingAllocator()
+	var execCalls []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: allocate,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	if *allocCalls != 1 {
+		t.Fatalf("allocatePorts called %d times, want 1", *allocCalls)
+	}
+	m := loadCopyLocalYAML(t, dir, "smoke")
+	if got := digToInt(t, m, "vars", "ports", "valkey"); got != 10010 {
+		t.Fatalf("vars.ports.valkey = %d, want 10010 (allocated, not the original 6380)", got)
+	}
+}
+
+// TestRunScenario_TracedVarPort_ExplicitPinKept pins that an explicit number in
+// env.vars disables the implicit remap for that path: the author asked for that
+// port, so nothing is allocated and the number reaches the copy untouched.
+func TestRunScenario_TracedVarPort_ExplicitPinKept(t *testing.T) {
+	dir := writeTracedPortProject(t, noStepsScenario+"env:\n  vars:\n    ports.valkey: 6390\n")
+
+	allocate, allocCalls := countingAllocator()
+	var execCalls []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: allocate,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	if *allocCalls != 0 {
+		t.Fatalf("allocatePorts called %d times, want 0 (nothing left to allocate)", *allocCalls)
+	}
+	m := loadCopyLocalYAML(t, dir, "smoke")
+	if got := digToInt(t, m, "vars", "ports", "valkey"); got != 6390 {
+		t.Fatalf("vars.ports.valkey = %d, want the pinned 6390", got)
+	}
+}
+
+// TestRunScenario_TracedVarPort_RetryReallocates pins that the one deploy retry
+// re-allocates the SAME plan: the traced path is rewritten with the second
+// batch's port, so a TOCTOU loss on an implicitly remapped port clears.
+func TestRunScenario_TracedVarPort_RetryReallocates(t *testing.T) {
+	dir := writeTracedPortProject(t, noStepsScenario)
+
+	deployAttempt := 0
+	execDwe := func(_ context.Context, _ string, _ []string, _, _ io.Writer, args ...string) error {
+		if strings.Join(args, " ") == "deploy run --silent" {
+			deployAttempt++
+			if deployAttempt == 1 {
+				return errors.New("port is already allocated")
+			}
+		}
+		return nil
+	}
+
+	allocate, allocCalls := countingAllocator()
+	r := &Runner{
+		execDwe:       execDwe,
+		allocatePorts: allocate,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed after the retry", result.Status)
+	}
+	if *allocCalls != 2 {
+		t.Fatalf("allocatePorts called %d times, want 2 (initial + one retry)", *allocCalls)
+	}
+	m := loadCopyLocalYAML(t, dir, "smoke")
+	if got := digToInt(t, m, "vars", "ports", "valkey"); got != 10020 {
+		t.Fatalf("vars.ports.valkey = %d, want 10020 (the retry's fresh allocation)", got)
+	}
+}
+
+// TestRunScenario_UntracedVarPort_WarnsAndAllocatesNothing pins that a compose
+// variable no active exports.env rule traces stays a warning and gets no port:
+// the runner has nothing to write it into, and compose falls back to the
+// literal default.
+func TestRunScenario_UntracedVarPort_WarnsAndAllocatesNothing(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml",
+		"services:\n  valkey:\n    image: valkey/valkey:8\n    ports:\n      - \"${VALKEY_PORT:-6379}:6379\"\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	allocate, allocCalls := countingAllocator()
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: allocate,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Warn:            func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	if *allocCalls != 0 {
+		t.Fatalf("allocatePorts called %d times, want 0 (nothing traced to remap)", *allocCalls)
+	}
+	if !slices.ContainsFunc(warnings, func(w string) bool { return strings.Contains(w, "VALKEY_PORT") }) {
+		t.Fatalf("expected a warning for the untraced variable, got %v", warnings)
+	}
+}
+
+// TestRunScenario_ServiceAndTracedVarPorts_ShareOneBatch pins the split of the
+// SINGLE allocation batch across its two consumers: the leading len(keys) ports
+// go to the enabled services' declared host ports and the remainder to the
+// traced vars: paths. Every other port test drives one side with the other
+// empty, so an off-by-one in that split (writing a service's port into a vars:
+// path or vice versa) would leave the copy binding the wrong host ports while
+// still handing out free ones — invisible to a per-side assertion.
+func TestRunScenario_ServiceAndTracedVarPorts_ShareOneBatch(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", `project:
+  name: runnertest
+  prefix: dwe
+compose:
+  base: docker-compose.yml
+vars:
+  ports:
+    valkey: 6380
+exports:
+  env:
+    - name: VALKEY_PORT
+      from: vars.ports.valkey
+`)
+	writeFixtureFile(t, dir, "docker-compose.yml",
+		"services:\n  valkey:\n    image: valkey/valkey:8\n    ports:\n      - \"${VALKEY_PORT:-6379}:6379\"\n")
+	writeFixtureFile(t, dir, "workspace/services/db/service.yml",
+		"type: infra\ncontainer: db\nrequired: true\nports:\n  mysql: 13306\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	allocate, allocCalls := countingAllocator()
+	var execCalls []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: allocate,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	if *allocCalls != 1 {
+		t.Fatalf("allocatePorts called %d times, want 1 (both kinds share one batch)", *allocCalls)
+	}
+
+	m := loadCopyLocalYAML(t, dir, "smoke")
+	svcPort := digToInt(t, m, "services", "db", "ports", "mysql")
+	varPort := digToInt(t, m, "vars", "ports", "valkey")
+	if svcPort != 10010 {
+		t.Errorf("services.db.ports.mysql = %d, want 10010 (the batch's first slot)", svcPort)
+	}
+	if varPort != 10011 {
+		t.Errorf("vars.ports.valkey = %d, want 10011 (the batch's slot after the service ports)", varPort)
+	}
+	if svcPort == varPort {
+		t.Errorf("service and var ports must differ, both = %d", svcPort)
+	}
+}
+
+// loadCopyLocalYAML reads the generated local.yml of a scenario's copy.
+// recordingTeardownDeps.RemoveCopy is a no-op, so it survives the run.
+func loadCopyLocalYAML(t *testing.T, baseDir, scenario string) map[string]any {
+	t.Helper()
+	m, err := local.LoadLocalYAML(config.LocalLayerPath(filepath.Join(RunDir(baseDir, scenario), "workspace.yml")))
+	if err != nil {
+		t.Fatalf("loading generated local.yml: %v", err)
+	}
+	return m
 }
 
 func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {

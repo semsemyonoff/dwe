@@ -1,4 +1,4 @@
-> Translated from: guides/shared-ide-and-agent-config.md @ 19821f92b789
+> Translated from: guides/shared-ide-and-agent-config.md @ 8e10b630fa17
 
 # Общий конфиг IDE и AI-агентов
 
@@ -185,7 +185,7 @@ using local override: workspace/templates/ide/default.local/.vscode/settings.jso
 | `services/<name>/AGENTS.md`, `services/<name>/CLAUDE.md` | обычно да | Отрендеренный результат; то же обоснование. |
 | `services/<name>/src/.git/hooks/<name>` | **никогда** | Лежит внутри `.git/`, который git игнорирует сам. |
 
-Типичный проект коммитит отрендеренные файлы IDE и AI, чтобы свежий клон сразу имел рабочие конфиги, и затем перезапускает `dwe render ide` / `dwe render ai` при каждом изменении пака или `service.yml`. Git-хуки — исключение: они лежат внутри `.git/` и должны рендериться заново после каждого клона.
+Типичный проект коммитит отрендеренные файлы IDE и AI, чтобы свежий клон сразу имел рабочие конфиги, и затем перезапускает `dwe render ide` / `dwe render ai` при каждом изменении пака или `service.yml` — а для пака, который перечисляет команды проекта (так делает [блок `Declared commands`](../reference/render/ai.md#индекс-объявленных-команд) AI-пака `default`), и при каждом изменении `workspace/commands/`. Git-хуки — исключение: они лежат внутри `.git/` и должны рендериться заново после каждого клона.
 
 ## См. также
 

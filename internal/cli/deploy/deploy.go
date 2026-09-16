@@ -290,7 +290,8 @@ func newDeployRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Execute the full deploy pipeline from workspace/deploy.yml phase by phase.
 
 Steps are run in declaration order. The .env file is regenerated as the implicit
-first step. Use --service to run only the steps relevant to a specific service.
+first step. Use --service to run only the steps relevant to a specific service;
+the ports_free preflight then checks only that service and its depends_on closure.
 
 State tracking allows idempotent deploys: steps that previously succeeded with
 matching hashes are skipped on re-run. Use --force to ignore prior state and
@@ -514,11 +515,26 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
 	}
 
+	// Validate requested service names BEFORE preflight: a typo must fail fast
+	// with "service not found" instead of narrowing the preflight scope to a
+	// name no config knows (which would silently skip every port check).
+	for _, name := range opts.Services {
+		if _, ok := cfg.Services[name]; !ok {
+			return fmt.Errorf("service %q not found in config", name)
+		}
+	}
+
 	runPreflight := opts.PreflightFn
 	if runPreflight == nil {
 		runPreflight = preflight.Run
 	}
-	if err := runPreflight(ctx, cfg, reg, workDir, "deploy", opts.SkipPreflight, cmd.ErrOrStderr()); err != nil {
+	// A per-service run can only bind the requested services' ports and those
+	// of what compose starts alongside them; scope ports_free to that set so a
+	// foreign holder of an untouched service's port cannot block the run. A
+	// whole-project run yields an empty scope, which WithServices carries as the
+	// unscoped case — no branch needed here.
+	scope := preflight.WithServices(preflightScope(cfg, opts.Services))
+	if err := runPreflight(ctx, cfg, reg, workDir, "deploy", opts.SkipPreflight, cmd.ErrOrStderr(), scope); err != nil {
 		return err
 	}
 	if regErr != nil {
@@ -593,16 +609,13 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		return fmt.Errorf("loading tracked services: %w", err)
 	}
 
-	// For subset deploys: also load deploy configs for requested services not in svcDeploys
+	// For subset deploys: also load deploy configs for requested services not in
+	// svcDeploys. Existence was already checked above, before preflight.
 	if len(opts.Services) > 0 {
 		toLoad := make(map[string]config.ServiceConfig)
 		for _, name := range opts.Services {
-			svcCfg, ok := cfg.Services[name]
-			if !ok {
-				return fmt.Errorf("service %q not found in config", name)
-			}
 			if _, already := svcDeploys[name]; !already {
-				toLoad[name] = svcCfg
+				toLoad[name] = cfg.Services[name]
 			}
 		}
 		if len(toLoad) > 0 {

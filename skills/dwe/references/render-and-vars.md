@@ -1,198 +1,79 @@
 # Render packs, generated secrets, vars & `.env`
 
-Load this file when a config file isn't getting generated, when an app secret (key/crypt key) must survive a re-render, when you need to know where free-form values go, or when something has to land in `.env`. This is the config-flow half of DWE: render packs → generated-secret harvest → the `vars` sandbox → `.env` exports.
-
-You edit the source (template / var / export rule); the **user** runs every render/deploy. Never hand-edit a generated artifact (`.dwe/**`, `.env`, `local.yml`, rendered hub files incl. `AGENTS.md`).
+Load when a config file is not being generated, an app secret must survive a re-render, you need to know where free-form values go, or something has to land in `.env`. You edit the source (template / var / export rule); the user runs every render/deploy. Never hand-edit a generated artifact.
 
 ## 1. Four pack kinds, two substrates
 
-Render packs live under `workspace/templates/<kind>/<pack>/`. Two different substrates:
+Packs live under `workspace/templates/<kind>/<pack>/`, each with a `manifest.yml` mapping template files to outputs (`to:` relative to the service hub; `src/` is the checkout).
 
-- **`config/<svc>/`** — writes **runtime files into the service hub** via the **`${...}` substrate**. `${...}` resolves the merged config: `${vars.x}`, `${generated.x}`, `${services.<svc>.hosts.web}`. This is the pack you wire when an app needs a rendered `.env` / `env.php` / `config.yaml`. Runs inside `dwe deploy run` (via the `service_configs_render` builtin) and on demand via `dwe render config`.
-- **`ide/`, `ai/`, `git/`** — write **hub dotfiles** (devcontainer, the generated `AGENTS.md`, git hooks) via **raw Go-template** with capital-letter context (`.Project.Name`, `.Service`, `.ServiceCfg.Container` — NOT the `${...}` shorthand). These are inert config — they do not see vars through `${...}`.
+- **`config/<svc>/`** — runtime files into the hub (`.env`, `env.php`, `config.yaml`) via the **`${...}` substrate**: `${vars.x}`, `${generated.x}`, `${services.<svc>.hosts.web}`; absent → `""`. Runs inside `dwe deploy run` (`service_configs_render`) and via `dwe render config`. Wired by `render.config.template: <pack>` in `service.yml`.
+- **`ide/`, `ai/`, `git/`** — hub dotfiles (devcontainer, hub `AGENTS.md`, git hooks) via **Go templates** (`.Project.Name`, `.Service`, `.ServiceCfg.Container`, `.Commands`, `.ServiceCommandGroups`); `${...}` is **not** interpreted there. `ai` packs also declare `symlinks:` (how `CLAUDE.md` mirrors `AGENTS.md`). The shipped `default` ai pack renders a `Declared commands` block into each hub `AGENTS.md`; a project scaffolded before that block existed adopts it by pasting the snippet from `dwe docs show 'render/ai#shipped-declared-commands-block' --lang en` into its template.
 
-```shell
-dwe docs show render/index  --lang en   # overview of all packs
-dwe docs show render/config --lang en   # the ${...} substrate
-dwe docs show render/ide    --lang en
-dwe docs show render/ai     --lang en
-dwe docs show render/git    --lang en
-dwe docs show templates     --lang en   # template-pack mechanics
-```
-
-## 2. `manifest.yml` shape
-
-Each pack folder has a `manifest.yml` mapping template files to outputs. `to:` is **relative to the service hub dir**; `src/` is the dir-mounted app tree (e.g. `./services/main` → `/workspace`, so `src/.env` lands at `/workspace/src/.env`).
-
-```yaml
-# workspace/templates/config/<svc>/manifest.yml
-render:
-  - from: env.tmpl
-    to: src/.env
-```
-
-`ai` packs also support symlinks (this is how `CLAUDE.md` mirrors `AGENTS.md`):
-
-```yaml
-# workspace/templates/ai/default/manifest.yml
-render:
-  - { from: AGENTS.md.tmpl, to: AGENTS.md }
-symlinks:
-  - { link: CLAUDE.md, to: AGENTS.md }
-```
-
-**Escape for app-owned `${...}` literals.** When a template line must emit a literal `${APP_NAME}` for the app itself to expand (not for DWE to resolve), write it double-brace-quote-dollar then `{NAME}` so DWE leaves it alone:
-
-```text
-MAIL_FROM_NAME="{{ "$" }}{APP_NAME}"   # renders to the literal ${APP_NAME}
-```
-
-Schema: `dwe docs show render/config --lang en`, `dwe docs show templates --lang en`.
-
-## 3. Generated-secret lifecycle (harvest + replay)
-
-The render engine is hermetic — it never mints secrets. Either the **service** generates them and DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render, or — when the app does not mint the value itself — the developer writes one with `dwe vars set <path> --generate` (§ 5) and the template reads a plain `${vars.*}`; the harvest lifecycle is for the former. Pattern (a Laravel `APP_KEY` flow):
-
-1. **Declare** in `service.yml`: a `generated:` block with `{file, pattern}` — `pattern` is a regex whose capture group 1 is the harvested value.
-   ```yaml
-   # workspace/services/<svc>/service.yml
-   generated:
-     app_key:
-       file: src/.env
-       pattern: "^APP_KEY=(.*)$"
-   ```
-2. **Reference** the stored value in the config template as `${generated.app_key}` (absent → `""`, like every `${...}` resolver).
-3. **Gate + mint + harvest** in `deploy.yml`: gate the mint step on `when: generated-missing <svc> <field>`, run the service's own mint command (e.g. `php artisan key:generate`), then a `service_generated_harvest` builtin captures it write-if-absent into `.dwe/generated.yml`:
-   ```yaml
-   - name: key-generate
-     type: command
-     cmd: services.main.key-generate          # the service mints it
-     when: { type: builtin, cmd: "generated-missing main app_key" }
-   - name: harvest-app-key
-     type: builtin
-     cmd: service_generated_harvest
-     with: { service: main }
-   ```
-
-The gate closes once the store holds the key, so the secret is never rotated; `render-configs` (run after install with `check: service_configs_render_check`) replays `${generated.app_key}` every deploy.
-
-**Safety — `reset --clear-generated` + `dwe run` must not blank secrets.** When a declared key is absent from the store, DWE **skips** that service's render rather than writing an empty value — so a cleared store followed by a plain run never erases the live secret (it is reminted on the next `dwe deploy run`).
+Escape an app-owned `${...}` literal in a config template as `{{ "$" }}{APP_NAME}` so DWE leaves it alone.
 
 ```shell
-dwe docs show config/services/fields#generated-block --lang en
-dwe docs show config/deploy/conditions --lang en      # the generated-missing predicate
-dwe docs show config/deploy/builtins   --lang en      # service_generated_harvest
-dwe docs show render/config            --lang en
+dwe docs show render/index  --lang en    # packs overview, local overrides, collisions
+dwe docs show render/config --lang en    # the ${...} substrate
+dwe docs show render/ai --lang en        # also render/ide, render/git
+dwe docs show templates --lang en        # template mechanics
 ```
 
-See `pipelines-and-orchestration.md` for the full deploy-step grammar.
+## 2. Generated-secret lifecycle (harvest, never mint)
 
-## 4. The `vars` sandbox = the single free-form namespace
+DWE never mints a secret on its own. Either the **service** mints one and DWE harvests it once into `.dwe/generated.yml` (write-if-absent) and replays it on every render, or the developer explicitly generates a developer-owned one with `dwe vars set <path> --generate hex` (§ 4) and the template reads `${vars.*}`. The harvest flow (Laravel `APP_KEY`):
 
-The merged config root is **strict** — a bare custom top-level key is a hard load error before any command runs. Every project-specific value nests under `vars:` in `workspace/defaults.yml` (a nestable, unvalidated leaf tree):
+1. `service.yml`: `generated: { app_key: { file: src/.env, pattern: "^APP_KEY=(.*)$" } }` — capture group 1 is the value.
+2. Template: `${generated.app_key}`.
+3. `deploy.yml`: gate the mint on `when: {type: builtin, cmd: "generated-missing <svc> app_key"}` → run the service's own generator (`type: command`) → `type: builtin, cmd: service_generated_harvest, with: {service: <svc>}`.
 
-```yaml
-# workspace/defaults.yml
-vars:
-  db:
-    database: appdb
-    user: root
-    password: root
-  source:
-    repo: git@github.com:acme/app.git
-    branch: main
-```
+The gate closes once the store holds the key, so it is never rotated; the render step (with `check: service_configs_render_check`) replays it every deploy. When a declared key is absent from the store, DWE **skips** that service's render rather than writing an empty value, so `reset --clear-generated` + `dwe run` never blanks a live secret. Docs: `config/services/fields#generated-block`, `config/deploy/builtins#service_generated_harvest`.
 
-**Three reference syntaxes, by field** — pick by where the value is consumed:
+## 3. The `vars` sandbox
 
-- `${vars.x}` — deploy `cmd:` strings, command `env:`, **config render templates**.
-- `from: vars.x` — structural fields: `exports` rules, command `params` (`default_from:`).
-- `{{ .Raw.vars.x }}` — Go-template fields: `info.yml`, typed `when.expr`.
+The config root is strict; every project-specific value nests under `vars:` in `workspace/defaults.yml` (nestable leaf tree). Three reference syntaxes, by field:
 
-Read/inspect (all safe, lock-free — run freely):
+- `${vars.x}` — deploy `cmd:` / `with:` strings, command `env:` / `argv:`, config render templates.
+- `from: vars.x` — structural fields: `exports.env` rules, command `params` (`default_from:`).
+- `{{ .Raw.vars.x }}` — Go-template fields: `info.yml`, `when: {type: template}`.
 
 ```shell
 dwe vars list [namespace] --output json
-dwe vars get <var>        --output json
-dwe vars inspect <var>    --output json   # per-layer values + every static usage site
+dwe vars get <var> --output json
+dwe vars inspect <var> --output json     # per-layer values + every static usage site
 ```
 
-Schema: `dwe docs show config/vars --lang en`.
+The `vars.` prefix is optional on every `dwe vars` path. Schema: `dwe docs show config/vars --lang en`.
 
-## 5. `vars set` is a handoff
+## 4. `vars set` is a handoff — and the layer is a decision
 
-`vars set` mutates `local.yml` — never run it. Edit the var in `defaults.yml` yourself when it's a project default; for a per-dev override, hand the user the command.
+`dwe vars set <path> <value>` writes `workspace/local.yml` (this developer only). Ask: **is this value true for everyone who clones the repo?** Yes → edit `defaults.yml` yourself. No → hand off `vars set`. A machine-local value in `defaults.yml` passes validation and breaks every clean clone (teammates, CI, `dwe test run`) — e.g. a `vars.source.<svc>.branch` that exists only locally; `source_clone` is branch-blind and never re-points an existing checkout, so the local checkout and the clone coordinates are deliberately independent.
 
-**The layer is a decision, not a formality: ask "is this value true for everyone who clones the repo?"** If not, it is a per-dev override and belongs in `local.yml` via the handed-off `vars set` — putting it in `defaults.yml` changes the tracked project default for the whole team. The failure is silent and `dwe validate` does not catch it: a `vars.source.<svc>.branch` pointed at a branch that exists only on this machine passed validation clean while every clean clone — a teammate, CI, and the project's own `dwe test run` — would fail at `source_clone`. Do not edit `defaults.yml` "for consistency" after changing something locally; a working checkout and the clone coordinates that provision it are deliberately independent (`source_clone` is idempotent and branch-blind — it never re-points an existing checkout).
+Coercion: bare `42` → int, `true` → bool, `1.5` → float; quote to force a string (`'"42"'`); `yes` / `no` / `on` / `off` stay strings; `""` → null; maps and sequences are rejected (a var is a leaf).
 
-**Coercion is load-bearing** (a var is always a single scalar leaf):
+Secret-like var (app key, session secret, Fernet key): hand off `dwe vars set vars.app.secret_key --generate hex` (`hex[:N]` / `base64url[:N]` / `uuid`, `N` bytes, default 32; `base64url:32` is a valid Fernet key; an existing value is refused without `--force`). Never invent the value or hand over a `python -c` one-liner. A secret the whole team shares is `dwe secrets set <vars.path>` instead (`dwe docs show config/secrets --lang en`). From inside a container `set` is additionally gated by `bridge.vars_writable`.
 
-- bare `42` → int, `true` → bool, `1.5` → float
-- quote to force a string: `'"42"'`
-- maps / sequences are rejected (a var is a leaf)
-- empty arg (`""`) → YAML null
-- `yes` / `no` / `on` / `off` → string
+## 5. `.env` is generated — edit the export rule
 
-```shell
-# hand this to the user:
-dwe vars set vars.db.user appuser
-```
-
-For a secret-like var (app key, session secret, Fernet key) the handoff is `--generate` — never invent the value or hand over a `python -c` one-liner:
-
-```shell
-# hand this to the user:
-dwe vars set vars.app.secret_key --generate hex          # or hex:N / base64url[:N] / uuid
-```
-
-`N` is bytes of entropy (default 32); `base64url` is padded, so `base64url:32` is a valid Fernet key. The value is always a string, is printed (never redacted), and an existing `local.yml` value is refused with `vars_value_exists` unless `--force` is added. A secret the whole team shares belongs in `dwe secrets set <vars.path> --stdin` instead.
-
-From inside a container, `set` is additionally gated by the top-level `bridge.vars_writable` allowlist (dot-boundary match, deny-by-default); on the host it is unrestricted. Schema: `dwe docs show config/vars --lang en`.
-
-## 6. `.env` is generated — edit the export rule, not the file
-
-The `.env` artifact is rendered from `exports.env` in `defaults.yml`. To surface a value in `.env`, **add/edit an export rule** — never touch `.env`. Each rule:
+`.env` is rendered from `exports.env` in `defaults.yml`:
 
 ```yaml
-# workspace/defaults.yml
 exports:
   env:
     - { name: DB_DATABASE, from: vars.db.database }
     - { name: APP_PORT,    from: services.nginx.ports.http, format: int }
-    - { name: USE_HTTPS,   from: runtime.use_https,          format: bool }
     - { name: DBGATE_PORT, from: services.dbgate.ports.http, format: int, when: services.dbgate.enabled }
 ```
 
-Rule fields: `name`, `from` (dot-path into the **merged** config), optional `format` (`bool`|`int`|`string`), `when` (dot-path — skip if falsy), `default`, `required`, `comment`. `dwe validate` warns (domain `config.exports`) when a rule's `from:` or `when:` does not resolve, but the two fail differently: an unresolved `from:` emits `NAME=` (which used to reach every container silently, hence the warning), while an unresolved `when:` is falsy and **skips the rule entirely** — the variable is not written at all. `dwe render env` repeats the `from:` case on stderr as it writes the empty value. `PROJECT`, `UID`, `GID` and `COMPOSE_PROJECT_NAME` are injected by dwe and a rule redeclaring one is a hard load error. A host port sourced `from: services.<name>.ports.<x>` is also what `dwe test` auto-remaps to a free port for every **enabled** service in the test copy, so a scenario runs alongside the live env — model host ports under `services.<name>.ports` and integration tests isolate them for free (`integration-tests.md`).
+Fields: `name`, `from` (dot-path into the merged config), `format` (`bool|int|string`), `when` (dot-path; falsy skips the rule entirely), `default`, `required`, `comment`. `dwe validate` warns on an unresolved `from:` / `when:` (an unresolved `from:` writes `NAME=`). `PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME` are injected and may not be redeclared. Multi-line values are refused — those belong in a `render config` pack.
 
-**`--out` is what makes it a write; bare `dwe render env` is a read.** Without it the resolved env goes to stdout and **`.env` is not touched** — the flag is easy to drop, and the command then looks like it worked while the stack keeps running on the old file. The bare form has no `-o` short form (`-o` is the global output-format flag) and ignores `--output json` — it always prints dotenv text. It resolves every rule against the merged config, so its unfiltered output is the project's whole exported secret set — **always scope it** (`dwe render env | grep -E '^<NAME>='`, or `grep -q` for a presence check), never print the full body into a transcript or log. It is **host-only** — the container allowlist admits `render config` and nothing else from the `render` family.
+A host port exported `from: services.<name>.ports.<x>` or `from: vars.<path>` is what `dwe test` remaps per scenario copy — route every compose host port through one of the two (`integration-tests.md` § 5).
 
-Two traps in the write form:
+**Read vs write.** Bare `dwe render env` prints to stdout and touches nothing — always scoped (`| grep -E '^<NAME>='`), since the full body is the exported secret set; host-only; ignores `-o json`. `--out <path>` is the write: it resolves against the **caller's cwd**, so always hand it over with the project-root path. A rewritten `.env` reaches containers only on the next up/recreate; verify against the file, not `printenv` in a running container. Schema: `dwe docs show render/env --lang en`.
 
-- **`--out` resolves against the caller's cwd**, not the project root — unlike every other dwe path. Run from `workspace/services/<name>/` it writes a stray `.env` there, exits 0, and leaves the real one stale. Always hand it over with an explicit project-root path.
-- **A rewritten `.env` does not reach running containers.** Compose reads it at up/recreate, so the new value lands on the next `dwe run`, or on the next `dwe deploy run` of the built-in pipeline (its `up` step carries a `check:` and re-runs every deploy). A custom `deploy.yml` whose `up` step has no `check:` journal-skips it, so `dwe deploy run` there never re-ups (§ 7). Verify against the file (`grep -E '^<NAME>=' <project-root>/.env`); `dwe shell <svc> -c 'printenv <NAME>'` reports the container's creation-time env and stays stale until it is recreated. Never reach for `docker compose exec`: it drops dwe's `-p`/`-f` argv and resolves a different compose project.
+## 6. Render handoff
 
-```shell
-dwe render env | grep -E '^<NAME>='       # read: prints to stdout, writes nothing — always scoped
-dwe render env --out <project-root>/.env  # write: regenerates the file (mutating — hand it to the user)
-```
+Renders normally run inside `dwe deploy run`. To iterate on one pack, hand over the scoped render (all mutating): `dwe render config [<svc>]`, `dwe render ide|ai|git [<svc>]`, `dwe render env --out <project-root>/.env`. `dwe render config --harvest` does not render — it stores declared `generated:` values write-if-absent (host-only).
 
-Schema: `dwe docs show render/env --lang en`.
+`.env` re-renders for free inside `dwe deploy run` (implicit first step), `dwe run` / `restart`, `dwe services enable|disable`, and `dwe docker up|run|exec|restart|build` — so a **`vars`** edit followed by any of those needs no separate render. An **`exports.env`-only** edit is the exception: that block is in no config hash, so `dwe deploy run` journal-skips the render step (the built-in pipeline's always-run `up` then re-ups against the stale file). Apply it with `dwe run` or `dwe deploy run --force`.
 
-## 7. Render handoff
-
-Renders normally run inside `dwe deploy run`. To iterate on one pack, hand the **user** the scoped render (all mutating):
-
-```shell
-dwe render env --out <project-root>/.env  # .env only — bare `render env` writes nothing (§6)
-dwe render config [<svc>]                 # the ${...} runtime files
-dwe render ide|ai|git [<svc>]             # hub dotfiles
-```
-
-`.env` re-renders for free inside `dwe deploy run` (implicit first step), `dwe run` / `dwe restart`, `dwe services enable|disable` (written immediately, with or without `--apply`), and `dwe docker up|run|exec|restart|build` — **not** `docker down|stop|pull`. So a **`vars`** edit followed by any of those needs no separate render.
-
-An **`exports.env`-only** edit is the exception, and it fails on two layers: that block is in neither the project nor the service config hash (`vars` is in both), so the implicit `render-env` step, which carries no `check:`, is journal-skipped on the still-matching hash — the built-in pipeline's always-run `up` step then re-ups against the stale `.env`, and a custom pipeline without an always-run step answers `already up-to-date` and returns. Apply that one with `dwe run` (renders unconditionally, ahead of everything else) or `dwe deploy run --force`. The scoped `render env --out` is a last resort — it rewrites the file but leaves the running stack untouched (§ 6).
-
-`dwe render config --harvest` does NOT render — it write-if-absent stores declared `generated:` values into `.dwe/generated.yml`. It is a **host-only** mutation; never suggest it from inside a container.
-
-Pick the apply command for the change: a `config` template / `generated:` / `service.yml` edit applies on `dwe deploy run`; an `ide`/`ai`/`git` template edit applies on `dwe render <kind>` (or the next deploy). Cross-links: `authoring-commands.md` (command `env:` / params consume `${vars.x}` / `from: vars.x`), `pipelines-and-orchestration.md` (the deploy steps that drive `service_configs_render` + `service_generated_harvest`).
+Apply by source: `config` template / `generated:` / `service.yml` → `dwe deploy run`; `ide` / `ai` / `git` template → `dwe render <kind>` (or the next deploy if the pipeline has a render step).

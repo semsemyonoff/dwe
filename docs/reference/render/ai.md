@@ -21,6 +21,7 @@ Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.loc
   - [Manifest validation rules](#manifest-validation-rules)
 - [Per-file rendering](#per-file-rendering)
   - [Template variables](#template-variables)
+  - [Declared command index](#declared-command-index)
   - [Path-safety guards](#path-safety-guards)
 - [Symlink creation](#symlink-creation)
 - [Worked example](#worked-example)
@@ -221,6 +222,10 @@ Templates receive the same object shape as IDE templates:
 | `.Resolved` | **rendering identity** — service whose hub is actually being rendered (collision-policy winner). For AI the winner is the shallowest extender, so `.Resolved` typically equals `.Service`. |
 | `.ServiceCfg` | effective service config of `.Resolved`, after `extends` resolution. |
 | `.Runtime` | merged `runtime` block |
+| `.Commands` | project-wide **declared** public commands (`private: true` ones are left out), sorted by id — see [Declared command index](#declared-command-index). Empty when the project declares none or its command files fail to load. |
+| `.CommandGroups` | authored command groups with their declared counts, sorted by id — see [Declared command index](#declared-command-index). |
+| `.ServiceCommands` | method: the `.Commands` entries whose `service:` equals `.ServiceCfg.Container`. |
+| `.ServiceCommandGroups` | method: the `.CommandGroups` that own at least one `.ServiceCommands` entry, collapsed to the shallowest. |
 | `.Cfg` | merged `DweConfig` (advanced). `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 > **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.claude/CLAUDE.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `workspace/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
@@ -237,6 +242,65 @@ Go's `text/template` resolves dot-segments only when each segment matches `[A-Za
 ```
 
 The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
+
+### Declared command index
+
+Every AI, IDE and git pack receives the project's command registry as plain data. Entries of `.Commands`:
+
+| Field | Meaning |
+|-------|---------|
+| `.ID` | command id (`admin.lint`) |
+| `.Group` | group id (`admin`) |
+| `.Description` | the authored `description:`, **never translated** — packs do not localize, so the rendered file is byte-identical whatever the active locale |
+| `.Type` | `service_exec`, `script`, `shell`, `workflow`, … — tells whether the command enters a container at all |
+| `.Service` | the declared `service:` (a compose service / container name); for the `.start` / `.logs` / `.stop` / `.restart` commands a `type: daemon` expands into, the daemon's own service. May be an unrendered expression such as `app-${param.service}` |
+
+Entries of `.CommandGroups`:
+
+| Field | Meaning |
+|-------|---------|
+| `.ID` | group id (`services.magento`) |
+| `.Title` | the last id segment (`magento` for `services.magento`), as in the text listing — the header's `title:` is not used |
+| `.Description` | the group header's `description:`; may be empty |
+| `.Count` | number of public commands under the group, nested groups included |
+
+A group is listed only when it has a `group:` title or description, or commands of its own, **and** at least one public command under it. Groups nobody authored are therefore left out: a dotted id like `services.magento` implicitly creates a `services` node, and without a `group:` header or commands of its own that node has nothing to print, so it never appears.
+
+**Joining commands to the hub.** `.ServiceCommands` compares a command's `service:` with `.ServiceCfg.Container` — not with `.Service` or `.Resolved`. A command names the compose service it runs in, and a service whose `service.yml` sets `container: app-magento` under the key `magento` is addressed as `app-magento`. A command with no `service:`, or with a templated one, belongs to no hub. `.ServiceCommandGroups` keeps the groups that contain at least one of this hub's commands and drops any such group nested inside another one it kept, because `dwe commands list <parent>` already lists the nested one. A parent absorbs its nested groups only while no command under it targets the container of a service with a different hub directory. Commands for containers without a hub of their own are helpers and do not count — magento's `services.magento.config.set` targets `db` and the group still collapses — and neither does an `extends` sibling sharing the hub (`magento-debug`). An authored `services` group spanning `services.magento` and `services.node` does not replace `services.magento` in the magento hub, and is itself listed only when it directly holds a magento command no nested group covers.
+
+**Declared, not live.** The index is built from the command files alone; `hide:` conditions are **not** evaluated. A `hide:` can depend on the running stack, and a tracked file that changed every time a container went up or down would produce meaningless diffs. So `.Count` is the declared count: while a `hide:` is active, `dwe commands list <group>` prints fewer commands than the file says, or none. Word generated text accordingly — "N declared", never a promise about what the listing will return. `dwe docs llms-txt` is the live counterpart: it evaluates `hide:` on every call. The rendered file is equally a snapshot of the command files: re-run `dwe render ai` (and `ide` / `git`, if their packs read the index) after changing `workspace/commands/`.
+
+**When the command files do not load**, `dwe render ai|ide|git` still renders: it prints one warning carrying the load error, and `.Commands` / `.CommandGroups` are empty for every service in that run. `dwe validate commands` reports the actual error; `dwe validate templates` dry-runs the packs against the same, then empty, index and does not report it a second time.
+
+#### Shipped `Declared commands` block
+
+The `default` pack scaffolded by `dwe init` renders the block below into each hub's `AGENTS.md`. A hub whose service owns no command group gets no block at all. Packs live in the project, so projects scaffolded before this block existed do not receive it — to adopt it, paste the snippet into `workspace/templates/ai/<pack>/AGENTS.md.tmpl`:
+
+```markdown
+{{ if .ServiceCommandGroups }}
+## Declared commands
+
+{{ range $g := .ServiceCommandGroups }}{{ with or $g.Description $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
+{{ end }}{{ end }}
+Before any task that falls under a group description above — tests, linters,
+formatters, builds, codegen, migrations, seeds, cache or token management,
+package-manager scripts — make that call once per session, and again after
+`workspace/commands/` changes. If a declared command matches the intent, run it
+with `dwe cmd <id>`; inspect an unfamiliar one with
+`dwe cmd -i <id> --output json`. Hand the exact call to the user instead when it
+changes project or data state (migrations, seeds, installs) or its inspect
+output shows `confirmation: true`. A scoped listing is a fast first lookup, not
+proof of absence: before falling back, run one full
+`dwe commands list --output json` — project-wide and workflow commands are
+declared without a service and will not appear above. Only when that finds no
+match, use `dwe shell {{ .Resolved }} -c '<cmd>'`. Do not invoke the underlying
+npm/composer/make/docker command directly until that check has been made.
+{{ end }}
+```
+
+The group line prints the group's description, or the last id segment when it has none. The block deliberately lists groups and a call, not a table of commands: `dwe commands list <group> --output json` returns the same data on demand, while a table is loaded into every agent session whether or not it is relevant. A project that wants a table has `.ServiceCommands` to build one in its own pack.
+
+The prose is the part that makes agents use the commands: it says when to check (a task that falls under a group description), what takes priority (the declared command), what not to do before checking (run the underlying tool directly), and what the check costs (once per session). Keep all four when editing it.
 
 ### Path-safety guards
 
@@ -354,6 +418,7 @@ services/main/
 | info | Explicit argument resolved to a different sibling — names the chosen winner and the shared hub directory. |
 | warning | A selected service was skipped because it has no hub directory (or its hub is the project root). |
 | warning | A selected service was skipped because another service won the directory collision — the winner is named. |
+| warning | The command files failed to load — printed once per run, not per service; `.Commands` and `.CommandGroups` render empty. |
 | success | One line per rendered file, naming the relative path inside the project. |
 | success | One line per symlink (whether newly created or already correct), showing both the link and its target. |
 | info | Nothing was selected after applying policy and collision rules. |

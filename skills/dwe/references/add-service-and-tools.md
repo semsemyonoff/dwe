@@ -1,67 +1,46 @@
 # Add a service or tool
 
-Load this file when the user wants to add an app / database / cache / search / proxy / tool to a DWE project, extend a base service into a variant, or add an optional service toggle. The agent edits YAML; the **user** runs every mutating command.
+Load when the user wants to add an app / database / cache / search / proxy / tool, extend a base service into a variant, or add an optional toggle. You edit YAML; the user runs every mutating command.
 
-Order: pick the type → create the folder (= key) → give it a container → wire the toggle → optional extras → validate (read) → handoff.
+Order: pick the type → folder (= key) → container → toggle → extras → validate → handoff.
 
 ## 1. Pick the type
 
-Every service is `type:` one of:
-
-- **`app`** — owns source (`dir`), render packs, its own `deploy.yml`, `extends`, `cli`, `generated`. The thing you're building.
-- **`tool`** — a side GUI/utility (dbgate, mailpit, redis-insight). No source, no `depends_on` target role.
-- **`infra`** — a backing service others depend on (nginx proxy, db, varnish). Can own the public HTTP port and be a `port_via` candidate for `dwe info`.
-
-Read the type overview and full field reference before writing:
+- **`app`** — owns source (`dir`), render packs, its own `deploy.yml`, `extends`, `cli`, `generated`.
+- **`tool`** — a side GUI / utility (dbgate, mailpit, redis-insight). No source.
+- **`infra`** — a backing service others depend on (proxy, db, varnish); may own the public HTTP port (`port_via` for `dwe info`).
 
 ```shell
-dwe docs show config/services/index --lang en
-dwe docs show config/services/fields --lang en
+dwe docs show config/services/index    --lang en
+dwe docs show config/services/fields   --lang en --anchors   # ports-field, hosts-field, cli-block, render-block, generated-block, bridge-block
 dwe docs show config/services/examples --lang en
 ```
 
-Scope the field reference with anchors instead of reading the whole body:
+## 2. Folder = key
 
-```shell
-dwe docs show config/services/fields --anchors --lang en
-```
-
-Useful anchors: `ports-field`, `hosts-field`, `cli-block`, `render-block`, `renderconfig-block`, `generated-block`, `bridge-block`.
-
-## 2. Create the folder = key
-
-One folder per service: `workspace/services/<name>/service.yml`. The **folder name IS the map key** — there is no `name:` field. `service.yml` is required.
-
-Required: `type:` + `container:` (the compose service name). Common optional fields: `icon:` (shown in `dwe info`), `ports:` (named map), `hosts:` (named map), `compose:` (overlay files this service activates), and either `required: true` (always-on) or a toggle in `defaults.yml` (step 5).
-
-**tool** skeleton (e.g. a `mailpit` / `dbgate` GUI):
+`workspace/services/<name>/service.yml` is required; the folder name **is** the key. Required fields: `type:` + `container:` (compose service name). Common: `icon:`, `ports:` (named map), `hosts:` (named map), `compose:` (overlays this service activates), `required: true` or a toggle (§ 4).
 
 ```yaml
+# tool
 type: tool
 container: mailpit
 icon: "📬"
-compose:
-  - compose/tools/mailpit.yml
-ports:
-  http: 8025
-hosts:
-  web: mail.localhost
+compose: [compose/tools/mailpit.yml]
+ports: { http: 8025 }
+hosts: { web: mail.localhost }
 ```
 
-**infra** skeleton (e.g. an `nginx` proxy — `required`, owns the HTTP port, no overlay because it's in the compose base):
-
 ```yaml
+# infra, always-on, in the compose base
 type: infra
 container: nginx
 icon: "🌐"
 required: true
-ports:
-  http: 80
+ports: { http: 80 }
 ```
 
-**app** skeleton (trimmed; full fields in step 3):
-
 ```yaml
+# app (extras in § 3)
 type: app
 container: app-main
 icon: "🐘"
@@ -69,118 +48,32 @@ required: true
 dir: ./services/main
 dir_internal: /workspace
 work_dir_internal: /workspace/src
-hosts:
-  web: app.localhost
+hosts: { web: app.localhost }
 ```
 
-Verify each field's meaning at `dwe docs show config/services/fields --lang en` (don't guess `ports`/`hosts` shape — see the `ports-field` / `hosts-field` anchors).
-
-**Model host ports under `services.<name>.ports`, not through a free-form var.** Only the modeled field is read by `ports_free` preflight and by `dwe test`'s automatic host-port isolation; a port routed to compose via `vars.*`/`${ENV}` instead binds the original host port in every test copy and silently collides across parallel/kept scenarios — **unless** each such port is declared per-scenario as `env.vars: auto`, the supported exception that gets it a freshly allocated port (see `integration-tests.md` § 6). Prefer keeping ports in `services.<name>.ports` and referencing them as `${services.<name>.ports.<x>}`; reach for `env.vars: auto` only when a port genuinely must reach compose through a var.
+Model host ports under `services.<name>.ports` (or route them through a `vars:` path an `exports.env` rule exports) — those are what `ports_free` preflight reads and what `dwe test` remaps per copy. A port reaching compose any other way collides across test copies (`integration-tests.md` § 5).
 
 ## 3. app-only extras
 
-These are valid **only** on `type: app`:
+`dir` / `dir_internal` / `work_dir_internal` (mount the whole hub — `SKILL.md` § Rules); `dirs: [...]` (extra hub subdirs); `render.config.template:` (config pack) and `generated:` (harvested secrets) — both in `render-and-vars.md`; `cli: {mode, shell, user, workdir, env}` (how `service_exec` and `dwe shell` enter the container); `bridge: {enabled: true}` (opt the container into the host bridge so `dwe cmd` / `vars` work from inside it).
 
-- `dir:` (host source dir, bind-mounted), `dir_internal:`, `work_dir_internal:` (container working dir).
-- `dirs: [...]` — extra hub subdirs to create (e.g. `home`, `runtime`).
-- `render.config.template:` — names the config pack that writes runtime files (the `.env`, `env.php`, …). See `render-and-vars.md`.
-- `generated:` — secrets minted once and replayed across renders (e.g. an app key). See `render-and-vars.md`.
-- `cli: { mode, shell, user, workdir }` — how `service_exec` commands enter the container.
-- `bridge: { enabled: true }` — opt the container into the host bridge so `dwe cmd`/`vars`/diagnostics work from inside it.
+## 4. Container, toggle, variant
 
-Anchors for the schema: `dwe docs show config/services/fields#cli-block --lang en`, `#renderconfig-block`, `#generated-block`, `#bridge-block`.
+The container lives in a compose file, not in `service.yml`: the **base** (`compose.yaml`, or whatever `docker.yml` `compose.base` names) for `required` infra, or **overlays** the service's `compose:` list activates (convention: `compose/tools/<name>.yml`, `compose/services/<name>.yml`, `compose/services/<svc>/<variant>.yml`). Overlays consume `.env` vars and patch the proxy vhost. Assembly: `dwe docs show config/docker --lang en`, `concepts/docker`.
 
-## 4. Give it a container
+- **Optional** service: omit `required:`, add `services.<name>.enabled: false|true` to `workspace/defaults.yml`. Required services are not listed there.
+- **Variant** via `extends: <parent>` (a `main-debug` reusing the parent's image / source / render, adding an overlay and a `cli.env` tweak). Deepest-extends-wins on render collisions; a child sharing the parent's hub is a render alias. `dwe docs show config/services/extends --lang en`.
+- **Toggle hooks**: `on_enable:` / `on_disable:` with `requires: none|restart|deploy|deploy-or-restart` (the deploy forms are `on_enable`-only) and `before:` / `after:` command IDs. `dwe docs show config/services/examples --lang en`.
 
-A service's real container does NOT live in `service.yml`. It lives in a compose file:
-
-- **compose base** — the always-present compose file (e.g. `compose.yaml`). Use for `required: true` infra like nginx/db.
-- **compose overlays** — separate files activated per service. Naming convention (no `docker-compose.` prefix):
-  - tools → `compose/tools/<name>.yml`
-  - per-service variants → `compose/services/<svc>/<variant>.yml`
-  - other per-service overlays → `compose/services/<name>.yml`
-
-The `service.yml` `compose:` list names which overlay(s) the service activates (e.g. a `mailpit` tool activates `compose/tools/mailpit.yml`). Overlays typically consume generated `.env` vars and patch the proxy (e.g. add an nginx vhost).
-
-Schema + assembly order:
-
-```shell
-dwe docs show config/docker --lang en
-dwe docs show concepts/docker --lang en
-```
-
-Editing the compose base/overlays applies via `dwe run` (not `deploy run`) — but adding a NEW service that also needs source/render/install applies via `dwe deploy run` (step 9).
-
-## 5. Optional vs required
-
-- **Optional service** — omit `required:` from `service.yml` and add a toggle to `workspace/defaults.yml` under `services.<name>.enabled` (e.g. a `defaults.yml` toggles `dbgate`/`mailpit`/`main-debug` to `false`). Free-form values still go under `vars:` — see step 5 anchor in `render-and-vars.md`.
-- **Required service** — set `required: true` on the `service.yml`. Required services are NOT listed in the `defaults.yml` `services` overlay.
-
-Toggling an already-defined service later is a pure toggle → handoff `dwe services enable|disable <name> --apply` (step 9). Adding the definition itself → `dwe deploy run`.
-
-Schema: `dwe docs show config/services/index --lang en`.
-
-## 6. Variant via `extends:`
-
-A debug/storybook/variant service `extends: <parent>` to reuse the parent's image/source/render and add only deltas (an extra compose overlay, a `cli.env` tweak). Example — a `main-debug` variant:
-
-```yaml
-type: app
-container: app-main-debug
-icon: "🐞"
-extends: main
-compose:
-  - compose/services/main/debug.yml
-cli:
-  env:
-    - XDEBUG_CONFIG="cli_color=1"
-```
-
-Render collisions resolve deepest-extends-wins; a child sharing the parent's hub dir is a render alias (don't give it its own render). Schema:
-
-```shell
-dwe docs show config/services/extends --lang en
-```
-
-## 7. Toggle automation (optional)
-
-To run hooks when a service is enabled/disabled, add `on_enable:` / `on_disable:` to its `service.yml`. Example — a `varnish` cache service:
-
-```yaml
-on_enable:
-  requires: restart        # or deploy-or-restart
-  after:
-    - services.app.varnish.enable
-on_disable:
-  requires: restart
-  before:
-    - services.app.varnish.disable
-```
-
-`requires:` picks how the toggle applies; `before:`/`after:` list command IDs to run around the toggle write. Schema: `dwe docs show config/services/fields --lang en` (toggle-hooks section — list with `--anchors`).
-
-## 8. Validate (read)
-
-Safe, lock-free, runs even when reporting errors:
+## 5. Validate (read) and hand off
 
 ```shell
 dwe validate config services --output json
 dwe validate --output json
 ```
 
-Fix any reported issue (edit the YAML), then re-validate.
+- Added or changed a service (`service.yml`, source, render, deploy steps) → `dwe deploy run` (not `--service <name>` for a new service — `SKILL.md` § Picking the apply command).
+- Only the compose base / overlays → `dwe run`.
+- Pure toggle of an existing service → `dwe services enable|disable <name> --apply`.
 
-## 9. Handoff (the user runs it)
-
-Pick the apply command by what you changed:
-
-- **Added or changed a service** (new `service.yml`, source, render, deploy steps) → user runs `dwe deploy run` (it inlines every enabled service's `deploy.yml` and ends with `docker up --wait`). Do NOT use `deploy run --service <name>` for a brand-new service — it requires that service's own `deploy.yml` and skips the final stack up.
-- **Only edited the compose base/overlays** → user runs `dwe run`.
-- **Pure toggle** of an already-defined service → user runs `dwe services enable|disable <name> --apply`.
-
-Edit the YAML yourself → show the diff → tell the user the exact command → wait for them to run it. Never run a mutating command, and never `docker compose` / `dwe docker up` directly.
-
-Cross-links:
-- Service needs a rendered config file or a persisted secret → `render-and-vars.md`.
-- Service needs a per-service `deploy.yml` (clone source, install, provision) → `pipelines-and-orchestration.md`.
-- Adding a service to a fresh repo from a git URL end to end → `populate-init-repo.md`.
+Cross-links: rendered config / persisted secret → `render-and-vars.md`; per-service `deploy.yml` → `pipelines-and-orchestration.md`; fresh repo end to end → `populate-init-repo.md`.

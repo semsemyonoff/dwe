@@ -77,8 +77,10 @@ type ScenarioStatus string
 const (
 	// StatusPassed means the copy deployed and every step succeeded.
 	StatusPassed ScenarioStatus = "passed"
-	// StatusFailed means the copy deployed but a step (or the deploy
-	// subprocess itself, or a scenario timeout) failed.
+	// StatusFailed means the scenario ran its course and did not pass: a step,
+	// the deploy subprocess itself or a scenario timeout failed after the copy
+	// deployed — or a blocking compose-isolation finding stopped the scenario
+	// before the copy was ever made.
 	StatusFailed ScenarioStatus = "failed"
 	// StatusError means the scenario could not even be prepared: copy,
 	// config/manifest generation, or the `dwe validate` subprocess failed.
@@ -284,21 +286,25 @@ func (e *KeptRunError) Error() string {
 
 // RunScenario executes a single scenario end to end (spec §6): acquire the
 // per-scenario flock, load the scenario, resolve the timeout, guard against
-// a kept/half-dead prior run, copy the project tree, generate the copy's
-// local.yml + docker identity, write the manifest (before any Docker
-// interaction), run `dwe validate` then `dwe deploy run --silent` as
-// subprocesses (one retry on deploy failure when the scenario has `auto`
-// ports), run the scenario's steps in-process, then tear down (unless Keep).
+// a kept/half-dead prior run, build the port plan and run the compose-isolation
+// gate on it, copy the project tree, generate the copy's local.yml + docker
+// identity, write the manifest (before any Docker interaction), run
+// `dwe validate` then `dwe deploy run --silent` as subprocesses (one retry on
+// deploy failure when the plan allocated ports), run the scenario's steps
+// in-process, then tear down (unless Keep).
 //
 // A non-nil error means the scenario could not be attempted at all (flock
 // held, a kept run already owns the copy, the scenario failed to load, or
 // the timeout failed to parse) — nothing was created, so there is nothing to
-// tear down. Every failure from CopyTree onward is instead reported via the
-// returned ScenarioResult (Status == StatusError for a prep/validate
-// failure, StatusFailed for a deploy/step/timeout failure) with a nil error,
-// since a copy (and, from WriteManifest onward, a manifest) exists and the
-// caller needs the result to report per-scenario outcomes across a run of
-// several scenarios.
+// tear down. A blocking compose-isolation finding is reported as StatusFailed
+// with a nil error and nothing created either: no copy, no manifest, no
+// compose project and no report directory (there is nothing to collect), so
+// ComposeProject and CopyPath stay empty. Every failure from CopyTree onward
+// is instead reported via the returned ScenarioResult (Status == StatusError
+// for a prep/validate failure, StatusFailed for a deploy/step/timeout failure)
+// with a nil error, since a copy (and, from WriteManifest onward, a manifest)
+// exists and the caller needs the result to report per-scenario outcomes
+// across a run of several scenarios.
 func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResult, error) {
 	if req.BaseDir == "" {
 		return nil, fmt.Errorf("envtest: RunRequest.BaseDir is required")
@@ -362,6 +368,18 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		return fail("loading project config", err)
 	}
 
+	// One scan of the scenario's view of the project, before anything is
+	// created: it feeds both the isolation gate and the port allocation, so the
+	// gate and the copy's local.yml can never disagree about what is remapped.
+	plan := buildPortPlan(origCfg, scn, req.BaseDir)
+	if scanComposeIsolationGate(plan.findings, origCfg, scn, req.SkipIsolationCheck, warn) {
+		return &ScenarioResult{
+			Name:     req.Scenario,
+			Status:   StatusFailed,
+			Duration: r.clock().Sub(start),
+		}, nil
+	}
+
 	runID, err := NewRunID()
 	if err != nil {
 		return fail("generating run ID", err)
@@ -390,7 +408,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		return prepFail("loading seed local.yml", err)
 	}
 
-	if err := r.writeCopyLocalYAML(origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
+	if err := r.writeCopyLocalYAML(plan, origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
 		return prepFail("generating local.yml", err)
 	}
 	if err := WriteDockerIdentity(copyRoot, composeProject); err != nil {
@@ -475,10 +493,6 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	logWriter = lw
 	defer cleanup()
 
-	if scanComposeIsolationGate(copyRoot, origCfg, scn, req.SkipIsolationCheck, warn) {
-		return finish(StatusFailed, "")
-	}
-
 	extraEnv := []string{"DWE_NONINTERACTIVE=1"}
 	if req.ForceColor {
 		// The subprocess stdout is a pipe (subprocOut), so lipgloss would
@@ -510,11 +524,11 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	// The conflict signal usually surfaces in the streamed deploy output (the
 	// subprocess exit error itself is just "exit status N"); scan both so the
 	// gate holds whether the message lands in the output or the returned error.
-	if deployErr != nil && hasAllocatedPorts(origCfg, scn) &&
+	if deployErr != nil && plan.hasAllocatedPorts() &&
 		isPortBindConflict(deployTail.String()+"\n"+deployErr.Error()) {
 		warn(fmt.Sprintf("deploy failed on a port conflict, retrying once with freshly allocated ports: %v", deployErr))
 		progress(PhaseDeployRetry)
-		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, diagArgs, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
+		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, diagArgs, subprocOut, plan, origCfg, seedLocal, scn, composeProject, warn)
 	}
 	if deployErr != nil {
 		warn(fmt.Sprintf("dwe deploy run failed: %v", deployErr))
@@ -531,23 +545,21 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	return finish(StatusPassed, "")
 }
 
-// scanComposeIsolationGate best-effort loads the copy's own config and scans
-// its raw compose files for constructs that bypass Docker-Compose
-// project-name scoping (config.ScanComposeIsolation). Every finding not
-// acknowledged by a docker.yml shared: true volume is printed as a warning;
-// it reports true (block the scenario) only when at least one such finding is
-// Blocking and skipIsolationCheck is false. An interpolated host port this
-// scenario's copy remaps (CoversInterpolatedHostPort, judged on origCfg — the
-// same inputs writeCopyLocalYAML allocates from) is not a hazard and stays
-// silent. If the copy config fails to load, the scan is skipped entirely — the
-// subsequent `dwe validate` subprocess surfaces the real config error.
-func scanComposeIsolationGate(copyRoot string, origCfg *config.DweConfig, scn *Scenario, skipIsolationCheck bool, warn func(string)) bool {
-	copyCfg, err := config.LoadConfigOrWrap(filepath.Join(copyRoot, "workspace.yml"))
-	if err != nil {
-		return false
-	}
-
-	findings := config.ScanComposeIsolation(copyCfg, copyRoot)
+// scanComposeIsolationGate judges the compose-isolation findings the port plan
+// already scanned (config.ScanComposeIsolation over the scenario's view of the
+// project) for constructs that bypass Docker-Compose project-name scoping.
+// Every finding not acknowledged by a docker.yml shared: true volume is
+// printed as a warning; it reports true (block the scenario) only when at
+// least one such finding is Blocking and skipIsolationCheck is false. An
+// interpolated host port this scenario's copy remaps
+// (CoversInterpolatedHostPort, judged on origCfg — the same inputs
+// writeCopyLocalYAML allocates from) is not a hazard and stays silent.
+//
+// It runs BEFORE CopyTree, so a blocked scenario never creates a copy: every
+// message travels through warn (suppressed in JSON mode, where the only signal
+// is the failed status) and there is no run log or report directory to write
+// to.
+func scanComposeIsolationGate(findings []config.IsolationFinding, origCfg *config.DweConfig, scn *Scenario, skipIsolationCheck bool, warn func(string)) bool {
 	if len(findings) == 0 {
 		return false
 	}
@@ -576,16 +588,6 @@ func scanComposeIsolationGate(copyRoot string, origCfg *config.DweConfig, scn *S
 		"blocking compose isolation hazard(s), refusing to run: %s — pass --skip-isolation-check to downgrade to a warning",
 		strings.Join(msgs, "; ")))
 	return true
-}
-
-// hasAllocatedPorts reports whether the copy's local.yml carried any
-// runner-allocated port — a remapped host port for an enabled service, or an
-// env.vars: auto port. It is the FIRST of two gates on the one deploy retry
-// (the second being isPortBindConflict): only a run that allocated ports can
-// lose a TOCTOU race worth re-allocating for, but on its own it is true for
-// nearly every project and so must never gate the retry alone.
-func hasAllocatedPorts(cfg *config.DweConfig, scn *Scenario) bool {
-	return len(enabledHostPortKeys(cfg, scn)) > 0 || len(scn.AutoPortVarPaths()) > 0
 }
 
 // deployTailLimit bounds how much of the deploy subprocess output the retry
@@ -635,19 +637,21 @@ func isPortBindConflict(output string) bool {
 	return false
 }
 
-// writeCopyLocalYAML allocates a fresh free host port for every enabled
-// service's declared host port (spec §5 isolation — a test copy never needs the
-// original host ports) plus any env.vars: auto port, then builds and writes the
-// copy's generated local.yml. All ports come from a SINGLE AllocatePorts batch
-// so a host port and a var port can never collide with each other. Re-invoked
-// by the one deploy retry so a TOCTOU loss on any allocated port gets an
-// entirely fresh set (spec §9).
+// writeCopyLocalYAML allocates a fresh free host port for every port the plan
+// names (spec §5 isolation — a test copy never needs the original host ports):
+// every enabled service's declared host port, plus every vars: path the plan
+// resolved — the scenario's own env.vars: auto entries AND every path a compose
+// host port reads through an active exports.env rule, which the copy must remap
+// even though the scenario never mentions it. All ports come from a SINGLE
+// AllocatePorts batch so a host port and a var port can never collide with each
+// other. Re-invoked by the one deploy retry with the same plan, so a TOCTOU loss
+// on any allocated port gets an entirely fresh set (spec §9).
 func (r *Runner) writeCopyLocalYAML(
-	origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario,
+	plan portPlan, origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario,
 	composeProject, copyRoot string, warn func(string),
 ) error {
-	keys := enabledHostPortKeys(origCfg, scn)
-	autoPaths := scn.AutoPortVarPaths()
+	keys := plan.keys
+	autoPaths := plan.autoPaths
 
 	var hostPorts []HostPortOverride
 	varPorts := make(map[string]int, len(autoPaths))
@@ -672,15 +676,17 @@ func (r *Runner) writeCopyLocalYAML(
 
 // retryDeployWithFreshPorts re-generates the copy's local.yml with a fresh set
 // of allocated ports (host + vars) and retries `dwe deploy run --silent`
-// exactly once. Any failure while preparing the retry is reported to the caller
-// and counts as the one permitted retry being exhausted — the original
-// deployErr stands and no second attempt is made.
+// exactly once. It re-allocates the SAME plan — the scan is never repeated, so
+// the retry remaps exactly the set the first attempt did. Any failure while
+// preparing the retry is reported to the caller and counts as the one permitted
+// retry being exhausted — the original deployErr stands and no second attempt
+// is made.
 func (r *Runner) retryDeployWithFreshPorts(
 	ctx context.Context, copyRoot string, extraEnv, diagArgs []string, subprocOut io.Writer,
-	origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario, composeProject string,
+	plan portPlan, origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario, composeProject string,
 	warn func(string),
 ) error {
-	if err := r.writeCopyLocalYAML(origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
+	if err := r.writeCopyLocalYAML(plan, origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
 		return fmt.Errorf("retry: %w", err)
 	}
 	return r.execDwe(ctx, copyRoot, extraEnv, subprocOut, subprocOut, dweArgs(diagArgs, "deploy", "run", "--silent")...)

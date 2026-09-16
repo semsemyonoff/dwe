@@ -40,6 +40,8 @@ services:
 
 Then re-deploy (or `dwe deploy run --service main`) to push the change through compose and refresh `dwe info`. Reference: [`../reference/config/services/fields.md`](../reference/config/services/fields.md).
 
+A per-service deploy is also narrower than a full one: `dwe deploy run --service <name>` (and `dwe services enable|disable --apply`) runs `env.ports_free` only over the named services and the transitive `depends_on` closure of their `service.yml` declarations, so a port held for a service that run does not start is not a conflict there.
+
 ## "Docker not running"
 
 `dwe validate env` is again the first stop. Two probes matter here:

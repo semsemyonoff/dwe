@@ -20,6 +20,40 @@ generated from commit subjects and stay on the
 
 Nothing yet.
 
+## [0.6.2] - 2026-09-16
+
+### Added
+
+- Render templates can read the project's declared commands: `.Commands`,
+  `.CommandGroups`, and per service `.ServiceCommands` /
+  `.ServiceCommandGroups`. See
+  [`dwe render ai`](docs/reference/render/ai.md#declared-command-index).
+- The `default` AI pack gives `AGENTS.md` a `Declared commands` block that tells
+  agents to use a declared command before falling back to `dwe shell`. Existing
+  projects can copy the
+  [snippet](docs/reference/render/ai.md#shipped-declared-commands-block).
+
+### Changed
+
+- **`dwe test` remaps compose host ports routed through `vars:`** — a port
+  variable exported `from: vars.<path>` gets a free port in every scenario copy
+  without `env.vars: { <path>: auto }`; a numeric `env.vars` value pins it. A
+  step that hardcodes the original port now misses — see
+  [Upgrading DWE](docs/guides/upgrading.md).
+- `dwe commands list --output json` entries carry `description` and `service`.
+- `interpolated_host_port` is no longer reported for a port traced to `vars:`.
+- A scenario blocked by the compose isolation scanner fails before creating a
+  copy or a compose project.
+- `dwe test list --output json` and the `interpolated_host_port` check of
+  `dwe validate tests` ignore `local.yml` `compose.extra` overlays, as the test
+  copy does.
+
+### Fixed
+
+- `dwe deploy run --service` and `dwe services enable|disable --apply` check
+  `ports_free` only for the named services and their `depends_on` closure.
+- `dwe deploy run --service` rejects an unknown service before preflight.
+
 ## [0.6.1] - 2026-09-15
 
 ### Changed
@@ -292,6 +326,7 @@ Nothing yet.
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0

@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ c4e0f9f52a1d
+> Translated from: reference/templates.md @ 7fbbf8caa0e6
 
 # Шаблоны
 
@@ -30,9 +30,9 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `cmd`, строковые листья `with`, `check`, `timeout` и shell `when: cmd:` | Только `${...}` (известные head'ы) | Смерженная конфигурация проекта (`.Raw`) | Рендерится один раз на этапе **разрешения плана**, не в момент выполнения — до того, как шаг будет показан, хеширован или запущен. См. [Шаблоны в полях шага](config/deploy/index.md#шаблоны-в-полях-шага) |
 | Билтин `message` — `text:` | `{{ ... }}` | Разрешённая конфигурация проекта | См. [билтин message](config/deploy/builtins.md#message) |
 | `docker.yml` — `project_name` | Только `${...}` | Разрешённая конфигурация проекта (lookup'ы по `.Raw`) | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
-| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
-| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ide.md](render/ide.md) |
-| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`, `.Commands`, `.CommandGroups`) | Строгий режим. См. [render/git.md](render/git.md) |
+| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`, `.Commands`, `.CommandGroups`) | Строгий режим. См. [render/ide.md](render/ide.md) |
+| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`, `.Commands`, `.CommandGroups`) | Строгий режим. См. [render/ai.md](render/ai.md) |
 | `workspace/templates/config/<pack>/**` | `${...}` | Разрешённая конфигурация проекта (`.Raw`) + курируемый поднабор `${services.<name>...}` + `${generated.<name>}` | Lenient (отсутствующее → `""`). См. [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
 
@@ -115,6 +115,7 @@ cmd: |
 | `.Runtime` | смерженный блок `runtime` (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Порты / хосты на сервис находятся в каждой записи сервиса (см. `.Services` ниже). |
 | `.Services` | сервисы по имени. Используйте `(index .Services "<name>")` для выборки; хелперы записи `.Port "<port-name>"` / `.Host "<host-name>"` / `.PortScheme "<port-name>"` (возвращает `""`, если переопределения нет) / `.EffectiveScheme "<port-name>" .Runtime.UseHTTPS` (возвращает `"http"` / `"https"` после прохода по цепочке per-port → сервис → runtime). Подмножества по типу — через `.AppServices` / `.ToolServices` / `.InfraServices`. |
 | `.Cfg` | объединённая конфигурация проекта (продвинутое). `.Cfg.Raw` — это дерево конфига после слияния (`services.*` подставляется из per-service файлов `service.yml`). Точечный синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Для типовых случаев предпочитайте выделенные поля выше. |
+| `.Commands` / `.CommandGroups` | **объявленные** команды проекта и авторские группы команд, плюс методы `.ServiceCommands` / `.ServiceCommandGroups` — см. [Индекс объявленных команд](render/ai.md#индекс-объявленных-команд) |
 
 IDE- и AI-паки рендерятся в отслеживаемые файлы проекта. Избегайте использования developer-local или секретных ключей через `.Cfg.Raw` в этих шаблонах — значения из `local.yml` дадут разные диффы у разных разработчиков. Git-хуки рендерятся в `.git/hooks/` (gitignored) и под это ограничение не попадают.
 

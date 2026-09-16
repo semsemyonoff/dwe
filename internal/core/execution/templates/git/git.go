@@ -20,6 +20,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packcommon"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packroot"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
@@ -311,11 +312,16 @@ type Context struct {
 	Service     string
 	Resolved    string
 	ServiceCfg  config.ServiceConfig
-	PackName    string
-	Manifest    *manifest.File
-	HooksDir    string // absolute path to <absHub>/src/.git/hooks
-	HubDir      string // absolute path to <absRoot>/<svc.Dir>
-	Writer      *render.Writer
+	// Commands and CommandGroups are the declared command index, built once
+	// per invocation by the caller (not per service, which would warn N times
+	// on a broken command file).
+	Commands      []model.CommandSummary
+	CommandGroups []model.CommandGroupSummary
+	PackName      string
+	Manifest      *manifest.File
+	HooksDir      string // absolute path to <absHub>/src/.git/hooks
+	HubDir        string // absolute path to <absRoot>/<svc.Dir>
+	Writer        *render.Writer
 }
 
 // RenderHooks renders every entry in ctx.Manifest into ctx.HooksDir.
@@ -365,13 +371,15 @@ func RenderHooks(ctx Context) error {
 		resolved = ctx.Service
 	}
 	data := TemplateData{
-		Project:    ctx.Cfg.Project,
-		Service:    ctx.Service,
-		Resolved:   resolved,
-		ServiceCfg: ctx.ServiceCfg,
-		Runtime:    ctx.Cfg.Runtime,
-		Services:   ctx.Cfg.Services,
-		Cfg:        ctx.Cfg,
+		Project:       ctx.Cfg.Project,
+		Service:       ctx.Service,
+		Resolved:      resolved,
+		ServiceCfg:    ctx.ServiceCfg,
+		Runtime:       ctx.Cfg.Runtime,
+		Services:      ctx.Cfg.Services,
+		Cfg:           ctx.Cfg,
+		Commands:      ctx.Commands,
+		CommandGroups: ctx.CommandGroups,
 	}
 
 	for _, entry := range ctx.Manifest.Render {

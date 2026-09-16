@@ -3,6 +3,7 @@ package envtest
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -116,27 +117,62 @@ func stripComposeExtra(seed map[string]any, warn func(string)) map[string]any {
 }
 
 // scenarioEnvOverlay builds the vars:/services: overlay from a scenario's
-// env block. ports is keyed by the var's dot-path (relative to vars:) for
-// every var whose value is AutoPortSentinel.
+// env block. ports is keyed by the var's dot-path (relative to vars:) and
+// holds a port for every var the scenario set to AutoPortSentinel PLUS every
+// path the runner allocated implicitly — a path a compose host port reads
+// through an active exports.env rule (see buildPortPlan). An implicit path is
+// written into vars: even though the scenario never mentions it; a path the
+// scenario pinned to a concrete value never reaches ports, so the pin stands.
 func scenarioEnvOverlay(scn *Scenario, ports map[string]int) (map[string]any, error) {
 	overlay := make(map[string]any)
 
-	if len(scn.Env.Vars) > 0 {
-		paths := make([]string, 0, len(scn.Env.Vars))
+	if len(scn.Env.Vars) > 0 || len(ports) > 0 {
+		declaredPaths := make([]string, 0, len(scn.Env.Vars))
 		for path := range scn.Env.Vars {
-			paths = append(paths, path)
+			declaredPaths = append(declaredPaths, path)
 		}
-		sort.Strings(paths)
+		implicitPaths := make([]string, 0, len(ports))
+		for path := range ports {
+			if _, declared := scn.Env.Vars[path]; !declared {
+				implicitPaths = append(implicitPaths, path)
+			}
+		}
+		sort.Strings(declaredPaths)
+		sort.Strings(implicitPaths)
+		// Implicit allocations are written LAST, after every declared path. Plain
+		// sorted order would let a declared path that extends an allocated one
+		// ("ports.valkey.x" over an allocated "ports.valkey") replace the
+		// allocated int with a fresh map — silently dropping the allocation and
+		// leaving the copy on the live stack's host port, which is exactly what
+		// pinsPortValue exists to prevent. Writing the allocation afterwards
+		// applies the documented map-wins collision rule in the direction that
+		// keeps the copy isolated.
+		paths := slices.Concat(declaredPaths, implicitPaths)
 
 		vars := make(map[string]any)
 		for _, path := range paths {
-			value := scn.Env.Vars[path]
-			if s, ok := value.(string); ok && s == AutoPortSentinel {
-				port, ok := ports[path]
-				if !ok {
+			value, declared := scn.Env.Vars[path]
+			port, allocated := ports[path]
+			switch {
+			case !declared:
+				value = port
+			case isAutoPort(value):
+				if !allocated {
 					return nil, fmt.Errorf("envtest: scenario var %q is %q but no port was allocated for it", path, AutoPortSentinel)
 				}
 				value = port
+			case allocated && !pinsPortValue(value):
+				// The scenario named the path but gave it no port (nil, "", or a
+				// nested structure), so buildPortPlan allocated one for it. Keeping
+				// the declared value here would silently drop that allocation and
+				// leave the copy binding the original host port.
+				value = port
+			}
+			if nested, isMap := value.(map[string]any); isMap {
+				// A value taken straight from scn.Env.Vars is stored by reference,
+				// and a later dot-path descending into it would write through into
+				// the caller's Scenario.
+				value = deepCopyMap(nested)
 			}
 			if err := setDotPath(vars, path, value); err != nil {
 				return nil, fmt.Errorf("envtest: scenario var %q: %w", path, err)

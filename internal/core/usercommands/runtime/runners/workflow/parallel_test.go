@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +12,18 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
+
+// clearColorEnv guarantees the colour-control vars are absent for one test, so
+// nothing but the runner's own decision can force colours — a developer or CI
+// environment exporting NO_COLOR would otherwise suppress the forcing the test
+// asserts. Mirrors the helper the other runner packages use.
+func clearColorEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"NO_COLOR", "CLICOLOR_FORCE"} {
+		t.Setenv(name, "x")
+		_ = os.Unsetenv(name)
+	}
+}
 
 // ffTrue / ffFalse are reusable *bool literals for the FailFast tristate.
 var (
@@ -476,6 +489,7 @@ func TestWorkflowRunner_Parallel_FailureDumpLabelled(t *testing.T) {
 // up plain text. The shell echoes each var verbatim; the assertion checks
 // every expected key surfaces in the captured output.
 func TestWorkflowRunner_Parallel_ForceColorEnv_Exported(t *testing.T) {
+	clearColorEnv(t)
 	dir := t.TempDir()
 	leaf := makeShellLeaf("wf.envprobe",
 		`printf 'CLICOLOR_FORCE=%s\nFORCE_COLOR=%s\nCOLORTERM=%s\n' "$CLICOLOR_FORCE" "$FORCE_COLOR" "$COLORTERM"`)

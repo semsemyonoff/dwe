@@ -256,6 +256,10 @@ func TestEmbeddedTemplates_AIPackRenders(t *testing.T) {
 	if !strings.Contains(string(rendered), "dwe render ai") {
 		t.Errorf("rendered hub AGENTS.md does not say it is generated:\n%s", rendered)
 	}
+	// No declared commands for this hub: the block must be absent, not empty.
+	if strings.Contains(string(rendered), "## Declared commands") {
+		t.Errorf("rendered hub AGENTS.md carries a Declared commands block with no commands:\n%s", rendered)
+	}
 	target, err := os.Readlink(filepath.Join(absHub, "CLAUDE.md"))
 	if err != nil {
 		t.Fatalf("readlink hub CLAUDE.md: %v", err)

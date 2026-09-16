@@ -619,11 +619,13 @@ resources:
 
 // TestScenariosValidator_InterpolatedHostPort pins the project-wide filter on
 // interpolated host ports: validate has no scenario of its own, so a finding is
-// silent only when EVERY scenario remaps its port (vars path set to auto, or
-// the source service in the runner's remap set), and otherwise names the
-// scenarios that still lack the fix. An unloadable scenario covers nothing, a
-// required service a scenario disables stays remapped, and a finding with no
-// VarPath/SourceService always warns without a scenario list.
+// silent only when EVERY scenario remaps its port, and otherwise names the
+// scenarios that still lack the fix. A vars-traced port is remapped in every
+// scenario with no scenario config at all, so it only ever appears through an
+// unloadable scenario (which covers nothing). A source service is remapped only
+// where the scenario keeps it in the runner's remap set — a required service a
+// scenario disables stays remapped — and a finding with no VarPath/SourceService
+// always warns without a scenario list.
 func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 	const steps = "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n"
 	const valkeyAuto = "env:\n  vars:\n    ports.valkey: auto\n" + steps
@@ -642,9 +644,23 @@ func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
 		},
 		{
-			name:      "vars path auto in some scenarios",
+			// The traced path is remapped in b too, even though b says
+			// nothing about it — that is what auto stopped being needed for.
+			name:      "vars path auto in only one scenario",
 			scenarios: map[string]string{"a.yml": valkeyAuto, "b.yml": steps},
-			want:      map[string][]string{"VALKEY_PORT": {"b"}, "CACHE_PORT": {"a", "b"}},
+			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
+		},
+		{
+			name:      "vars path traced, no scenario mentions it",
+			scenarios: map[string]string{"a.yml": steps, "b.yml": steps},
+			want:      map[string][]string{"CACHE_PORT": {"a", "b"}},
+		},
+		{
+			// An explicit number pins the copy's port: the author's decision,
+			// not a collision validate should nag about.
+			name:      "vars path pinned to a number",
+			scenarios: map[string]string{"a.yml": "env:\n  vars:\n    ports.valkey: 6390\n" + steps},
+			want:      map[string][]string{"CACHE_PORT": {"a"}},
 		},
 		{
 			name:      "unloadable scenario counts as uncovered",
@@ -667,7 +683,7 @@ func TestScenariosValidator_InterpolatedHostPort(t *testing.T) {
 		{
 			name:      "service enabled by only one scenario",
 			scenarios: map[string]string{"a.yml": enableCache, "b.yml": steps},
-			want:      map[string][]string{"VALKEY_PORT": {"a", "b"}, "CACHE_PORT": {"b"}},
+			want:      map[string][]string{"CACHE_PORT": {"b"}},
 		},
 		{
 			name: "source service disabled by one scenario",
@@ -875,6 +891,56 @@ services:
 				}
 			}
 		})
+	}
+}
+
+// TestScenariosValidator_InterpolatedHostPortInLocalOverlay pins that the
+// scenario view drops the per-developer compose overlays, as the copy's seeded
+// local.yml does: an interpolated host port declared only in such an overlay
+// binds nothing in any copy, so it must not warn — while a finding of another
+// kind from the same file still comes from the project-wide scan and warns.
+func TestScenariosValidator_InterpolatedHostPortInLocalOverlay(t *testing.T) {
+	root := t.TempDir()
+	writeScenario(t, root, "smoke.yml", "steps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n")
+
+	composePath := filepath.Join(root, "docker-compose.yml")
+	if err := os.WriteFile(composePath, []byte(`
+services:
+  web:
+    image: busybox
+`), 0o644); err != nil {
+		t.Fatalf("write compose file: %v", err)
+	}
+	overlayPath := filepath.Join(root, "local.compose.yml")
+	if err := os.WriteFile(overlayPath, []byte(`
+services:
+  web:
+    container_name: fixed-name
+    ports: ["${LOCAL_PORT:-9001}:6379"]
+`), 0o644); err != nil {
+		t.Fatalf("write overlay file: %v", err)
+	}
+
+	cfg := baseCfg()
+	cfg.Compose.Base = composePath
+	cfg.Compose.Extra = []string{overlayPath}
+
+	var iso, other []string
+	for _, d := range warningDiags(runFor(root, cfg)) {
+		if d.Target != "tests.isolation" {
+			continue
+		}
+		if strings.Contains(d.Message, "LOCAL_PORT") {
+			iso = append(iso, d.Message)
+			continue
+		}
+		other = append(other, d.Message)
+	}
+	if len(iso) != 0 {
+		t.Errorf("an interpolated port from a per-developer overlay must stay silent, got %v", iso)
+	}
+	if len(other) != 1 || !strings.Contains(other[0], "container_name") {
+		t.Errorf("want the container_name finding from the same file, got %v", other)
 	}
 }
 

@@ -1,65 +1,51 @@
 # Authoring DWE commands and daemons
 
-Load this file when the task is "add a command", "wrap a framework CLI" (`artisan` / `bin/magento` / `npm`), "run X in the container", or "background worker / daemon". You edit the yml; the **user** runs every mutating command.
+Load when the task is "add a command", "wrap a framework CLI" (`artisan` / `bin/magento` / `npm`), "run X in the container", or "background worker / daemon". You edit the yml; running a command that mutates is a handoff (`SKILL.md` § Permission boundary).
 
-Commands live in `workspace/commands/**.yml`. Inspecting them is a read (run freely); running one (`dwe cmd <id>`) is a mutation (handoff).
+Commands live in `workspace/commands/**.yml`. Schema: `dwe docs show config/commands/index --lang en` (sub-pages `types`, `directives`, `templating`, `validation`); pattern guide: `dwe docs show guides/author-project-commands --lang en`.
 
-## 1. ID derivation + read/inspect
+## 1. IDs and inspection
 
-ID = folder path + filename + map-key, dot-joined: `workspace/commands/<path>/<file>.yml` key `k` → ID `<path>.<file>.k`.
-
-- `commands/services/main/cache.yml` key `clear` → `services.main.cache.clear`
-- `commands/app.yml` key `install` → `app.install`
-
-Run (mutating — **hand to the user**):
+ID = folder path + filename + map key, dot-joined: `commands/services/main/cache.yml` key `clear` → `services.main.cache.clear`; `commands/app.yml` key `install` → `app.install`.
 
 ```shell
-dwe cmd <id> [--set key=value]      # alias of `dwe commands run`
+dwe commands list [group] --output json   # id, type, description, service, params (--all adds private)
+dwe cmd -i <id> --output json             # resolved shape: type, service, argv, params, confirmation
+dwe cmd <id> [--set key=value] [-- args]  # run (`dwe cmd` is an alias of `dwe commands`)
 ```
 
-Inspect / list (read — run freely):
-
-```shell
-dwe commands -i <id>                 # resolved shape: type, service, argv, params
-dwe commands list --all --output json
-```
-
-## 2. Group header
-
-Each file may carry a `group:` header + a `commands:` map:
+## 2. File shape
 
 ```yaml
 group:
   title: Main Artisan
   description: Everyday php artisan utilities for the main service
-  bridge: { enabled: true, services: [main] }   # children inherit (see §7)
-  # hide: '<go-template>'                        # conditional visibility
+  bridge: { enabled: true, services: [main] }      # optional; children inherit (§ 6)
+  # hide: '{{ not .Raw.services.main.enabled }}'   # conditional visibility
 
 commands:
-  # … per-command map (keys become the last ID segment)
+  # per-command map; keys become the last ID segment
 ```
 
-Schema → `dwe docs show config/commands/index --lang en`.
+One file per framework namespace (`commands/services/main/migrate.yml` → `services.main.migrate.{run,status,rollback}`), each entry a `service_exec` wrapping the binary verb; set `service:` / `bridge:` once on the group header.
 
-## 3. Pick the TYPE (decision tree)
+## 3. Pick the type
 
-`type:` is one of `service_exec · service_run · shell · script · dwe · workflow · builtin · daemon`. One short example each below; full schema → `dwe docs show config/commands/types --lang en`.
+`type:` is one of `service_exec · service_run · shell · script · dwe · workflow · builtin · daemon`. Full schema: `dwe docs show config/commands/types --lang en`.
 
-**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `argv:`/`cmd:`; `mode:` defaults to `exec-or-run` and `workdir` falls back to the service's own (`cli.workdir` → `work_dir_internal` → `dir_internal`), so declare either only to override. Two more defaults the command no longer inherits from the caller: a `type: daemon` with no `user:` takes the service's `cli.user` rather than the image's `USER`, and a container TTY is granted **only** to a user-launched invocation whose streams are terminals (or a bridged run) — every pipeline step, `parallel:` sub-step and `check:` probe runs with `-T`, colour forced. Assume `-T` when writing a command whose output you intend to parse. Example:
+**`service_exec`** — exec into a *running* container; the everyday wrapper. Needs `service:` + `argv:`/`cmd:`. Defaults: `mode: exec-or-run`; `workdir` and `user` fall back to the service's own `cli:` block (declare either only to override). A container TTY is granted only to a user-launched terminal invocation — pipeline steps, `check:` probes and piped output run with `-T`, so keep the output parseable.
 
 ```yaml
 db-seed:
   type: service_exec
-  description: Run database seeders (php artisan db:seed [--class=<Seeder>])
+  description: Run database seeders
   service: app-main
-  mode: exec-or-run                              # the default; spell it out only to override
-  workdir_from: services.main.work_dir_internal
   params:
     class: { type: string, description: Seeder class, pattern: '^[A-Za-z][A-Za-z0-9_]*$' }
   cmd: "php artisan db:seed{{ with .Params.class }} --class={{ . }}{{ end }}"
 ```
 
-**`service_run`** — throwaway container, runs even before the stack is up (pre-up `chown` as `user: root`, one-shot installs):
+**`service_run`** — throwaway container; works before the stack is up (pre-up `chown` as `user: root`, one-shot installs):
 
 ```yaml
 chown-src:
@@ -67,21 +53,12 @@ chown-src:
   private: true
   service: app-main
   user: root
-  workdir_from: services.main.work_dir_internal
   argv: [sh, -c, "chown -R www-data:www-data ."]
 ```
 
-**`shell`** — host `sh -c` glue (inherits `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE`;
-`COMPOSE_PROJECT_NAME` is the same value the generated `.env` carries as a reserved system
-variable):
+**`shell`** — host `sh -c` glue; inherits `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE`. Counts as a host step for the `dwe test run` gate.
 
-```yaml
-auth-json:
-  type: shell
-  cmd: "printf '%s' \"$AUTH_JSON\" > ~/.composer/auth.json"
-```
-
-**`script`** — runs `workspace/scripts/**.sh` with declarative `files:` resolution + `env:` (nested maps reach the script as `DWE_CONTEXT_JSON`; inherits `COMPOSE_PROJECT_NAME` / `COMPOSE_FILE` like `shell`):
+**`script`** — runs `workspace/scripts/**.sh` with declarative `files:` resolution and `env:` (nested maps reach the script as `DWE_CONTEXT_JSON`):
 
 ```yaml
 dump-create:
@@ -92,44 +69,18 @@ dump-create:
   script: { path: workspace/scripts/db/dump-create.sh, shell: bash }
 ```
 
-**`dwe`** — wraps a top-level `dwe` subcommand string so pipelines/workflows can reuse it:
+**`dwe`** — wraps a `dwe` subcommand string (`cmd: "docker up db"`) so pipelines and workflows can reuse it.
+
+**`workflow`** — sequences other command IDs (`steps: [{command: db.start}, …]`); supports `parallel:`, `when:`, `continue_on_error`, `always_show_output`.
+
+**`builtin`** — engine action or predicate, payload in `with:` (`cmd: docker_wait_healthy`, `with: {services: [db], timeout: 120s}`).
+
+**`daemon`** — long-running worker; expands into `<id>.{start,logs,stop,restart}`, auto-reaped on `dwe stop`:
 
 ```yaml
-up:
-  type: dwe
-  private: true
-  cmd: "docker up db"
-```
-
-**`workflow`** — sequences other command IDs; supports `parallel:`, `when:`, `continue_on_error`, `always_show_output`:
-
-```yaml
-bootstrap:
-  type: workflow
-  steps:
-    - command: db.start
-    - command: services.main.composer-install
-    - command: services.main.migrate.run
-```
-
-**`builtin`** — engine action, payload in `with:`:
-
-```yaml
-wait:
-  type: builtin
-  private: true
-  cmd: docker_wait_healthy
-  with: { services: [db], timeout: 120s, interval: 2s }
-```
-
-**`daemon`** — long-running worker; expands into FOUR virtual IDs `<group>.<key>.{start,logs,stop,restart}`, auto-reaped on `dwe stop`. Example:
-
-```yaml
-queue:                                            # → services.main.queue.{start,logs,stop,restart}
+queue:
   type: daemon
   service: app-main
-  user: www-data
-  workdir_from: services.main.work_dir_internal
   params:
     name: { type: string, default: "default", pattern: '^[a-zA-Z0-9_-]+$' }
   argv: [php, artisan, "queue:listen", --timeout=0, "--queue=${param.name}"]
@@ -140,73 +91,44 @@ queue:                                            # → services.main.queue.{sta
     stop_timeout: 60s
 ```
 
-Multi-instance: `dwe cmd services.main.queue.start --set name=emails`. Guide → `dwe docs show guides/background-daemons --lang en`.
+Multi-instance: `dwe cmd services.main.queue.start --set name=emails`. Guide: `dwe docs show guides/background-daemons --lang en`.
 
 ## 4. Params
 
-`params:` is a map; each entry is `{type: string|int|bool|path, description, required, default, default_from: vars.x, pattern, widget: select, options: [...]}`.
+`params:` map; each entry `{type: string|int|bool|path, description, required, default, default_from: vars.x, pattern, widget: select, options: [...]}`. Resolution: `--set k=v` → `default_from` → `default` → error if `required`. `dwe validate` warns (domain `commands`) on a `default_from` / `options.from` / `context.<name>.from` dot-path that does not resolve.
 
-Resolution order at run time: caller **`--set k=v`** → **`default_from`** (a `vars.*` dot-path) → **`default`** → error if `required:`.
+Secrets do **not** go in params (they land in a docker label) — use `env:`. Schema: `dwe docs show config/commands/validation --lang en`.
 
-`dwe validate` now warns (domain `commands`) on a `default_from`, `options.from` or `context.<name>.from` whose dot-path does not resolve in the merged config — a typo there used to render empty and silently fall through to `default:`. Run it after authoring these fields; note `--strict` turns the warning into a failure.
-
-Secrets do **not** go in params (params land in a docker label) — use `env:` (§6). Schema → `dwe docs show config/commands/validation --lang en`.
-
-## 5. Three templating substrates
-
-Pick by who resolves the value (full rules → `dwe docs show config/commands/templating --lang en`):
+## 5. Templating and directives
 
 | Syntax | Resolved by | Use in |
 | --- | --- | --- |
-| `${vars.x}` / `${param.x}` | DWE, **before** exec | `argv:` items, `cmd:`, `env:`, `messages:` |
-| `{{ .Params.x }}` / `{{ with .Params.x }}…{{ end }}` | Go-template, before exec | inside a `cmd:` string |
-| `$VAR` (no braces) | left **for the shell** | inside a `shell` `cmd:` |
+| `${vars.x}` / `${param.x}` / `${args}` | DWE, before exec | `argv:` items, `cmd:`, `env:`, `messages:` |
+| `{{ .Params.x }}` / `{{ with .Params.x }}…{{ end }}` | Go template, before exec | inside a `cmd:` string |
+| `$VAR` | left for the shell | a `shell` `cmd:` |
 
-**Prefer `argv:` over `cmd:`** for anything with SQL or quoting — `argv` is a list, so no shell re-parsing. Reserve `cmd:` for simple strings or Go-template conditionals.
+Prefer `argv:` over `cmd:` for anything with quoting or SQL — a list is not re-parsed by a shell. Full rules: `dwe docs show config/commands/templating --lang en`.
 
-## 6. Directives
+Directives (`dwe docs show config/commands/directives --lang en`):
 
-- `private: true` — pipeline/workflow-only; not runnable via `dwe cmd`. This is exactly how you author a **test-only** command (seed fixtures, dump to a fixed filename) that an integration-test scenario calls via a `type: command` step while keeping it off the everyday listing — use `private`, not `hide` (pipelines skip `hide` commands). See `integration-tests.md`.
-- `confirmation: true` + `confirmation_text: "…"` — interactive prompt before running.
-- `env:` — environment for the process; **secrets go ONLY here** (e.g. `MYSQL_PWD: "${vars.db.password}"`), never in params.
-- `messages: { success, error }` — user-facing result lines.
-- `files:` — declarative file resolution (read/write candidates, globs, `env:` binding) for `script` commands.
-- `notify:` — desktop notification on completion.
-- `argv_append_from: "<host shell expr>"` — appends the expression's stdout **lines** to `argv:` as individual elements. This is how a staged-files linter is authored: `argv: [ruff, check]` + `argv_append_from: "git diff --cached --name-only …"` — do **not** hand-roll `docker compose exec` in a `type: shell` `cmd:` to get the same effect. Valid on `shell`/`service_exec`/`service_run`, requires `argv:` (rejected with `cmd:`, and rejected on `daemon`). The expression runs **on the host**, in the project root, even for a container command; empty output **skips** the command (exit 0), so a pipeline step using it needs a `files_gate:`/`check:`.
+- `private: true` — pipeline/workflow-only, not runnable via `dwe cmd`, listed only with `--all`. This is how a test-only helper (seed fixtures, dump to a fixed filename) stays off the everyday listing — use `private`, not `hide` (pipelines skip `hide` commands).
+- `confirmation: true` + `confirmation_text:` — prompt before running; `-y` skips it.
+- `env:` — process environment; **secrets go only here** (`MYSQL_PWD: "${vars.db.password}"`).
+- `${args}` in `argv:`/`cmd:` — pass-through arguments after `--`.
+- `argv_append_from: "<host shell expr>"` — appends the expression's stdout lines to `argv:` as elements; the idiom for a staged-files linter (`argv: [ruff, check]` + `argv_append_from: "git -C services/app/src diff --cached --name-only …"`). Requires `argv:`; runs on the host even for a container command; empty output skips the command with exit 0.
+- `messages: {success, error}`, `notify:`, `files:` (declarative file resolution for `script` commands).
 
-Schema → `dwe docs show config/commands/directives --lang en`.
+## 6. Bridge opt-in (optional)
 
-## 7. Bridge opt-in (optional)
+Running a command from **inside** a service container is opt-in, default-deny: add `bridge: { enabled: true, services: [<service keys>] }` on the command or group header, and set `bridge.enabled: true` in the service's `service.yml`. Keep interactive, secret-minting and daemon commands host-only. Concept: `dwe docs show concepts/bridge --lang en`.
 
-Container-reachability is **opt-in, default-deny**. To let a command run from inside a service container, add a `bridge:` block on the command or the group header (children inherit; per-field override wins):
-
-```yaml
-bridge: { enabled: true, services: [main] }       # services = workspace service KEYS
-```
-
-Keep interactive (`tinker`), secret-minting, and daemon commands **host-only** (`bridge: { enabled: false }`). The service must also carry `bridge.enabled: true` in its `service.yml`. Concept → `dwe docs show concepts/bridge --lang en`.
-
-## 8. Port a framework CLI (the namespace pattern)
-
-One file per framework namespace; every command is a `service_exec` wrapping the binary verb.
-
-- `commands/services/main/migrate.yml` → `services.main.migrate.{run,status,rollback,…}` each `argv: [php, artisan, "migrate:…"]`
-- `commands/services/shop/indexer.yml` → `services.shop.indexer.{reindex,…}` each `argv: [bin/magento, "indexer:…"]`
-
-Set the namespace's `bridge:` + `service:` once on the group header; the per-command entries inherit. Pattern guide → `dwe docs show guides/author-project-commands --lang en`.
-
-## 9. Verify (read) + handoff
-
-Verify the resolved shape before handing off:
+## 7. Verify and hand off
 
 ```shell
-dwe commands -i <id> --output json
+dwe cmd -i <id> --output json
 dwe validate commands --output json
 ```
 
-Then apply by **role**:
+A command referenced from a pipeline step (`type: command`) applies when the user runs that pipeline (`dwe deploy run` / `dwe run`); a standalone command is run by the user via `dwe cmd <id>` — or by you when the task it carries only reads or verifies (`SKILL.md` § Running project tasks).
 
-- **Pipeline-referenced** commands (used in a `deploy.yml`/`lifecycle.yml` step as `type: command`) apply when the **user** runs the matching pipeline: `dwe deploy run` (deploy steps) or `dwe run` (lifecycle hooks).
-- **Standalone** commands are run by the **user** via `dwe cmd <id> [--set k=v]` — a mutation; never run it yourself. Edit the yml → show the diff → tell the user the exact command → wait.
-
-Cross-links: pipeline wiring (`type: command` steps, `deploy_services`) → `pipelines-and-orchestration.md`. Vars sandbox, `default_from: vars.x`, and `${generated.x}` in command env → `render-and-vars.md`. Calling a `private` command from an integration-test scenario → `integration-tests.md`.
+Cross-links: pipeline wiring → `pipelines-and-orchestration.md`; `${vars.*}` / `default_from` → `render-and-vars.md`; calling a `private` command from a test scenario → `integration-tests.md`.

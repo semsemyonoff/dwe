@@ -120,9 +120,16 @@ than grepping it.
 
 Day-to-day work goes through the first two — they cover most of what an agent needs:
 
-- `dwe commands list` — list this project's declared dev commands (tests, linters,
-  migrations, …); `dwe cmd <id>` runs one, `dwe cmd -i <id>` shows its definition
-  (type, service, workdir, the underlying command, its params)
+- `dwe commands list --output json` — before any task a declared command may
+  cover (tests, linters, formatters, builds, codegen, migrations, seeds, cache or
+  token management, package-manager scripts), make this call once per session and
+  again after `workspace/commands/` changes. A declared command that matches the
+  intent outranks the direct invocation: run it with `dwe cmd <id>`, inspect an
+  unfamiliar one with `dwe cmd -i <id> --output json`. Hand the exact call to the
+  user instead when it changes project or data state (migrations, seeds,
+  installs) or its inspect output shows `confirmation: true`. Do not invoke the
+  underlying npm/composer/make/docker command directly until that check has been
+  made
 - `dwe shell <service> -c '<cmd>'` — run a one-off command inside a service
   container, for anything not covered by a declared command
 
@@ -550,10 +557,30 @@ dwe docs llms-txt --lang en
 
 Loads a project-aware index of services, commands, pipeline builtins, diagnostic
 flags and docs pointers. Read it once, then navigate on demand.
+{{ if .ServiceCommandGroups }}
+## Declared commands
 
+{{ range $g := .ServiceCommandGroups }}{{ with or $g.Description $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
+{{ end }}{{ end }}
+Before any task that falls under a group description above — tests, linters,
+formatters, builds, codegen, migrations, seeds, cache or token management,
+package-manager scripts — make that call once per session, and again after
+`workspace/commands/` changes. If a declared command matches the intent, run it
+with `dwe cmd <id>`; inspect an unfamiliar one with
+`dwe cmd -i <id> --output json`. Hand the exact call to the user instead when it
+changes project or data state (migrations, seeds, installs) or its inspect
+output shows `confirmation: true`. A scoped listing is a fast first lookup, not
+proof of absence: before falling back, run one full
+`dwe commands list --output json` — project-wide and workflow commands are
+declared without a service and will not appear above. Only when that finds no
+match, use `dwe shell {{ .Resolved }} -c '<cmd>'`. Do not invoke the underlying
+npm/composer/make/docker command directly until that check has been made.
+{{ end }}
 ## Working on this service
 
-- `dwe commands list` — this project's declared dev commands; `dwe cmd <id>` runs one
+- `dwe commands list --output json` — this project's declared dev commands; check
+  it before tests, linters, builds, migrations and similar tasks, and prefer a
+  matching command (`dwe cmd <id>`) over invoking the underlying tool directly
 - `dwe shell {{ .Resolved }} -c '<cmd>'` — a one-off command inside the container
 - `dwe logs {{ .Resolved }}` — stream this service's logs
 - `dwe status` — stack health and container names
