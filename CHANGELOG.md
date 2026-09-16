@@ -18,6 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.6.2] - 2026-09-16
+
 ### Added
 
 - Render templates can read the project's declared commands: `.Commands`,
@@ -322,6 +326,7 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0
