@@ -563,12 +563,12 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 - Modify: `internal/cli/command/command_json_test.go` (:62, :76, :96, :109, :137, :363-391 — this is where the DTO tests and the golden comparison live, not `list_test.go`)
 - Modify: `internal/cli/command/testdata/list.json.golden` (regenerated with `UPDATE_GOLDEN=1`; the scaffold golden in Task 5 uses a `-update` **flag** instead — do not mix them up)
 
-- [ ] add `Description string \`json:"description,omitempty"\`` and `Service string \`json:"service,omitempty"\`` to `commandEntryJSON`, placed after `Title` and `Type` respectively; resolve description through the translator exactly as the text branch does (`list.go:436`), service through `def.EffectiveService()`
-- [ ] regenerate `list.json.golden` with `UPDATE_GOLDEN=1` (do not hand-edit)
-- [ ] write a test asserting the existing keys are unchanged in name and order for a fixture command (a positive pin, not an eyeball "confirm")
-- [ ] write table-driven tests: a command with a description emits it; a command without emits no key; `service:` present; `service:` absent → no key; `runner: {service: x}` wins over the top-level field; a templated `service: app-${param.svc}` is emitted verbatim (unrendered) rather than dropped or expanded
-- [ ] write a test that the localized description reaches the JSON branch (translator stub returning a marker) — the JSON branch must not fall back to the raw `def.Description` while the text branch localizes
-- [ ] run `go test ./internal/cli/command/...` - must pass before task 2
+- [x] add `Description string \`json:"description,omitempty"\`` and `Service string \`json:"service,omitempty"\`` to `commandEntryJSON`, placed after `Title` and `Type` respectively; resolve description through the translator exactly as the text branch does (`list.go:436`), service through `def.EffectiveService()`
+- [x] regenerate `list.json.golden` with `UPDATE_GOLDEN=1` (do not hand-edit)
+- [x] write a test asserting the existing keys are unchanged in name and order for a fixture command (a positive pin, not an eyeball "confirm")
+- [x] write table-driven tests: a command with a description emits it; a command without emits no key; `service:` present; `service:` absent → no key; `runner: {service: x}` wins over the top-level field; a templated `service: app-${param.svc}` is emitted verbatim (unrendered) rather than dropped or expanded
+- [x] write a test that the localized description reaches the JSON branch (translator stub returning a marker) — the JSON branch must not fall back to the raw `def.Description` while the text branch localizes
+- [x] run `go test ./internal/cli/command/...` - must pass before task 2
 
 ### Task 2: shared summary types and the `CommandIndex` builder
 

@@ -27,10 +27,14 @@ type commandsListJSON struct {
 
 // commandEntryJSON is a single entry in the flat JSON command list.
 type commandEntryJSON struct {
-	ID      string           `json:"id"`
-	Group   string           `json:"group,omitempty"`
-	Title   string           `json:"title"`
-	Type    string           `json:"type"`
+	ID          string `json:"id"`
+	Group       string `json:"group,omitempty"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type"`
+	// Service is the declared value, not a rendered one: a templated
+	// `service: app-${param.svc}` is emitted verbatim.
+	Service string           `json:"service,omitempty"`
 	Private bool             `json:"private,omitempty"`
 	Params  []paramEntryJSON `json:"params,omitempty"`
 }
@@ -96,12 +100,14 @@ func buildParamEntriesJSON(def *usercommands.CommandDef, translator i18n.Transla
 // commandDefToEntryJSON converts a single CommandDef to its JSON list entry.
 func commandDefToEntryJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandEntryJSON {
 	return commandEntryJSON{
-		ID:      def.ID,
-		Group:   def.Group,
-		Title:   def.LocalName,
-		Type:    string(def.Type),
-		Private: def.Private,
-		Params:  buildParamEntriesJSON(def, translator, locale),
+		ID:          def.ID,
+		Group:       def.Group,
+		Title:       def.LocalName,
+		Description: translator.CommandDescription(locale, def.ID, def.Description),
+		Type:        string(def.Type),
+		Service:     def.EffectiveService(),
+		Private:     def.Private,
+		Params:      buildParamEntriesJSON(def, translator, locale),
 	}
 }
 
