@@ -18,8 +18,38 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+### Added
+
+- **Template packs receive the project's declared commands.** Every
+  `dwe render ai|ide|git` template can read `.Commands` and `.CommandGroups`,
+  plus `.ServiceCommands` / `.ServiceCommandGroups`, which keep the commands and
+  groups whose `service:` is the rendered service's container. The data is what
+  the command files *declare*: `hide:` is not evaluated, so a rendered file does
+  not change as containers start and stop, and a group's count can be larger
+  than what `dwe commands list <group>` prints while a `hide:` applies.
+  Descriptions are always English, so the output does not depend on the locale.
+  When the command files fail to load, rendering still succeeds, with one
+  warning naming the file and the command data empty. See
+  [`dwe render ai`](docs/reference/render/ai.md#declared-command-index).
+- **Scaffolded agent files tell agents to use declared commands.** The hub
+  `AGENTS.md` from the `default` AI pack gains a `Declared commands` block that
+  names the service's command groups with their declared counts and the exact
+  `dwe commands list <group> --output json` call, followed by the rule: look up
+  declared commands before tests, linters, builds, migrations and similar tasks,
+  prefer a matching one, and run a full listing before falling back to
+  `dwe shell`. The root `AGENTS.md` gets the same rule without the group data.
+  This applies to projects created with `dwe init` from now on — existing packs
+  are project files and are not changed; the block is published as a copyable
+  snippet in [`dwe render ai`](docs/reference/render/ai.md#shipped-declared-commands-block).
+
 ### Changed
 
+- **`dwe commands list --output json` entries carry `description` and
+  `service`.** Both are omitted when empty; no existing key changed.
+  `description` is localized like the text listing, so match commands on `id`.
+  `service` is the declared value and can be an unrendered expression such as
+  `app-${param.service}`. See
+  [commands § JSON listing](docs/reference/config/commands/index.md#json-listing).
 - **`dwe test` remaps compose host ports routed through `vars:`.** A host port
   published as a single variable (`"${VALKEY_PORT:-6379}:6379"`) whose active
   `exports.env` rule reads `from: vars.<path>` now gets a freshly allocated port

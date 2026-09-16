@@ -658,14 +658,14 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 - Modify: `skills/dwe/references/authoring-commands.md` (:24 `commands list --all --output json`)
 - Modify: `CHANGELOG.md`
 
-- [ ] `render/ai.md`: document `TemplateData.Commands` / `CommandGroups` / the three accessors, the declared-not-runtime contract, and publish the shipped block as a **copyable snippet** for existing projects (their packs are project-owned and receive nothing automatically)
-- [ ] `commands/index.md`: the two new JSON fields, with the note that `service` may be an unrendered template expression and that `description` is localized (so a tool parsing it must not treat it as a stable key)
-- [ ] `packages.md`: the builder's single-source role, the synthetic-ancestor skip, the `Container` join, the shallowest-group collapse, the `ApplyVisibility` split (llms-txt yes / packs no) and the warn-once render policy
-- [ ] `skills/dwe`: replace the `commands list | grep` workarounds with the now-sufficient `dwe commands list --output json` (the skill is generic and has no `<group>` to substitute — the scoped form belongs only where a hub file already named the group), and teach the same priority-and-fallback rule the templates now carry (the skill is the agent-facing surface this work exists for — editing it is implementation, not post-completion sync)
-- [ ] `CHANGELOG.md` `## [Unreleased]`: `### Added` (shared index + template block), `### Changed` (the two JSON fields)
-- [ ] refresh the RU translation hashes for every touched page
-- [ ] `make build` (embedded docs must not go stale), then `make test`
-- [ ] run `make lint` - must pass before task 7
+- [x] `render/ai.md`: document `TemplateData.Commands` / `CommandGroups` / the three accessors, the declared-not-runtime contract, and publish the shipped block as a **copyable snippet** for existing projects (their packs are project-owned and receive nothing automatically)
+- [x] `commands/index.md`: the two new JSON fields, with the note that `service` may be an unrendered template expression and that `description` is localized (so a tool parsing it must not treat it as a stable key)
+- [x] `packages.md`: the builder's single-source role, the synthetic-ancestor skip, the `Container` join, the shallowest-group collapse, the `ApplyVisibility` split (llms-txt yes / packs no) and the warn-once render policy
+- [x] `skills/dwe`: replace the `commands list | grep` workarounds with the now-sufficient `dwe commands list --output json` (the skill is generic and has no `<group>` to substitute — the scoped form belongs only where a hub file already named the group), and teach the same priority-and-fallback rule the templates now carry (the skill is the agent-facing surface this work exists for — editing it is implementation, not post-completion sync)
+- [x] `CHANGELOG.md` `## [Unreleased]`: `### Added` (shared index + template block), `### Changed` (the two JSON fields)
+- [x] refresh the RU translation hashes for every touched page
+- [x] `make build` (embedded docs must not go stale), then `make test`
+- [x] run `make lint` - must pass before task 7
 
 ### Task 7: verify acceptance criteria
 
