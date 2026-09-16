@@ -38,9 +38,9 @@ command over an ad-hoc one — it carries the right service, workdir, user and e
 so it behaves the same for you, the user, and CI.
 
 1. Find the ID. One call, done once per session (and again after
-   `workspace/commands/` changes); each entry carries `id`, `description`, `type`
-   and the `service` it runs in, so pick by `description` / `service` rather than
-   by guessing id patterns:
+   `workspace/commands/` changes); each entry carries `id`, `title` and `type`,
+   plus `description` and the `service` it runs in when declared, so pick by
+   `description` / `service` rather than by guessing id patterns:
    ```shell
    dwe commands list --output json
    dwe commands list <group> --output json   # when a hub AGENTS.md names the group

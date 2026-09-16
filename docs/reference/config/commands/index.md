@@ -296,7 +296,7 @@ When `dwe commands` is invoked without an exact command ID on an interactive ter
 
 ### JSON listing
 
-`dwe commands list [group] --output json` prints one flat, id-sorted array. The optional `group` narrows it to that group and everything nested under it (`admin` matches `admin.lint`, not `administration`):
+`dwe commands list [group] --output json` prints an object whose `commands` field is one flat, id-sorted array. The optional `group` narrows it to that group and everything nested under it (`admin` matches `admin.lint`, not `administration`):
 
 ```json
 {"commands":[

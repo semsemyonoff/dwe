@@ -445,6 +445,11 @@ Accessors, mirroring the existing `AppServices` shape:
   `admin` + `admin.lint` collapse to `admin` (13 declared); magento's seventeen
   `services.magento.*` collapse to `services.magento` (55 declared) and **not** to
   the meta-less `services` node above it.
+  *(As shipped: an ancestor absorbs only while no command under it targets the
+  container of another hub — see `ServiceCommandGroups` and
+  `docs/internals/packages.md`; live verification showed an unconditional
+  collapse is wrong for a shared parent and a per-service one too strict for
+  magento.)*
 
 A hub with no qualifying group (every command declared without a `service:`, or
 only through a templated one) yields an empty slice and the whole block

@@ -287,7 +287,9 @@ formatters, builds, codegen, migrations, seeds, cache or token management,
 package-manager scripts — make that call once per session, and again after
 `workspace/commands/` changes. If a declared command matches the intent, run it
 with `dwe cmd <id>`; inspect an unfamiliar one with
-`dwe cmd -i <id> --output json`. A scoped listing is a fast first lookup, not
+`dwe cmd -i <id> --output json`. Hand the exact call to the user instead when it
+changes project or data state (migrations, seeds, installs) or its inspect
+output shows `confirmation: true`. A scoped listing is a fast first lookup, not
 proof of absence: before falling back, run one full
 `dwe commands list --output json` — project-wide and workflow commands are
 declared without a service and will not appear above. Only when that finds no

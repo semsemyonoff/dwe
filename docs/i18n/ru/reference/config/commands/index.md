@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ ce148345a523
+> Translated from: reference/config/commands/index.md @ 659788fcca96
 
 # commands/
 
@@ -298,7 +298,7 @@ db.start:
 
 ### JSON-листинг
 
-`dwe commands list [group] --output json` печатает один плоский массив, отсортированный по id. Необязательный `group` сужает его до этой группы и всего, что в неё вложено (`admin` совпадает с `admin.lint`, но не с `administration`):
+`dwe commands list [group] --output json` печатает объект, поле `commands` которого — один плоский массив, отсортированный по id. Необязательный `group` сужает его до этой группы и всего, что в неё вложено (`admin` совпадает с `admin.lint`, но не с `administration`):
 
 ```json
 {"commands":[
