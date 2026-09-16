@@ -31,7 +31,7 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 | `hosts` | `map[string]string` | no | all | Named hostnames. See [`hosts` field](#hosts-field). |
 | `icon` | string | no | all | Visual indicator emoji or symbol used in the `dwe info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → 🔧, `type: infra` → 🧱. See [`icon` field](#icon-field). |
 | `info` | block | no | all | Display metadata for the info dashboard — title override, host/port key selection, and sub-paths. See [`info` block](#info-block). |
-| `depends_on` | list | no | app / infra | Ordered dependency on other services (affects deploy order). A `type: tool` target is rejected at load. |
+| `depends_on` | list | no | app / infra | Ordered dependency on other services (affects deploy order, and widens the [`env.ports_free`](../validate.md#validation-domains) scope of a per-service deploy to the services compose starts alongside the requested one). A `type: tool` target is rejected at load. |
 | `status` | list | no | all | Custom columns for the per-type `dwe status apps` / `tools` / `infra` table — see [`status` block](#status-block). |
 | `on_enable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is enabled. See [Examples — toggle lifecycle](examples.md#toggle-lifecycle). |
 | `on_disable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is disabled. |

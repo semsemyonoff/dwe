@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/bridge"
+	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -21,7 +22,7 @@ import (
 // os.Executable() — re-executing the test binary (the documented recursion
 // hazard). Bridge tests install recorders via recordBridgeSeams.
 func init() {
-	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 		return nil
 	}
 	BridgePrepareFunc = func(bridge.PrepareOptions) error { return nil }

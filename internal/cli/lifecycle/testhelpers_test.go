@@ -7,6 +7,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/bridge"
+	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
@@ -21,7 +22,7 @@ import (
 // and spawns a detached daemon via os.Executable() — re-executing the test
 // binary (the documented recursion hazard).
 func init() {
-	lifecyclepkg.PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	lifecyclepkg.PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 		return nil
 	}
 	lifecyclepkg.BridgePrepareFunc = func(bridge.PrepareOptions) error { return nil }

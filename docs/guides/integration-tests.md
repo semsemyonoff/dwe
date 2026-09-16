@@ -8,7 +8,9 @@
 
 A scenario step that needs a remapped port references it the normal way: `${services.<name>.ports.<x>}`.
 
-The one case this does *not* cover is a host port hardcoded straight in a raw compose file (`8080:8080`) that your dwe service config never models — it bypasses both the remap and the `ports_free` preflight. Either declare it under `services.<name>.ports` so `dwe test` can see and reassign it, or route the compose interpolation through a var and set that var per scenario with `env.vars: { …: auto }` (the runner allocates a free port and writes it into the copy's `vars:`; the step then reads `${vars.<path>}`). Miss that and `dwe test run` and `dwe validate` warn about it: an `interpolated_host_port` finding names the variable and, when it comes from `vars:`, gives the exact line to add — for example `env.vars: { ports.valkey: auto }`.
+A compose host port written as a variable (`"${VALKEY_PORT:-6379}:6379"`) is covered too, as long as dwe can trace the variable: an `exports.env` rule `from: vars.<path>` makes the runner allocate a free port for `<path>` and write it into the copy's `vars:` — again with no scenario config. The step reads it as `${vars.<path>}`. A scenario that wants a specific port pins it with `env.vars: { <path>: 6380 }`.
+
+Two shapes stay outside the remap, and they fail differently. A host port hardcoded straight in a raw compose file (`8080:8080`) is a **blocking** `raw_host_port` finding: `dwe test run` refuses the scenario before the copy exists, so nothing ever binds your working environment's port. A port interpolated from a variable that no active `exports.env` rule routes to a port is **not** blocking — it bypasses both the remap and the `ports_free` preflight, the copy binds the same port as your working environment, and `dwe test run` and `dwe validate` only warn, with an `interpolated_host_port` finding naming the variable and both routing fixes. The fix is the same for both: declare the port under `services.<name>.ports`, or export the variable from a `vars.<path>` through an `exports.env` rule.
 
 ## Your first scenario
 
@@ -167,7 +169,7 @@ It also surfaces [compose isolation](#resolving-an-isolation-failure) hazards as
 
 ## Resolving an isolation failure
 
-`dwe test run` scans the copy's compose files for constructs that bypass compose's project-name scoping — `container_name:` and literal (non-templated) host ports are **blocking**; `external:`/explicitly-`name:`d volumes and networks are warnings only. A blocking finding fails the scenario before deploy even starts (teardown still runs), with a message naming the offending construct:
+`dwe test run` scans the compose files the scenario's copy will run — the project's own, with the scenario's `env:` applied — for constructs that bypass compose's project-name scoping. `container_name:` and literal (non-templated) host ports are **blocking**; `external:`/explicitly-`name:`d volumes and networks are warnings only. The scan happens before the copy is made, so a blocking finding fails the scenario with nothing created — no copy, no containers, no teardown, and no failure report collected for that run (one left by an **earlier** failure of the same scenario stays in place) — with a message naming the offending construct:
 
 ```
 blocking compose isolation hazard(s), refusing to run: service db sets container_name: myapp-db — bypasses compose project-name scoping and collides with any other project/run using the same fixed name — pass --skip-isolation-check to downgrade to a warning
@@ -175,7 +177,7 @@ blocking compose isolation hazard(s), refusing to run: service db sets container
 
 Fix it at the source when you can:
 
-- **Literal host port** (`8080:8080` in a raw compose file) — move it onto `services.<name>.ports` so `dwe test` can see and remap it automatically (see [Ports are isolated automatically](#ports-are-isolated-automatically) above), or route the compose interpolation through a var set with `env.vars: { …: auto }`.
+- **Literal host port** (`8080:8080` in a raw compose file) — move it onto `services.<name>.ports` so `dwe test` can see and remap it automatically (see [Ports are isolated automatically](#ports-are-isolated-automatically) above), or interpolate it from a variable an `exports.env` rule exports `from: vars.<path>`, which `dwe test` then remaps on its own.
 - **`container_name:`** — drop it; compose already names containers deterministically from the project + service name, and a fixed `container_name:` is what causes the collision in the first place.
 
 When the finding is a false positive, or fixing it isn't practical right now, downgrade every finding to a warning and proceed:

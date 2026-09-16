@@ -28,6 +28,15 @@ import (
 // string — no typed field, no allocation logic.
 const AutoPortSentinel = "auto"
 
+// isAutoPort reports whether an env.vars value is the AutoPortSentinel — the
+// single place the sentinel is recognised, so every surface (the loader's
+// AutoPortVarPaths, the copy's overlay, the inspection views) agrees that only
+// the exact string counts.
+func isAutoPort(value any) bool {
+	s, ok := value.(string)
+	return ok && s == AutoPortSentinel
+}
+
 // scenarioNamePattern is the compose-project-name-fragment rule a scenario file
 // basename (without .yml) must already satisfy. Names are never sanitised — a
 // non-matching name is rejected so the eventual compose project name stays valid.
@@ -99,7 +108,7 @@ func (s *Scenario) AutoPortVarPaths() []string {
 	}
 	var paths []string
 	for path, v := range s.Env.Vars {
-		if str, ok := v.(string); ok && str == AutoPortSentinel {
+		if isAutoPort(v) {
 			paths = append(paths, path)
 		}
 	}

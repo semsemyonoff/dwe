@@ -1,4 +1,4 @@
-> Translated from: guides/troubleshooting.md @ 32e3c8b81254
+> Translated from: guides/troubleshooting.md @ 3587d08ff935
 
 # Диагностика проблем
 
@@ -41,6 +41,8 @@ services:
 ```
 
 Затем пере-деплой (или `dwe deploy run --service main`), чтобы изменение прошло через compose и обновило `dwe info`. Справочник: [`../reference/config/services/fields.md`](../reference/config/services/fields.md).
+
+Per-service деплой к тому же проверяет меньше портов, чем полный: `dwe deploy run --service <name>` (и `dwe services enable|disable --apply`) запускает `env.ports_free` только по названным сервисам и транзитивному замыканию `depends_on` из их `service.yml`, поэтому порт, занятый для сервиса, который этот запуск не поднимает, конфликтом там не считается.
 
 ## «Docker не запущен»
 

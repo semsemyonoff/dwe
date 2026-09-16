@@ -30,6 +30,22 @@ Three things worth doing before you trust the new version in a project:
    `dwe bridge status` shows the running daemon; `dwe version` from inside a bridged container shows which build it answers with.
 3. **Force a redeploy when the release notes say so.** A behaviour change that does not alter the deployment hash is invisible to `dwe deploy run`, which will report `already up-to-date` and skip the very step whose semantics moved. `dwe deploy run --force` re-runs every step; `when:` guards still apply.
 
+## Upgrading to 0.6.2
+
+### Integration tests
+
+**A compose host port routed through `vars:` is now remapped in every test copy.** If a compose file publishes a port as a single variable (`"${VALKEY_PORT:-6379}:6379"`) and an active `exports.env` rule exports that variable `from: vars.<path>`, `dwe test` allocates a free host port for `<path>` and writes it into the copy's `local.yml` — with no `env.vars` entry in the scenario. Previously such a port bound the live stack's number and `dwe validate` warned about it.
+
+What to check in your scenarios:
+
+- **A step that hardcoded the original host port now talks to the wrong port.** Read it from the variable instead — `${vars.<path>}` — or pin the copy's port with `env.vars: { <path>: 6380 }`, which disables the automatic remap for that path.
+- **`env.vars: { <path>: auto }` entries for such a port are now redundant.** They keep working and change nothing; delete them at your convenience. `auto` still matters for a var that no compose port reads.
+- **An untraced variable is unchanged** — no `exports.env` rule, a rule whose `when:` is falsy, or one reading something other than `vars.<path>` / a declared service port. It still binds the original port and still warns, but the warning now points at the two ways to route the port (a declared `services.<name>.ports` entry, or an `exports.env` rule `from: vars.<path>`) instead of telling you to write `env.vars: { …: auto }`.
+
+**A scenario blocked by the compose isolation scanner creates nothing.** The scan now runs before the copy is made, so a blocking finding (`container_name:`, a literal host port) fails the scenario with no copy directory and no compose project, and no failure report is collected for that run — a report left by an **earlier** failure of the same scenario stays in place, so read the run's own warnings rather than the directory's timestamp. The exit code is unchanged (1). `--keep` has nothing to keep for such a scenario.
+
+**`dwe test list --output json` ignores per-developer compose overlays.** `compose.extra` / `services.<name>.compose.extra` from your own `workspace/local.yml` reference gitignored files the copy never receives, so the command now evaluates scenarios without them, as the copy runs: cost numbers (`build_services`, `external_images`) drop those services, and so does `cost_profile.isolation_findings`. `dwe validate tests` builds the same view per scenario, so an `interpolated_host_port` finding that exists only in such an overlay is no longer reported — its other finding kinds (`container_name`, a literal host port, the volume and network kinds) still come from a project-wide scan and warn regardless of overlays.
+
 ## Upgrading to 0.6.1
 
 ### Template functions
@@ -82,6 +98,8 @@ env:
 A port exported `from: services.<name>.ports.<x>` is already remapped while that service is enabled in the scenario; it warns only for a scenario that disables the service while its compose file stays in the stack — one declared in the root compose file, for instance. A `required: true` service cannot be disabled, so it stays remapped and never warns. See [Interpolated host ports](../reference/config/tests.md#interpolated-host-ports).
 
 A warning that names no scenarios means no active `exports.env` rule traces the variable — it comes from a hand-written `.env`, the host environment, or a rule whose `when:` is falsy — so no scenario setting can fix it. Export the variable `from: vars.<path>` and add `env.vars: { <path>: auto }` to each scenario, or export it `from: services.<name>.ports.<x>`.
+
+Skipping straight to 0.6.2? The `env.vars: { <path>: auto }` step above is no longer needed there — a variable exported `from: vars.<path>` is remapped automatically (see [Upgrading to 0.6.2](#upgrading-to-062)).
 
 **A literal host port behind an interpolated bind address now blocks `dwe test run`.** `"${BIND:-127.0.0.1}:8080:80"` publishes the literal host port 8080, which collides with the live stack; the scanner used to miss it. Model the port under `services.<name>.ports` and interpolate it, as for any [literal host port](../reference/config/tests.md#compose-isolation-scanner), or pass `--skip-isolation-check`.
 

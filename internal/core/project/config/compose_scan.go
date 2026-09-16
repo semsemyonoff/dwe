@@ -51,8 +51,9 @@ type IsolationFinding struct {
 	// EnvVar is the compose variable the host port is interpolated from.
 	EnvVar string
 	// VarPath is the vars:-relative path the variable's active exports.env
-	// rule reads (`from: vars.<VarPath>`); a scenario setting it to `auto`
-	// covers the finding.
+	// rule reads (`from: vars.<VarPath>`), and is always well-formed — a
+	// malformed from: leaves it empty (see classifyExportSource). dwe test
+	// remaps a traced path automatically unless the scenario pins it.
 	VarPath string
 	// SourceService is the dwe service whose declared port the variable's
 	// active rule reads (`from: services.<n>.ports.<p>`). The scanner never
@@ -905,9 +906,9 @@ func scanPublishedToken(service, token, file string, exports *composeExports) (I
 }
 
 // exportTarget is what one active exports.env rule reads, as far as the test
-// copy's port remap is concerned: a vars: path (covered by `env.vars: auto`),
-// a declared dwe service port (covered while the runner remaps that service),
-// or neither.
+// copy's port remap is concerned: a vars: path (always remapped, unless the
+// scenario pins the path to a concrete value), a declared dwe service port
+// (covered while the runner remaps that service), or neither.
 type exportTarget struct {
 	from          string
 	varPath       string
@@ -948,9 +949,16 @@ func newComposeExports(cfg *DweConfig, projectRoot string) *composeExports {
 // (`.port`) never resolves, and an undeclared or out-of-range port is not one
 // the runner remaps — both export the rule's default instead. Enabled is
 // deliberately not consulted: whether the port is remapped is per scenario.
+//
+// A malformed vars path (`vars.`, `vars.ports.`, `vars.a..b`) classifies as
+// NEITHER, exactly like a from: nothing traces: it resolves to no value, so the
+// rule exports its default and dwe test has no path to remap. Letting it through
+// as a varPath would instead have the runner allocate a port for an
+// unwritable path and abort every scenario (BuildLocalOverlay rejects it) over a
+// typo `dwe validate` only warns about.
 func classifyExportSource(cfg *DweConfig, from string) exportTarget {
 	t := exportTarget{from: from}
-	if path, ok := strings.CutPrefix(from, "vars."); ok && path != "" {
+	if path, ok := strings.CutPrefix(from, "vars."); ok && IsWellFormedDotPath(path) {
 		t.varPath = path
 		return t
 	}
@@ -965,9 +973,11 @@ func classifyExportSource(cfg *DweConfig, from string) exportTarget {
 }
 
 // interpolatedFinding builds the KindInterpolatedHostPort finding for a host
-// port interpolated from variable name. Non-blocking: the collision is real
-// only in scenarios that neither remap the source service nor set the vars
-// path to auto, and that filtering is each consumer's job.
+// port interpolated from variable name. Non-blocking, and a pure statement of
+// fact: a variable traced to a vars: path is always remapped by dwe test, one
+// reading a declared service port only in scenarios that remap that service,
+// and an untraced one never. Deciding which of those still collides is each
+// consumer's job (envtest.CoversInterpolatedHostPort).
 func (e *composeExports) interpolatedFinding(service, token, name, file string) IsolationFinding {
 	var target exportTarget
 	display := file
@@ -983,8 +993,7 @@ func (e *composeExports) interpolatedFinding(service, token, name, file string) 
 	var message string
 	switch {
 	case target.varPath != "":
-		message = head + " (exports.env from: " + target.from + ") — dwe test does not remap it, so " + collides +
-			"; add `env.vars: { " + target.varPath + ": auto }` to the scenario"
+		message = head + " (exports.env from: " + target.from + ") — dwe test remaps it through vars." + target.varPath
 	case target.sourceService != "":
 		message = head + " (exports.env from: " + target.from + ") — dwe test remaps service " + target.sourceService +
 			"'s ports only in scenarios where " + target.sourceService + " is enabled and not listed under env.services.disable" +
@@ -992,7 +1001,7 @@ func (e *composeExports) interpolatedFinding(service, token, name, file string) 
 	default:
 		message = head + ", which no active exports.env rule traces to a port dwe test remaps — " + collides +
 			"; export it from a declared service port (`from: services.<name>.ports.<port>`) or from" +
-			" `vars.<path>` with `env.vars: { <path>: auto }` in the scenario"
+			" `vars.<path>` through an exports.env rule (dwe test then remaps it automatically)"
 	}
 
 	return IsolationFinding{

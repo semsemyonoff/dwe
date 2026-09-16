@@ -52,6 +52,11 @@ type Context struct {
 	// read this to self-skip when their check is irrelevant for the stage
 	// (e.g. env.ports_free skips on "stop").
 	Stage string
+
+	// Services narrows service-scoped probes to the services a lifecycle command
+	// acts on (plus what they bring up). Nil or empty means the whole project.
+	// Set only by preflight (WithServices); dwe validate leaves it nil.
+	Services []string
 }
 
 // Validator is the interface for domain-specific validators.

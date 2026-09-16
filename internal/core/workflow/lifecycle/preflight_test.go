@@ -36,7 +36,7 @@ func TestRunRun_PreflightBlocksBeforeGitProbe(t *testing.T) {
 		gitProbeCalls++
 		return git.Status{}, nil
 	}
-	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 		return &preflight.Error{}
 	}
 
@@ -61,7 +61,7 @@ func TestRunStop_PreflightBlocksBeforePhases(t *testing.T) {
 
 	prev := PreflightFunc
 	t.Cleanup(func() { PreflightFunc = prev })
-	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 		return &preflight.Error{}
 	}
 
@@ -88,7 +88,7 @@ func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 	t.Cleanup(func() { PreflightFunc = prev })
 
 	var sawSkip bool
-	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer, _ ...preflight.Option) error {
 		sawSkip = skip
 		return errors.New("short-circuit after preflight observation")
 	}
@@ -114,7 +114,7 @@ func TestRunRestart_PropagatesSkipPreflight(t *testing.T) {
 	t.Cleanup(func() { PreflightFunc = prev })
 
 	var calls []bool
-	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer, _ ...preflight.Option) error {
 		calls = append(calls, skip)
 		return errors.New("short-circuit")
 	}

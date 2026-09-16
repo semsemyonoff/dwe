@@ -12,6 +12,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
@@ -429,7 +430,7 @@ func dockerInvocations(t *testing.T, baseDir string) []string {
 func stubPreflightRun(t *testing.T) {
 	t.Helper()
 	prev := preflightRun
-	preflightRun = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	preflightRun = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 		return nil
 	}
 	t.Cleanup(func() { preflightRun = prev })

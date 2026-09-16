@@ -105,7 +105,7 @@ func writeDeployTestWorkspace(t *testing.T) (dir, cfgPath string) {
 	return dir, cfgPath
 }
 
-func noopPreflight(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+func noopPreflight(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 	return nil
 }
 
@@ -183,7 +183,7 @@ func TestRunHelper_BridgePrepareNotCalledWhenPreflightFails(t *testing.T) {
 	err := RunHelper(context.Background(), &cobra.Command{}, flags, Opts{
 		NonInteractive: true,
 		Silent:         true,
-		PreflightFn: func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+		PreflightFn: func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer, _ ...preflight.Option) error {
 			return pfErr
 		},
 	})

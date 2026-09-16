@@ -208,12 +208,15 @@ func TestScanComposeIsolation_InterpolatedHostPort(t *testing.T) {
 
 			switch {
 			case tc.wantVarPath != "":
-				require.Contains(t, f.Message, "`env.vars: { "+tc.wantVarPath+": auto }`")
+				require.Contains(t, f.Message, "dwe test remaps it through vars."+tc.wantVarPath)
+				require.NotContains(t, f.Message, "env.vars")
+				require.NotContains(t, f.Message, "binds the same host port as the live stack")
 			case tc.wantSource != "":
 				require.Contains(t, f.Message, "remaps service db's ports only in scenarios where db is enabled and not listed under env.services.disable")
 			default:
 				require.Contains(t, f.Message, "`from: services.<name>.ports.<port>`")
-				require.Contains(t, f.Message, "`env.vars: { <path>: auto }`")
+				require.Contains(t, f.Message, "`vars.<path>` through an exports.env rule (dwe test then remaps it automatically)")
+				require.NotContains(t, f.Message, "env.vars")
 			}
 		})
 	}

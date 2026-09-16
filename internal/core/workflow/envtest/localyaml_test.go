@@ -161,6 +161,122 @@ func TestBuildLocalOverlayAutoPortReplacement(t *testing.T) {
 	}
 }
 
+// TestBuildLocalOverlayImplicitVarPort covers the paths buildPortPlan
+// allocates from a traced compose variable: the scenario never mentions them,
+// so the overlay must create them from ports alone.
+func TestBuildLocalOverlayImplicitVarPort(t *testing.T) {
+	tests := []struct {
+		name  string
+		seed  map[string]any
+		vars  map[string]any
+		ports map[string]int
+		want  map[string]any
+	}{
+		{
+			name:  "implicit path only",
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "implicit and explicit auto paths mix",
+			vars:  map[string]any{"app.http_port": AutoPortSentinel},
+			ports: map[string]int{"app.http_port": 41235, "ports.valkey": 41234},
+			want: map[string]any{
+				"app":   map[string]any{"http_port": 41235},
+				"ports": map[string]any{"valkey": 41234},
+			},
+		},
+		{
+			name:  "an explicit value wins over an allocation for the same path",
+			vars:  map[string]any{"ports.valkey": 6380},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 6380}},
+		},
+		{
+			name:  "an allocated port replaces the developer's seeded value",
+			seed:  map[string]any{"vars": map[string]any{"ports": map[string]any{"valkey": 6379, "other": 7000}}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234, "other": 7000}},
+		},
+		{
+			// pinnedVarPath treats these as NOT pinned (a string-format export
+			// rule falls back to its default for both), so the plan allocates a
+			// port and the overlay must write it rather than the declared value.
+			name:  "a path declared with no value takes the allocation",
+			vars:  map[string]any{"ports.valkey": nil},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a path declared empty takes the allocation",
+			vars:  map[string]any{"ports.valkey": ""},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a path declared as a structure takes the allocation",
+			vars:  map[string]any{"ports.valkey": map[string]any{"nested": 1}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a nested declaration takes the implicit sibling allocation",
+			vars:  map[string]any{"ports": map[string]any{"other": 7000}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234, "other": 7000}},
+		},
+		{
+			// The declared path EXTENDS the allocated one, so it is not a pin
+			// (pinnedVarPath sees a map at ports.valkey) and the plan allocates.
+			// In plain sorted order the deeper path would be written last and
+			// replace the allocated int with a fresh map — dropping the
+			// allocation and leaving the copy on the live stack's port.
+			name:  "a deeper declared path does not swallow the allocation",
+			vars:  map[string]any{"ports.valkey.x": 1},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+		{
+			name:  "a deeper nested declaration does not swallow the allocation",
+			vars:  map[string]any{"ports": map[string]any{"valkey": map[string]any{"x": 1}}},
+			ports: map[string]int{"ports.valkey": 41234},
+			want:  map[string]any{"ports": map[string]any{"valkey": 41234}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scn := &Scenario{Env: ScenarioEnv{Vars: tt.vars}}
+			overlay, err := BuildLocalOverlay(tt.seed, scn, "proj-t-s-abc", tt.ports, nil)
+			if err != nil {
+				t.Fatalf("BuildLocalOverlay: %v", err)
+			}
+			if got := overlay["vars"]; !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("vars = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBuildLocalOverlayDoesNotMutateScenario pins that an implicit allocation
+// never writes through into the caller's Scenario: RunScenario reuses the same
+// *Scenario for the deploy retry and the steps run, so a runner-allocated port
+// smuggled into env.vars would make a later read see a pin the author never
+// wrote.
+func TestBuildLocalOverlayDoesNotMutateScenario(t *testing.T) {
+	scn := &Scenario{
+		Env: ScenarioEnv{Vars: map[string]any{"ports": map[string]any{"other": 7000}}},
+	}
+
+	if _, err := BuildLocalOverlay(nil, scn, "proj-t-s-abc", map[string]int{"ports.valkey": 41234}, nil); err != nil {
+		t.Fatalf("BuildLocalOverlay: %v", err)
+	}
+
+	want := map[string]any{"ports": map[string]any{"other": 7000}}
+	if !reflect.DeepEqual(scn.Env.Vars, want) {
+		t.Errorf("scenario env.vars = %#v, want unchanged %#v", scn.Env.Vars, want)
+	}
+}
+
 func TestBuildLocalOverlayAutoPortMissingAllocation(t *testing.T) {
 	scn := &Scenario{
 		Env: ScenarioEnv{Vars: map[string]any{"app.http_port": AutoPortSentinel}},

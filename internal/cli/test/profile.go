@@ -2,7 +2,6 @@ package test
 
 import (
 	"errors"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -180,23 +179,18 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 		return nil
 	}
 
-	services := p.scenarioServices(scn)
+	// One view of the config this scenario's copy would run — the scenario's
+	// service toggles and env.vars applied, the per-developer compose overlays
+	// dropped — so the compose chain, the cost numbers and the isolation scan
+	// all describe the same stack the copy deploys. The scanner evaluates
+	// exports.env when: on Raw, which the view patches too. Whether a port is
+	// remapped is decided on the unpatched project config, as the runner does.
+	view := envtest.ScenarioView(p.cfg, scn.Env)
 
-	// A shallow view over the loaded config: everything except the enabled
-	// state is shared, so the compose chain resolves exactly as it would in
-	// the copy this scenario deploys.
-	view := *p.cfg
-	view.Services = services
+	costs := config.ScanComposeCost(view, p.baseDir)
 
-	costs := config.ScanComposeCost(&view, p.baseDir)
-
-	// The scanner evaluates exports.env when: on Raw, so the isolation scan
-	// sees the scenario's enabled state there too. Whether a port is remapped
-	// is decided on the unpatched project config, as the runner does.
-	isoView := view
-	isoView.Raw = scenarioRaw(p.cfg.Raw, services, scn)
 	findings := make([]testIsolationFindingJSON, 0)
-	for _, f := range config.ScanComposeIsolation(&isoView, p.baseDir) {
+	for _, f := range config.ScanComposeIsolation(view, p.baseDir) {
 		if f.Blocking || envtest.CoversInterpolatedHostPort(p.cfg, scn, f) {
 			continue
 		}
@@ -204,8 +198,8 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 	}
 
 	enabled := 0
-	host := p.countHostSteps(scn.Steps) + p.projectHost + p.countHostChecks(services)
-	for name, svc := range services {
+	host := p.countHostSteps(scn.Steps) + p.projectHost + p.countHostChecks(view.Services)
+	for name, svc := range view.Services {
 		if !svc.Enabled {
 			continue
 		}
@@ -222,66 +216,6 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 		IsolationFindings:     findings,
 		HostSteps:             host,
 	}
-}
-
-// scenarioServices returns the project's services with this scenario's
-// env.services overlay applied. A `required: true` service stays enabled even
-// when the scenario disables it — the same precedence the config loader
-// applies to the generated local.yml the runner writes.
-func (p *costProfiler) scenarioServices(scn *envtest.Scenario) map[string]config.ServiceConfig {
-	out := make(map[string]config.ServiceConfig, len(p.cfg.Services))
-	maps.Copy(out, p.cfg.Services)
-
-	for _, name := range scn.Env.Services.Enable {
-		if svc, ok := out[name]; ok {
-			svc.Enabled = true
-			out[name] = svc
-		}
-	}
-	for _, name := range scn.Env.Services.Disable {
-		svc, ok := out[name]
-		if !ok || svc.Required {
-			continue
-		}
-		svc.Enabled = false
-		out[name] = svc
-	}
-
-	return out
-}
-
-// scenarioRaw returns raw with services.<n>.enabled patched from services for
-// every service the scenario toggles, mirroring the loader's Raw mirror. raw,
-// raw["services"] and each patched entry are cloned — the project config is
-// never mutated. With no toggles raw itself is returned.
-func scenarioRaw(raw map[string]any, services map[string]config.ServiceConfig, scn *envtest.Scenario) map[string]any {
-	toggled := slices.Concat(scn.Env.Services.Enable, scn.Env.Services.Disable)
-	if len(toggled) == 0 {
-		return raw
-	}
-
-	existing, _ := raw["services"].(map[string]any)
-	rawServices := maps.Clone(existing)
-	if rawServices == nil {
-		rawServices = map[string]any{}
-	}
-	for _, name := range toggled {
-		svc, ok := services[name]
-		if !ok {
-			continue
-		}
-		entry := map[string]any{}
-		if e, ok := rawServices[name].(map[string]any); ok {
-			maps.Copy(entry, e)
-		}
-		entry["enabled"] = svc.Enabled
-		rawServices[name] = entry
-	}
-
-	out := make(map[string]any, len(raw)+1)
-	maps.Copy(out, raw)
-	out["services"] = rawServices
-	return out
 }
 
 // countHostChecks counts the workspace/validate.yml entries that execute

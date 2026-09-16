@@ -901,6 +901,31 @@ func TestResolvePath_emptyPath(t *testing.T) {
 	}
 }
 
+// TestIsWellFormedDotPath pins the shape test callers use to reject a truncated
+// path BEFORE handing it to ResolvePath, which alone accepts a trailing dot —
+// the exact shape a truncated `from: vars.<path>` produces.
+func TestIsWellFormedDotPath(t *testing.T) {
+	cases := map[string]bool{
+		"a":         true,
+		"a.b":       true,
+		"ports.x_y": true,
+		"":          false,
+		".":         false,
+		"a.":        false,
+		".a":        false,
+		"a..b":      false,
+	}
+	for path, want := range cases {
+		if got := IsWellFormedDotPath(path); got != want {
+			t.Errorf("IsWellFormedDotPath(%q) = %v, want %v", path, got, want)
+		}
+	}
+	// The trailing-dot divergence from ResolvePath is the reason this exists.
+	if _, ok := ResolvePath(map[string]any{"a": 1}, "a."); !ok {
+		t.Error("ResolvePath no longer tolerates a trailing dot — IsWellFormedDotPath's premise changed")
+	}
+}
+
 func TestResolvePath_nilMap(t *testing.T) {
 	_, ok := ResolvePath(nil, "a")
 	if ok {

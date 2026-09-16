@@ -3622,6 +3622,23 @@ func LookupDotPath(cfg *DweConfig, path string) (any, error) {
 	return v, nil
 }
 
+// IsWellFormedDotPath reports whether path is a usable dot-path: non-empty, with
+// no empty segment. It is the shared shape test for the places that must reject
+// a typo (`vars.`, `a..b`) instead of resolving it loosely — note ResolvePath
+// itself tolerates a TRAILING dot (`a.` resolves `a`), which is exactly the
+// shape a truncated `from:` produces.
+func IsWellFormedDotPath(path string) bool {
+	if path == "" {
+		return false
+	}
+	for part := range strings.SplitSeq(path, ".") {
+		if part == "" {
+			return false
+		}
+	}
+	return true
+}
+
 // ResolvePath resolves a dot-separated path (e.g. "services.app.ports.http") in a
 // nested map and returns the value and whether it was found.
 func ResolvePath(m map[string]any, path string) (any, bool) {

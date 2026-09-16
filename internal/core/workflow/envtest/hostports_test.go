@@ -125,6 +125,7 @@ func TestScenarioAutoPortVarPaths(t *testing.T) {
 func TestCoversInterpolatedHostPort(t *testing.T) {
 	cfg := remapTestConfig()
 	auto := &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": AutoPortSentinel}}}
+	pinned := &Scenario{Env: ScenarioEnv{Vars: map[string]any{"ports.valkey": 6380}}}
 	interp := func(varPath, source string) config.IsolationFinding {
 		return config.IsolationFinding{Kind: config.KindInterpolatedHostPort, VarPath: varPath, SourceService: source}
 	}
@@ -135,13 +136,15 @@ func TestCoversInterpolatedHostPort(t *testing.T) {
 		want bool
 	}{
 		{"vars path set to auto", auto, interp("ports.valkey", ""), true},
-		{"vars path without auto", &Scenario{}, interp("ports.valkey", ""), false},
-		{"other vars path set to auto", auto, interp("ports.redis", ""), false},
+		{"traced vars path without any scenario config", &Scenario{}, interp("ports.valkey", ""), true},
+		{"traced vars path pinned to a number", pinned, interp("ports.valkey", ""), true},
+		{"other traced vars path", auto, interp("ports.redis", ""), true},
 		{"source service remapped", &Scenario{}, interp("", "db"), true},
 		{"source service disabled by the scenario", &Scenario{Env: ScenarioEnv{Services: ScenarioServices{Disable: []string{"db"}}}}, interp("", "db"), false},
 		{"source service off by default", &Scenario{}, interp("", "minio"), false},
 		{"neither field", auto, interp("", ""), false},
-		{"nil scenario", nil, interp("ports.valkey", ""), false},
+		{"traced vars path beats a non-remapped source service", &Scenario{}, interp("ports.valkey", "minio"), true},
+		{"nil scenario with a traced path", nil, interp("ports.valkey", ""), true},
 		{"other kind never covered", auto, config.IsolationFinding{Kind: config.KindRawHostPort, VarPath: "ports.valkey"}, false},
 	}
 	for _, tt := range tests {
