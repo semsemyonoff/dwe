@@ -678,9 +678,9 @@ as-is — after Change A it is finally honest about `dwe commands list`.
 
 ### Task 8: [Final] Update documentation
 
-- [ ] re-read the CHANGELOG entries and `docs/reference/render/ai.md` together for consistent wording on the declared-vs-live distinction — the file says "declared", the docs say why, and neither promises the count matches a live listing
-- [ ] `AGENTS.md`: add at most a one-line pointer if the `Container` join or the visibility split proves to be a trap during implementation; the write-up goes to `packages.md` (the file stays under `agentsMdBudget` — `TestAgentsMdBudget` pins it)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] re-read the CHANGELOG entries and `docs/reference/render/ai.md` together for consistent wording on the declared-vs-live distinction — the file says "declared", the docs say why, and neither promises the count matches a live listing
+- [x] `AGENTS.md`: add at most a one-line pointer if the `Container` join or the visibility split proves to be a trap during implementation; the write-up goes to `packages.md` (the file stays under `agentsMdBudget` — `TestAgentsMdBudget` pins it) (no pointer added — neither proved a trap; the write-up is in `packages.md`)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

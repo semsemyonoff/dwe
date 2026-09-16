@@ -9,7 +9,7 @@ type CommandSummary struct {
 	Group       string
 	Description string
 	Type        string
-	// Service is EffectiveService(): the compose service / container name. It
+	// Service is DeclaredService(): the compose service / container name. It
 	// may be an unrendered ${...} expression — consumers must not treat it as
 	// a resolved name.
 	Service string

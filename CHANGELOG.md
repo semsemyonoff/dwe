@@ -27,9 +27,9 @@ generated from commit subjects and stay on the
   the command files *declare*: `hide:` is not evaluated, so a rendered file does
   not change as containers start and stop, and a group's count can be larger
   than what `dwe commands list <group>` prints while a `hide:` applies.
-  Descriptions are always English, so the output does not depend on the locale.
+  Descriptions are never translated, so the output does not depend on the locale.
   When the command files fail to load, rendering still succeeds, with one
-  warning naming the file and the command data empty. See
+  warning carrying the load error and the command data empty. See
   [`dwe render ai`](docs/reference/render/ai.md#declared-command-index).
 - **Scaffolded agent files tell agents to use declared commands.** The hub
   `AGENTS.md` from the `default` AI pack gains a `Declared commands` block that

@@ -202,7 +202,7 @@ func CommandIndex(reg *Registry, tr i18n.Translator, locale string) ([]model.Com
 			Group:       def.Group,
 			Description: tr.CommandDescription(locale, def.ID, def.Description),
 			Type:        string(def.Type),
-			Service:     def.EffectiveService(),
+			Service:     def.DeclaredService(),
 		})
 	}
 

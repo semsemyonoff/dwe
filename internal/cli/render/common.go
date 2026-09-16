@@ -29,7 +29,7 @@ import (
 func loadCommandIndex(w *render.Writer, configPath string) ([]model.CommandSummary, []model.CommandGroupSummary) {
 	reg, err := usercommands.LoadRegistryFromConfigPath(configPath)
 	if err != nil {
-		w.Warning(fmt.Sprintf("command index unavailable: %v — .Commands and .CommandGroups render empty (run `dwe validate commands` for details)", err))
+		w.Warning(fmt.Sprintf("command index unavailable (.Commands and .CommandGroups render empty; run `dwe validate commands` for details): %v", err))
 		return nil, nil
 	}
 	return usercommands.CommandIndex(reg, i18n.NopTranslator{}, "")

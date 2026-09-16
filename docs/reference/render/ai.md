@@ -251,7 +251,7 @@ Every AI, IDE and git pack receives the project's command registry as plain data
 |-------|---------|
 | `.ID` | command id (`admin.lint`) |
 | `.Group` | group id (`admin`) |
-| `.Description` | the authored `description:`, **English** — packs never localize, so the rendered file is byte-identical whatever the active locale |
+| `.Description` | the authored `description:`, **never translated** — packs do not localize, so the rendered file is byte-identical whatever the active locale |
 | `.Type` | `service_exec`, `script`, `shell`, `workflow`, … — tells whether the command enters a container at all |
 | `.Service` | the declared `service:` (a compose service / container name). May be an unrendered expression such as `app-${param.service}` |
 
@@ -260,17 +260,17 @@ Entries of `.CommandGroups`:
 | Field | Meaning |
 |-------|---------|
 | `.ID` | group id (`services.magento`) |
-| `.Title` | the group header's `title:`, else the last id segment |
+| `.Title` | the last id segment (`magento` for `services.magento`), as in the text listing — the header's `title:` is not used |
 | `.Description` | the group header's `description:`; may be empty |
 | `.Count` | number of public commands under the group, nested groups included |
 
 Groups nobody authored are left out: a dotted id like `services.magento` implicitly creates a `services` node, and without a `group:` header or commands of its own that node has nothing to print, so it never appears.
 
-**Joining commands to the hub.** `.ServiceCommands` compares a command's `service:` with `.ServiceCfg.Container` — not with `.Service` or `.Resolved`. A command names the compose service it runs in, and a service whose `service.yml` sets `container: app-magento` under the key `magento` is addressed as `app-magento`. A command with no `service:`, or with a templated one, belongs to no hub. `.ServiceCommandGroups` keeps the groups that contain at least one of this hub's commands and drops any such group nested inside another one it kept, because `dwe commands list <parent>` already lists the nested one.
+**Joining commands to the hub.** `.ServiceCommands` compares a command's `service:` with `.ServiceCfg.Container` — not with `.Service` or `.Resolved`. A command names the compose service it runs in, and a service whose `service.yml` sets `container: app-magento` under the key `magento` is addressed as `app-magento`. A command with no `service:`, or with a templated one, belongs to no hub. `.ServiceCommandGroups` keeps the groups that contain at least one of this hub's commands and drops any such group nested inside another one it kept, because `dwe commands list <parent>` already lists the nested one. A parent absorbs its nested groups only while it holds no other service's commands: an authored `services` group spanning `services.magento` and `services.node` does not replace `services.magento` in the magento hub, and is itself listed only when it directly holds a magento command no nested group covers.
 
 **Declared, not live.** The index is built from the command files alone; `hide:` conditions are **not** evaluated. A `hide:` can depend on the running stack, and a tracked file that changed every time a container went up or down would produce meaningless diffs. So `.Count` is the declared count: while a `hide:` is active, `dwe commands list <group>` prints fewer commands than the file says, or none. Word generated text accordingly — "N declared", never a promise about what the listing will return. `dwe docs llms-txt` is the live counterpart: it evaluates `hide:` on every call.
 
-**When the command files do not load**, `dwe render ai|ide|git` still renders: it prints one warning naming the file, and `.Commands` / `.CommandGroups` are empty for every service in that run. `dwe validate commands` reports the actual error.
+**When the command files do not load**, `dwe render ai|ide|git` still renders: it prints one warning carrying the load error, and `.Commands` / `.CommandGroups` are empty for every service in that run. `dwe validate commands` reports the actual error.
 
 #### Shipped `Declared commands` block
 
@@ -296,7 +296,7 @@ npm/composer/make/docker command directly until that check has been made.
 {{ end }}
 ```
 
-The group line prints the group's description, falls back to its title, and is omitted when both are empty. The block deliberately lists groups and a call, not a table of commands: `dwe commands list <group> --output json` returns the same data on demand, while a table is loaded into every agent session whether or not it is relevant. A project that wants a table has `.ServiceCommands` to build one in its own pack.
+The group line prints the group's description, or the last id segment when it has none. The block deliberately lists groups and a call, not a table of commands: `dwe commands list <group> --output json` returns the same data on demand, while a table is loaded into every agent session whether or not it is relevant. A project that wants a table has `.ServiceCommands` to build one in its own pack.
 
 The prose is the part that makes agents use the commands: it says when to check (a task that falls under a group description), what takes priority (the declared command), what not to do before checking (run the underlying tool directly), and what the check costs (once per session). Keep all four when editing it.
 

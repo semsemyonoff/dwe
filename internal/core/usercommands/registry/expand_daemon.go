@@ -51,6 +51,7 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 			ID:                base + "." + local,
 			SourceDaemon:      src.Daemon,
 			DerivedFromDaemon: base,
+			DaemonService:     effectiveService,
 		}
 	}
 

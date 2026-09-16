@@ -97,10 +97,37 @@ commands:
     runner:
       service: app-worker
 `,
+		"queue.yml": `
+commands:
+  worker:
+    type: daemon
+    description: Queue worker
+    service: app-main
+    argv: [php, artisan, queue:work]
+    daemon:
+      container_template: "{project}-queue"
+`,
 	})
 
 	tr := &markerTranslator{}
 	cmds, _ := usercommands.CommandIndex(reg, tr, "ru")
+
+	// A daemon's synthetics carry no Service of their own (the builtin
+	// validator rejects it); the index must still attribute them.
+	synthetics := 0
+	for _, c := range cmds {
+		if !strings.HasPrefix(c.ID, "queue.worker.") {
+			continue
+		}
+		synthetics++
+		if c.Service != "app-main" {
+			t.Errorf("%s Service = %q, want %q (daemon source service)", c.ID, c.Service, "app-main")
+		}
+	}
+	if synthetics != 4 {
+		t.Errorf("daemon synthetics in index = %d, want 4", synthetics)
+	}
+	cmds = slices.DeleteFunc(cmds, func(c model.CommandSummary) bool { return c.Group != "app" })
 
 	ids := make([]string, 0, len(cmds))
 	for _, c := range cmds {

@@ -136,12 +136,19 @@ func (d TemplateData) ServiceCommands() []model.CommandSummary {
 // ServiceCommands, collapsed to the shallowest: a qualifying group nested under
 // another qualifying group is dropped, since listing the ancestor covers it.
 // CommandGroups holds authored groups only, so the collapse never lands on a
-// synthetic ancestor such as magento's `services`. Order follows CommandGroups.
+// synthetic ancestor such as magento's `services`.
+//
+// Only a group scoped to this service absorbs its descendants: an authored
+// `services` parent that also holds another service's commands would otherwise
+// replace `services.magento` in every hub with one listing of all of them.
+// Such a parent is kept only while it owns a hub command no qualifying
+// descendant covers. Order follows CommandGroups.
 func (d TemplateData) ServiceCommandGroups() []model.CommandGroupSummary {
 	cmds := d.ServiceCommands()
 	if len(cmds) == 0 {
 		return nil
 	}
+	container := d.ServiceCfg.Container
 	var qualifying []model.CommandGroupSummary
 	for _, g := range d.CommandGroups {
 		for _, c := range cmds {
@@ -151,20 +158,52 @@ func (d TemplateData) ServiceCommandGroups() []model.CommandGroupSummary {
 			}
 		}
 	}
+	scoped := func(g model.CommandGroupSummary) bool {
+		for _, c := range d.Commands {
+			if c.Service != "" && c.Service != container && underPrefix(c.ID, g.ID) {
+				return false
+			}
+		}
+		return true
+	}
 	var out []model.CommandGroupSummary
 	for _, g := range qualifying {
-		nested := false
+		absorbed := false
 		for _, a := range qualifying {
-			if a.ID != g.ID && underPrefix(g.ID, a.ID) {
-				nested = true
+			if a.ID != g.ID && underPrefix(g.ID, a.ID) && scoped(a) {
+				absorbed = true
 				break
 			}
 		}
-		if !nested {
+		if absorbed {
+			continue
+		}
+		if scoped(g) || ownsUncovered(g, cmds, qualifying) {
 			out = append(out, g)
 		}
 	}
 	return out
+}
+
+// ownsUncovered reports whether g holds a command from cmds that no other
+// qualifying group nested under g covers.
+func ownsUncovered(g model.CommandGroupSummary, cmds []model.CommandSummary, qualifying []model.CommandGroupSummary) bool {
+	for _, c := range cmds {
+		if !underPrefix(c.ID, g.ID) {
+			continue
+		}
+		covered := false
+		for _, q := range qualifying {
+			if q.ID != g.ID && underPrefix(q.ID, g.ID) && underPrefix(c.ID, q.ID) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return true
+		}
+	}
+	return false
 }
 
 // underPrefix reports whether id equals prefix or sits below it on a dot

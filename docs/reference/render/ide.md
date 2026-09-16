@@ -184,6 +184,7 @@ Templates receive a single object with these top-level fields:
 | `.Runtime` | merged `runtime` block | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Per-service ports / hosts live on each service entry — use `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
 | `.Services` | `map[string]ServiceConfig` keyed by service name | Indexed access only (Go template requirement): `(index .Services "main")`. Filter by type via `.AppServices` / `.ToolServices` / `.InfraServices` (zero-arg methods returning typed subsets). |
 | `.Cfg` | merged `DweConfig` (advanced) | `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Commands` / `.CommandGroups` | the project's **declared** commands and authored command groups | Also `.ServiceCommands` / `.ServiceCommandGroups` for this service's container. Fields and the declared-vs-live rule: [Declared command index](ai.md#declared-command-index) |
 
 > **Advisory.** IDE outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in IDE templates: any value layered in from `workspace/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
@@ -292,6 +293,7 @@ services/main/
 | info | Explicit argument resolved to a different sibling — names the chosen winner and the shared hub directory. |
 | warning | A selected service was skipped because it has no hub directory (or its hub is the project root). |
 | warning | A selected service was skipped because another service won the directory collision — the winner is named. |
+| warning | The command files failed to load — printed once per run, not per service; `.Commands` and `.CommandGroups` render empty. |
 | info | A `<pack>.local/<rel>` override was used in place of the canonical pack file. |
 | success | One line per rendered file, naming the relative path inside the project. |
 | info | Nothing was selected after applying policy and collision rules. |

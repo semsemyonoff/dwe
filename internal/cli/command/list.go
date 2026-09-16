@@ -105,7 +105,7 @@ func commandDefToEntryJSON(def *usercommands.CommandDef, translator i18n.Transla
 		Title:       def.LocalName,
 		Description: translator.CommandDescription(locale, def.ID, def.Description),
 		Type:        string(def.Type),
-		Service:     def.EffectiveService(),
+		Service:     def.DeclaredService(),
 		Private:     def.Private,
 		Params:      buildParamEntriesJSON(def, translator, locale),
 	}

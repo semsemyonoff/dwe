@@ -574,7 +574,9 @@ npm/composer/make/docker command directly until that check has been made.
 {{ end }}
 ## Working on this service
 
-- `dwe commands list` — this project's declared dev commands; `dwe cmd <id>` runs one
+- `dwe commands list --output json` — this project's declared dev commands; check
+  it before tests, linters, builds, migrations and similar tasks, and prefer a
+  matching command (`dwe cmd <id>`) over invoking the underlying tool directly
 - `dwe shell {{ .Resolved }} -c '<cmd>'` — a one-off command inside the container
 - `dwe logs {{ .Resolved }}` — stream this service's logs
 - `dwe status` — stack health and container names

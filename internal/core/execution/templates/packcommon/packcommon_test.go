@@ -272,6 +272,41 @@ func TestTemplateDataServiceCommandGroups(t *testing.T) {
 			want: []string{"administration"},
 		},
 		{
+			name: "authored parent shared with another service does not absorb",
+			data: TemplateData{
+				ServiceCfg: config.ServiceConfig{Container: "app-magento"},
+				Commands: []model.CommandSummary{
+					{ID: "services.magento.reindex", Service: "app-magento"},
+					{ID: "services.magento.db.dump", Service: "app-magento"},
+					{ID: "services.node.build", Service: "app-node"},
+				},
+				CommandGroups: []model.CommandGroupSummary{
+					{ID: "services", Description: "Per-service commands", Count: 3},
+					{ID: "services.magento", Title: "magento", Count: 2},
+					{ID: "services.magento.db", Title: "db", Count: 1},
+					{ID: "services.node", Title: "node", Count: 1},
+				},
+			},
+			want: []string{"services.magento"},
+		},
+		{
+			name: "shared parent kept for a hub command no descendant covers",
+			data: TemplateData{
+				ServiceCfg: config.ServiceConfig{Container: "app-magento"},
+				Commands: []model.CommandSummary{
+					{ID: "services.status", Service: "app-magento"},
+					{ID: "services.magento.reindex", Service: "app-magento"},
+					{ID: "services.node.build", Service: "app-node"},
+				},
+				CommandGroups: []model.CommandGroupSummary{
+					{ID: "services", Description: "Per-service commands", Count: 3},
+					{ID: "services.magento", Title: "magento", Count: 1},
+					{ID: "services.node", Title: "node", Count: 1},
+				},
+			},
+			want: []string{"services", "services.magento"},
+		},
+		{
 			name: "no qualifying group",
 			data: TemplateData{
 				ServiceCfg: config.ServiceConfig{Container: "admin"},
