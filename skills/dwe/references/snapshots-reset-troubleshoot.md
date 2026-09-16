@@ -1,47 +1,26 @@
 # DWE snapshots, reset, and troubleshooting
 
-Load this file when a service won't come up, a port conflicts, the journal looks stale, or the user wants to snapshot / reset the project. The triage trio is all-read and lock-free; snapshots and reset are mutating — edit yml yourself, hand the user the exact command, wait.
+Load when a service won't come up, a port conflicts, the journal looks stale, or the user wants to snapshot / reset. The triage trio is read-only; snapshots and reset are handoffs.
 
-These rules from `recipes.md` apply here too: read commands run freely; mutating commands are a handoff; `--lang en` on every `dwe docs …`; `--output json` only on data commands (never on `docs show` / `docs llms-txt` — both always emit markdown and ignore it).
-
-## Triage trio (all read, lock-free)
-
-Run these in order — each is safe even when it reports errors. Start broad, then narrow:
+## Triage trio (read, lock-free)
 
 ```shell
-dwe validate --output json                       # config-level diagnostics
-dwe status --output json                          # whole-stack state
-dwe status deploy <svc> --output json             # scope to one service to cut noise
-dwe logs <svc> --tail 0 --output json             # all logs for one service (default tail is only 50)
+dwe validate --output json                # config-level diagnostics
+dwe status --output json                  # whole stack; `dwe status deploy <svc>` scopes to one
+dwe logs <svc> --tail 0 --output json     # full log (default --tail 50); -f streams
 ```
 
-`dwe logs <svc>` defaults to `--tail 50`; use `--tail 0` for the full log or `-f`/`--follow` to stream. Then go deeper (still all read):
+Deeper, still read-only: `dwe compose argv up` (exact compose argv), `dwe compose files` (ordered overlay list), `dwe docker ps`, `dwe deploy state show` (the journal, YAML). `-v` / `--debug` echo to **stderr** only, so `dwe run --debug 2>debug.log` keeps stdout clean. Guide: `dwe docs show guides/troubleshooting --lang en`.
 
-```shell
-dwe compose argv up        # exact docker-compose argv DWE would run for `up`
-dwe compose files          # the ordered overlay list assembled for this stack
-dwe docker ps              # live container state
-dwe deploy state show --output json   # the deploy journal (.dwe/deploy/state.yml)
-```
+## Symptom → command
 
-`-v` / `--debug` echoes go to **stderr only**, so you can capture them without corrupting stdout JSON:
-
-```shell
-dwe run --debug 2>debug.log    # echoes/decisions land in debug.log; stdout stays clean
-```
-
-Guide: `dwe docs show guides/troubleshooting --lang en`.
-
-## Symptom → command map
-
-- **Port already in use** → `dwe validate env --output json` to confirm the clash, then remap the port. Ports live in `service.yml` (`ports:`/`hosts:`) or as vars in `defaults.yml`; edit the source, then hand off `dwe vars set <path> <value>` (a single port) or `dwe services enable|disable <name> --apply` (if a toggle is involved). See `render-and-vars.md` for the vars side.
-- **Stale journal after a branch switch** → `dwe deploy state show --output json` to inspect what the journal thinks is deployed. If it's out of sync, hand the user `dwe deploy state repair` (reconcile) or `dwe deploy state clear` (wipe the journal) — both mutating. Never hand-edit `.dwe/deploy/state.yml`.
-- **Container won't come up** → `dwe logs <svc> --tail 0 --output json` first, then `dwe compose argv up` and `dwe compose files` to confirm the assembled overlays look right. Most fixes land in `service.yml`, the service's `deploy.yml`, or a compose overlay — see `pipelines-and-orchestration.md` for the deploy/lifecycle side.
-- **Build fails fetching a base image** from a LAN / private registry (`failed to fetch oauth token … no route to host`) while a plain `docker pull` of that image works → the buildkit builder can't reach the registry that the daemon can. Set `docker.build.prepull_bases: true` in `workspace/docker.yml` (default off): `dwe docker build` / `dwe docker up` (hence the default deploy's `docker up --wait`) then daemon-side `docker pull` any **missing** base images before compose builds. Best-effort/advisory — it never makes a build worse. Edit the yml, hand off `dwe deploy run`. `dwe docs show config/docker --lang en`.
+- **Port already in use** → `dwe validate env --output json`, then remap at the source: `service.yml` `ports:` or a `vars:` path (`render-and-vars.md`); hand off `dwe vars set` / `dwe deploy run`.
+- **Stale journal after a branch switch** → `dwe deploy state show`; if out of sync hand off `dwe deploy state repair` (reconcile) or `dwe deploy state clear` (wipe). Never hand-edit `.dwe/deploy/state.yml`.
+- **Container won't come up** → `dwe logs <svc> --tail 0`, then `dwe compose argv up` / `dwe compose files` to confirm the assembled overlays. Fixes land in `service.yml`, the service's `deploy.yml`, or an overlay (`pipelines-and-orchestration.md`).
+- **Build fails fetching a base image** from a private/LAN registry while `docker pull` works → set `build.prepull_bases: true` in `workspace/docker.yml` (daemon-side pull of missing bases before compose builds; best-effort). `dwe docs show config/docker --lang en`.
+- **`<encrypted>` / `secrets.unresolved`** → `dwe secrets status --output json`; `SKILL.md` § Anti-patterns.
 
 ## Snapshots — read first
-
-Snapshots use a dedicated scope and templating rules; read before authoring or running:
 
 ```shell
 dwe snapshot list --output json
@@ -49,32 +28,21 @@ dwe snapshot current --output json
 dwe snapshot inspect <name|tar> --output json
 dwe docs show config/snapshot --lang en
 dwe docs show guides/write-snapshot-workflows --lang en
-dwe docs show guides/switching-tasks-with-snapshots --lang en
 ```
 
 ### Authoring `workspace/snapshot.yml`
 
-Top-level keys: `dir` (where snapshots live), `rollback_target` (the snapshot `dwe snapshot rollback` restores — create it once after a clean deploy), `require_matching_config` (block restore if the captured config hash diverged), and `pack.exclude` (globs dropped from the shared tarball). Two pipelines, `create:` and `restore:`, each a list of steps.
+Top-level: `dir`, `rollback_target` (what `dwe snapshot rollback` restores — create it once after a clean deploy), `require_matching_config`, `pack.exclude`; two pipelines `create:` / `restore:` of steps (`command:` + `with:`, `parallel:`, `when:`).
 
-Load-bearing rules when writing these pipelines:
+Load-bearing rules:
 
-- `${snapshot.path}` (and any `${snapshot.*}`) resolves **only** inside snapshot workflow blocks — never elsewhere.
-- Snapshots call the project's **own** `db.dump` / `db.restore` commands (and any search/index dump). They do not invent backup logic.
-- A `confirmation:` command **can't be prompted interactively under `parallel:`** — so the outcome forks on `--yes`: **without** it (and without a non-interactive stdin / `DWE_NONINTERACTIVE=1`) the sub-step is hard-rejected at the parallel preflight (*"rerun with --yes or set DWE_NONINTERACTIVE=1"*); **with** it, `SkipConfirm` propagates into each sub-step and the prompt is skipped, so it runs. Either way, don't make `restore:` hinge on the caller passing `--yes` — call `private:` wrapper commands that carry **no** `confirmation:` block (e.g. a `snapshot.db.restore` wrapper, not the interactive `db.restore`), so restore runs cleanly regardless.
-- Gate each dump/restore on `file-exists` / `dir-exists` so partial snapshots (created before an optional service existed) restore cleanly. Gate optional-service steps with `${services.<name>.enabled}`.
-
-Skeleton (multi-DB project):
+- `${snapshot.path}` (any `${snapshot.*}`) resolves **only** inside these blocks.
+- Snapshots call the project's **own** dump/restore commands; they invent no backup logic.
+- A `confirmation:` command cannot prompt under `parallel:` — without `--yes` the sub-step is rejected at preflight. Call `private:` wrapper commands with **no** `confirmation:` (e.g. `snapshot.db.restore`), so restore runs cleanly regardless of flags.
+- Gate each dump/restore on `when: "file-exists ${snapshot.path}/…"` / `dir-exists` so partial snapshots restore cleanly; gate optional-service steps with `when: "${services.<name>.enabled}"`.
 
 ```yaml
-dir: snapshots
-require_matching_config: false
-rollback_target: baseline
-pack:
-  exclude:
-    - "**/.DS_Store"
-
 create:
-  description: Capture .env files and all DB dumps.
   steps:
     - command: snapshot.configs.dump
       with: { out_dir: "${snapshot.path}/configs" }
@@ -82,76 +50,36 @@ create:
         steps:
           - name: dump-main
             command: db.dump
-            with:
-              database: "${vars.db.database}"
-              out: "${snapshot.path}/db/${vars.db.database}.sql.gz"
-          - name: dump-sales
-            command: db.dump
-            when: "${services.sales.enabled}"   # optional service
-            with:
-              database: "${vars.db.sales_database}"
-              out: "${snapshot.path}/db/${vars.db.sales_database}.sql.gz"
-
+            with: { database: "${vars.db.database}", out: "${snapshot.path}/db/main.sql.gz" }
 restore:
-  description: Restore .env files and all DB dumps.
   steps:
-    - command: snapshot.configs.restore
-      when: "dir-exists ${snapshot.path}/configs"
-      with: { in_dir: "${snapshot.path}/configs" }
-    - parallel:
-        steps:
-          - name: restore-main
-            command: snapshot.db.restore          # private no-prompt wrapper
-            when: "file-exists ${snapshot.path}/db/${vars.db.database}.sql.gz"
-            with:
-              database: "${vars.db.database}"
-              dump_file: "${snapshot.path}/db/${vars.db.database}.sql.gz"
+    - command: snapshot.db.restore            # private, no confirmation
+      when: "file-exists ${snapshot.path}/db/main.sql.gz"
+      with: { database: "${vars.db.database}", dump_file: "${snapshot.path}/db/main.sql.gz" }
 ```
-
-Schema for every field: `dwe docs show config/snapshot --lang en`. The `private:` wrappers it calls are authored like any command — see `authoring-commands.md`.
 
 ### Snapshot handoff (all mutating)
 
-Edit `snapshot.yml`, then hand the user whichever applies:
-
 ```shell
-dwe snapshot create <name> -d "WIP on …"   # capture current state
-dwe snapshot restore <name>                # restore a named snapshot
-dwe snapshot rollback                      # restore rollback_target
-dwe snapshot remove <name>                 # delete a snapshot
-dwe snapshot pack <name> --out <tar>       # share a snapshot as a tarball
-dwe snapshot unpack <tar> --as <name>      # import a shared tarball
+dwe snapshot create <name> -d "WIP on …"
+dwe snapshot restore <name>
+dwe snapshot rollback
+dwe snapshot remove <name>
+dwe snapshot pack <name> --out <tar>
+dwe snapshot unpack <tar> --as <name>
 ```
 
 ## Reset — destructive, always a handoff
 
-`dwe reset run` is destructive — never run it yourself. The reset pipeline is project-defined, so read it first, then preview:
+Read `dwe docs show config/reset --lang en` and `dwe reset plan --output json` first. Always snapshot before resetting:
 
 ```shell
-dwe docs show config/reset --lang en
-dwe reset plan --output json
+dwe snapshot create <name> -d "pre-reset"
+dwe reset run
 ```
 
-Before any reset, **always create a snapshot first** so the state is recoverable:
+- **Volume cleanup is opt-in** — only if the reset pipeline includes `docker_remove_project_volumes`; confirm in `dwe reset plan`.
+- **`--clear-generated`** also wipes `.dwe/generated.yml`; secrets re-mint on the next deploy only if the service's `deploy.yml` has the harvest step (`render-and-vars.md` § 2).
+- `--service <name>` needs that service's own `deploy.yml` and never removes volumes.
 
-```shell
-dwe snapshot create <name> -d "pre-reset"   # user runs this BEFORE reset run
-dwe reset run                                # then this
-```
-
-Two things that are easy to get wrong:
-
-- **Volume cleanup is opt-in.** Volumes are wiped only if the project's reset pipeline includes the `docker_remove_project_volumes` builtin. Do not assume volumes are gone — confirm against `dwe reset plan` / `config/reset`.
-- **`--clear-generated` also wipes `.dwe/generated.yml`.** Run `dwe reset run --clear-generated` only when secrets should be re-minted next deploy; they regenerate on the following `dwe deploy run` **only if the service's `deploy.yml` has a harvest step** (a `pattern:` regex that recaptures the value a generate `command:` mints) — a plain deploy with no harvest step won't re-mint. See `render-and-vars.md` for the generated-secret lifecycle.
-
-For a true clean install, hand the user the pair — never `deploy run --force` (that only ignores prior state; `when:` still applies):
-
-```shell
-dwe reset run && dwe deploy run
-```
-
-## Related references
-
-- `recipes.md` — the quick "service fails to start" / "share or restore a snapshot" / "reset everything" entries point here for the full version.
-- `pipelines-and-orchestration.md` — authoring the `deploy` / `lifecycle` / `reset` pipelines and their step types, builtins, and `when:` predicates.
-- `render-and-vars.md` — vars + ports for the port-conflict fix, and the generated-secret lifecycle behind `--clear-generated`.
+True clean install: `dwe reset run && dwe deploy run` — never `deploy run --force`.
