@@ -671,30 +671,37 @@ const BridgeOverlayRelPath = ".dwe/compose.bridge.yml"
 // base file first, then enabled tool overlays (sorted by key), then enabled
 // service overlays (sorted by service name). Per-service local overlays from
 // workspace/local.yml (services.<name>.compose.extra) are emitted immediately
-// after each service's own compose files, inside the same enabled-gate.
-// The generated host-bridge overlay (BridgeOverlayRelPath) follows the
-// service groups when it exists on disk. Project-wide local overlays from
-// workspace/local.yml (compose.extra) are appended last so last-wins compose
-// semantics let a single local file patch anything. This is the canonical
-// file list used by all compose-aware CLI operations.
+// after each service's own compose files, inside the same enabled-gate. Next,
+// enabled services' compose_after files are emitted in one pass sorted by
+// service name across all types — a patch tier that runs after every service
+// group so it can override whole values (command:, healthcheck:, environment:
+// keys) an app's own overlay sets. The generated host-bridge overlay
+// (BridgeOverlayRelPath) follows the compose_after tier when it exists on
+// disk. Project-wide local overlays from workspace/local.yml (compose.extra)
+// are appended last so last-wins compose semantics let a single local file
+// patch anything. This is the canonical file list used by all compose-aware
+// CLI operations.
 func (c *DweConfig) ComposeFiles() []string {
 	return c.composeFiles(false)
 }
 
 // ComposeFilesAll returns the ordered list of all configured compose files,
 // regardless of whether overlays are enabled: base file first, then all tool
-// overlays (sorted by key), then all service overlays (sorted by service name).
-// Per-service local overlays from workspace/local.yml are included for every
-// service regardless of its enabled state; project-wide local overlays are
-// always appended last. Used by --all flags to override the active set.
+// overlays (sorted by key), then all service overlays (sorted by service name),
+// then every service's compose_after files (sorted by service name, all
+// types). Per-service local overlays from workspace/local.yml are included
+// for every service regardless of its enabled state; project-wide local
+// overlays are always appended last. Used by --all flags to override the
+// active set.
 func (c *DweConfig) ComposeFilesAll() []string {
 	return c.composeFiles(true)
 }
 
 // composeFiles assembles the ordered -f chain for docker compose. Per-service
 // local overlays (svc.LocalComposeExtra) reuse the same `all || svc.Enabled`
-// gate as svc.Compose. Project-wide local overlays (c.Compose.Extra) are
-// appended unconditionally at the very end.
+// gate as svc.Compose. The compose_after tier reuses the same gate in a
+// separate pass after all three service groups. Project-wide local overlays
+// (c.Compose.Extra) are appended unconditionally at the very end.
 func (c *DweConfig) composeFiles(all bool) []string {
 	files := make([]string, 0, 1+len(c.Services))
 	if c.Compose.Base != "" {
@@ -725,6 +732,17 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeTool })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeInfra })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeApp || t == "" })
+
+	// compose_after: patches that must win over every service group — e.g. a
+	// tool overlay adjusting an app defined in its own overlay. Same enabled
+	// gate as compose:, one pass by service name across all types, list order
+	// kept within a service (pinned by TestComposeFiles_composeAfterTier).
+	for _, name := range slices.Sorted(maps.Keys(c.Services)) {
+		svc := c.Services[name]
+		if (all || svc.Enabled) && len(svc.ComposeAfter) > 0 {
+			files = append(files, svc.ComposeAfter...)
+		}
+	}
 
 	// Generated host-bridge overlay: after the service overlays, BEFORE the
 	// project-wide local.yml overlays — local.yml stays the user

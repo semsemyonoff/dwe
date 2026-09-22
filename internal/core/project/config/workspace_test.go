@@ -1149,6 +1149,63 @@ runtime:
 	}
 }
 
+// TestLoadConfig_composeAfterRejectedInOverlayLayers pins the "no
+// compose_after in overlay layers" non-goal: services.<name>.compose_after is
+// a structural field, not in OverlayAllowedKeys, so both a shared layer
+// (defaults.yml) and workspace/local.yml reject it — same as any other
+// structural field (container, dir, compose, ...). There is no per-developer
+// escape hatch for it, unlike services.<name>.compose.extra.
+func TestLoadConfig_composeAfterRejectedInOverlayLayers(t *testing.T) {
+	servicesYML := `
+services:
+  otel:
+    type: tool
+    container: otel
+`
+	minimalDefaults := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	overlayServices := `
+services:
+  otel:
+    compose_after:
+      - compose/after/otel.yml
+`
+
+	t.Run("defaults.yml", func(t *testing.T) {
+		defaults := minimalDefaults + overlayServices
+		path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", servicesYML, noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatal("LoadConfig: expected error for services.otel.compose_after in defaults.yml, got nil")
+		}
+		if !strings.Contains(err.Error(), "defaults.yml") {
+			t.Errorf("err = %v, want it to name defaults.yml", err)
+		}
+		if !strings.Contains(err.Error(), "services.otel.compose_after") {
+			t.Errorf("err = %v, want it to name services.otel.compose_after", err)
+		}
+	})
+
+	t.Run("local.yml", func(t *testing.T) {
+		path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaults, overlayServices, servicesYML, noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatal("LoadConfig: expected error for services.otel.compose_after in local.yml, got nil")
+		}
+		if !strings.Contains(err.Error(), "local.yml") {
+			t.Errorf("err = %v, want it to name local.yml", err)
+		}
+		if !strings.Contains(err.Error(), "services.otel.compose_after") {
+			t.Errorf("err = %v, want it to name services.otel.compose_after", err)
+		}
+	})
+}
+
 // --- Config Validation ---
 
 func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {
@@ -4475,9 +4532,10 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 				LocalComposeExtra: []string{"compose/tools/adminer.local.yml"},
 			},
 			"mailhog": {
-				Type:    ServiceTypeTool,
-				Enabled: true,
-				Compose: []string{"compose/tools/mailhog.yml"},
+				Type:         ServiceTypeTool,
+				Enabled:      true,
+				Compose:      []string{"compose/tools/mailhog.yml"},
+				ComposeAfter: []string{"compose/tools/mailhog.after.yml"},
 			},
 			"postgres": {
 				Type:              ServiceTypeInfra,
@@ -4486,9 +4544,10 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 				LocalComposeExtra: []string{"compose/infra/postgres.local.yml"},
 			},
 			"redis": {
-				Type:    ServiceTypeInfra,
-				Enabled: false, // disabled — excluded in active
-				Compose: []string{"compose/infra/redis.yml"},
+				Type:         ServiceTypeInfra,
+				Enabled:      false, // disabled — excluded in active
+				Compose:      []string{"compose/infra/redis.yml"},
+				ComposeAfter: []string{"compose/infra/redis.after.yml"},
 			},
 			"api": {
 				Type:              ServiceTypeApp,
@@ -4511,6 +4570,8 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 		"compose/infra/postgres.yml", "compose/infra/postgres.local.yml",
 		"compose/apps/api.yml", "compose/apps/api.local.yml",
 		"compose/apps/web.yml",
+		// compose_after tier: only mailhog's — redis is disabled.
+		"compose/tools/mailhog.after.yml",
 		"compose.local.yml", "compose.local.2.yml",
 	}
 	if got := cfg.ComposeFiles(); !slicesEqual(got, wantActive) {
@@ -4525,6 +4586,8 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 		"compose/infra/redis.yml",
 		"compose/apps/api.yml", "compose/apps/api.local.yml",
 		"compose/apps/web.yml",
+		// compose_after tier: both, sorted by service name (mailhog < redis).
+		"compose/tools/mailhog.after.yml", "compose/infra/redis.after.yml",
 		"compose.local.yml", "compose.local.2.yml",
 	}
 	if got := cfg.ComposeFilesAll(); !slicesEqual(got, wantAll) {

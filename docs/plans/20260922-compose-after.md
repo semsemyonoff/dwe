@@ -368,18 +368,18 @@ it.
 - Modify: `internal/core/project/config/workspace_test.go` (`TestComposeFiles_LocalOverlays_GoldenFullPipeline` :4367, overlay-rejection tests)
 - Modify: `internal/cli/compose/compose_test.go` (`dwe compose files`)
 
-- [ ] emit `svc.ComposeAfter` in `composeFiles` as in Technical Details: after the app group, before the bridge overlay, one sorted-by-name pass over all types, gate `all || svc.Enabled`
-- [ ] update the `ComposeFiles` / `ComposeFilesAll` / `composeFiles` doc comments to describe the new tier and its position, pointing at both `TestComposeFiles_grouped_tool_infra_app` and `TestComposeFiles_composeAfterTier`
-- [ ] leave `TestComposeFiles_grouped_tool_infra_app` untouched; add a sibling table-driven `TestComposeFiles_composeAfterTier` in `type_gates_test.go`, each row pinning the exact full slice for both `ComposeFiles()` and `ComposeFilesAll()`:
+- [x] emit `svc.ComposeAfter` in `composeFiles` as in Technical Details: after the app group, before the bridge overlay, one sorted-by-name pass over all types, gate `all || svc.Enabled`
+- [x] update the `ComposeFiles` / `ComposeFilesAll` / `composeFiles` doc comments to describe the new tier and its position, pointing at both `TestComposeFiles_grouped_tool_infra_app` and `TestComposeFiles_composeAfterTier`
+- [x] leave `TestComposeFiles_grouped_tool_infra_app` untouched; add a sibling table-driven `TestComposeFiles_composeAfterTier` in `type_gates_test.go`, each row pinning the exact full slice for both `ComposeFiles()` and `ComposeFilesAll()`:
   - a tool (`otel`) with `compose: [tool-otel.yml]` and `compose_after: [after-otel-1.yml, after-otel-2.yml]`, plus an infra and an app each with one `compose_after` entry → groups as before, then the `compose_after` files ordered by service name across types, the tool's two in list order
   - owner disabled → its `compose_after` absent from `ComposeFiles()`, present in `ComposeFilesAll()` at the same position
   - required owner (`Required: true, Enabled: true`) → present
   - no `compose_after` anywhere → chain byte-identical to the `TestComposeFiles_grouped_tool_infra_app` expectation (the backward-compatibility pin)
-- [ ] extend `TestComposeFiles_bridgeOverlayChainPosition` with a `compose_after` entry: it lands after the app's `compose.extra` and before `BridgeOverlayRelPath`, which stays before the project-wide `compose.local.yml`
-- [ ] extend `TestComposeFiles_LocalOverlays_GoldenFullPipeline` with a `compose_after` on the disabled `redis` and on an enabled tool: the active chain has only the tool's, after `compose/apps/web.yml` and before the project-wide extras; the all-chain has both
-- [ ] write overlay-rejection tests via `LoadConfig`: `services.<name>.compose_after` in `workspace/defaults.yml` and in `workspace/local.yml` are load errors naming the layer file and `services.<name>.compose_after`
-- [ ] add a `dwe compose files` test in `internal/cli/compose/compose_test.go` on a temp project with a tool `compose_after`: the printed lines equal `cfg.ComposeFiles()` with the `compose_after` file after the app overlay
-- [ ] run `go test ./internal/core/project/config/... ./internal/cli/compose/...` - must pass before task 3
+- [x] extend `TestComposeFiles_bridgeOverlayChainPosition` with a `compose_after` entry: it lands after the app's `compose.extra` and before `BridgeOverlayRelPath`, which stays before the project-wide `compose.local.yml`
+- [x] extend `TestComposeFiles_LocalOverlays_GoldenFullPipeline` with a `compose_after` on the disabled `redis` and on an enabled tool: the active chain has only the tool's, after `compose/apps/web.yml` and before the project-wide extras; the all-chain has both
+- [x] write overlay-rejection tests via `LoadConfig`: `services.<name>.compose_after` in `workspace/defaults.yml` and in `workspace/local.yml` are load errors naming the layer file and `services.<name>.compose_after`
+- [x] add a `dwe compose files` test in `internal/cli/compose/compose_test.go` on a temp project with a tool `compose_after`: the printed lines equal `cfg.ComposeFiles()` with the `compose_after` file after the app overlay
+- [x] run `go test ./internal/core/project/config/... ./internal/cli/compose/...` - must pass before task 3
 
 ### Task 3: `extends:` inheritance
 

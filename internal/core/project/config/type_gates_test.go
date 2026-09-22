@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -87,4 +88,141 @@ func TestComposeFiles_grouped_tool_infra_app(t *testing.T) {
 			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, all[i], want[i])
 		}
 	}
+}
+
+// TestComposeFiles_composeAfterTier pins the compose_after tier: emitted
+// after all three service groups, one pass sorted by service name across all
+// types, list order kept within a service, gated by the same
+// `all || svc.Enabled` rule as compose:.
+func TestComposeFiles_composeAfterTier(t *testing.T) {
+	baseServices := func() map[string]ServiceConfig {
+		return map[string]ServiceConfig{
+			"otel": {
+				Type: ServiceTypeTool, Enabled: true,
+				Compose:      []string{"tool-otel.yml"},
+				ComposeAfter: []string{"after-otel-1.yml", "after-otel-2.yml"},
+			},
+			"cache": {
+				Type: ServiceTypeInfra, Enabled: true,
+				Compose:      []string{"infra-cache.yml"},
+				ComposeAfter: []string{"after-cache.yml"},
+			},
+			"web": {
+				Type: ServiceTypeApp, Enabled: true,
+				Compose:      []string{"app-web.yml"},
+				ComposeAfter: []string{"after-web.yml"},
+			},
+		}
+	}
+
+	t.Run("all owners enabled", func(t *testing.T) {
+		cfg := &DweConfig{
+			Compose:  ComposeConfig{Base: "compose.yaml"},
+			Services: baseServices(),
+		}
+		want := []string{
+			"compose.yaml",
+			"tool-otel.yml",
+			"infra-cache.yml",
+			"app-web.yml",
+			"after-cache.yml",
+			"after-otel-1.yml",
+			"after-otel-2.yml",
+			"after-web.yml",
+		}
+		if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
+			t.Errorf("ComposeFiles() = %v, want %v", got, want)
+		}
+		if got := cfg.ComposeFilesAll(); !slices.Equal(got, want) {
+			t.Errorf("ComposeFilesAll() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("owner disabled: absent from ComposeFiles, present in ComposeFilesAll", func(t *testing.T) {
+		services := baseServices()
+		otel := services["otel"]
+		otel.Enabled = false
+		services["otel"] = otel
+		cfg := &DweConfig{
+			Compose:  ComposeConfig{Base: "compose.yaml"},
+			Services: services,
+		}
+		active := []string{
+			"compose.yaml",
+			"infra-cache.yml",
+			"app-web.yml",
+			"after-cache.yml",
+			"after-web.yml",
+		}
+		if got := cfg.ComposeFiles(); !slices.Equal(got, active) {
+			t.Errorf("ComposeFiles() = %v, want %v", got, active)
+		}
+		allWant := []string{
+			"compose.yaml",
+			"tool-otel.yml",
+			"infra-cache.yml",
+			"app-web.yml",
+			"after-cache.yml",
+			"after-otel-1.yml",
+			"after-otel-2.yml",
+			"after-web.yml",
+		}
+		if got := cfg.ComposeFilesAll(); !slices.Equal(got, allWant) {
+			t.Errorf("ComposeFilesAll() = %v, want %v", got, allWant)
+		}
+	})
+
+	t.Run("required owner is always present", func(t *testing.T) {
+		services := baseServices()
+		otel := services["otel"]
+		otel.Required = true
+		otel.Enabled = true
+		services["otel"] = otel
+		cfg := &DweConfig{
+			Compose:  ComposeConfig{Base: "compose.yaml"},
+			Services: services,
+		}
+		want := []string{
+			"compose.yaml",
+			"tool-otel.yml",
+			"infra-cache.yml",
+			"app-web.yml",
+			"after-cache.yml",
+			"after-otel-1.yml",
+			"after-otel-2.yml",
+			"after-web.yml",
+		}
+		if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
+			t.Errorf("ComposeFiles() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("no compose_after anywhere: byte-identical to the grouping-only chain", func(t *testing.T) {
+		cfg := &DweConfig{
+			Compose: ComposeConfig{Base: "compose.yaml"},
+			Services: map[string]ServiceConfig{
+				"zzz_tool": {Type: ServiceTypeTool, Enabled: true, Compose: []string{"tool-z.yml"}},
+				"aaa_tool": {Type: ServiceTypeTool, Enabled: true, Compose: []string{"tool-a.yml"}},
+				"db":       {Type: ServiceTypeInfra, Enabled: true, Compose: []string{"infra-db.yml"}},
+				"cache":    {Type: ServiceTypeInfra, Enabled: true, Compose: []string{"infra-cache.yml"}},
+				"web":      {Type: ServiceTypeApp, Enabled: true, Compose: []string{"app-web.yml"}},
+				"api":      {Type: ServiceTypeApp, Enabled: true, Compose: []string{"app-api.yml"}},
+			},
+		}
+		want := []string{
+			"compose.yaml",
+			"tool-a.yml",
+			"tool-z.yml",
+			"infra-cache.yml",
+			"infra-db.yml",
+			"app-api.yml",
+			"app-web.yml",
+		}
+		if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
+			t.Errorf("ComposeFiles() = %v, want %v", got, want)
+		}
+		if got := cfg.ComposeFilesAll(); !slices.Equal(got, want) {
+			t.Errorf("ComposeFilesAll() = %v, want %v", got, want)
+		}
+	})
 }

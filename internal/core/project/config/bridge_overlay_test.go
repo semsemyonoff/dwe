@@ -27,7 +27,8 @@ func TestComposeFiles_bridgeOverlayChainPosition(t *testing.T) {
 		Services: map[string]ServiceConfig{
 			"main": {Type: ServiceTypeApp, Enabled: true,
 				Compose:           []string{"compose/main.yml"},
-				LocalComposeExtra: []string{"compose/main.local.yml"}},
+				LocalComposeExtra: []string{"compose/main.local.yml"},
+				ComposeAfter:      []string{"compose/main.after.yml"}},
 			"redis": {Type: ServiceTypeInfra, Enabled: true,
 				Compose: []string{"compose/redis.yml"}},
 		},
@@ -40,20 +41,23 @@ func TestComposeFiles_bridgeOverlayChainPosition(t *testing.T) {
 		"compose/redis.yml",
 		"compose/main.yml",
 		"compose/main.local.yml",
+		"compose/main.after.yml",
 		"compose.local.yml",
 	}
 	if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
 		t.Errorf("ComposeFiles without overlay = %v, want %v", got, want)
 	}
 
-	// Overlay present → inserted after the service groups and BEFORE the
-	// project-wide local.yml overlays, so local.yml keeps the last word.
+	// Overlay present → inserted after the service groups (including
+	// compose_after) and BEFORE the project-wide local.yml overlays, so
+	// local.yml keeps the last word.
 	writeBridgeOverlayFixture(t, dir)
 	want = []string{
 		"compose.yaml",
 		"compose/redis.yml",
 		"compose/main.yml",
 		"compose/main.local.yml",
+		"compose/main.after.yml",
 		BridgeOverlayRelPath,
 		"compose.local.yml",
 	}
