@@ -25,6 +25,14 @@ generated from commit subjects and stay on the
   At runtime such an expression is fail-open and leaves the command visible.
   `cmd:` and builtin-predicate expressions are not executed by the check.
 
+### Changed
+
+- The `▶ <id>  [<type>]  <description>` banner that `dwe cmd` / `dwe commands`
+  prints before running a command now goes to stderr, so `dwe cmd X | …`
+  receives only the command's own output. This also keeps the banner out of
+  stdout under `-o json`, and it reaches the container's stderr through the
+  host bridge. Scripts that parsed the banner from stdout must read stderr.
+
 ### Fixed
 
 - The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
