@@ -57,10 +57,13 @@ DWE does not write a single `compose.yaml` that imports everything. It passes a 
 2. Enabled **tool** overlays, sorted by service key.
 3. Enabled **infra** overlays, sorted by service key.
 4. Enabled **app** overlays, sorted by service key.
+5. Enabled services' `compose_after:` files, one pass sorted by service name across all types — patches that must win over every group above (see [`compose_after` in `service.yml` fields](../config/services/fields.md#top-level-service-fields)).
+6. The generated bridge overlay, `.dwe/compose.bridge.yml`, when present.
+7. The project-wide `local.yml` `compose.extra`, always last.
 
-Service type order matters: tools first, then infra, then apps. Within a group, sort is alphabetical by the service key (the directory name under `workspace/services/<name>/`). The explicit sort keeps the file list deterministic so `docker compose` always sees overlays in the same merge order.
+Service type order matters: tools first, then infra, then apps, then `compose_after` patches. Within a group, sort is alphabetical by the service key (the directory name under `workspace/services/<name>/`). The explicit sort keeps the file list deterministic so `docker compose` always sees overlays in the same merge order.
 
-`dwe docker pull --all` and `dwe docker build --all` operate on the same ordered list but ignore the `enabled` flag, so a developer can pull or build images for overlays they have toggled off locally — without modifying `workspace/local.yml`.
+`dwe docker pull --all` and `dwe docker build --all` operate on the same ordered list but ignore the `enabled` flag, so a developer can pull or build images for overlays they have toggled off locally — without modifying `workspace/local.yml`. This includes disabled services' `compose_after` files.
 
 Each entry in the list points at a file inside the project tree, typically under `compose/`:
 

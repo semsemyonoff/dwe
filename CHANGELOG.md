@@ -28,6 +28,13 @@ generated from commit subjects and stay on the
   resolve: against the directory of the first `-f` file (`compose.base`), not
   the overlay's own directory. See
   [`compose`](docs/reference/config/services/fields.md).
+- New `service.yml` field `compose_after:` — compose overlay files emitted
+  after every service group (tool → infra → app) and before the generated
+  bridge overlay and the project-wide `local.yml` `compose.extra`, under the
+  same enabled gate as `compose:`. Lets a patch win over whole-value keys
+  (`command:`, `healthcheck:`, an `environment:` entry) an app sets in its own
+  overlay, instead of losing to it because the app group emits later. See
+  [`compose_after`](docs/reference/config/services/fields.md).
 
 ## [0.6.2] - 2026-09-16
 

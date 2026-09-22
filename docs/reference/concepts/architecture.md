@@ -93,7 +93,7 @@ sequenceDiagram
 
 Three properties of this loop are load-bearing:
 
-- **Deterministic argv.** The compose file list is sorted (tools → infra → apps, alphabetical within each group). The project name is templated once and reused. Two `dwe run` invocations on the same config produce byte-identical `docker compose` commands.
+- **Deterministic argv.** The compose file list is sorted (tools → infra → apps → `compose_after` patches, alphabetical within each group). The project name is templated once and reused. Two `dwe run` invocations on the same config produce byte-identical `docker compose` commands.
 - **Env is fresh before every relevant call.** DWE regenerates `.env` immediately before `up` / `run` / `exec` / `restart` / `build`. Container-visible variables are always in sync with the resolved config.
 - **No long-lived process.** The CLI exits as soon as Docker accepts the command (or after `--wait` resolves). The Docker engine keeps the containers alive; DWE does not babysit them.
 
