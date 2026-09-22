@@ -489,10 +489,10 @@ has only the `files`, `raw` and `argv` subcommands
 
 ### Task 9: [Final] Update documentation
 
-- [ ] `docs/internals/packages.md` § Core — Foundation (`project/config/`, :82): extend the "order is part of the public surface, locked" sentence with the `compose_after` tier (position, gate, one sorted pass across types, before the bridge overlay); add `ComposeAfter` to the `ResolveServiceExtends` inherited-field note (independent of `Compose`, no dedup); add `compose_after` to the list of fields that required BOTH allowlist entries; state the hash rule (key present only when non-empty, so existing deployment hashes are unchanged) and that the field is deliberately not mirrored into `Raw["services"]`
-- [ ] `AGENTS.md`: no change expected — the existing "`info.yml` auto-blocks + `service.yml` allowlists" bullet already carries the only trap this field touches; add at most a one-line pointer only if implementation uncovers a new one (`TestAgentsMdBudget` pins the file size)
-- [ ] move this plan to `docs/plans/completed/`
-- [ ] run `make build && make test` (this task edits `packages.md` after the last `make build`) and commit the regenerated `internal/core/docs/content_hashes_gen.go` with the `packages.md` change
+- [x] `docs/internals/packages.md` § Core — Foundation (`project/config/`, :82): extend the "order is part of the public surface, locked" sentence with the `compose_after` tier (position, gate, one sorted pass across types, before the bridge overlay); add `ComposeAfter` to the `ResolveServiceExtends` inherited-field note (independent of `Compose`, no dedup); add `compose_after` to the list of fields that required BOTH allowlist entries; state the hash rule (key present only when non-empty, so existing deployment hashes are unchanged) and that the field is deliberately not mirrored into `Raw["services"]`
+- [x] `AGENTS.md`: no change — the existing "`info.yml` auto-blocks + `service.yml` allowlists" bullet already carries the only trap this field touches; implementation did not uncover a new one (`TestAgentsMdBudget` pins the file size)
+- [x] move this plan to `docs/plans/completed/`
+- [x] run `make build && make test` (this task edits `packages.md` after the last `make build`) and commit the regenerated `internal/core/docs/content_hashes_gen.go` with the `packages.md` change
 
 ## Post-Completion
 
