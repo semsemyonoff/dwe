@@ -1,6 +1,6 @@
 # Observability with OpenTelemetry
 
-You want traces, metrics and logs for your dev stack — for yourself and for the coding agent working in it — without touching the production images of your services and without turning it on for everyone. This guide builds an opt-in `otel` tool service that any developer switches on with one command:
+You want traces and metrics for your dev stack — for yourself and for the coding agent working in it — without touching the production images of your services and without turning it on for everyone. This guide builds an opt-in `otel` tool service that any developer switches on with one command:
 
 ```bash
 dwe services enable otel --apply    # backend up, services export to it
@@ -11,7 +11,7 @@ There is no "pack" mechanism in DWE and none is needed: a **tool service whose `
 
 What you end up with:
 
-- `grafana/otel-lgtm` — OTel Collector + Tempo (traces) + Loki (logs) + Prometheus (metrics) + Grafana in one container, reachable at `http://otel.<project>.localhost`.
+- `grafana/otel-lgtm` — OTel Collector + Tempo (traces) + Loki (logs) + Prometheus (metrics) + Grafana in one container, reachable at `http://otel.<project>.localhost`. Loki ships in the image, but the recipes here do not export application logs (`OTEL_LOGS_EXPORTER: "none"`): logs stay in the container's own output and correlate with traces where the app writes `trace_id`/`span_id` into its log lines (the Go `slog` wrapper below). Switching OTLP logs on (for example `OTEL_LOGS_EXPORTER: "otlp"` with Python's distro) is possible but not covered or verified here.
 - App services exporting OTLP to it, instrumented per language (recipes below for Python, Go and Node).
 - A text trace lookup for the agent (`dwe cmd otel.traces`) plus a section for your `AGENTS.md`, so the agent reads a trace before it reads the code.
 
@@ -34,7 +34,7 @@ hosts:
   web: otel.myproject.localhost
 icon: "📊"
 info:
-  title: "Grafana · traces, metrics, logs (OpenTelemetry)"
+  title: "Grafana · traces, metrics (OpenTelemetry)"
 notes:
   disable: "Optional dev tool; the stack runs without it."
 ```
@@ -65,7 +65,8 @@ Nothing else is needed for Grafana behind the proxy — its own vhost at the roo
 
 ```yaml
 # compose/otel.yml — the otel backend.
-# Relative bind-mount paths resolve against the PROJECT ROOT, not compose/.
+# Relative bind-mount paths resolve against the directory of the first -f file
+# (compose.base — the project root in the usual layout), not compose/.
 services:
   otel:
     # Pin it: `:latest` is sticky in the local image cache. 0.33.1 is multi-arch.
@@ -192,7 +193,7 @@ Auto-instrumentation via `opentelemetry-instrument`, layered over the project ve
       OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: "healthz"
 ```
 
-Pins are one release train (SDK 1.44.0 ↔ contrib 0.65b0); bump them together. Instrument one DB layer only (SQLAlchemy *or* asyncpg), or every query appears twice. The child process a watcher spawns inherits the layered PATH, so hot reload keeps working. `--with` resolves outside `uv.lock`; if the feature stays, move the packages to a non-default dependency group and use `uv run --frozen --group otel`. Root spans for background workers or bot handlers are not automatic: a few lines on `opentelemetry-api` (a no-op without the SDK) around each tick give the trace a name. OTLP over HTTP (4318), not gRPC — no `grpcio` wheel to build on a fresh Python.
+`watchfiles` is not an OpenTelemetry package: it is the hot-reload runner the base compose already used, so it must be a dev dependency of the project — otherwise add `--with watchfiles`. Pins are one release train (SDK 1.44.0 ↔ contrib 0.65b0); bump them together. Instrument one DB layer only (SQLAlchemy *or* asyncpg), or every query appears twice. The child process a watcher spawns inherits the layered PATH, so hot reload keeps working. `--with` resolves outside `uv.lock`; if the feature stays, move the packages to a non-default dependency group and use `uv run --frozen --group otel`. Root spans for background workers or bot handlers are not automatic: a few lines on `opentelemetry-api` (a no-op without the SDK) around each tick give the trace a name. OTLP over HTTP (4318), not gRPC — no `grpcio` wheel to build on a fresh Python.
 
 ### Go — a small diff, gated by env
 
@@ -211,7 +212,15 @@ func Init(ctx context.Context) (shutdown func(context.Context) error, err error)
 	if err != nil {
 		return nil, err
 	}
-	res, _ := resource.New(ctx, resource.WithFromEnv(), resource.WithProcess())
+	res, _ := resource.New(ctx,
+		resource.WithFromEnv(),
+		// Not WithProcess(): it includes WithProcessCommandArgs(), which would put
+		// argv — DSNs, tokens passed as flags — into every exported resource.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+	)
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(time.Second)),
 		sdktrace.WithResource(res),
@@ -247,19 +256,24 @@ r.Use(func(next http.Handler) http.Handler {
 // pgx pool: attach the tracer to the pool config. sqlc-generated queries start
 // with `-- name: GetEntries :many`; without a name func that comment line
 // becomes the span name, so derive it from the header instead.
-cfg, _ := pgxpool.ParseConfig(dsn)
+cfg, err := pgxpool.ParseConfig(dsn)
+if err != nil {
+	return nil, fmt.Errorf("parse database DSN: %w", err)
+}
 cfg.ConnConfig.Tracer = otelpgx.NewTracer(
-	otelpgx.WithIncludeQueryParameters(), // literal parameter values in spans: dev sink only
+	// otelpgx.WithIncludeQueryParameters(), // opt-in: literal parameter values in spans
 	otelpgx.WithSpanNameFunc(sqlcSpanName),
 )
 pool, err := pgxpool.NewWithConfig(ctx, cfg)
 ```
 
+`WithIncludeQueryParameters` is commented out on purpose: it writes literal parameter values into spans, and Grafana here grants anonymous `Admin`. Enable it only on a local-only stack with non-sensitive data.
+
 The recipe is **traces-only**: `Init` installs no MeterProvider, so `otelhttp` records its metrics into the no-op global meter and nothing is exported. Set `OTEL_METRICS_EXPORTER: "none"` in the Go service's patch rather than copying `otlp` from the example above. RED panels for a Go service come from Tempo's span metrics (`traces_spanmetrics_*`), which are derived from the traces themselves.
 
 Modules: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp`, `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`, `github.com/exaring/otelpgx`. Expect `go get` to bump the whole `go.opentelemetry.io/otel` family that an error-tracking SDK already pulled in transitively — keep them on one version. Outgoing HTTP calls get `otelhttp.NewTransport(http.DefaultTransport)`. Log lines correlate with traces through a small `slog.Handler` wrapper that adds `trace_id`/`span_id` from `trace.SpanContextFromContext(ctx)` when the span is valid — a no-op otherwise, so it can be installed unconditionally.
 
-`otelpgx` ≥ 0.12 speaks the current semantic conventions: `db.system.name`, `db.query.text`, `db.operation.name`, `db.namespace`, `db.collection.name`, plus its own `pgx.query.parameters`. Anything that reads the spans has to know both the old and the new key sets — see section 4.
+`otelpgx` ≥ 0.12 speaks the current semantic conventions: `db.system.name`, `db.query.text`, `db.operation.name`, `db.namespace`, `db.collection.name`, plus its own `pgx.query.parameters` when `WithIncludeQueryParameters` is on. Anything that reads the spans has to know both the old and the new key sets — see section 4.
 
 ### Node — zero diff via `NODE_OPTIONS`
 
@@ -287,7 +301,7 @@ Node loads instrumentation before the app when told to with `--import`; nothing 
       - ./workspace/otel/node:/opt/otel-node
 ```
 
-```
+```text
 workspace/otel/node/
   package.json         # @opentelemetry/api (same 1.x as the app's own copy!),
   package-lock.json    # auto-instrumentations-node, sdk-node, sdk-trace-base,

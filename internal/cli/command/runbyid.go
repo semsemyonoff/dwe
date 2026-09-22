@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
+
+	lipglossv2 "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -216,7 +220,11 @@ func runCommandByID(
 		rctx.NonInteractive = skipPrompts
 	}
 
-	printRunHeader(stdout, def, opts.Translator, opts.Locale)
+	// stderr: stdout carries only the command's own output, so
+	// `dwe cmd <id> | …` pipes exactly what the command printed.
+	if !opts.NoHeader {
+		printRunHeader(stderr, def, opts.Translator, opts.Locale)
+	}
 
 	if err := runUserCommand(ctx, rctx); err != nil {
 		return fmt.Errorf("running command %q: %w", id, err)
@@ -296,16 +304,24 @@ func prepareParams(cfg *config.DweConfig, def *usercommands.CommandDef, provided
 // execute so the user has context for the runner output that follows.
 // Format: `▶ <id>  [<type>]  <description>`. Type and description are omitted
 // when empty.
+//
+// The banner goes to stderr, so the v1 styles helpers (whose color profile is
+// detected from stdout) would colour it by the wrong stream: stripped under
+// `dwe cmd x | jq`, ANSI in `2>err.log`. Same route as the error hint in
+// cmd/dwe/main.go instead: full-colour lipgloss v2 styles written through a
+// colorprofile.Writer, which downsamples for w itself and honours NO_COLOR.
 func printRunHeader(w io.Writer, def *usercommands.CommandDef, translator i18n.Translator, locale string) {
-	parts := []string{"▶ " + styles.StyleKey(def.ID)}
+	accent := lipglossv2.NewStyle().Foreground(lipglossv2.Color(styles.ColorAccent())).Bold(true)
+	muted := lipglossv2.NewStyle().Foreground(lipglossv2.Color(styles.ColorMuted()))
+	parts := []string{"▶ " + accent.Render(def.ID)}
 	if def.Type != "" {
-		parts = append(parts, styles.StyleMuted("["+string(def.Type)+"]"))
+		parts = append(parts, muted.Render("["+string(def.Type)+"]"))
 	}
 	desc := translator.CommandDescription(locale, def.ID, def.Description)
 	if desc != "" {
-		parts = append(parts, styles.StyleMuted(desc))
+		parts = append(parts, muted.Render(desc))
 	}
-	_, _ = fmt.Fprintln(w, strings.Join(parts, "  "))
+	_, _ = fmt.Fprintln(colorprofile.NewWriter(w, os.Environ()), strings.Join(parts, "  "))
 }
 
 // buildAskFields converts a command's params into ordered ask.Field values.

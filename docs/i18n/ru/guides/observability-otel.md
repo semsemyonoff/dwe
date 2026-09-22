@@ -1,8 +1,8 @@
-> Translated from: guides/observability-otel.md @ 505fdfeefe7d
+> Translated from: guides/observability-otel.md @ 315678b415a0
 
 # Наблюдаемость с OpenTelemetry
 
-Вам нужны трейсы, метрики и логи dev-стека — для себя и для кодового агента, который в нём работает, — без правок в продакшен-образах сервисов и без того, чтобы включать это всем подряд. Это руководство строит опциональный tool-сервис `otel`, который любой разработчик включает одной командой:
+Вам нужны трейсы и метрики dev-стека — для себя и для кодового агента, который в нём работает, — без правок в продакшен-образах сервисов и без того, чтобы включать это всем подряд. Это руководство строит опциональный tool-сервис `otel`, который любой разработчик включает одной командой:
 
 ```bash
 dwe services enable otel --apply    # бэкенд поднят, сервисы экспортируют в него
@@ -13,7 +13,7 @@ dwe services disable otel --apply   # его нет; сервисы снова �
 
 Что получится в итоге:
 
-- `grafana/otel-lgtm` — OTel Collector + Tempo (трейсы) + Loki (логи) + Prometheus (метрики) + Grafana в одном контейнере, доступный по `http://otel.<project>.localhost`.
+- `grafana/otel-lgtm` — OTel Collector + Tempo (трейсы) + Loki (логи) + Prometheus (метрики) + Grafana в одном контейнере, доступный по `http://otel.<project>.localhost`. Loki в образе есть, но рецепты здесь не экспортируют логи приложений (`OTEL_LOGS_EXPORTER: "none"`): логи остаются в собственном выводе контейнера и коррелируют с трейсами там, где приложение пишет `trace_id`/`span_id` в свои строки логов (обёртка `slog` для Go ниже). Включить OTLP-логи можно (например, `OTEL_LOGS_EXPORTER: "otlp"` с дистрибутивом Python), но здесь это не описано и не проверено.
 - App-сервисы, экспортирующие OTLP в него и инструментированные под свой язык (ниже рецепты для Python, Go и Node).
 - Текстовый поиск трейсов для агента (`dwe cmd otel.traces`) и раздел для вашего `AGENTS.md`, чтобы агент читал трейс раньше, чем код.
 
@@ -36,7 +36,7 @@ hosts:
   web: otel.myproject.localhost
 icon: "📊"
 info:
-  title: "Grafana · traces, metrics, logs (OpenTelemetry)"
+  title: "Grafana · traces, metrics (OpenTelemetry)"
 notes:
   disable: "Optional dev tool; the stack runs without it."
 ```
@@ -67,7 +67,8 @@ http://otel.myproject.localhost {
 
 ```yaml
 # compose/otel.yml — бэкенд otel.
-# Относительные пути bind-маунтов разрешаются от КОРНЯ ПРОЕКТА, а не от compose/.
+# Относительные пути bind-маунтов разрешаются от каталога первого -f файла
+# (compose.base — корень проекта при обычной раскладке), а не от compose/.
 services:
   otel:
     # Пиньте версию: `:latest` залипает в локальном кэше образов. 0.33.1 — multi-arch.
@@ -194,7 +195,7 @@ UID источников данных в образе — `prometheus`, `tempo`,
       OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: "healthz"
 ```
 
-Пины относятся к одному релизному поезду (SDK 1.44.0 ↔ contrib 0.65b0); поднимайте их вместе. Инструментируйте только один слой БД (SQLAlchemy *или* asyncpg), иначе каждый запрос появится дважды. Дочерний процесс, который запускает вотчер, наследует наложенный PATH, так что горячая перезагрузка продолжает работать. `--with` разрешается мимо `uv.lock`; если фича остаётся надолго, перенесите пакеты в недефолтную группу зависимостей и используйте `uv run --frozen --group otel`. Корневые спаны для фоновых воркеров и обработчиков ботов автоматически не появляются: несколько строк на `opentelemetry-api` (без SDK это no-op) вокруг каждого тика дают трейсу имя. OTLP по HTTP (4318), а не gRPC — не нужно собирать wheel `grpcio` на свежем Python.
+`watchfiles` — не пакет OpenTelemetry: это раннер горячей перезагрузки, которым уже пользовался базовый compose, поэтому он должен быть dev-зависимостью проекта — иначе добавьте `--with watchfiles`. Пины относятся к одному релизному поезду (SDK 1.44.0 ↔ contrib 0.65b0); поднимайте их вместе. Инструментируйте только один слой БД (SQLAlchemy *или* asyncpg), иначе каждый запрос появится дважды. Дочерний процесс, который запускает вотчер, наследует наложенный PATH, так что горячая перезагрузка продолжает работать. `--with` разрешается мимо `uv.lock`; если фича остаётся надолго, перенесите пакеты в недефолтную группу зависимостей и используйте `uv run --frozen --group otel`. Корневые спаны для фоновых воркеров и обработчиков ботов автоматически не появляются: несколько строк на `opentelemetry-api` (без SDK это no-op) вокруг каждого тика дают трейсу имя. OTLP по HTTP (4318), а не gRPC — не нужно собирать wheel `grpcio` на свежем Python.
 
 ### Go — небольшой дифф, включаемый через env
 
@@ -213,7 +214,15 @@ func Init(ctx context.Context) (shutdown func(context.Context) error, err error)
 	if err != nil {
 		return nil, err
 	}
-	res, _ := resource.New(ctx, resource.WithFromEnv(), resource.WithProcess())
+	res, _ := resource.New(ctx,
+		resource.WithFromEnv(),
+		// Не WithProcess(): он включает WithProcessCommandArgs(), и argv — DSN,
+		// токены, переданные флагами, — попал бы в каждый экспортируемый ресурс.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+	)
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(time.Second)),
 		sdktrace.WithResource(res),
@@ -249,19 +258,24 @@ r.Use(func(next http.Handler) http.Handler {
 // Пул pgx: подключаем трейсер к конфигу пула. Запросы, сгенерированные sqlc,
 // начинаются с `-- name: GetEntries :many`; без функции имени эта строка-комментарий
 // становится именем спана, поэтому выводим его из заголовка.
-cfg, _ := pgxpool.ParseConfig(dsn)
+cfg, err := pgxpool.ParseConfig(dsn)
+if err != nil {
+	return nil, fmt.Errorf("parse database DSN: %w", err)
+}
 cfg.ConnConfig.Tracer = otelpgx.NewTracer(
-	otelpgx.WithIncludeQueryParameters(), // буквальные значения параметров в спанах: только для dev-приёмника
+	// otelpgx.WithIncludeQueryParameters(), // по желанию: буквальные значения параметров в спанах
 	otelpgx.WithSpanNameFunc(sqlcSpanName),
 )
 pool, err := pgxpool.NewWithConfig(ctx, cfg)
 ```
 
+`WithIncludeQueryParameters` закомментирован намеренно: он пишет буквальные значения параметров в спаны, а Grafana здесь даёт анонимный `Admin`. Включайте его только на сугубо локальном стеке с нечувствительными данными.
+
 Рецепт **только трейсовый**: `Init` не ставит MeterProvider, поэтому `otelhttp` пишет свои метрики в глобальный no-op meter, и ничего не экспортируется. Задайте `OTEL_METRICS_EXPORTER: "none"` в патче Go-сервиса, а не копируйте `otlp` из примера выше. RED-панели для Go-сервиса строятся на span-метриках Tempo (`traces_spanmetrics_*`), которые выводятся из самих трейсов.
 
 Модули: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp`, `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`, `github.com/exaring/otelpgx`. Ожидайте, что `go get` поднимет всё семейство `go.opentelemetry.io/otel`, которое SDK трекера ошибок уже подтянул транзитивно, — держите их на одной версии. Исходящим HTTP-вызовам нужен `otelhttp.NewTransport(http.DefaultTransport)`. Строки логов коррелируют с трейсами через небольшую обёртку `slog.Handler`, которая добавляет `trace_id`/`span_id` из `trace.SpanContextFromContext(ctx)`, когда спан валиден, — иначе это no-op, так что её можно ставить безусловно.
 
-`otelpgx` ≥ 0.12 говорит на актуальных семантических конвенциях: `db.system.name`, `db.query.text`, `db.operation.name`, `db.namespace`, `db.collection.name`, плюс собственный `pgx.query.parameters`. Всё, что читает спаны, должно знать и старый, и новый набор ключей — см. раздел 4.
+`otelpgx` ≥ 0.12 говорит на актуальных семантических конвенциях: `db.system.name`, `db.query.text`, `db.operation.name`, `db.namespace`, `db.collection.name`, плюс собственный `pgx.query.parameters`, когда включён `WithIncludeQueryParameters`. Всё, что читает спаны, должно знать и старый, и новый набор ключей — см. раздел 4.
 
 ### Node — без диффа через `NODE_OPTIONS`
 
@@ -289,7 +303,7 @@ Node загружает инструментирование раньше при
       - ./workspace/otel/node:/opt/otel-node
 ```
 
-```
+```text
 workspace/otel/node/
   package.json         # @opentelemetry/api (та же 1.x, что и собственная копия приложения!),
   package-lock.json    # auto-instrumentations-node, sdk-node, sdk-trace-base,
