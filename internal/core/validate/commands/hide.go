@@ -3,17 +3,17 @@ package commands
 // hide.go validates `hide:` expressions on commands and group metadata.
 //
 // `hide:` accepts the same expression syntax as workflow `when:` — Go template
-// + builtin predicates (cmd:/builtin keys). This validator checks syntax, and
-// for template-only expressions also renders them against the loaded config:
-// runtime evaluation (registry.ApplyVisibility) is fail-open, so an expression
-// that parses but cannot execute leaves the command visible, reported only as
-// a log line at each invocation. Predicates are never executed here.
+// + builtin predicates (cmd:/builtin keys). This validator checks syntax, then
+// renders the expression against the loaded config exactly as the first step
+// of runtime evaluation (tpl.EvalCommandCondition) does: runtime visibility
+// (registry.ApplyVisibility) is fail-open, so an expression that parses but
+// cannot render leaves the command visible, reported only as a log line at
+// each invocation. Rendering is side-effect free (the template FuncMap is
+// hermetic); the rendered cmd:/builtin predicate is never evaluated here.
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
@@ -49,7 +49,7 @@ func hideExprDiagnostics(expr, target, label, relFile string, cfg *config.DweCon
 			Hint:     "fix the template syntax; same rules as workflow `when:`",
 		}}
 	}
-	if cfg == nil || !isTemplateOnlyHide(expr) {
+	if cfg == nil {
 		return nil
 	}
 	if _, err := tpl.RenderCommand(expr, registry.HideRenderContext(cfg)); err != nil {
@@ -63,21 +63,4 @@ func hideExprDiagnostics(expr, target, label, relFile string, cfg *config.DweCon
 		}}
 	}
 	return nil
-}
-
-// isTemplateOnlyHide reports whether expr is neither a `cmd:` predicate nor a
-// builtin `when:` predicate. Those are left to runtime: their result depends
-// on the host state they probe, not on the config the validator holds.
-func isTemplateOnlyHide(expr string) bool {
-	s := strings.TrimSpace(expr)
-	if strings.HasPrefix(s, "cmd:") {
-		return false
-	}
-	verb, _, _ := strings.Cut(s, " ")
-	for _, p := range condition.Predicates() {
-		if p.Name == verb {
-			return false
-		}
-	}
-	return true
 }

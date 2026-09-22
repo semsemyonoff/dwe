@@ -20,10 +20,10 @@ generated from commit subjects and stay on the
 
 ### Added
 
-- `dwe validate` warns `hide: expression does not evaluate` when a template-only
-  `hide:` on a command or group fails to render against the project config.
-  At runtime such an expression is fail-open and leaves the command visible.
-  `cmd:` and builtin-predicate expressions are not executed by the check.
+- `dwe validate` warns `hide: expression does not evaluate` when a `hide:` on a
+  command or group fails to render against the project config. At runtime
+  such an expression is fail-open and leaves the command visible. The check
+  only renders: a `cmd:` or builtin predicate is never executed.
 
 ### Changed
 

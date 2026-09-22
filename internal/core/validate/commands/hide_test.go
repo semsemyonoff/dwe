@@ -97,7 +97,8 @@ func TestHideDiagnostics_RenderCheck(t *testing.T) {
 		{"index into missing service", `{{ not (index .Raw "services" "cache" "enabled") }}`, cfg, 1},
 		{"config failed to load skips render", `{{ not (index .services "db" "enabled") }}`, nil, 0},
 		{"cmd predicate is not executed", "cmd: touch " + sentinel, cfg, 0},
-		{"builtin predicate is not rendered", `file-exists {{ .services }}`, cfg, 0},
+		{"builtin predicate template is rendered", `file-exists {{ index .services "db" "dir" }}/x`, cfg, 1},
+		{"builtin predicate is not evaluated", `file-exists {{ index .Raw "services" "db" "dir" }}/x`, cfg, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
