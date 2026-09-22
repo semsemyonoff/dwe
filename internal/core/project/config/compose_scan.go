@@ -84,10 +84,12 @@ type composeScanService struct {
 	Healthcheck   yaml.Node `yaml:"healthcheck"`
 }
 
-// composeScanHealthcheck is the narrow healthcheck shape ScanComposeCost needs.
+// composeScanHealthcheck is the narrow healthcheck shape ScanComposeCost and
+// ScanComposeHealthchecks need.
 type composeScanHealthcheck struct {
-	Disable     bool   `yaml:"disable"`
-	StartPeriod string `yaml:"start_period"`
+	Disable     bool      `yaml:"disable"`
+	StartPeriod string    `yaml:"start_period"`
+	Test        yaml.Node `yaml:"test"`
 }
 
 type composeScanNamedEntity struct {
@@ -393,6 +395,95 @@ func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
 	slices.Sort(out.ExternalImages)
 
 	return out
+}
+
+// HealthcheckWithoutStartPeriod is a compose service in the active chain whose
+// merged healthcheck runs a test but declares no start_period.
+type HealthcheckWithoutStartPeriod struct {
+	Service string
+	// File is the last compose file in the chain that declares this
+	// service's healthcheck — where a start_period belongs.
+	File string
+}
+
+// ScanComposeHealthchecks reports every compose service in the active chain
+// (cfg.ComposeFiles()) whose merged healthcheck has an active test but no
+// start_period. Without one, the probes a slow-starting service fails while
+// booting count against retries from the first second, so `docker compose up
+// --wait` can declare it unhealthy before it ever had a chance.
+//
+// healthcheck: is a mapping, so compose merges it key by key across the -f
+// chain: a later file's test: or start_period: replaces an earlier one, and an
+// earlier start_period survives a later file that does not mention it.
+// `!reset` drops the whole healthcheck and `!override` replaces it. Only
+// compose-declared healthchecks are visible — one baked into the image is not.
+func ScanComposeHealthchecks(cfg *DweConfig, projectRoot string) []HealthcheckWithoutStartPeriod {
+	type hcState struct {
+		test, disabled, startPeriod bool
+		file                        string
+	}
+
+	merged := make(map[string]*hcState)
+	for _, pf := range parseComposeFiles(cfg, projectRoot) {
+		for name, svc := range pf.doc.Services {
+			tag := mergeTagOf(svc.Healthcheck)
+			if tag == mergeReset {
+				delete(merged, name)
+				continue
+			}
+			hc, declared := decodeHealthcheck(svc.Healthcheck)
+			if !declared {
+				continue
+			}
+			st, ok := merged[name]
+			if !ok || tag == mergeOverride {
+				st = &hcState{}
+				merged[name] = st
+			}
+			st.file = pf.file
+			if nodeDeclared(hc.Test) {
+				st.test = healthcheckTestActive(hc.Test)
+			}
+			if hc.Disable {
+				st.disabled = true
+			}
+			// Any declared value counts, even 0s: an explicit start_period is
+			// the author's decision, not an omission.
+			if hc.StartPeriod != "" {
+				st.startPeriod = true
+			}
+		}
+	}
+
+	var out []HealthcheckWithoutStartPeriod
+	for _, name := range slices.Sorted(maps.Keys(merged)) {
+		st := merged[name]
+		if st.test && !st.disabled && !st.startPeriod {
+			out = append(out, HealthcheckWithoutStartPeriod{Service: name, File: st.file})
+		}
+	}
+	return out
+}
+
+// healthcheckTestActive reports whether a healthcheck test: runs a probe.
+// `["NONE"]` disables the image's healthcheck, `!reset` drops the key, and an
+// empty value declares nothing.
+func healthcheckTestActive(n yaml.Node) bool {
+	if mergeTagOf(n) == mergeReset {
+		return false
+	}
+	n = resolveAlias(n)
+	switch n.Kind {
+	case yaml.SequenceNode:
+		if len(n.Content) == 0 {
+			return false
+		}
+		return scalarValue(*n.Content[0]) != "NONE"
+	case yaml.ScalarNode:
+		return scalarValue(n) != ""
+	default:
+		return false
+	}
 }
 
 // maxAliasHops bounds resolveAlias. The YAML spec forbids anchoring an alias

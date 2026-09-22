@@ -45,6 +45,12 @@ generated from commit subjects and stay on the
   whether enabled or not. A typo used to surface only as a `docker compose`
   error on the next `dwe run`. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
+- `dwe validate` notes (`config.healthcheck_start_period`, info) a compose
+  service in the active chain whose healthcheck runs a test but sets no
+  `start_period`. `dwe run` waits with `docker compose up --wait`, so a
+  slow-starting service whose boot-time probes use up `retries` fails the
+  whole run. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
 
 ### Changed
 
