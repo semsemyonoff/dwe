@@ -18,6 +18,13 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+### Added
+
+- `dwe validate` warns `hide: expression does not evaluate` when a template-only
+  `hide:` on a command or group fails to render against the project config.
+  At runtime such an expression is fail-open and leaves the command visible.
+  `cmd:` and builtin-predicate expressions are not executed by the check.
+
 ### Fixed
 
 - The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
