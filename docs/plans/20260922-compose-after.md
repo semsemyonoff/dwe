@@ -351,13 +351,13 @@ it.
 - Modify: `internal/core/project/config/service_type_test.go` (`TestAllowedFieldsFor` :92)
 - Modify: `internal/core/validate/config/workspace_test.go`
 
-- [ ] add `ComposeAfter []string \`yaml:"compose_after"\`` after `LocalComposeExtra`, with a doc comment: emitted by `composeFiles` after every service group and before the bridge overlay, same `all || svc.Enabled` gate as `Compose`
-- [ ] add `"compose_after"` to the `common` slice of `allowedFieldsFor`
-- [ ] add `"compose_after": true` to all three maps in `servicesAllowedFields` (app, infra, tool)
-- [ ] extend `TestAllowedFieldsFor`: add `compose_after` to `commonFields` so every type must have it and the unknown type must lack it
-- [ ] add `TestServicesValidator_ComposeAfterAllowedAllTypes` in `internal/core/validate/config/workspace_test.go`, mirroring `TestServicesValidator_BridgeFieldAllowedAllTypes` (:560): an app, an infra and a tool each declaring `compose_after:` produce no "field not allowed" diagnostic (the side the loader test cannot see)
-- [ ] write loader tests through `LoadConfig` on a temp project: `compose_after: [a.yml, b.yml]` decodes in list order for `app`, `infra` and `tool`; a scalar `compose_after: a.yml` is a load error (strict decode into `[]string`); the typo `compose_afer:` is rejected with `ErrServiceFieldNotAllowed`
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/validate/config/...` - must pass before task 2
+- [x] add `ComposeAfter []string \`yaml:"compose_after"\`` after `LocalComposeExtra`, with a doc comment: emitted by `composeFiles` after every service group and before the bridge overlay, same `all || svc.Enabled` gate as `Compose`
+- [x] add `"compose_after"` to the `common` slice of `allowedFieldsFor`
+- [x] add `"compose_after": true` to all three maps in `servicesAllowedFields` (app, infra, tool)
+- [x] extend `TestAllowedFieldsFor`: add `compose_after` to `commonFields` so every type must have it and the unknown type must lack it
+- [x] add `TestServicesValidator_ComposeAfterAllowedAllTypes` in `internal/core/validate/config/workspace_test.go`, mirroring `TestServicesValidator_BridgeFieldAllowedAllTypes` (:560): an app, an infra and a tool each declaring `compose_after:` produce no "field not allowed" diagnostic (the side the loader test cannot see)
+- [x] write loader tests through `LoadConfig` on a temp project: `compose_after: [a.yml, b.yml]` decodes in list order for `app`, `infra` and `tool`; a scalar `compose_after: a.yml` is a load error (strict decode into `[]string`); the typo `compose_afer:` is rejected with `ErrServiceFieldNotAllowed`
+- [x] run `go test ./internal/core/project/config/... ./internal/core/validate/config/...` - must pass before task 2
 
 ### Task 2: emission, `--all`, overlay-layer rejection
 

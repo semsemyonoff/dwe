@@ -1056,6 +1056,99 @@ func TestLoadConfig_composeAbsent(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_composeAfterDecodesInOrder(t *testing.T) {
+	servicesYML := `
+services:
+  main:
+    type: app
+    container: app-main
+    required: true
+    dir: ./services/main
+    compose_after:
+      - compose/after/main-1.yml
+      - compose/after/main-2.yml
+  cache:
+    type: infra
+    container: cache
+    compose_after:
+      - compose/after/cache.yml
+  otel:
+    type: tool
+    container: otel
+    compose_after:
+      - compose/after/otel-1.yml
+      - compose/after/otel-2.yml
+`
+	minimalComposeAfterDefaultsYML := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalComposeAfterDefaultsYML, "", servicesYML, noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if want := []string{"compose/after/main-1.yml", "compose/after/main-2.yml"}; !slicesEqual(cfg.Services["main"].ComposeAfter, want) {
+		t.Errorf("Services[main].ComposeAfter = %v, want %v", cfg.Services["main"].ComposeAfter, want)
+	}
+	if want := []string{"compose/after/cache.yml"}; !slicesEqual(cfg.Services["cache"].ComposeAfter, want) {
+		t.Errorf("Services[cache].ComposeAfter = %v, want %v", cfg.Services["cache"].ComposeAfter, want)
+	}
+	if want := []string{"compose/after/otel-1.yml", "compose/after/otel-2.yml"}; !slicesEqual(cfg.Services["otel"].ComposeAfter, want) {
+		t.Errorf("Services[otel].ComposeAfter = %v, want %v", cfg.Services["otel"].ComposeAfter, want)
+	}
+}
+
+func TestLoadConfig_composeAfterScalarIsLoadError(t *testing.T) {
+	servicesYML := `
+services:
+  otel:
+    type: tool
+    container: otel
+    compose_after: compose/after/otel.yml
+`
+	minimalDefaults := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaults, "", servicesYML, noToolsYML)
+	if _, err := LoadConfig(path); err == nil {
+		t.Fatal("LoadConfig: expected error for scalar compose_after, got nil")
+	}
+}
+
+func TestLoadConfig_composeAfterTypoRejected(t *testing.T) {
+	servicesYML := `
+services:
+  otel:
+    type: tool
+    container: otel
+    compose_afer:
+      - compose/after/otel.yml
+`
+	minimalDefaults := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaults, "", servicesYML, noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("LoadConfig: expected error for typo compose_afer, got nil")
+	}
+	if !errors.Is(err, ErrServiceFieldNotAllowed) {
+		t.Errorf("err = %v, want errors.Is ErrServiceFieldNotAllowed", err)
+	}
+}
+
 // --- Config Validation ---
 
 func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {

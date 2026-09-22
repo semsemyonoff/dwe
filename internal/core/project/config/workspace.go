@@ -1097,7 +1097,7 @@ type ServiceInfoPath struct {
 func allowedFieldsFor(t ServiceType) map[string]bool {
 	// Fields permitted for every service type.
 	common := []string{
-		"type", "container", "required", "compose",
+		"type", "container", "required", "compose", "compose_after",
 		"ports", "hosts", "icon", "info", "status",
 		"on_enable", "on_disable", "notes", "bridge",
 	}
@@ -1168,10 +1168,16 @@ type ServiceConfig struct {
 	// gate. Populated only by explicit post-decode injection from
 	// `workspace/local.yml` (`services.<name>.compose.extra`) — the `yaml:"-"`
 	// tag makes it unreachable from any git-tracked service.yml.
-	LocalComposeExtra []string            `yaml:"-"`
-	CLI               ServiceCLIConfig    `yaml:"cli"`
-	Render            ServiceRenderConfig `yaml:"render"`
-	Bridge            ServiceBridgeConfig `yaml:"bridge"`
+	LocalComposeExtra []string `yaml:"-"`
+	// ComposeAfter carries overlay files emitted once after all three service
+	// groups (tool/infra/app) in [DweConfig.composeFiles], before the generated
+	// bridge overlay — the tier that lets one service's overlay win over another
+	// service's own overlay regardless of type-group order. Same `all ||
+	// svc.Enabled` gate as Compose.
+	ComposeAfter []string            `yaml:"compose_after"`
+	CLI          ServiceCLIConfig    `yaml:"cli"`
+	Render       ServiceRenderConfig `yaml:"render"`
+	Bridge       ServiceBridgeConfig `yaml:"bridge"`
 	// Generated declares per-service values that the service itself mints (e.g.
 	// Laravel APP_KEY) and DWE harvests back into a durable store
 	// (.dwe/generated.yml) to replay on subsequent renders. Keyed by field name.
