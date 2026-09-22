@@ -34,9 +34,26 @@ func (v *composeFilesValidator) ID() string     { return "compose_files" }
 func (v *composeFilesValidator) Domain() string { return "config" }
 
 func (v *composeFilesValidator) Run(ctx validate.Context) []validate.Diagnostic {
+	var diags []validate.Diagnostic
+	// compose.base heads every -f chain, so a missing one breaks the stack
+	// whatever is enabled.
+	if ctx.Cfg != nil && ctx.Cfg.Compose.Base != "" {
+		base := ctx.Cfg.Compose.Base
+		if problem, _ := composePathProblem(ctx.ProjectRoot, base); problem != "" {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityWarning,
+				Domain:   "config",
+				Target:   "config.compose_files",
+				File:     "workspace.yml",
+				Message:  fmt.Sprintf("compose.base file %q %s", base, problem),
+				Hint:     "docker compose will fail on `dwe run`; the path resolves against the project root",
+			})
+		}
+	}
+
 	services, ok := resolveServices(ctx)
 	if !ok {
-		return nil
+		return diags
 	}
 
 	type ref struct{ field, path string }
@@ -59,31 +76,18 @@ func (v *composeFilesValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		add("compose_after", name, svc.ComposeAfter)
 	}
 
-	var diags []validate.Diagnostic
 	for _, r := range order {
 		svcs := owners[r]
-		// Resolved like parseComposeFiles and docker compose itself: dwe runs
-		// compose with cmd.Dir = project root and no --project-directory.
-		abs := r.path
-		if !filepath.IsAbs(abs) {
-			abs = filepath.Join(ctx.ProjectRoot, r.path)
+		problem, missing := composePathProblem(ctx.ProjectRoot, r.path)
+		if problem == "" {
+			continue
 		}
-
-		var problem, hint string
-		info, err := os.Stat(abs)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			problem = "does not exist"
+		var hint string
+		if missing {
 			hint = "docker compose will fail on `dwe run` while this service is enabled; paths resolve against the project root, not the service folder"
 			if alt := filepath.Join(ctx.ProjectRoot, "workspace", "services", svcs[0], r.path); !filepath.IsAbs(r.path) && fileExists(alt) {
 				hint = fmt.Sprintf("paths resolve against the project root, not the service folder — did you mean %q?", relPath(ctx.ProjectRoot, alt))
 			}
-		case err != nil:
-			problem = "cannot be read: " + err.Error()
-		case info.IsDir():
-			problem = "is a directory, not a compose file"
-		default:
-			continue
 		}
 
 		diags = append(diags, validate.Diagnostic{
@@ -97,6 +101,28 @@ func (v *composeFilesValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		})
 	}
 	return diags
+}
+
+// composePathProblem stats a compose path resolved like parseComposeFiles and
+// docker compose itself (dwe runs compose with cmd.Dir = project root and no
+// --project-directory). It returns "" when the path is a readable file;
+// missing reports the not-exist case.
+func composePathProblem(root, p string) (problem string, missing bool) {
+	abs := p
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(root, p)
+	}
+	info, err := os.Stat(abs)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "does not exist", true
+	case err != nil:
+		return "cannot be read: " + err.Error(), false
+	case info.IsDir():
+		return "is a directory, not a compose file", false
+	default:
+		return "", false
+	}
 }
 
 // ownersLabel renders "service a lists" / "services a, b list".

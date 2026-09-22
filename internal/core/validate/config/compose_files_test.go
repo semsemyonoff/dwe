@@ -15,6 +15,8 @@ func TestComposeFilesValidator(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name string
+		// workspace overrides the default workspace.yml body.
+		workspace string
 		// services maps folder name to service.yml body.
 		services map[string]string
 		// files are created relative to the project root.
@@ -60,6 +62,12 @@ func TestComposeFilesValidator(t *testing.T) {
 			wantMsgs: []string{`service app lists compose file "compose", which is a directory, not a compose file`},
 		},
 		{
+			name:      "missing compose.base warns",
+			workspace: "project:\n  name: shop\ncompose:\n  base: docker-compose.yaml\n",
+			files:     []string{"docker-compose.yml"},
+			wantMsgs:  []string{`compose.base file "docker-compose.yaml" does not exist`},
+		},
+		{
 			// A child inheriting the parent's list via extends: reports the
 			// shared path once, naming both services.
 			name: "inherited path is reported once",
@@ -74,7 +82,11 @@ func TestComposeFilesValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
-			require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: shop\n"), 0o644))
+			ws := tt.workspace
+			if ws == "" {
+				ws = "project:\n  name: shop\n"
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(ws), 0o644))
 			for name, body := range tt.services {
 				dir := filepath.Join(root, "workspace", "services", name)
 				require.NoError(t, os.MkdirAll(dir, 0o755))

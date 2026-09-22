@@ -42,7 +42,7 @@ generated from commit subjects and stay on the
   only renders: a `cmd:` or builtin predicate is never executed.
 - `dwe validate` warns (`config.compose_files`) when a file listed under a
   service's `compose:` or `compose_after:` does not exist, for every service
-  whether enabled or not. A typo used to surface only as a `docker compose`
+  whether enabled or not, or when `compose.base` does not exist. A typo used to surface only as a `docker compose`
   error on the next `dwe run`. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
 - `dwe validate` notes (`config.healthcheck_start_period`, info) a compose
