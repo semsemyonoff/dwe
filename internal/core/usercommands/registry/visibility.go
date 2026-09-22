@@ -42,12 +42,7 @@ func (r *Registry) ApplyVisibility(cfg *config.DweConfig, projectRoot string) er
 	if r == nil {
 		return nil
 	}
-	rctx := &tpl.RenderContext{
-		Host: tpl.CurrentHostInfo(),
-	}
-	if cfg != nil {
-		rctx.Raw = cfg.Raw
-	}
+	rctx := HideRenderContext(cfg)
 
 	// Invariant: applyGroupVisibility MUST complete fully before the
 	// byID loop below. The per-command cascade reads parent.Hidden via
@@ -181,6 +176,20 @@ func collectEffectiveBridge(node *GroupNode, parent *model.BridgeDef, eff map[st
 	for _, child := range node.Children {
 		collectEffectiveBridge(child, cur, eff)
 	}
+}
+
+// HideRenderContext builds the render context `hide:` expressions evaluate
+// against: the merged config as .Raw plus host info — no params, context or
+// files. `dwe validate` renders against the same context so its "does not
+// evaluate" warning matches what ApplyVisibility sees. nil cfg leaves Raw nil.
+func HideRenderContext(cfg *config.DweConfig) *tpl.RenderContext {
+	rctx := &tpl.RenderContext{
+		Host: tpl.CurrentHostInfo(),
+	}
+	if cfg != nil {
+		rctx.Raw = cfg.Raw
+	}
+	return rctx
 }
 
 // evalHide treats an empty expression as "not hidden". Otherwise it

@@ -274,7 +274,7 @@ By default every command shows up in `dwe commands list`, the interactive browse
   commands:
     db.engine.reset:
       type: shell
-      hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+      hide: '{{ eq (index .Raw "vars" "db_engine") "sqlite" }}'
       cmd: db reset --engine
   ```
 

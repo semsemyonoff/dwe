@@ -28,6 +28,26 @@ generated from commit subjects and stay on the
   resolve: against the directory of the first `-f` file (`compose.base`), not
   the overlay's own directory. See
   [`compose`](docs/reference/config/services/fields.md).
+- `dwe validate` warns `hide: expression does not evaluate` when a `hide:` on a
+  command or group fails to render against the project config. At runtime
+  such an expression is fail-open and leaves the command visible. The check
+  only renders: a `cmd:` or builtin predicate is never executed.
+
+### Changed
+
+- The `▶ <id>  [<type>]  <description>` banner that `dwe cmd` / `dwe commands`
+  prints before running a command now goes to stderr, so `dwe cmd X | …`
+  receives only the command's own output; through the host bridge it reaches
+  the container's stderr. Under `-o json` the banner is no longer printed at
+  all, so stderr carries only the error envelope. Scripts that parsed the
+  banner from stdout must read stderr.
+
+### Fixed
+
+- The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
+  reference no longer fail to evaluate: config is read through `.Raw`
+  (`index .Raw "services" "db" "enabled"`), not a non-existent `.services`.
+  A copied example used to leave the command visible without any error.
 
 ## [0.6.2] - 2026-09-16
 
