@@ -60,24 +60,39 @@ func (v *composeFilesValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	// A child inheriting its parent's list through extends: carries the same
 	// path; report it once, naming every service that lists it.
 	owners := make(map[ref][]string)
+	// declarer is the service whose own service.yml writes the path — the
+	// diagnostic's File and the service-folder hint belong there, not on a
+	// child that merely inherited the list.
+	declarer := make(map[ref]string)
 	var order []ref
-	add := func(field, svc string, paths []string) {
+	add := func(field, svc string, paths []string, declared bool) {
 		for _, p := range paths {
 			r := ref{field, p}
 			if _, seen := owners[r]; !seen {
 				order = append(order, r)
 			}
 			owners[r] = append(owners[r], svc)
+			if _, has := declarer[r]; declared && !has {
+				declarer[r] = svc
+			}
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(services)) {
 		svc := services[name]
-		add("compose", name, svc.Compose)
-		add("compose_after", name, svc.ComposeAfter)
+		parent, hasParent := services[svc.Extends]
+		hasParent = hasParent && svc.Extends != ""
+		add("compose", name, svc.Compose, !hasParent || !slices.Equal(svc.Compose, parent.Compose))
+		add("compose_after", name, svc.ComposeAfter, !hasParent || !slices.Equal(svc.ComposeAfter, parent.ComposeAfter))
 	}
 
 	for _, r := range order {
 		svcs := owners[r]
+		// Unreachable on a loaded config — every extends chain ends at a root
+		// that declares its own list — kept so a hand-built one still reports.
+		src, ok := declarer[r]
+		if !ok {
+			src = svcs[0]
+		}
 		problem, missing := composePathProblem(ctx.ProjectRoot, r.path)
 		if problem == "" {
 			continue
@@ -85,7 +100,7 @@ func (v *composeFilesValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		var hint string
 		if missing {
 			hint = "docker compose will fail on `dwe run` while this service is enabled; paths resolve against the project root, not the service folder"
-			if alt := filepath.Join(ctx.ProjectRoot, "workspace", "services", svcs[0], r.path); !filepath.IsAbs(r.path) && fileExists(alt) {
+			if alt := filepath.Join(ctx.ProjectRoot, "workspace", "services", src, r.path); !filepath.IsAbs(r.path) && fileExists(alt) {
 				hint = fmt.Sprintf("paths resolve against the project root, not the service folder — did you mean %q?", relPath(ctx.ProjectRoot, alt))
 			}
 		}
@@ -94,7 +109,7 @@ func (v *composeFilesValidator) Run(ctx validate.Context) []validate.Diagnostic 
 			Severity: validate.SeverityWarning,
 			Domain:   "config",
 			Target:   "config.compose_files",
-			File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "workspace", "services", svcs[0], "service.yml")),
+			File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "workspace", "services", src, "service.yml")),
 			Message: fmt.Sprintf("%s %s file %q, which %s",
 				ownersLabel(svcs), r.field, r.path, problem),
 			Hint: hint,

@@ -24,6 +24,7 @@ func TestComposeFilesValidator(t *testing.T) {
 		dirs     []string
 		wantMsgs []string
 		wantHint string
+		wantFile string
 	}{
 		{
 			name:     "all files present is silent",
@@ -77,6 +78,19 @@ func TestComposeFilesValidator(t *testing.T) {
 			},
 			wantMsgs: []string{`services main, main2 list compose file "compose/main.yml", which does not exist`},
 		},
+		{
+			// The child sorts first but only inherits the list: File and the
+			// service-folder hint belong to the parent that declares it.
+			name: "inherited path is attributed to the declaring parent",
+			services: map[string]string{
+				"zmain": "type: app\ndir: src\ncompose: [overlay.yml]\n",
+				"app":   "type: app\ndir: src2\nextends: zmain\n",
+			},
+			files:    []string{"workspace/services/zmain/overlay.yml"},
+			wantMsgs: []string{`services app, zmain list compose file "overlay.yml", which does not exist`},
+			wantHint: `did you mean "workspace/services/zmain/overlay.yml"?`,
+			wantFile: "workspace/services/zmain/service.yml",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,6 +130,9 @@ func TestComposeFilesValidator(t *testing.T) {
 			}
 			if tt.wantHint != "" {
 				require.Contains(t, diags[0].Hint, tt.wantHint)
+			}
+			if tt.wantFile != "" {
+				require.Equal(t, tt.wantFile, diags[0].File)
 			}
 		})
 	}
