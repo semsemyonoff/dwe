@@ -7,15 +7,16 @@ package docs
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
 	"README.md":                                "93af0098060d",
-	"guides/add-a-service.md":                  "c5ab3861731c",
+	"guides/add-a-service.md":                  "1c0a0a6f8530",
 	"guides/author-project-commands.md":        "f568b0f4673c",
 	"guides/background-daemons.md":             "b2dcd1937aba",
 	"guides/brand-your-project.md":             "c74cf1229066",
 	"guides/daily-workflow.md":                 "2424341da74f",
-	"guides/index.md":                          "dbb95f9fd530",
+	"guides/index.md":                          "741830772008",
 	"guides/integration-tests.md":              "c48a7e440867",
 	"guides/joining-a-project.md":              "8e830b51dfe5",
 	"guides/localize-for-your-team.md":         "7651e1c5c14c",
+	"guides/observability-otel.md":             "feb2071fbbe9",
 	"guides/preflight-checks.md":               "0118a90a2c11",
 	"guides/shared-ide-and-agent-config.md":    "8e10b630fa17",
 	"guides/starship.md":                       "585d118b6b71",
