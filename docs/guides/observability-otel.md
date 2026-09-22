@@ -20,12 +20,16 @@ What you end up with:
 ```yaml
 # workspace/services/otel/service.yml
 # tool: OpenTelemetry backend (grafana/otel-lgtm). Optional, OFF by default.
-# The overlay ALSO patches the app services to export here — one toggle
-# switches the whole feature (see compose/otel.yml).
+# The backend lives in compose:; the app patch that makes services export to
+# it lives in compose_after:, so it wins over each app's own overlay — one
+# toggle switches the whole feature (see compose/otel.yml and
+# compose/otel-apps.yml).
 type: tool
 container: "otel"
 compose:
   - compose/otel.yml
+compose_after:
+  - compose/otel-apps.yml
 hosts:
   web: otel.myproject.localhost
 icon: "📊"
@@ -60,7 +64,7 @@ Nothing else is needed for Grafana behind the proxy — its own vhost at the roo
 ## 2. The overlay
 
 ```yaml
-# compose/otel.yml — the otel backend AND the patch of the app services.
+# compose/otel.yml — the otel backend.
 # Relative bind-mount paths resolve against the PROJECT ROOT, not compose/.
 services:
   otel:
@@ -90,11 +94,19 @@ services:
       start_period: 120s
       start_interval: 5s
 
-  # --- patch of the base app service --------------------------------------
-  # Compose merges this into the base definition: `command` REPLACES,
-  # `environment` and `volumes` MERGE. No `depends_on: otel` in either
-  # direction — spans emitted before the collector answers are dropped with a
-  # warning in the app log, which is the intended behaviour.
+volumes:
+  otel_data:
+```
+
+```yaml
+# compose/otel-apps.yml — the patch of the app services, listed in
+# compose_after: so it is emitted after every service group (tool → infra →
+# app) and wins over the app's own overlay instead of losing to it.
+# Compose merges this into the base definition: `command` REPLACES,
+# `environment` and `volumes` MERGE. No `depends_on: otel` in either
+# direction — spans emitted before the collector answers are dropped with a
+# warning in the app log, which is the intended behaviour.
+services:
   app:
     environment:
       OTEL_SERVICE_NAME: "app"
@@ -108,9 +120,6 @@ services:
       # push metrics every 10 s (rate() panels need two samples to draw).
       OTEL_BSP_SCHEDULE_DELAY: "1000"
       OTEL_METRIC_EXPORT_INTERVAL: "10000"
-
-volumes:
-  otel_data:
 ```
 
 Traps worth knowing before the first `dwe run`:
@@ -119,8 +128,8 @@ Traps worth knowing before the first `dwe run`:
 - **The app answers 502 through the proxy for ~30 s after `enable --apply`** while its container is recreated. Wait for its health endpoint, not for the `dwe` command to return.
 - **The first minutes show "No data" in every `rate()` panel.** That is the export interval, not a broken pipeline; make some requests and look in Explore → Tempo first.
 - **A `depends_on` on an optional service in the base `compose.yaml` breaks the stack while that service is disabled.** Keep the coupling inside the overlay.
-- **Patch only services that exist whenever the tool is on.** A patch block carries no `image:` or `build:`, so it is valid only on top of a definition from an earlier file. Patch a service from the base `compose.yaml`, or an always-on one. If the patched app lives in its own overlay (`compose/services/site.yml`, say) and a developer disables that app while `otel` stays enabled, `compose/otel.yml` still declares `site:` with only `environment:` / `volumes:`, and Compose rejects the whole project because the service has neither an image nor a build context.
-- **A tool overlay cannot override what an app's own overlay sets.** DWE passes compose files as `base → tools → infra → apps` (alphabetical inside each group; `dwe compose files` prints the chain), so when the app service is defined in its own `compose/<app>.yml` rather than in the base file, that file comes *after* `compose/otel.yml` and wins every whole-value merge: `command:`, `healthcheck:`, and any `environment:` key both files set. New env keys and extra `volumes:` still merge fine. Design the patch to add only — an injected script that does its own setup (the Node recipe below) instead of a replaced `command:`.
+- **Patch only services that exist whenever the tool is on.** A patch block carries no `image:` or `build:`, so it is valid only on top of a definition from an earlier file. Patch a service from the base `compose.yaml`, or an always-on one. If the patched app lives in its own overlay (`compose/services/site.yml`, say) and a developer disables that app while `otel` stays enabled, `compose/otel-apps.yml` still declares `site:` with only `environment:` / `volumes:`, and Compose rejects the whole project because the service has neither an image nor a build context. `compose_after:` fixes the **order** the patch is emitted in, not whether the patched service **exists** — this trap is still live.
+- **`compose_after:` wins over an app's own overlay.** DWE emits a `compose_after:` file after every service group (tool → infra → app; `dwe compose files` prints the chain), so `compose/otel-apps.yml` lands after `compose/<app>.yml` and wins every whole-value merge: `command:`, `healthcheck:`, and any `environment:` key both files set. New env keys and extra `volumes:` merge fine from either tier. Put a whole-value override in `compose_after:` — a plain `compose:` overlay still loses that merge to a later app overlay.
 
 ### Dashboards
 
@@ -288,7 +297,7 @@ workspace/otel/node/
 
 Undici (the global `fetch`) is hooked through `diagnostics_channel`, so an SSR framework calling the backend propagates `traceparent` with no code. Things that break the zero-diff promise or add noise:
 
-- **A Sentry SDK v8+ in the app.** `Sentry.init` runs its own OpenTelemetry setup. The `@opentelemetry/api` global registry is first-wins, so an SDK registered from `--import` keeps the provider, but Sentry's preloaded http/undici instrumentations still run and emit a second server span for every request through *your* provider. Since the overlay cannot override the app's `SENTRY_DSN` (see the ordering trap above), `register.mjs` deletes `SENTRY_DSN` from `process.env` before the app starts: while the tool is on, the SSR half of Sentry is off. The browser half (`PUBLIC_*`, inlined at build) is untouched. Say so in the overlay's comments.
+- **A Sentry SDK v8+ in the app.** `Sentry.init` runs its own OpenTelemetry setup. The `@opentelemetry/api` global registry is first-wins, so an SDK registered from `--import` keeps the provider, but Sentry's preloaded http/undici instrumentations still run and emit a second server span for every request through *your* provider. `compose/otel-apps.yml` now sets `SENTRY_DSN: ""` directly — a whole-value `environment:` key like this wins over the app's own overlay — so the SSR half of Sentry is off while the tool is on for any app that treats a falsy `SENTRY_DSN` as disabled. An app whose init code falls back to a hardcoded default DSN when the variable is nullish (`dsn: process.env.SENTRY_DSN ?? defaultDsn`) sees the empty string as a non-nullish value and still initializes Sentry with it; that app needs `register.mjs`'s `delete process.env.SENTRY_DSN` to actually unset the variable instead. The browser half (`PUBLIC_*`, inlined at build) is untouched. Say so in the overlay's comments.
 - **Health probes.** The compose healthcheck's own process is skipped by the `argv[1]` guard, but its request still reaches the instrumented server. Filtering inside the http instrumentation config misses spans other instrumentations create, so drop them in a `SpanProcessor` wrapper around the `BatchSpanProcessor` (`onEnd`: path `/` with no `user-agent`, `/@vite/`, `/@fs/`, `/node_modules/`, `/__astro*`), which sits downstream of every instrumentation. Note that a healthcheck which renders a full page still produces real backend traffic every interval, and the backend traces it.
 - **No `http.route` on the site side.** The framework does not feed a route template to the instrumentation, so server spans are named by path. Group by path prefix in the lookup tool.
 
@@ -299,7 +308,7 @@ Grafana is for humans. An agent needs a command with compact output — Tempo's 
 The recipe ships a stdlib-only Python script (`workspace/otel/traces.py`) with `summary`, `list`, `show <id>`, `traceparent`, `services` and `selftest` subcommands. It runs inside any container of the stack that has `python3` — the `otel` image itself has only `curl` and `bash`; check a candidate with `docker exec <container> python3 --version` (Debian-based Go and PHP images usually carry one, Alpine ones do not) — and is mounted by the overlay so the command exists exactly when the backend does:
 
 ```yaml
-# compose/otel.yml, in the patched app service
+# compose/otel-apps.yml, the patched app service
     volumes:
       - ./workspace/otel:/opt/otel:ro
 ```
