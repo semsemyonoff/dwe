@@ -387,10 +387,10 @@ it.
 - Modify: `internal/core/project/config/workspace.go` (`ResolveServiceExtends` :2514-2519)
 - Modify: the `ResolveServiceExtends` tests in `internal/core/project/config/`
 
-- [ ] inherit `ComposeAfter` in `ResolveServiceExtends` next to `Compose` (`slices.Clone` from the parent when the child's list is empty; the child's own list replaces)
-- [ ] write extends tests via `LoadConfig`: child without `compose_after` inherits the parent's, and mutating the child's slice does not affect the parent's; child with its own list keeps only its own; child declaring `compose:` but not `compose_after:` still inherits the parent's `compose_after` (independent fields)
-- [ ] add the no-dedup row: parent and child both enabled, child inherits → the inherited file appears **twice** in `ComposeFiles()` (once per service, in service-name order); a comment on the assertion names it as the decided no-dedup policy, matching an inherited `compose:` list
-- [ ] run `go test ./internal/core/project/config/...` - must pass before task 4
+- [x] inherit `ComposeAfter` in `ResolveServiceExtends` next to `Compose` (`slices.Clone` from the parent when the child's list is empty; the child's own list replaces)
+- [x] write extends tests via `LoadConfig`: child without `compose_after` inherits the parent's, and mutating the child's slice does not affect the parent's; child with its own list keeps only its own; child declaring `compose:` but not `compose_after:` still inherits the parent's `compose_after` (independent fields)
+- [x] add the no-dedup row: parent and child both enabled, child inherits → the inherited file appears **twice** in `ComposeFiles()` (once per service, in service-name order); a comment on the assertion names it as the decided no-dedup policy, matching an inherited `compose:` list
+- [x] run `go test ./internal/core/project/config/...` - must pass before task 4
 
 ### Task 4: journal hash
 

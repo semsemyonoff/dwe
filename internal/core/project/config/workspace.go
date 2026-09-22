@@ -2538,6 +2538,9 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if len(svc.Compose) == 0 && len(parent.Compose) > 0 {
 			svc.Compose = slices.Clone(parent.Compose)
 		}
+		if len(svc.ComposeAfter) == 0 && len(parent.ComposeAfter) > 0 {
+			svc.ComposeAfter = slices.Clone(parent.ComposeAfter)
+		}
 		if len(svc.LocalComposeExtra) == 0 && len(parent.LocalComposeExtra) > 0 {
 			svc.LocalComposeExtra = slices.Clone(parent.LocalComposeExtra)
 		}
