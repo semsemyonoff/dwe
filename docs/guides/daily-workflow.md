@@ -137,7 +137,7 @@ dwe logs              # whole stack (all enabled services)
 dwe logs <service>    # one service
 ```
 
-With no argument, `dwe logs` streams the whole stack — every enabled service, multiplexed and prefixed, like `docker compose logs`. With a service name it streams that one service's container. By default the last 50 lines print and the command exits. To follow:
+With no argument, `dwe logs` shows the whole stack — every enabled service, multiplexed and prefixed, like `docker compose logs`. With a service name it shows that one service's container. By default the last 50 lines print and the command exits. To follow:
 
 ```shell
 dwe logs --follow

@@ -40,6 +40,17 @@ generated from commit subjects and stay on the
   command or group fails to render against the project config. At runtime
   such an expression is fail-open and leaves the command visible. The check
   only renders: a `cmd:` or builtin predicate is never executed.
+- `dwe validate` warns (`config.compose_files`) when a file listed under a
+  service's `compose:` or `compose_after:` does not exist, for every service
+  whether enabled or not, or when `compose.base` does not exist. A typo used to surface only as a `docker compose`
+  error on the next `dwe run`. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
+- `dwe validate` notes (`config.healthcheck_start_period`, info) a compose
+  service in the active chain whose healthcheck runs a test but sets no
+  `start_period`. `dwe run` waits with `docker compose up --wait`, so a
+  slow-starting service whose boot-time probes use up `retries` fails the
+  whole run. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
 
 ### Changed
 
@@ -49,6 +60,11 @@ generated from commit subjects and stay on the
   the container's stderr. Under `-o json` the banner is no longer printed at
   all, so stderr carries only the error envelope. Scripts that parsed the
   banner from stdout must read stderr.
+- `dwe logs` help and the `AGENTS.md` files `dwe init` scaffolds no longer
+  describe the command as streaming: it prints the last `--tail` lines and
+  exits unless `--follow` is passed, so a coding agent can call it
+  non-interactively. Existing projects keep their `AGENTS.md` until it is
+  edited or regenerated.
 
 ### Fixed
 

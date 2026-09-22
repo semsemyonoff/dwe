@@ -31,6 +31,8 @@ func All() []validate.Validator {
 		&iconsValidator{},
 		&composeProjectNameValidator{},
 		&containerNameValidator{},
+		&composeFilesValidator{},
+		&healthcheckStartPeriodValidator{},
 		&formalBlocksValidator{},
 		&templateRefsValidator{},
 		&portsExportsValidator{},
