@@ -1137,6 +1137,22 @@ func TestScanComposeHealthchecks(t *testing.T) {
 			},
 		},
 		{
+			name: "start_period reset in a later file is reported",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n      start_period: 30s\n",
+				"services:\n  db:\n    healthcheck:\n      start_period: !reset null\n",
+			},
+			want: []string{"db@compose-1.yml"},
+		},
+		{
+			name: "disable: false in a later file re-enables",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n      disable: true\n",
+				"services:\n  db:\n    healthcheck:\n      disable: false\n",
+			},
+			want: []string{"db@compose-1.yml"},
+		},
+		{
 			name: "reset drops the healthcheck",
 			docs: []string{
 				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n",
@@ -1181,4 +1197,16 @@ func TestScanComposeHealthchecks(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestScanComposeCost_StartPeriodResetClears pins that `start_period: !reset`
+// in a later file clears the earlier value instead of reading the tag's raw
+// text.
+func TestScanComposeCost_StartPeriodResetClears(t *testing.T) {
+	t.Parallel()
+	facts := costChain(t,
+		"services:\n  app:\n    image: busybox\n    healthcheck:\n      start_period: 300s\n",
+		"services:\n  app:\n    healthcheck:\n      start_period: !reset null\n",
+	)
+	require.Zero(t, facts.MaxStartPeriod)
 }

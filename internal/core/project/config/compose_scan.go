@@ -86,10 +86,35 @@ type composeScanService struct {
 
 // composeScanHealthcheck is the narrow healthcheck shape ScanComposeCost and
 // ScanComposeHealthchecks need.
+// Every field is a yaml.Node so a `!reset` on it is visible (see mergeTagOf)
+// and an explicit `disable: false` is distinguishable from an absent key.
 type composeScanHealthcheck struct {
-	Disable     bool      `yaml:"disable"`
-	StartPeriod string    `yaml:"start_period"`
+	Disable     yaml.Node `yaml:"disable"`
+	StartPeriod yaml.Node `yaml:"start_period"`
 	Test        yaml.Node `yaml:"test"`
+}
+
+// disabled reports whether this file's healthcheck sets `disable: true`.
+func (h composeScanHealthcheck) disabled() bool {
+	v, _ := boolNode(h.Disable)
+	return v
+}
+
+// boolNode reads a boolean scalar. declared is false for an absent key, a
+// `!reset`, or a value that is not a boolean.
+func boolNode(n yaml.Node) (value, declared bool) {
+	if mergeTagOf(n) == mergeReset {
+		return false, false
+	}
+	n = resolveAlias(n)
+	if n.Kind != yaml.ScalarNode {
+		return false, false
+	}
+	var b bool
+	if err := n.Decode(&b); err != nil {
+		return false, false
+	}
+	return b, true
 }
 
 type composeScanNamedEntity struct {
@@ -365,7 +390,9 @@ func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
 
 			hc, declared := decodeHealthcheck(svc.Healthcheck)
 			switch {
-			case mergeTagOf(svc.Healthcheck) == mergeReset, declared && hc.Disable:
+			case mergeTagOf(svc.Healthcheck) == mergeReset, declared && hc.disabled():
+				facts.startPeriod = 0
+			case declared && mergeTagOf(hc.StartPeriod) == mergeReset:
 				facts.startPeriod = 0
 			case declared:
 				if d, ok := parseStartPeriod(hc); ok {
@@ -444,12 +471,18 @@ func ScanComposeHealthchecks(cfg *DweConfig, projectRoot string) []HealthcheckWi
 			if nodeDeclared(hc.Test) {
 				st.test = healthcheckTestActive(hc.Test)
 			}
-			if hc.Disable {
-				st.disabled = true
+			// Mapping keys merge last-one-wins, so a later `disable: false`
+			// re-enables and a later `!reset` drops an earlier value.
+			if mergeTagOf(hc.Disable) == mergeReset {
+				st.disabled = false
+			} else if v, ok := boolNode(hc.Disable); ok {
+				st.disabled = v
 			}
 			// Any declared value counts, even 0s: an explicit start_period is
 			// the author's decision, not an omission.
-			if hc.StartPeriod != "" {
+			if mergeTagOf(hc.StartPeriod) == mergeReset {
+				st.startPeriod = false
+			} else if scalarValue(hc.StartPeriod) != "" {
 				st.startPeriod = true
 			}
 		}
@@ -596,10 +629,11 @@ func nodePresent(n yaml.Node) bool {
 // parser cannot read yields (0, false) — the scanner stays advisory and never
 // errors on a compose file docker itself accepts.
 func parseStartPeriod(h composeScanHealthcheck) (time.Duration, bool) {
-	if h.Disable || h.StartPeriod == "" {
+	sp := scalarValue(h.StartPeriod)
+	if h.disabled() || sp == "" || mergeTagOf(h.StartPeriod) == mergeReset {
 		return 0, false
 	}
-	d, err := time.ParseDuration(strings.ReplaceAll(h.StartPeriod, " ", ""))
+	d, err := time.ParseDuration(strings.ReplaceAll(sp, " ", ""))
 	if err != nil || d < 0 {
 		return 0, false
 	}
