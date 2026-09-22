@@ -29,9 +29,10 @@ generated from commit subjects and stay on the
 
 - The `▶ <id>  [<type>]  <description>` banner that `dwe cmd` / `dwe commands`
   prints before running a command now goes to stderr, so `dwe cmd X | …`
-  receives only the command's own output. This also keeps the banner out of
-  stdout under `-o json`, and it reaches the container's stderr through the
-  host bridge. Scripts that parsed the banner from stdout must read stderr.
+  receives only the command's own output; through the host bridge it reaches
+  the container's stderr. Under `-o json` the banner is no longer printed at
+  all, so stderr carries only the error envelope. Scripts that parsed the
+  banner from stdout must read stderr.
 
 ### Fixed
 

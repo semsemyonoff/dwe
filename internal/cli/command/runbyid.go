@@ -218,7 +218,9 @@ func runCommandByID(
 
 	// stderr: stdout carries only the command's own output, so
 	// `dwe cmd <id> | …` pipes exactly what the command printed.
-	printRunHeader(stderr, def, opts.Translator, opts.Locale)
+	if !opts.NoHeader {
+		printRunHeader(stderr, def, opts.Translator, opts.Locale)
+	}
 
 	if err := runUserCommand(ctx, rctx); err != nil {
 		return fmt.Errorf("running command %q: %w", id, err)
