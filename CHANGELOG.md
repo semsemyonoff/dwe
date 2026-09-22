@@ -40,6 +40,11 @@ generated from commit subjects and stay on the
   command or group fails to render against the project config. At runtime
   such an expression is fail-open and leaves the command visible. The check
   only renders: a `cmd:` or builtin predicate is never executed.
+- `dwe validate` warns (`config.compose_files`) when a file listed under a
+  service's `compose:` or `compose_after:` does not exist, for every service
+  whether enabled or not. A typo used to surface only as a `docker compose`
+  error on the next `dwe run`. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
 
 ### Changed
 
