@@ -59,7 +59,7 @@ Model host ports under `services.<name>.ports` (or route them through a `vars:` 
 
 ## 4. Container, toggle, variant
 
-The container lives in a compose file, not in `service.yml`: the **base** (`compose.yaml`, or whatever `docker.yml` `compose.base` names) for `required` infra, or **overlays** the service's `compose:` list activates (convention: `compose/tools/<name>.yml`, `compose/services/<name>.yml`, `compose/services/<svc>/<variant>.yml`). Overlays consume `.env` vars and patch the proxy vhost. Assembly: `dwe docs show config/docker --lang en`, `concepts/docker`.
+The container lives in a compose file, not in `service.yml`: the **base** (`compose.yaml`, or whatever `workspace.yml` `compose.base` names) for `required` infra, or **overlays** the service's `compose:` list activates (convention: `compose/tools/<name>.yml`, `compose/services/<name>.yml`, `compose/services/<svc>/<variant>.yml`). Overlays consume `.env` vars and patch the proxy vhost. Assembly: `dwe docs show config/docker --lang en`, `concepts/docker`.
 
 An overlay may also patch **neighbouring** services — a tool's overlay adding env and mounts to an app, so one toggle switches a whole feature — with no `depends_on` on the optional service in the base; merge rules and file-order traps: `dwe docs show guides/observability-otel#2-the-overlay --lang en`.
 
