@@ -32,8 +32,8 @@ compose_after:
 app, per-service `local.yml` extras included) and **before** the generated bridge
 overlay and the project-wide `local.yml` `compose.extra`. They are emitted only
 while the owning service is enabled — the same `all || svc.Enabled` gate as
-`compose:` — ordered by service name, with the author's list order preserved
-within a service.
+`compose:` — in one pass ordered by service name across all types, with the
+author's list order preserved within a service.
 
 New chain:
 
@@ -49,11 +49,12 @@ compose.base
 
 User-observable → `CHANGELOG.md` `## [Unreleased]` `### Added`. No existing
 project changes behaviour: a project that does not declare the field produces a
-byte-identical chain and byte-identical deployment hashes (see Task 3).
+byte-identical chain and byte-identical deployment hashes (Tasks 2 and 4 pin
+both).
 
 ### Non-goals
 
-Decided during design; do not re-litigate during implementation:
+Decided during design and review; do not re-litigate during implementation:
 
 - **No per-entry gate on another service being enabled.** The disabled-app trap
   (a patch block with no `image:`/`build:` for an app that is currently disabled
@@ -71,7 +72,7 @@ Decided during design; do not re-litigate during implementation:
   - The shape is forward-compatible: `compose_after` is `[]string` now, and a
     future mapping form can be added additively via a string-or-struct
     `UnmarshalYAML`, exactly as `ServiceConfigEntry` accepts `- .env` and
-    `- file: .env` (`workspace.go:~785`).
+    `- file: .env` (`workspace.go:~767`).
   - The guide keeps the caveat ("patch only services that exist whenever the tool
     is on"), reworded so it is clear that `compose_after` fixes the **order**, not
     the **presence**, of the patched service.
@@ -99,14 +100,22 @@ Decided during design; do not re-litigate during implementation:
   app that sorts after it); and `compose:` itself is allowed for every type.
   Nothing in the loader special-cases compose lists by type.
 - **No type grouping inside the `compose_after` tier.** One pass over service
-  names sorted alphabetically, all types together. The tool → infra → app
-  grouping exists to let apps win over the tools layered under them; files in
-  this tier are by definition patches over the whole stack, and two
-  `compose_after` files patching the same key is an authoring conflict either
-  way. (Open question recorded at the end in case review prefers grouping.)
+  names sorted alphabetically, all types together (decided in review). The
+  tool → infra → app grouping exists to let apps win over the tools layered
+  under them; files in this tier are by definition patches over the whole
+  stack, and two `compose_after` files patching the same key is an authoring
+  conflict either way. `fields.md` states the tie-break (the later service name
+  wins) and tells authors not to rely on it — patch disjoint keys.
 - **No deduplication.** A path listed in both `compose:` and `compose_after:`, or
   by two services, appears twice — the same policy `workspace.md` documents for
-  `compose.extra` ("Docker Compose tolerates duplicates").
+  `compose.extra` ("Docker Compose tolerates duplicates"). This includes
+  `extends:`: a parent and a child that are both enabled emit the inherited
+  `compose_after` file twice, exactly as an inherited `compose:` list does today
+  (pinned in Task 3, documented in `extends.md`).
+- **No `Raw["services"]` mirror.** `injectServicesIntoRaw` mirrors `compose`, but
+  nothing reads `services.<name>.compose_after`, and adding it would create a
+  public dot-path surface (export rules, `docker.yml` templates, `default_from:`)
+  that then has to be kept stable. Add it when a consumer exists.
 - **No change to the bridge overlay generator** (`internal/core/bridge/composegen.go`
   reads no compose file list) **nor to the prompt hot path** (`shared/prompt`
   only resolves the compose project name, never the file list).
@@ -135,7 +144,8 @@ Verified on `feat/compose-after` @ `879f058f`.
 
 - `internal/shared/docker/compose.go:60,66` — `NewCompose` / `NewComposeAll`
   (every `dwe run`/`stop`/`docker …` invocation; `--all` for
-  `dwe docker pull|build --all` via `internal/cli/docker/docker.go:263,300`).
+  `dwe docker pull|build --all` via `internal/cli/docker/docker.go:263,300`,
+  already covered by `docker_test.go:673-680`).
 - `internal/cli/compose/compose.go:70` (`dwe compose` passthrough) and `:154`
   (`dwe compose files`).
 - `internal/core/usercommands/runtime/spec/runner.go:152` — `RunContext.Compose()`
@@ -151,11 +161,10 @@ Verified on `feat/compose-after` @ `879f058f`.
 
 - `ResolveServiceExtends` — `workspace.go:2514-2519` clones `parent.Compose` /
   `parent.LocalComposeExtra` when the child has none.
-- `injectServicesIntoRaw` — `workspace.go:2989-2995` mirrors `compose` into
-  `Raw["services"][name]` (documented in `services/index.md` § Load behavior as
-  "each resolved service is injected").
 - `journal.serviceConfigToMap` — `internal/core/workflow/deploy/journal/hash.go:257`
   hashes `"compose": svc.Compose` into `ServiceConfigHash` / `ProjectConfigHash`.
+- `injectServicesIntoRaw` — `workspace.go:2989-2995` mirrors `compose` into
+  `Raw["services"][name]`. Deliberately NOT extended (see Non-goals).
 
 **Allowlists** (the `AGENTS.md` "service.yml allowlists" trap)
 
@@ -164,7 +173,9 @@ Verified on `feat/compose-after` @ `879f058f`.
   `service_type_test.go:92` (per-type `mustHave`/`mustLack` table).
 - Validator mirror: `servicesAllowedFields` —
   `internal/core/validate/config/workspace.go:149-170` (three per-type maps),
-  consumed at `:284`.
+  consumed at `:284`. Precedent test for an all-types field:
+  `TestServicesValidator_BridgeFieldAllowedAllTypes`
+  (`internal/core/validate/config/workspace_test.go:560`).
 - Overlay layers: `OverlayAllowedKeys` — `workspace.go:2022`; the
   `services.<name>.compose` special case at `:2061-2067`.
 
@@ -183,22 +194,29 @@ Verified on `feat/compose-after` @ `879f058f`.
 - No JSON schema, scaffold template or `llms-txt` section enumerates
   `service.yml` fields or compose lists.
 
-**Existing order tests to extend**
+**Existing order tests**
 
 - `TestComposeFiles_grouped_tool_infra_app` — `type_gates_test.go:53` (single
-  fixture, asserts `ComposeFiles()` and `ComposeFilesAll()`).
+  fixture, asserts `ComposeFiles()` and `ComposeFilesAll()`). Left as is.
 - `TestComposeFiles_bridgeOverlayChainPosition` — `bridge_overlay_test.go:23`.
 - `TestComposeFiles_LocalOverlays_GoldenFullPipeline` — `workspace_test.go:4367`.
-- `TestComposeFilesAll_*` — `workspace_test.go:3736-4101`.
 - `internal/cli/compose/compose_test.go:37-151` — `TestBuildComposeFileList_*`.
 
-**Docs that state the order** (grep `tools → infra`):
+**Docs that state the order or the chain's contents** (grep `tools → infra`):
 `docs/reference/config/services/index.md:37`,
 `docs/reference/config/workspace.md:452-458` (the "Final emission order" block,
 which also omits the bridge overlay today),
 `docs/reference/concepts/architecture.md:96`,
-`docs/guides/observability-otel.md:123`, `docs/internals/packages.md:82`, and
-their RU mirrors under `docs/i18n/ru/`.
+`docs/reference/concepts/docker.md:55-61` (§ Compose file list — a numbered
+list that claims completeness but stops at the app group),
+`docs/reference/config/tests.md:494` (which files leave a scenario's chain when
+it disables a service), `docs/guides/observability-otel.md:123`,
+`docs/internals/packages.md:82`, and their RU mirrors under `docs/i18n/ru/`.
+
+**Generated, tracked file.** `internal/core/docs/content_hashes_gen.go` is
+committed and regenerated only by `make build` (`make test` syncs the embedded
+tree but does not regenerate it). Every task that edits docs ends with
+`make build` and commits the regenerated file together with the docs.
 
 ## Development Approach
 
@@ -258,17 +276,13 @@ their RU mirrors under `docs/i18n/ru/`.
    inherits the parent's overlays but silently loses the parent's post-app patch
    would run a half-configured stack; field-by-field inheritance is how every
    other inherited field behaves.
-5. **Raw mirror.** `injectServicesIntoRaw` writes `compose_after` next to
-   `compose` when non-empty, so `services.<name>.compose_after` resolves in
-   dot-paths exactly as `services.<name>.compose` does and the "each resolved
-   service is injected" contract in the docs stays true.
-6. **Journal hash.** `serviceConfigToMap` adds `"compose_after"` **only when
+5. **Journal hash.** `serviceConfigToMap` adds `"compose_after"` **only when
    non-empty** (the `configs`/`dirs` pattern at `hash.go:260-275`), never as an
    always-present key: an always-present `nil` entry would change the canonical
    bytes of every existing service and make every deployed project look
    config-changed after upgrade. Hashed at all because `compose` is — an edit to
    the patch list changes what the stack runs.
-7. **`--all`.** `ComposeFilesAll()` includes every service's `compose_after`
+6. **`--all`.** `ComposeFilesAll()` includes every service's `compose_after`
    (the `all ||` half of the shared gate). Under `--all` every app overlay is in
    the chain too, so the disabled-app trap cannot arise there; this is the
    consistent reading of "all configured overlays" that `dwe docker pull|build
@@ -296,7 +310,9 @@ for _, name := range slices.Sorted(maps.Keys(c.Services)) {
 
 The sentence in the existing comment "Order is part of the public surface —
 overlay precedence depends on it (pinned by TestComposeFiles_grouped_tool_infra_app)"
-is extended to name the new tier and its pinning test.
+is extended to name the new tier and point at both pinning tests:
+`TestComposeFiles_grouped_tool_infra_app` (the groups, unchanged) and the new
+`TestComposeFiles_composeAfterTier`.
 
 ### Chain position relative to per-developer overlays
 
@@ -333,69 +349,78 @@ it.
 - Modify: `internal/core/project/config/workspace.go` (`ServiceConfig` :1165-1172, `allowedFieldsFor` :1099-1103)
 - Modify: `internal/core/validate/config/workspace.go` (`servicesAllowedFields` :149-170)
 - Modify: `internal/core/project/config/service_type_test.go` (`TestAllowedFieldsFor` :92)
-- Modify: the `servicesValidator` tests in `internal/core/validate/config/` (the file that exercises `servicesAllowedFields`)
+- Modify: `internal/core/validate/config/workspace_test.go`
 
 - [ ] add `ComposeAfter []string \`yaml:"compose_after"\`` after `LocalComposeExtra`, with a doc comment: emitted by `composeFiles` after every service group and before the bridge overlay, same `all || svc.Enabled` gate as `Compose`
 - [ ] add `"compose_after"` to the `common` slice of `allowedFieldsFor`
 - [ ] add `"compose_after": true` to all three maps in `servicesAllowedFields` (app, infra, tool)
 - [ ] extend `TestAllowedFieldsFor`: add `compose_after` to `commonFields` so every type must have it and the unknown type must lack it
-- [ ] write a validator-side test: a `service.yml` of each type declaring `compose_after:` produces no "field not allowed" diagnostic (this is the side the loader test cannot see)
+- [ ] add `TestServicesValidator_ComposeAfterAllowedAllTypes` in `internal/core/validate/config/workspace_test.go`, mirroring `TestServicesValidator_BridgeFieldAllowedAllTypes` (:560): an app, an infra and a tool each declaring `compose_after:` produce no "field not allowed" diagnostic (the side the loader test cannot see)
 - [ ] write loader tests through `LoadConfig` on a temp project: `compose_after: [a.yml, b.yml]` decodes in list order for `app`, `infra` and `tool`; a scalar `compose_after: a.yml` is a load error (strict decode into `[]string`); the typo `compose_afer:` is rejected with `ErrServiceFieldNotAllowed`
 - [ ] run `go test ./internal/core/project/config/... ./internal/core/validate/config/...` - must pass before task 2
 
-### Task 2: emission, `--all`, extends, overlay-layer rejection
+### Task 2: emission, `--all`, overlay-layer rejection
 
 **Files:**
-- Modify: `internal/core/project/config/workspace.go` (`composeFiles` :698-742 + doc comments :670-692, `ResolveServiceExtends` :2514-2519)
-- Modify: `internal/core/project/config/type_gates_test.go` (`TestComposeFiles_grouped_tool_infra_app` :53)
+- Modify: `internal/core/project/config/workspace.go` (`composeFiles` :698-742 + doc comments :670-692)
+- Modify: `internal/core/project/config/type_gates_test.go` (new sibling test next to `TestComposeFiles_grouped_tool_infra_app` :53)
 - Modify: `internal/core/project/config/bridge_overlay_test.go` (`TestComposeFiles_bridgeOverlayChainPosition` :23)
-- Modify: `internal/core/project/config/workspace_test.go` (`TestComposeFiles_LocalOverlays_GoldenFullPipeline` :4367, `TestComposeFilesAll_*`, extends tests)
+- Modify: `internal/core/project/config/workspace_test.go` (`TestComposeFiles_LocalOverlays_GoldenFullPipeline` :4367, overlay-rejection tests)
 - Modify: `internal/cli/compose/compose_test.go` (`dwe compose files`)
 
 - [ ] emit `svc.ComposeAfter` in `composeFiles` as in Technical Details: after the app group, before the bridge overlay, one sorted-by-name pass over all types, gate `all || svc.Enabled`
-- [ ] update the `ComposeFiles` / `ComposeFilesAll` / `composeFiles` doc comments to describe the new tier and its position
-- [ ] inherit `ComposeAfter` in `ResolveServiceExtends` next to `Compose` (clone from parent when the child's list is empty; child's own list replaces)
-- [ ] convert `TestComposeFiles_grouped_tool_infra_app` into a table (existing fixture as the first row, expectations unchanged) and add a `compose_after` row: a tool (`otel`) with `compose: [tool-otel.yml]` and `compose_after: [after-otel-1.yml, after-otel-2.yml]`, an infra and an app each with a `compose_after` entry — pin the exact full slice: groups as before, then the `compose_after` files ordered by service name across types with the tool's two files in list order, for both `ComposeFiles()` and `ComposeFilesAll()`
-- [ ] add rows: owner disabled → its `compose_after` absent from `ComposeFiles()` but present in `ComposeFilesAll()` at the same position; required owner (`Required: true, Enabled: true`) → present; a project with no `compose_after` anywhere → chain byte-identical to the pre-change expectation (reuse the first row)
+- [ ] update the `ComposeFiles` / `ComposeFilesAll` / `composeFiles` doc comments to describe the new tier and its position, pointing at both `TestComposeFiles_grouped_tool_infra_app` and `TestComposeFiles_composeAfterTier`
+- [ ] leave `TestComposeFiles_grouped_tool_infra_app` untouched; add a sibling table-driven `TestComposeFiles_composeAfterTier` in `type_gates_test.go`, each row pinning the exact full slice for both `ComposeFiles()` and `ComposeFilesAll()`:
+  - a tool (`otel`) with `compose: [tool-otel.yml]` and `compose_after: [after-otel-1.yml, after-otel-2.yml]`, plus an infra and an app each with one `compose_after` entry → groups as before, then the `compose_after` files ordered by service name across types, the tool's two in list order
+  - owner disabled → its `compose_after` absent from `ComposeFiles()`, present in `ComposeFilesAll()` at the same position
+  - required owner (`Required: true, Enabled: true`) → present
+  - no `compose_after` anywhere → chain byte-identical to the `TestComposeFiles_grouped_tool_infra_app` expectation (the backward-compatibility pin)
 - [ ] extend `TestComposeFiles_bridgeOverlayChainPosition` with a `compose_after` entry: it lands after the app's `compose.extra` and before `BridgeOverlayRelPath`, which stays before the project-wide `compose.local.yml`
-- [ ] extend `TestComposeFiles_LocalOverlays_GoldenFullPipeline` with a `compose_after` on the disabled `redis` and on an enabled tool: active chain has only the tool's, after `compose/apps/web.yml` and before the project-wide extras; the all-chain has both
-- [ ] write extends tests via `LoadConfig`: child without `compose_after` inherits the parent's (and mutating the child's slice does not affect the parent's); child with its own list keeps only its own; child declaring `compose:` but not `compose_after:` still inherits the parent's `compose_after` (independent fields)
+- [ ] extend `TestComposeFiles_LocalOverlays_GoldenFullPipeline` with a `compose_after` on the disabled `redis` and on an enabled tool: the active chain has only the tool's, after `compose/apps/web.yml` and before the project-wide extras; the all-chain has both
 - [ ] write overlay-rejection tests via `LoadConfig`: `services.<name>.compose_after` in `workspace/defaults.yml` and in `workspace/local.yml` are load errors naming the layer file and `services.<name>.compose_after`
 - [ ] add a `dwe compose files` test in `internal/cli/compose/compose_test.go` on a temp project with a tool `compose_after`: the printed lines equal `cfg.ComposeFiles()` with the `compose_after` file after the app overlay
 - [ ] run `go test ./internal/core/project/config/... ./internal/cli/compose/...` - must pass before task 3
 
-### Task 3: raw mirror and journal hash
+### Task 3: `extends:` inheritance
 
 **Files:**
-- Modify: `internal/core/project/config/workspace.go` (`injectServicesIntoRaw` :2989-2995)
+- Modify: `internal/core/project/config/workspace.go` (`ResolveServiceExtends` :2514-2519)
+- Modify: the `ResolveServiceExtends` tests in `internal/core/project/config/`
+
+- [ ] inherit `ComposeAfter` in `ResolveServiceExtends` next to `Compose` (`slices.Clone` from the parent when the child's list is empty; the child's own list replaces)
+- [ ] write extends tests via `LoadConfig`: child without `compose_after` inherits the parent's, and mutating the child's slice does not affect the parent's; child with its own list keeps only its own; child declaring `compose:` but not `compose_after:` still inherits the parent's `compose_after` (independent fields)
+- [ ] add the no-dedup row: parent and child both enabled, child inherits → the inherited file appears **twice** in `ComposeFiles()` (once per service, in service-name order); a comment on the assertion names it as the decided no-dedup policy, matching an inherited `compose:` list
+- [ ] run `go test ./internal/core/project/config/...` - must pass before task 4
+
+### Task 4: journal hash
+
+**Files:**
 - Modify: `internal/core/workflow/deploy/journal/hash.go` (`serviceConfigToMap` :247-275)
 - Modify: `internal/core/workflow/deploy/journal/hash_test.go`
-- Modify: the `injectServicesIntoRaw` tests in `internal/core/project/config/`
 
-- [ ] `injectServicesIntoRaw`: write `entry["compose_after"]` as `[]any` when non-empty, omitted when empty (same shape and omit rule as `compose`)
+- [ ] **before** changing `hash.go`, capture `ServiceConfigHash` of a fixed fixture service (no `compose_after`, a representative set of fields) on the branch base and pin it as a literal in a new test — this is the "no redeploy on upgrade" guarantee, checked against the pre-change value rather than against itself
 - [ ] `serviceConfigToMap`: add `m["compose_after"] = svc.ComposeAfter` only when `len > 0`
-- [ ] write a hash test: `ServiceConfigHash` of a service without `compose_after` equals the hash computed from the map **without** a `compose_after` key (assert `serviceConfigToMap` has no such key — this is the "no redeploy on upgrade" guarantee), and adding or reordering a `compose_after` entry changes the hash
-- [ ] write a raw-injection test: `services.<name>.compose_after` resolves to the list after `LoadConfig`; a service without the field has no key (update any test pinning the injected key set)
-- [ ] run `go test ./internal/core/workflow/deploy/journal/... ./internal/core/project/config/...` - must pass before task 4
+- [ ] test: `serviceConfigToMap` of a service without `compose_after` has no `compose_after` key
+- [ ] test: adding a `compose_after` entry changes the hash, and reordering two entries changes it again
+- [ ] run `go test ./internal/core/workflow/deploy/journal/...` (the literal pin must still pass after the change) - must pass before task 5
 
-### Task 4: the scanners and `dwe test` see the new files
+### Task 5: the scanners and `dwe test` inherit the tier
 
 No production code is expected here — every consumer goes through
-`ComposeFiles()`. This task pins it, so a future consumer that walks
-`svc.Compose` directly is caught.
+`ComposeFiles()`. These tests pin that the scanners and the scenario view
+inherit the new tier, so a later change to either cannot silently drop it.
 
 **Files:**
-- Modify: `internal/core/project/config/compose_scan_test.go`
 - Modify: `internal/core/workflow/envtest/scenarioview_test.go`
-- Modify: `internal/core/validate/tests/` tests (per-scenario chain)
+- Modify: `internal/core/project/config/compose_scan_test.go`
 
-- [ ] `ScanComposeIsolation`: a `container_name:` declared only in an enabled service's `compose_after` file is reported with that file as `File`; a `compose_after` file resetting a base `container_name` (the existing `!reset` / last-wins fixtures) clears the finding — the tier is last in the chain, so it wins the collapse
-- [ ] `ScanComposeCost`: an `image:` override in a `compose_after` file wins over the app overlay's `image:` (mirror `TestScanComposeCost_OverlayWins`)
-- [ ] `ScenarioView`: `compose_after` survives the view (not stripped like `LocalComposeExtra`); a scenario `env.services.disable` of the owner drops its `compose_after` from `view.ComposeFiles()`, `enable` adds it; extend `TestScenarioView_DoesNotMutateInput` with a `compose_after` slice
-- [ ] `validate/tests`: an interpolated-port finding in a `compose_after` file of a service the scenario disables is not attributed to that scenario's chain (mirror the existing disabled-service `compose:` case)
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/workflow/envtest/... ./internal/core/validate/tests/...` - must pass before task 5
+- [ ] `ScenarioView`: `compose_after` survives the view (not stripped like `LocalComposeExtra`)
+- [ ] `ScenarioView`: a scenario `env.services.disable` of the owner drops its `compose_after` from `view.ComposeFiles()`, `enable` of a disabled owner adds it
+- [ ] extend `TestScenarioView_DoesNotMutateInput` with a service carrying a `compose_after` slice
+- [ ] `ScanComposeIsolation`: a `compose_after` file resetting a `container_name:` set by the app's own overlay clears the finding — last-wins over the app overlay, because the tier follows the app group (mirror `TestScanComposeIsolation_ContainerNameReset`)
+- [ ] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...` - must pass before task 6
 
-### Task 5: reference docs, RU mirrors, CHANGELOG
+### Task 6: reference docs, RU mirrors, CHANGELOG
 
 **Files:**
 - Modify: `docs/reference/config/services/fields.md` (+ `docs/i18n/ru/reference/config/services/fields.md`)
@@ -403,46 +428,56 @@ No production code is expected here — every consumer goes through
 - Modify: `docs/reference/config/services/extends.md` (+ RU)
 - Modify: `docs/reference/config/workspace.md` (+ RU)
 - Modify: `docs/reference/concepts/architecture.md` (+ RU)
+- Modify: `docs/reference/concepts/docker.md` (+ RU)
+- Modify: `docs/reference/config/tests.md` (+ RU)
+- Modify: `internal/core/docs/content_hashes_gen.go` (regenerated by `make build`, committed)
 - Modify: `CHANGELOG.md`
 
-- [ ] `fields.md`: a `compose_after` row after `compose` (list, no, all): emitted after every service group and before the bridge overlay and project-wide `compose.extra`; same enabled gate; ordered by service name, list order kept; the use case (patch an app defined in its own overlay; whole-value keys now win); the caveat that it fixes order, not presence (a patch block for a disabled app still breaks the project); not settable from overlay layers; paths resolve like `compose:` (against the first `-f` file's directory)
+- [ ] `fields.md`: a `compose_after` row after `compose` (list, no, all): emitted after every service group and before the bridge overlay and project-wide `compose.extra`; same enabled gate; one pass ordered by service name across types, list order kept; between two `compose_after` files touching the same key the later service name wins — do not rely on it, patch disjoint keys; the use case (patch an app defined in its own overlay; whole-value keys now win); the caveat that it fixes order, not presence (a patch block for a disabled app still breaks the project); not settable from overlay layers; paths resolve like `compose:` (against the first `-f` file's directory)
 - [ ] `services/index.md`: allowlist table row (✓ ✓ ✓); rewrite the ordering bullet at :37 to `tool → infra → app → compose_after`; add `compose_after` to the structural-fields example list in § Load behavior (overlays may not set it)
-- [ ] `extends.md`: `compose_after` in the inherited-fields list (:32) with the same wording as `compose`, noting the two lists inherit independently
+- [ ] `extends.md`: `compose_after` in the inherited-fields list (:32) with the same wording as `compose`, noting that the two lists inherit independently and that a parent and child both enabled emit an inherited file twice (no dedup)
 - [ ] `workspace.md` § Compose overlays: update the "Final emission order" block (:452-458) to include the `compose_after` tier **and** the bridge overlay line it currently omits (the block claims to be the final order); add one sentence that a per-service `compose.extra` precedes every `compose_after` file, so the project-wide layer is the one with the last word
 - [ ] `concepts/architecture.md:96`: "tools → infra → apps → `compose_after` patches"
-- [ ] RU mirrors of all five pages: translate the same changes, then set each `> Translated from: … @ <hash>` header to the new 12-char hash (run `make build` first so `internal/core/docs/content_hashes_gen.go` holds the new English hashes; `TestRussianTranslationsAreFresh` fails on a stale header)
+- [ ] `concepts/docker.md` § Compose file list (:55-61): add item 5 "enabled services' `compose_after` files, by service name", then complete the tail the list claims to cover — item 6 the generated bridge overlay (when present), item 7 the project-wide `local.yml` `compose.extra`; adjust the following "Service type order matters" paragraph and note that `--all` includes disabled services' `compose_after` files too
+- [ ] `config/tests.md:494`: the sentence listing a service's own compose files that leave the chain when a scenario disables it names `compose_after:` alongside `compose:` and the `local.yml` overlays
+- [ ] RU mirrors of all seven pages: translate the same changes
 - [ ] `CHANGELOG.md` `## [Unreleased]` `### Added`: the `compose_after:` field — one entry naming the chain position, the enabled gate, and linking `docs/reference/config/services/fields.md`
-- [ ] run `make build` then `make test` - must pass before task 6
+- [ ] run `make build` (regenerates `internal/core/docs/content_hashes_gen.go`), set each RU `> Translated from: … @ <hash>` header to the new 12-char hash from that file, then `make test` (`TestRussianTranslationsAreFresh` fails on a stale header) - must pass before task 7
+- [ ] commit the docs together with the regenerated `internal/core/docs/content_hashes_gen.go`
 
-### Task 6: the OpenTelemetry guide and the agent skill
+### Task 7: the OpenTelemetry guide and the agent skill
 
 **Files:**
 - Modify: `docs/guides/observability-otel.md` (+ `docs/i18n/ru/guides/observability-otel.md`)
 - Modify: `skills/dwe/references/add-service-and-tools.md`
+- Modify: `internal/core/docs/content_hashes_gen.go` (regenerated by `make build`, committed)
+- Modify: `CHANGELOG.md`
 
 - [ ] guide § 1: the `service.yml` example gains `compose_after: [compose/otel-apps.yml]`; its header comment says the backend is in `compose:` and the app patch in `compose_after:`
 - [ ] guide § 2: split the overlay — `compose/otel.yml` keeps the `otel` service and the `otel_data` volume; the `# --- patch of the base app service ---` block moves to a second listing, `compose/otel-apps.yml`, whose comment says it is emitted after every app overlay so `command:` / `healthcheck:` / `environment:` replacements win; every later reference to "`compose/otel.yml`, in the patched app service" (e.g. :302) points at the new file
 - [ ] guide traps list: replace the "A tool overlay cannot override what an app's own overlay sets … design the patch to add only" bullet (:123) with the `compose_after` explanation (chain order, `dwe compose files` to see it); keep the "Patch only services that exist whenever the tool is on" bullet (:122), reworded so it says `compose_after` fixes the order but not the presence of the patched service
 - [ ] guide Node/Sentry paragraph (:291): drop the "since the overlay cannot override the app's `SENTRY_DSN`" rationale; the patch now sets `SENTRY_DSN: ""` in `compose/otel-apps.yml`; keep one sentence that an app which falls back on an empty DSN (`?? default`) still needs the `register.mjs` delete
 - [ ] re-read the Node recipe ("zero diff via `NODE_OPTIONS`") for any other sentence justified only by the ordering limit, and adjust it; the recipe itself stays add-only by choice, not by necessity
-- [ ] RU guide: same edits; refresh its translation hash after `make build`
-- [ ] `skills/dwe/references/add-service-and-tools.md`: add `compose_after:` to the "Common:" field list (:21) and one sentence in the compose paragraph (:62) — a tool/infra overlay that patches app services goes in `compose_after:`, not `compose:`
-- [ ] `CHANGELOG.md`: extend the existing otel-guide entry, or add a line, saying the guide now uses `compose_after:`
-- [ ] run `make build` then `make test` - must pass before task 7
+- [ ] RU guide: same edits
+- [ ] `skills/dwe/references/add-service-and-tools.md`: add `compose_after:` to the "Common:" field list (:21), and one sentence in the neighbour-patching paragraph (:64) — an overlay that patches app services goes in `compose_after:`, not `compose:`, so it lands after the apps' own overlays
+- [ ] `CHANGELOG.md`: amend the wording of the existing unreleased otel-guide entry (the service's overlay is now split into a `compose:` backend and a `compose_after:` app patch) rather than adding a separate line about the guide
+- [ ] run `make build`, refresh the RU guide's translation hash from the regenerated `content_hashes_gen.go`, then `make test` - must pass before task 8
+- [ ] commit the guide, skill and CHANGELOG together with the regenerated `internal/core/docs/content_hashes_gen.go`
 
-### Task 7: verify acceptance criteria
+### Task 8: verify acceptance criteria
 
 - [ ] on a temp project with an app defined in `compose/app.yml` (with `command:` and an `environment:` key) and an enabled tool whose `compose_after` file overrides both: `dwe compose files` lists the tool's file after `compose/app.yml`, and `dwe compose config` shows the tool's `command:` and env value
-- [ ] disabling the tool removes its `compose_after` file from `dwe compose files`; `dwe docker pull|build --all` still includes it — `dwe docker` has no dry-run, so assert it through `resolvePullInvocation` / `resolveBuildInvocation` (`internal/cli/docker/docker.go:263,300`, `all=true`) in `internal/cli/docker` tests: the returned `Compose.Files` contain the disabled owner's `compose_after` file
-- [ ] a project without `compose_after` prints the same `dwe compose files` as on `feat/otel-guide`
-- [ ] `services.<name>.compose_after` in `workspace/local.yml` fails `dwe validate` / load with the overlay error
+- [ ] `dwe services disable <tool>` on that project: `dwe compose files` no longer lists its `compose_after` file
+- [ ] `services.<name>.compose_after` added to that project's `workspace/local.yml`: `dwe validate` reports the overlay error naming the file and key
+- [ ] backward compatibility is covered by Task 2's byte-identical row and Task 4's literal hash pin — no separate binary comparison
 - [ ] `make build`, `make lint`, `make test` clean
 
-### Task 8: [Final] Update documentation
+### Task 9: [Final] Update documentation
 
-- [ ] `docs/internals/packages.md` § Core — Foundation (`project/config/`, :82): extend the "order is part of the public surface, locked" sentence with the `compose_after` tier (position, gate, one sorted pass across types, before the bridge overlay); add `ComposeAfter` to the `ResolveServiceExtends` inherited-field note; add `compose_after` to the list of fields that required BOTH allowlist entries; state the hash rule (key present only when non-empty, so existing deployment hashes are unchanged)
+- [ ] `docs/internals/packages.md` § Core — Foundation (`project/config/`, :82): extend the "order is part of the public surface, locked" sentence with the `compose_after` tier (position, gate, one sorted pass across types, before the bridge overlay); add `ComposeAfter` to the `ResolveServiceExtends` inherited-field note (independent of `Compose`, no dedup); add `compose_after` to the list of fields that required BOTH allowlist entries; state the hash rule (key present only when non-empty, so existing deployment hashes are unchanged) and that the field is deliberately not mirrored into `Raw["services"]`
 - [ ] `AGENTS.md`: no change expected — the existing "`info.yml` auto-blocks + `service.yml` allowlists" bullet already carries the only trap this field touches; add at most a one-line pointer only if implementation uncovers a new one (`TestAgentsMdBudget` pins the file size)
 - [ ] move this plan to `docs/plans/completed/`
+- [ ] run `make build && make test` (this task edits `packages.md` after the last `make build`) and commit the regenerated `internal/core/docs/content_hashes_gen.go` with the `packages.md` change
 
 ## Post-Completion
 
@@ -474,13 +509,8 @@ tool service patching an app that is defined in its own overlay):
   `compose:`) file that has no `image:`/`build:` anywhere earlier in the active
   chain — the disabled-app trap caught statically. Could reuse
   `parseComposeFiles`; must not become a third compose parser.
+- A `dwe validate` warning for overlapping keys across `compose_after` files of
+  different services (the case where the service-name tie-break silently
+  decides), on the same parser.
 - An existence check for `service.yml` `compose:` / `compose_after:` paths, which
   today only Docker Compose reports.
-
-## Open questions
-
-- **Type grouping inside the tier.** This plan emits `compose_after` in one
-  alphabetical pass across types. The alternative is a second tool → infra → app
-  pass so an app's `compose_after` outranks a tool's. No known use case needs
-  it; switching later is a precedence change (user-observable), so decide in
-  review rather than after release.
