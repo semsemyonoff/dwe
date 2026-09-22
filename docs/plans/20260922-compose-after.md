@@ -419,7 +419,7 @@ inherit the new tier, so a later change to either cannot silently drop it.
 - [ ] `ScenarioView`: a scenario `env.services.disable` of the owner drops its `compose_after` from `view.ComposeFiles()`, `enable` of a disabled owner adds it
 - [ ] extend `TestScenarioView_DoesNotMutateInput` with a service carrying a `compose_after` slice
 - [ ] `ScanComposeIsolation`: a `compose_after` file resetting a `container_name:` set by the app's own overlay clears the finding — last-wins over the app overlay, because the tier follows the app group (mirror `TestScanComposeIsolation_ContainerNameReset`)
-- [ ] `ScanComposeCost`: a `compose_after` file that resets the app overlay's `build:` (`!reset`) and sets `image:` plus a `healthcheck.start_period` moves the service from `BuildServices` to `ExternalImages` and changes `MaxStartPeriod` — the tier wins the cost merge too (mirror `TestScanComposeCost_OverlayResetClearsBuild`)
+- [ ] `ScanComposeCost`: a `compose_after` file that resets the app overlay's `build:` (`!reset`) and sets `image:` plus a `healthcheck.start_period` leaves `BuildServices` empty and `ExternalImages == []string{"<image ref>"}`, and `MaxStartPeriod` reports the `compose_after` value (give the app overlay a different or no baseline `start_period`) — the tier wins the cost merge too (mirror `TestScanComposeCost_OverlayResetClearsBuild`)
 - [ ] `dwe test list` cost profile (`internal/cli/test/profile_test.go`, next to `TestCostProfile_IgnoresLocalComposeExtra`): one scenario enabling and one disabling the owner of a `compose_after` file that adds a `build:` service — the profile's build facts differ between them (`profile.go:188` feeds `ScenarioView` into both scanners)
 - [ ] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/... ./internal/cli/test/...` - must pass before task 6
 
@@ -483,7 +483,7 @@ has only the `files`, `raw` and `argv` subcommands
 
 - [ ] on a temp project with an app defined in `compose/app.yml` (with `command:` and an `environment:` key) and an enabled tool whose `compose_after` file overrides both: `"$repo/bin/dwe" compose files` lists the tool's file after `compose/app.yml`, and `"$repo/bin/dwe" compose raw -- config` shows the tool's `command:` and env value
 - [ ] `"$repo/bin/dwe" services disable <tool>` on that project: `"$repo/bin/dwe" compose files` no longer lists its `compose_after` file
-- [ ] `services.<name>.compose_after` added to that project's `workspace/local.yml`: `"$repo/bin/dwe" validate` reports the overlay error naming the file and key
+- [ ] `services.<name>.compose_after` added to that project's `workspace/local.yml`: `"$repo/bin/dwe" validate` reports a load failure whose message names `workspace/local.yml` and `services.<name>.compose_after` (the diagnostic's `File` field is `workspace.yml`, set by the workspace validator)
 - [ ] backward compatibility is covered by Task 2's byte-identical row and Task 4's literal hash pin — no separate binary comparison
 - [ ] `make build`, `make lint`, `make test` clean
 
