@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ f568b0f4673c
+> Translated from: guides/author-project-commands.md @ 3c8d6c4e3776
 
 # Авторство проектных команд
 
@@ -276,7 +276,7 @@ commands:
   commands:
     db.engine.reset:
       type: shell
-      hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+      hide: '{{ eq (index .Raw "vars" "db_engine") "sqlite" }}'
       cmd: db reset --engine
   ```
 

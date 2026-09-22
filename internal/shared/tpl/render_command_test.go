@@ -948,3 +948,52 @@ func TestValidateRawScope(t *testing.T) {
 		})
 	}
 }
+
+// TestEvalCommandCondition_hideDocExamples pins the `hide:` examples shipped in
+// docs/reference/config/commands/directives.md: config lives under .Raw, so the
+// expressions must index through it. The old `.services` spelling is kept as a
+// failing case because RenderContext has no such field — that was the bug.
+func TestEvalCommandCondition_hideDocExamples(t *testing.T) {
+	ctx := func(dbEnabled bool, engine string) *RenderContext {
+		return &RenderContext{Raw: map[string]any{
+			"services": map[string]any{"db": map[string]any{"enabled": dbEnabled}},
+			"vars":     map[string]any{"db_engine": engine},
+		}}
+	}
+	const (
+		hideWhenDisabled = `{{ not (index .Raw "services" "db" "enabled") }}`
+		hideWhenSqlite   = `{{ eq (index .Raw "vars" "db_engine") "sqlite" }}`
+	)
+	tests := []struct {
+		name string
+		expr string
+		ctx  *RenderContext
+		want bool
+	}{
+		{"db enabled stays visible", hideWhenDisabled, ctx(true, "postgres"), false},
+		{"db disabled hides", hideWhenDisabled, ctx(false, "postgres"), true},
+		{"postgres engine stays visible", hideWhenSqlite, ctx(true, "postgres"), false},
+		{"sqlite engine hides", hideWhenSqlite, ctx(true, "sqlite"), true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := EvalCommandCondition(tc.expr, tc.ctx, t.TempDir())
+			if err != nil {
+				t.Fatalf("EvalCommandCondition(%q): %v", tc.expr, err)
+			}
+			if got != tc.want {
+				t.Errorf("EvalCommandCondition(%q) = %v, want %v", tc.expr, got, tc.want)
+			}
+		})
+	}
+
+	t.Run("old .services form errors", func(t *testing.T) {
+		_, err := EvalCommandCondition(`{{ not (index .services "db" "enabled") }}`, ctx(true, "postgres"), t.TempDir())
+		if err == nil {
+			t.Fatal("expected an error: RenderContext has no services field")
+		}
+		if !strings.Contains(err.Error(), "services") {
+			t.Errorf("error should name the missing field; got %q", err)
+		}
+	})
+}
