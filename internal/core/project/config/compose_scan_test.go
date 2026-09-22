@@ -456,6 +456,31 @@ func TestScanComposeIsolation_ContainerNameReset(t *testing.T) {
 	require.Equal(t, "later-name", findings[0].Value)
 }
 
+// TestScanComposeIsolation_ComposeAfterWinsOverAppOverlay pins that the
+// compose_after tier is scanned in ITS chain position — after the app group
+// — so a tool's compose_after file resetting a container_name the app's own
+// overlay set clears the finding, mirroring
+// TestScanComposeIsolation_ContainerNameReset but through real Services
+// groups (app + tool) rather than a bare -f list, since compose_after's
+// position depends on ComposeFiles() grouping the tool's file after the
+// app's.
+func TestScanComposeIsolation_ComposeAfterWinsOverAppOverlay(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	appFile := filepath.Join(root, "app.yml")
+	afterFile := filepath.Join(root, "otel-after.yml")
+	require.NoError(t, os.WriteFile(appFile, []byte("services:\n  app:\n    image: busybox\n    container_name: base-name\n"), 0o644))
+	require.NoError(t, os.WriteFile(afterFile, []byte("services:\n  app:\n    container_name: !reset null\n"), 0o644))
+
+	cfg := &DweConfig{
+		Services: map[string]ServiceConfig{
+			"web":  {Type: ServiceTypeApp, Enabled: true, Compose: []string{appFile}},
+			"otel": {Type: ServiceTypeTool, Enabled: true, ComposeAfter: []string{afterFile}},
+		},
+	}
+	require.Empty(t, ScanComposeIsolation(cfg, root))
+}
+
 // TestScanComposeIsolation_ContainerNameOverrideTag pins the sibling merge tag:
 // `!override` replaces the merged value rather than clearing it, so the tagged
 // value is a perfectly ordinary container_name finding.
@@ -970,6 +995,33 @@ func TestScanComposeCost_OverlayResetClearsBuild(t *testing.T) {
 	)
 	require.Empty(t, facts.BuildServices)
 	require.Equal(t, []string{"busybox"}, facts.ExternalImages)
+}
+
+// TestScanComposeCost_ComposeAfterWinsCostMerge pins that the compose_after
+// tier wins the cost merge too, mirroring
+// TestScanComposeCost_OverlayResetClearsBuild but through real Services
+// groups: a tool's compose_after file resets the app overlay's `build:`,
+// sets `image:` and a `healthcheck.start_period`, and those values are what
+// the facts report — because compose_after is scanned after the app group,
+// not because of chain position within a single Extra list.
+func TestScanComposeCost_ComposeAfterWinsCostMerge(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	appFile := filepath.Join(root, "app.yml")
+	afterFile := filepath.Join(root, "otel-after.yml")
+	require.NoError(t, os.WriteFile(appFile, []byte("services:\n  app:\n    image: busybox\n    build:\n      context: .\n"), 0o644))
+	require.NoError(t, os.WriteFile(afterFile, []byte("services:\n  app:\n    build: !reset null\n    image: otel/patched:1\n    healthcheck:\n      start_period: 45s\n"), 0o644))
+
+	cfg := &DweConfig{
+		Services: map[string]ServiceConfig{
+			"web":  {Type: ServiceTypeApp, Enabled: true, Compose: []string{appFile}},
+			"otel": {Type: ServiceTypeTool, Enabled: true, ComposeAfter: []string{afterFile}},
+		},
+	}
+	facts := ScanComposeCost(cfg, root)
+	require.Empty(t, facts.BuildServices)
+	require.Equal(t, []string{"otel/patched:1"}, facts.ExternalImages)
+	require.Equal(t, 45*time.Second, facts.MaxStartPeriod)
 }
 
 // TestScanComposeCost_OverlayResetClearsImage pins the same on `image:`. The

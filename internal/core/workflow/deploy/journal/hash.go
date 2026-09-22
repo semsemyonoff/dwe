@@ -274,6 +274,11 @@ func serviceConfigToMap(svc config.ServiceConfig) map[string]any {
 		m["dirs"] = svc.Dirs
 	}
 
+	// Include compose_after if present
+	if len(svc.ComposeAfter) > 0 {
+		m["compose_after"] = svc.ComposeAfter
+	}
+
 	// Include CLI config if present
 	if svc.CLI.Mode != "" || svc.CLI.Shell != "" || svc.CLI.User != "" || svc.CLI.WorkDir != "" || len(svc.CLI.Env) > 0 {
 		cli := map[string]any{}

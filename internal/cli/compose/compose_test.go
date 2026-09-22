@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -480,6 +481,38 @@ func TestComposeFilesCmd_RunE(t *testing.T) {
 	cmd.SetOut(&buf)
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestComposeFilesCmd_RunE_composeAfterTier(t *testing.T) {
+	dir := makeMinimalProject(t)
+	toolDir := filepath.Join(dir, "workspace", "services", "otel")
+	if err := os.MkdirAll(toolDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	toolYML := "type: tool\ncontainer: otel\ncompose_after:\n  - compose/otel-apps.yml\n"
+	if err := os.WriteFile(filepath.Join(toolDir, "service.yml"), []byte(toolYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defaultsYML := "schema_version: \"1\"\nservices:\n  otel:\n    enabled: true\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+
+	cmd := newComposeFilesCmd(flags)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	// The minimal project declares no compose.base, and the tool has no
+	// compose: of its own, so the compose_after file is the whole chain.
+	want := []string{"compose/otel-apps.yml"}
+	if !slices.Equal(got, want) {
+		t.Errorf("printed lines = %v, want %v", got, want)
 	}
 }
 

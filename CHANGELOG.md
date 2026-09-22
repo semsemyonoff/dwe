@@ -21,13 +21,21 @@ generated from commit subjects and stay on the
 ### Added
 
 - New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
-  — an opt-in `otel` tool service whose compose overlay also patches the app
-  services, with instrumentation recipes for Python, Go and Node and a text
-  trace lookup for coding agents.
+  — an opt-in `otel` tool service whose `compose:` overlay ships the backend
+  and whose `compose_after:` overlay patches the app services, with
+  instrumentation recipes for Python, Go and Node and a text trace lookup for
+  coding agents.
 - The service reference documents how relative paths in a `compose:` overlay
   resolve: against the directory of the first `-f` file (`compose.base`), not
   the overlay's own directory. See
   [`compose`](docs/reference/config/services/fields.md).
+- New `service.yml` field `compose_after:` — compose overlay files emitted
+  after every service group (tool → infra → app) and before the generated
+  bridge overlay and the project-wide `local.yml` `compose.extra`, under the
+  same enabled gate as `compose:`. Lets a patch win over whole-value keys
+  (`command:`, `healthcheck:`, an `environment:` entry) an app sets in its own
+  overlay, instead of losing to it because the app group emits later. See
+  [`compose_after`](docs/reference/config/services/fields.md).
 - `dwe validate` warns `hide: expression does not evaluate` when a `hide:` on a
   command or group fails to render against the project config. At runtime
   such an expression is fail-open and leaves the command visible. The check

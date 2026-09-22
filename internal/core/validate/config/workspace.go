@@ -149,7 +149,8 @@ func (v *servicesValidator) Domain() string {
 var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 	config.ServiceTypeApp: {
 		"type": true, "container": true, "required": true, "compose": true,
-		"ports": true, "hosts": true, "icon": true, "info": true, "status": true,
+		"compose_after": true,
+		"ports":         true, "hosts": true, "icon": true, "info": true, "status": true,
 		"on_enable": true, "on_disable": true, "notes": true, "bridge": true,
 		"depends_on": true,
 		"dir":        true, "dir_internal": true, "work_dir_internal": true,
@@ -158,12 +159,14 @@ var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 	},
 	config.ServiceTypeInfra: {
 		"type": true, "container": true, "required": true, "compose": true,
-		"ports": true, "hosts": true, "icon": true, "info": true, "status": true, "depends_on": true,
+		"compose_after": true,
+		"ports":         true, "hosts": true, "icon": true, "info": true, "status": true, "depends_on": true,
 		"on_enable": true, "on_disable": true, "notes": true, "bridge": true,
 	},
 	config.ServiceTypeTool: {
 		"type": true, "container": true, "required": true, "compose": true,
-		"ports": true, "hosts": true, "icon": true, "info": true, "status": true,
+		"compose_after": true,
+		"ports":         true, "hosts": true, "icon": true, "info": true, "status": true,
 		"on_enable": true, "on_disable": true, "notes": true, "bridge": true,
 	},
 }

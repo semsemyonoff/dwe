@@ -93,7 +93,7 @@ Dot-paths are consumed by:
 
 ### Where service fields come from
 
-`services.<name>.*` paths in the merged map are populated from each `workspace/services/<name>/service.yml` (the canonical service declaration, which carries `type:`). Every overlay layer is validated against the declared field set, the 3 layers are merged, then `enabled` is resolved per service (required wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — becomes available under `services.<name>` in the merged config. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of the per-service folder structure.
+`services.<name>.*` paths in the merged map are populated from each `workspace/services/<name>/service.yml` (the canonical service declaration, which carries `type:`). Every overlay layer is validated against the declared field set, the 3 layers are merged, then `enabled` is resolved per service (required wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — becomes available under `services.<name>` in the merged config. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of the per-service folder structure. `compose_after` is deliberately not exposed here — there is no `${services.<name>.compose_after}`, and no `exports.env` `from:` or command `default_from:` can read it.
 
 ## Strict root + the `vars:` sandbox
 
@@ -400,7 +400,7 @@ compose:
 | `compose.base` | Base compose file (always included) |
 | `compose.extra` | **Not valid here.** Per-developer overlay files belong in `local.yml`. See [Compose overlays](#compose-overlays). |
 
-Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`workspace/services/<name>/service.yml`](services/index.md). The full compose-file emission order (including per-developer overlays) is documented under [Compose overlays](#compose-overlays) in `local.yml`.
+Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`workspace/services/<name>/service.yml`](services/index.md). A second per-service list, `services.<name>.compose_after`, sits in its own tier: emitted after every service group, so a patch that must win over an app's own overlay goes there instead. The full compose-file emission order (including per-developer overlays) is documented under [Compose overlays](#compose-overlays) in `local.yml`.
 
 ---
 
@@ -454,8 +454,12 @@ compose.base
   → tools  (alpha-sorted) — each: svc.compose… + svc.local-extras…
   → infra  (alpha-sorted) — each: svc.compose… + svc.local-extras…
   → apps   (alpha-sorted) — each: svc.compose… + svc.local-extras…
+  → compose_after  (alpha-sorted by service name, any type) — each: svc.compose_after…
+  → .dwe/compose.bridge.yml         (generated bridge overlay, when present)
   → compose.extra…                  (project-wide, always last)
 ```
+
+A service's own per-developer `services.<name>.compose.extra` is emitted inside its group, so it precedes every `compose_after` file — a tool's `compose_after` patch can override an app's per-service local extra. The project-wide `compose.extra` layer stays the one with the last word.
 
 Docker Compose merges later `-f` files on top of earlier ones — the project-wide layer therefore can override per-service overlays. If that is unwanted, scope the override to a per-service block instead.
 

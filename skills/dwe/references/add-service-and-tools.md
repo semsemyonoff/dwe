@@ -18,7 +18,7 @@ dwe docs show config/services/examples --lang en
 
 ## 2. Folder = key
 
-`workspace/services/<name>/service.yml` is required; the folder name **is** the key. Required fields: `type:` + `container:` (compose service name). Common: `icon:`, `ports:` (named map), `hosts:` (named map), `compose:` (overlays this service activates), `required: true` or a toggle (§ 4).
+`workspace/services/<name>/service.yml` is required; the folder name **is** the key. Required fields: `type:` + `container:` (compose service name). Common: `icon:`, `ports:` (named map), `hosts:` (named map), `compose:` (overlays this service activates), `compose_after:` (overlays emitted after every service group — patches over other services' own overlays), `required: true` or a toggle (§ 4).
 
 ```yaml
 # tool
@@ -61,7 +61,7 @@ Model host ports under `services.<name>.ports` (or route them through a `vars:` 
 
 The container lives in a compose file, not in `service.yml`: the **base** (`compose.yaml`, or whatever the root config's `compose.base` names — usually set in `workspace/defaults.yml`) for `required` infra, or **overlays** the service's `compose:` list activates (convention: `compose/tools/<name>.yml`, `compose/services/<name>.yml`, `compose/services/<svc>/<variant>.yml`). Overlays consume `.env` vars and patch the proxy vhost. Assembly: `dwe docs show config/docker --lang en`, `concepts/docker`.
 
-An overlay may also patch **neighbouring** services — a tool's overlay adding env and mounts to an app, so one toggle switches a whole feature — with no `depends_on` on the optional service in the base; merge rules and file-order traps: `dwe docs show guides/observability-otel#2-the-overlay --lang en`.
+An overlay may also patch **neighbouring** services — a tool's overlay adding env and mounts to an app, so one toggle switches a whole feature — with no `depends_on` on the optional service in the base; merge rules and file-order traps: `dwe docs show guides/observability-otel#2-the-overlay --lang en`. An overlay that patches app services belongs in `compose_after:`, not `compose:`, so it lands after the apps' own overlays and wins whole-value merges (`command:`, `environment:` keys).
 
 - **Optional** service: omit `required:`, add `services.<name>.enabled: false|true` to `workspace/defaults.yml`. Required services are not listed there.
 - **Variant** via `extends: <parent>` (a `main-debug` reusing the parent's image / source / render, adding an overlay and a `cli.env` tweak). Deepest-extends-wins on render collisions; a child sharing the parent's hub is a render alias. `dwe docs show config/services/extends --lang en`.

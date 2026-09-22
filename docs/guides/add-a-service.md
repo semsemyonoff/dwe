@@ -110,7 +110,7 @@ services:
 
 The compose file is a normal Docker Compose YAML — DWE does not re-implement Compose, it composes overlays. Use `dwe compose files` to see the full overlay order DWE will merge.
 
-An overlay is not limited to its own service: a tool's overlay can also patch a neighbouring app service (extra `environment:`, `volumes:`), so one toggle switches a whole feature on and off. [Observability with OpenTelemetry](observability-otel.md#2-the-overlay) walks through that technique — what Compose merges, what it replaces, and why the file order decides who wins.
+An overlay is not limited to its own service: a tool's overlay can also patch a neighbouring app service (extra `environment:`, `volumes:`), so one toggle switches a whole feature on and off. [Observability with OpenTelemetry](observability-otel.md#2-the-overlay) walks through that technique — what Compose merges, what it replaces, and why the file order decides who wins. A patch that must replace a whole value the app's own overlay sets (`command:`, `healthcheck:`, an `environment:` key) goes in the tool's [`compose_after:`](../reference/config/services/fields.md#top-level-service-fields) list, not `compose:` — it is emitted after every service group, so it wins.
 
 ## Register the toggle in `defaults.yml`
 

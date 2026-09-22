@@ -65,6 +65,39 @@ func TestCostProfile_IgnoresLocalComposeExtra(t *testing.T) {
 	}
 }
 
+// TestCostProfile_ComposeAfterTracksOwnerEnabled pins that the profile feeds
+// ScenarioView into both scanners (profile.go:188), so a compose_after file's
+// build: service is counted only when its owning service is enabled in that
+// scenario — unlike TestCostProfile_IgnoresLocalComposeExtra, compose_after
+// is a tracked field the view keeps, not a per-developer overlay it strips.
+func TestCostProfile_ComposeAfterTracksOwnerEnabled(t *testing.T) {
+	baseDir := t.TempDir()
+	writeMinimalProject(t, baseDir)
+	writeProjectFile(t, baseDir, "workspace/services/otel/service.yml", "type: tool\ncontainer: otel\ncompose_after:\n  - compose/otel-apps.yml\n")
+	writeProjectFile(t, baseDir, "compose/otel-apps.yml", "services:\n  worker:\n    build: .\n")
+
+	p := newCostProfiler(baseDir, "")
+	if p == nil {
+		t.Fatal("expected a profiler for a loadable project")
+	}
+
+	disabled := p.profile(&envtest.Scenario{})
+	if disabled == nil {
+		t.Fatal("expected a profile")
+	}
+	if len(disabled.BuildServices) != 0 {
+		t.Errorf("build_services (otel disabled) = %v, want none", disabled.BuildServices)
+	}
+
+	enabled := p.profile(&envtest.Scenario{Env: envtest.ScenarioEnv{Services: envtest.ScenarioServices{Enable: []string{"otel"}}}})
+	if enabled == nil {
+		t.Fatal("expected a profile")
+	}
+	if want := []string{"worker"}; len(enabled.BuildServices) != 1 || enabled.BuildServices[0] != want[0] {
+		t.Errorf("build_services (otel enabled) = %v, want %v", enabled.BuildServices, want)
+	}
+}
+
 // TestCostProfile_IsolationFindingsOmitTracedVarPorts pins that a host port
 // traced to a vars: path never reaches isolation_findings: the runner remaps
 // it with no scenario config, so listing it would be advice with no action.

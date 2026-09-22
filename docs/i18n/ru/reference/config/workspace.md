@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 052599009de4
+> Translated from: reference/config/workspace.md @ 97a8392ae0c4
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -94,7 +94,7 @@ Dot-path'ы используются:
 
 ### Откуда берутся поля сервисов
 
-Пути `services.<name>.*` в смерженной мапе наполняются из каждого `workspace/services/<name>/service.yml` (канонической декларации сервиса с полем `type:`). Каждый оверлейный слой валидируется по декларированному набору полей, три слоя сливаются, затем определяется `enabled` для каждого сервиса (required выигрывает; иначе берётся значение из смерженного оверлея, по умолчанию `false`). Каждый разрешённый сервис — включая вложенные карты `ports` / `hosts` и разрешённые поля вроде `container`, `dir`, `compose` — становится доступен под `services.<name>` в смерженном конфиге. Поэтому правила экспорта и шаблоны могут использовать `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled` и т.д., не зная о внутренней структуре per-service папок.
+Пути `services.<name>.*` в смерженной мапе наполняются из каждого `workspace/services/<name>/service.yml` (канонической декларации сервиса с полем `type:`). Каждый оверлейный слой валидируется по декларированному набору полей, три слоя сливаются, затем определяется `enabled` для каждого сервиса (required выигрывает; иначе берётся значение из смерженного оверлея, по умолчанию `false`). Каждый разрешённый сервис — включая вложенные карты `ports` / `hosts` и разрешённые поля вроде `container`, `dir`, `compose` — становится доступен под `services.<name>` в смерженном конфиге. Поэтому правила экспорта и шаблоны могут использовать `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled` и т.д., не зная о внутренней структуре per-service папок. `compose_after` намеренно здесь не отражается — нет ни `${services.<name>.compose_after}`, ни `from:` в `exports.env`, ни `default_from:` команды, которые могли бы его прочитать.
 
 ## Строгий корень + песочница `vars:`
 
@@ -401,7 +401,7 @@ compose:
 | `compose.base` | Базовый compose-файл (всегда подключается) |
 | `compose.extra` | **Здесь невалидно.** Файлы оверлеев на разработчика принадлежат `local.yml`. См. [Compose-оверлеи](#compose-оверлеи). |
 
-Оверлеи для конкретных сервисов находятся под `services.<name>.compose` (список путей к файлам для каждой записи сервиса) в [`workspace/services/<name>/service.yml`](services/index.md). Полный порядок вывода compose-файлов (включая оверлеи на разработчика) описан в разделе [Compose-оверлеи](#compose-оверлеи) в `local.yml`.
+Оверлеи для конкретных сервисов находятся под `services.<name>.compose` (список путей к файлам для каждой записи сервиса) в [`workspace/services/<name>/service.yml`](services/index.md). Второй список на уровне сервиса, `services.<name>.compose_after`, находится в собственном ярусе: эмитится после всех групп сервисов, поэтому патч, который должен побеждать собственный оверлей приложения, идёт туда. Полный порядок вывода compose-файлов (включая оверлеи на разработчика) описан в разделе [Compose-оверлеи](#compose-оверлеи) в `local.yml`.
 
 ---
 
@@ -455,8 +455,12 @@ compose.base
   → tools  (alpha-sorted) — каждый: svc.compose… + svc.local-extras…
   → infra  (alpha-sorted) — каждый: svc.compose… + svc.local-extras…
   → apps   (alpha-sorted) — каждый: svc.compose… + svc.local-extras…
+  → compose_after  (alpha-sorted по имени сервиса, любой тип) — каждый: svc.compose_after…
+  → .dwe/compose.bridge.yml         (сгенерированный bridge-оверлей, если есть)
   → compose.extra…                  (на уровне проекта, всегда последним)
 ```
+
+Собственный per-developer `services.<name>.compose.extra` сервиса эмитится внутри его группы, поэтому предшествует каждому файлу `compose_after` — патч инструмента (`tool`) может переопределить локальное расширение приложения на уровне сервиса. Слой на уровне проекта `compose.extra` остаётся тем, за кем остаётся последнее слово.
 
 Docker Compose мержит более поздние `-f`-файлы поверх более ранних — поэтому слой на уровне проекта может переопределить per-service оверлеи. Если это нежелательно, ограничьте переопределение блоком конкретного сервиса.
 

@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/index.md @ e92a3358a354
+> Translated from: reference/concepts/index.md @ a216b4a46f13
 
 # Концепции
 
@@ -11,7 +11,7 @@
 - [Начало работы](getting-started.md) — установите бинарник, перейдите в проект, запустите свой первый `dwe deploy` и `dwe run`, посмотрите информационную панель и сориентируйтесь, что читать дальше.
 - [Архитектура](architecture.md) — взгляд на границу: что относится к DWE, а что — к Docker; как команда `dwe` превращается в вызов `docker compose`; и какое состояние хранится на диске, а какое — в Docker engine.
 - [Раскладка проекта](project-layout.md) — как реальный проект DWE выглядит на диске: `workspace.yml` в корне, дерево конфигурации `workspace/` с `services/`, `commands/`, `templates/`, `i18n/` и `scripts/`; параллельные оверлеи `compose/`; и runtime-артефакты в `.dwe/`.
-- [Интеграция с Docker](docker.md) — как DWE управляет Docker Compose: формирование имени compose-проекта, список compose-файлов, собранный из базы + оверлеев сервисов + tools + local, проброс окружения, конвенции по томам и почему некоторые lifecycle-команды обходят compose и вызывают `docker stop` / `docker rm` напрямую.
+- [Интеграция с Docker](docker.md) — как DWE управляет Docker Compose: формирование имени compose-проекта, список compose-файлов, собранный из базы, оверлеев tool/infra/app, патчей `compose_after` и local, проброс окружения, конвенции по томам и почему некоторые lifecycle-команды обходят compose и вызывают `docker stop` / `docker rm` напрямую.
 - [Интеграция с Git](git.md) — что DWE рендерит в Git: шаблоны shell-хуков, копируемые в `<svc.Dir>/src/.git/hooks/`, наследование хуков через корень пака, отображение `dwe status git` и конвенции `.gitignore`, которые удерживают `.dwe/` вне контроля версий.
 - [Пайплайны](pipelines.md) — модель выполнения phase → step → condition, общая для deploy, reset и lifecycle: как работают параллельные группы, как наследуются переопределения суб-шагов, доступные типы шагов и три вида условий (`when:`, `check:`, `files_gate:`).
 - [Состояние и блокировки](state-and-locks.md) — как `.dwe/deploy/state.yml` записывает хэши и решает, что пропустить; как `deploy.lock` и `snapshot.lock` берутся в алфавитном порядке и освобождаются в обратном; как DWE восстанавливается после падения посреди пайплайна; и как pending-состояние откладывает работу между `services enable` и следующим `deploy run`.

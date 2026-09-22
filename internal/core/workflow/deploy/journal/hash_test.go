@@ -187,6 +187,66 @@ func TestServiceConfigHashVarsChange(t *testing.T) {
 	assert.Equal(t, hashNil, hashEmpty)
 }
 
+// TestServiceConfigHash_NoComposeAfterMatchesPreUpgradeLiteral pins the hash of
+// a representative service without compose_after against the value computed on
+// 879f058f (the branch base, before the compose_after field existed). A service
+// that never declares compose_after must produce a byte-identical hash after
+// this upgrade, or every already-deployed project would look config-changed.
+func TestServiceConfigHash_NoComposeAfterMatchesPreUpgradeLiteral(t *testing.T) {
+	svc := config.ServiceConfig{
+		Type:            "app",
+		Container:       "main",
+		Required:        true,
+		Dir:             "/app",
+		DirInternal:     "/src",
+		WorkDirInternal: "/src",
+		Extends:         "base",
+		DependsOn:       []string{"db"},
+		Compose:         []string{"docker-compose.yml"},
+		Dirs:            []string{"data"},
+	}
+
+	hash := ServiceConfigHash(svc, nil, nil)
+	assert.Equal(t, "59567020ea428100704a721403d855ce3f65e531cc1eec8cf6e3d6da8596b1bd", hash,
+		"hash of a compose_after-less service must not change across the compose_after upgrade")
+}
+
+// TestServiceConfigToMap_ComposeAfterOmittedWhenEmpty verifies that
+// serviceConfigToMap does not add a "compose_after" key for a service that
+// declares none, matching the configs/dirs pattern: an always-present nil
+// entry would change the canonical bytes of every existing service.
+func TestServiceConfigToMap_ComposeAfterOmittedWhenEmpty(t *testing.T) {
+	svc := config.ServiceConfig{Type: "app", Container: "main"}
+	m := serviceConfigToMap(svc)
+	_, ok := m["compose_after"]
+	assert.False(t, ok, "compose_after key must be absent when svc.ComposeAfter is empty")
+}
+
+// TestServiceConfigHash_ComposeAfterChangesHash verifies that adding a
+// compose_after entry changes ServiceConfigHash, and that reordering entries
+// changes it again (list order is part of the hashed value).
+func TestServiceConfigHash_ComposeAfterChangesHash(t *testing.T) {
+	base := config.ServiceConfig{Type: "tool", Container: "otel"}
+
+	withNone := base
+	hashNone := ServiceConfigHash(withNone, nil, nil)
+
+	withOne := base
+	withOne.ComposeAfter = []string{"compose/otel-apps.yml"}
+	hashOne := ServiceConfigHash(withOne, nil, nil)
+	assert.NotEqual(t, hashNone, hashOne, "adding a compose_after entry must change the hash")
+
+	withTwo := base
+	withTwo.ComposeAfter = []string{"compose/otel-apps.yml", "compose/otel-extra.yml"}
+	hashTwo := ServiceConfigHash(withTwo, nil, nil)
+	assert.NotEqual(t, hashOne, hashTwo, "adding a second compose_after entry must change the hash")
+
+	reordered := base
+	reordered.ComposeAfter = []string{"compose/otel-extra.yml", "compose/otel-apps.yml"}
+	hashReordered := ServiceConfigHash(reordered, nil, nil)
+	assert.NotEqual(t, hashTwo, hashReordered, "reordering compose_after entries must change the hash")
+}
+
 // TestProjectConfigHash verifies the project config hash with tracked services.
 func TestProjectConfigHash(t *testing.T) {
 	cfg := &config.DweConfig{
