@@ -69,9 +69,13 @@ services:
     # No container_name: a fixed name bypasses compose project scoping and
     # collides with the copies `dwe test` runs (`dwe validate` warns).
     restart: unless-stopped
-    # Telemetry data is ephemeral (no volume): every recreate — including
-    # enable/disable — drops it. Dashboards come from the repo (below).
+    # The image declares no VOLUME: every stateful path (Grafana, Loki,
+    # Prometheus, Tempo, Pyroscope) lives under /data in the writable layer, so
+    # without a volume every recreate — overlay edit + `dwe run`, enable/disable
+    # --apply, `dwe reset` — drops all telemetry. A project-scoped named volume
+    # keeps it. Dashboards come from the repo (below).
     volumes:
+      - otel_data:/data
       - ./configs/otel/provisioning/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
       - ./configs/otel/dashboards:/otel-lgtm/grafana-dashboards-myproject:ro
     # The image ships its own HEALTHCHECK (`/otel-lgtm/docker/healthcheck.sh`,
@@ -94,7 +98,7 @@ services:
   app:
     environment:
       OTEL_SERVICE_NAME: "app"
-      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${PROJECT_NAME:-myproject},deployment.environment.name=dev"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${COMPOSE_PROJECT_NAME},deployment.environment.name=dev"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318"
       OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
       OTEL_TRACES_EXPORTER: "otlp"
@@ -104,6 +108,9 @@ services:
       # push metrics every 10 s (rate() panels need two samples to draw).
       OTEL_BSP_SCHEDULE_DELAY: "1000"
       OTEL_METRIC_EXPORT_INTERVAL: "10000"
+
+volumes:
+  otel_data:
 ```
 
 Traps worth knowing before the first `dwe run`:
@@ -112,6 +119,7 @@ Traps worth knowing before the first `dwe run`:
 - **The app answers 502 through the proxy for ~30 s after `enable --apply`** while its container is recreated. Wait for its health endpoint, not for the `dwe` command to return.
 - **The first minutes show "No data" in every `rate()` panel.** That is the export interval, not a broken pipeline; make some requests and look in Explore → Tempo first.
 - **A `depends_on` on an optional service in the base `compose.yaml` breaks the stack while that service is disabled.** Keep the coupling inside the overlay.
+- **Patch only services that exist whenever the tool is on.** A patch block carries no `image:` or `build:`, so it is valid only on top of a definition from an earlier file. Patch a service from the base `compose.yaml`, or an always-on one. If the patched app lives in its own overlay (`compose/services/site.yml`, say) and a developer disables that app while `otel` stays enabled, `compose/otel.yml` still declares `site:` with only `environment:` / `volumes:`, and Compose rejects the whole project because the service has neither an image nor a build context.
 - **A tool overlay cannot override what an app's own overlay sets.** DWE passes compose files as `base → tools → infra → apps` (alphabetical inside each group; `dwe compose files` prints the chain), so when the app service is defined in its own `compose/<app>.yml` rather than in the base file, that file comes *after* `compose/otel.yml` and wins every whole-value merge: `command:`, `healthcheck:`, and any `environment:` key both files set. New env keys and extra `volumes:` still merge fine. Design the patch to add only — an injected script that does its own setup (the Node recipe below) instead of a replaced `command:`.
 
 ### Dashboards
@@ -139,7 +147,7 @@ providers:
 
 Datasource UIDs in the image are `prometheus`, `tempo`, `loki`, `pyroscope`. There is no write-back from the container to the repo: edit in the UI, copy the JSON model, paste it over the file under `configs/otel/dashboards/`, commit.
 
-Do not expect a dashboard to move between languages. Metric names follow the instrumentation: Python's `http_server_duration_milliseconds_*` with `http_target`, Go's `http.server.request.duration` in seconds with `http.route`, and only Python ships process/GC metrics out of the box. Check what actually arrives with `curl http://otel:9090/api/v1/label/__name__/values` from any container. Panels built on Tempo's span metrics (`traces_spanmetrics_*`: `span_name`, `span_kind`, `status_code`, `service`) are the one part that carries over unchanged.
+Do not expect a dashboard to move between languages. Metric names follow the instrumentation: Python exports `http_server_duration_milliseconds_*` with `http_target` plus process/GC metrics, while the Go recipe below is traces-only and exports no application metrics at all. Check what actually arrives with `curl http://otel:9090/api/v1/label/__name__/values` from any container. Panels built on Tempo's span metrics (`traces_spanmetrics_*`: `span_name`, `span_kind`, `status_code`, `service`) are the one part that carries over unchanged.
 
 ## 3. Instrumenting the services
 
@@ -237,6 +245,8 @@ cfg.ConnConfig.Tracer = otelpgx.NewTracer(
 pool, err := pgxpool.NewWithConfig(ctx, cfg)
 ```
 
+The recipe is **traces-only**: `Init` installs no MeterProvider, so `otelhttp` records its metrics into the no-op global meter and nothing is exported. Set `OTEL_METRICS_EXPORTER: "none"` in the Go service's patch rather than copying `otlp` from the example above. RED panels for a Go service come from Tempo's span metrics (`traces_spanmetrics_*`), which are derived from the traces themselves.
+
 Modules: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp`, `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`, `github.com/exaring/otelpgx`. Expect `go get` to bump the whole `go.opentelemetry.io/otel` family that an error-tracking SDK already pulled in transitively — keep them on one version. Outgoing HTTP calls get `otelhttp.NewTransport(http.DefaultTransport)`. Log lines correlate with traces through a small `slog.Handler` wrapper that adds `trace_id`/`span_id` from `trace.SpanContextFromContext(ctx)` when the span is valid — a no-op otherwise, so it can be installed unconditionally.
 
 `otelpgx` ≥ 0.12 speaks the current semantic conventions: `db.system.name`, `db.query.text`, `db.operation.name`, `db.namespace`, `db.collection.name`, plus its own `pgx.query.parameters`. Anything that reads the spans has to know both the old and the new key sets — see section 4.
@@ -250,7 +260,7 @@ Node loads instrumentation before the app when told to with `--import`; nothing 
     environment:
       NODE_OPTIONS: "--import /opt/otel-node/register.mjs"
       OTEL_SERVICE_NAME: "site"
-      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${PROJECT_NAME:-myproject},deployment.environment.name=dev"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${COMPOSE_PROJECT_NAME},deployment.environment.name=dev"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318"
       # exporter-trace-otlp-http is JSON-only; the protobuf flavour is a
       # different package. Say what is true rather than copy the Go value.
@@ -337,7 +347,7 @@ Without such a pointer an agent bypasses `dwe` altogether (`docker logs`, `docke
 
 ## Known rough edges
 
-- Everything in the backend is ephemeral; a `dwe stop otel && dwe run` loses every trace. Add a named volume for `/data` if you need persistence across restarts.
+- Without the `otel_data` volume every recreate of the container loses all telemetry: editing the overlay and running `dwe run`, `dwe services enable|disable --apply`, `dwe reset`. Stopping and starting the same container (`dwe restart otel`, `dwe stop` then `dwe run`) keeps it either way.
 - At debug log level the OTLP exporter's own HTTP calls appear in the app log about once a second (Python: `urllib3.connectionpool … POST /v1/traces`). Raise `OTEL_BSP_SCHEDULE_DELAY` or silence that logger.
 - Health probes excluded from HTTP instrumentation still emit parentless `PING` / `SELECT` / `connect` traces from their DB checks. Filter with `--exclude-root` / `--kind server` in the lookup tool, or at the collector.
 - Tempo's span metrics carry only `span_name`, so a SQL span is named by its verb; the actual statement is visible only inside the trace.

@@ -1,4 +1,4 @@
-> Translated from: guides/observability-otel.md @ feb2071fbbe9
+> Translated from: guides/observability-otel.md @ 55c468d11a9a
 
 # Наблюдаемость с OpenTelemetry
 
@@ -71,9 +71,13 @@ services:
     # Без container_name: фиксированное имя обходит скоупинг compose-проекта и
     # конфликтует с копиями, которые запускает `dwe test` (`dwe validate` предупреждает).
     restart: unless-stopped
-    # Телеметрия эфемерна (тома нет): каждое пересоздание — включая
-    # enable/disable — её теряет. Дашборды берутся из репозитория (ниже).
+    # Образ не объявляет VOLUME: всё состояние (Grafana, Loki, Prometheus,
+    # Tempo, Pyroscope) лежит в /data в записываемом слое, поэтому без тома каждое
+    # пересоздание — правка оверлея + `dwe run`, enable/disable --apply,
+    # `dwe reset` — теряет всю телеметрию. Именованный том в рамках проекта её
+    # сохраняет. Дашборды берутся из репозитория (ниже).
     volumes:
+      - otel_data:/data
       - ./configs/otel/provisioning/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
       - ./configs/otel/dashboards:/otel-lgtm/grafana-dashboards-myproject:ro
     # В образе есть собственный HEALTHCHECK (`/otel-lgtm/docker/healthcheck.sh`,
@@ -96,7 +100,7 @@ services:
   app:
     environment:
       OTEL_SERVICE_NAME: "app"
-      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${PROJECT_NAME:-myproject},deployment.environment.name=dev"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${COMPOSE_PROJECT_NAME},deployment.environment.name=dev"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318"
       OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
       OTEL_TRACES_EXPORTER: "otlp"
@@ -106,6 +110,9 @@ services:
       # отправляем метрики каждые 10 с (панелям с rate() нужно два сэмпла).
       OTEL_BSP_SCHEDULE_DELAY: "1000"
       OTEL_METRIC_EXPORT_INTERVAL: "10000"
+
+volumes:
+  otel_data:
 ```
 
 Ловушки, о которых стоит знать до первого `dwe run`:
@@ -114,6 +121,7 @@ services:
 - **Приложение отвечает 502 через прокси ~30 с после `enable --apply`**, пока его контейнер пересоздаётся. Ждите его health-эндпоинт, а не возврата из команды `dwe`.
 - **Первые минуты все панели с `rate()` показывают «No data».** Это интервал экспорта, а не сломанный пайплайн; сделайте несколько запросов и сначала загляните в Explore → Tempo.
 - **`depends_on` на опциональный сервис в базовом `compose.yaml` ломает стек, пока этот сервис выключен.** Держите связку внутри оверлея.
+- **Патчите только сервисы, которые существуют всегда, когда включён инструмент.** В блоке патча нет ни `image:`, ни `build:`, поэтому он валиден только поверх определения из более раннего файла. Патчите сервис из базового `compose.yaml` или всегда включённый. Если пропатченное приложение живёт в собственном оверлее (например, `compose/services/site.yml`) и разработчик выключает его, оставив `otel` включённым, `compose/otel.yml` всё равно объявляет `site:` только с `environment:` / `volumes:`, и Compose отвергает весь проект: у сервиса нет ни образа, ни контекста сборки.
 - **Оверлей tool-сервиса не может переопределить то, что задаёт собственный оверлей приложения.** DWE передаёт compose-файлы в порядке `base → tools → infra → apps` (по алфавиту внутри каждой группы; `dwe compose files` печатает цепочку), поэтому если app-сервис определён в своём `compose/<app>.yml`, а не в базовом файле, этот файл идёт *после* `compose/otel.yml` и выигрывает при каждом слиянии целым значением: `command:`, `healthcheck:` и любой ключ `environment:`, который задают оба файла. Новые env-ключи и дополнительные `volumes:` по-прежнему сливаются нормально. Проектируйте патч так, чтобы он только добавлял, — внедрённый скрипт, который сам делает свою настройку (рецепт для Node ниже), вместо заменённого `command:`.
 
 ### Дашборды
@@ -141,7 +149,7 @@ providers:
 
 UID источников данных в образе — `prometheus`, `tempo`, `loki`, `pyroscope`. Обратной записи из контейнера в репозиторий нет: правьте в UI, копируйте JSON-модель, вставляйте её поверх файла в `configs/otel/dashboards/`, коммитьте.
 
-Не рассчитывайте, что дашборд переедет между языками. Имена метрик следуют инструментированию: у Python — `http_server_duration_milliseconds_*` с `http_target`, у Go — `http.server.request.duration` в секундах с `http.route`, и метрики процесса/GC из коробки есть только у Python. Проверить, что реально приходит, можно через `curl http://otel:9090/api/v1/label/__name__/values` из любого контейнера. Единственное, что переносится без изменений, — панели на span-метриках Tempo (`traces_spanmetrics_*`: `span_name`, `span_kind`, `status_code`, `service`).
+Не рассчитывайте, что дашборд переедет между языками. Имена метрик следуют инструментированию: Python экспортирует `http_server_duration_milliseconds_*` с `http_target` плюс метрики процесса/GC, а рецепт для Go ниже только трейсовый и никаких метрик приложения не экспортирует. Проверить, что реально приходит, можно через `curl http://otel:9090/api/v1/label/__name__/values` из любого контейнера. Единственное, что переносится без изменений, — панели на span-метриках Tempo (`traces_spanmetrics_*`: `span_name`, `span_kind`, `status_code`, `service`).
 
 ## 3. Инструментирование сервисов
 
@@ -239,6 +247,8 @@ cfg.ConnConfig.Tracer = otelpgx.NewTracer(
 pool, err := pgxpool.NewWithConfig(ctx, cfg)
 ```
 
+Рецепт **только трейсовый**: `Init` не ставит MeterProvider, поэтому `otelhttp` пишет свои метрики в глобальный no-op meter, и ничего не экспортируется. Задайте `OTEL_METRICS_EXPORTER: "none"` в патче Go-сервиса, а не копируйте `otlp` из примера выше. RED-панели для Go-сервиса строятся на span-метриках Tempo (`traces_spanmetrics_*`), которые выводятся из самих трейсов.
+
 Модули: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp`, `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`, `github.com/exaring/otelpgx`. Ожидайте, что `go get` поднимет всё семейство `go.opentelemetry.io/otel`, которое SDK трекера ошибок уже подтянул транзитивно, — держите их на одной версии. Исходящим HTTP-вызовам нужен `otelhttp.NewTransport(http.DefaultTransport)`. Строки логов коррелируют с трейсами через небольшую обёртку `slog.Handler`, которая добавляет `trace_id`/`span_id` из `trace.SpanContextFromContext(ctx)`, когда спан валиден, — иначе это no-op, так что её можно ставить безусловно.
 
 `otelpgx` ≥ 0.12 говорит на актуальных семантических конвенциях: `db.system.name`, `db.query.text`, `db.operation.name`, `db.namespace`, `db.collection.name`, плюс собственный `pgx.query.parameters`. Всё, что читает спаны, должно знать и старый, и новый набор ключей — см. раздел 4.
@@ -252,7 +262,7 @@ Node загружает инструментирование раньше при
     environment:
       NODE_OPTIONS: "--import /opt/otel-node/register.mjs"
       OTEL_SERVICE_NAME: "site"
-      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${PROJECT_NAME:-myproject},deployment.environment.name=dev"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${COMPOSE_PROJECT_NAME},deployment.environment.name=dev"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318"
       # exporter-trace-otlp-http умеет только JSON; protobuf-вариант — это
       # другой пакет. Пишите то, что правда, а не копируйте значение из Go.
@@ -339,7 +349,7 @@ dwe cmd otel.traces -- summary --last 15m     # когда вы ещё не зн
 
 ## Известные шероховатости
 
-- Всё в бэкенде эфемерно; `dwe stop otel && dwe run` теряет все трейсы. Добавьте именованный том для `/data`, если нужна сохранность между перезапусками.
+- Без тома `otel_data` каждое пересоздание контейнера теряет всю телеметрию: правка оверлея и `dwe run`, `dwe services enable|disable --apply`, `dwe reset`. Остановка и повторный запуск того же контейнера (`dwe restart otel`, `dwe stop`, затем `dwe run`) её сохраняют в любом случае.
 - На уровне логирования debug собственные HTTP-вызовы OTLP-экспортера появляются в логе приложения примерно раз в секунду (Python: `urllib3.connectionpool … POST /v1/traces`). Увеличьте `OTEL_BSP_SCHEDULE_DELAY` или заглушите этот логгер.
 - Health-пробы, исключённые из HTTP-инструментирования, всё равно дают трейсы без родителя — `PING` / `SELECT` / `connect` — от своих проверок БД. Фильтруйте через `--exclude-root` / `--kind server` в инструменте поиска или на коллекторе.
 - Span-метрики Tempo несут только `span_name`, так что SQL-спан назван по своему глаголу; сам запрос виден только внутри трейса.
