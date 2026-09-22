@@ -728,6 +728,33 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 	})
 }
 
+// TestPrintRunHeader_ColorFollowsWriter pins that the banner's colour is
+// decided by the stream it is written to, not by stdout: a non-terminal
+// writer gets plain text, and CLICOLOR_FORCE (checked against that same
+// writer) turns colour back on.
+func TestPrintRunHeader_ColorFollowsWriter(t *testing.T) {
+	def := &usercommands.CommandDef{ID: "db.up", Type: usercommands.CommandTypeShell, Description: "Start"}
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "xterm-256color")
+
+	t.Setenv("CLICOLOR_FORCE", "")
+	var plain bytes.Buffer
+	printRunHeader(&plain, def, i18n.NopTranslator{}, "")
+	if strings.Contains(plain.String(), "\x1b[") {
+		t.Errorf("non-terminal writer must get no ANSI; got %q", plain.String())
+	}
+	if !strings.Contains(plain.String(), "db.up") {
+		t.Errorf("banner missing id; got %q", plain.String())
+	}
+
+	t.Setenv("CLICOLOR_FORCE", "1")
+	var forced bytes.Buffer
+	printRunHeader(&forced, def, i18n.NopTranslator{}, "")
+	if !strings.Contains(forced.String(), "\x1b[") {
+		t.Errorf("CLICOLOR_FORCE must colour the banner; got %q", forced.String())
+	}
+}
+
 func TestPrintRunHeader(t *testing.T) {
 	cases := []struct {
 		name string
