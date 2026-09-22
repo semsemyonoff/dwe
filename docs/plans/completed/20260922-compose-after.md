@@ -37,7 +37,7 @@ author's list order preserved within a service.
 
 New chain:
 
-```
+```text
 compose.base
   → tools  (alpha) — each: svc.compose… + svc.local-extras…
   → infra  (alpha) — each: svc.compose… + svc.local-extras…
