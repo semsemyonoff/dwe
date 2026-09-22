@@ -415,13 +415,13 @@ inherit the new tier, so a later change to either cannot silently drop it.
 - Modify: `internal/core/project/config/compose_scan_test.go`
 - Modify: `internal/cli/test/profile_test.go`
 
-- [ ] `ScenarioView`: `compose_after` survives the view (not stripped like `LocalComposeExtra`)
-- [ ] `ScenarioView`: a scenario `env.services.disable` of the owner drops its `compose_after` from `view.ComposeFiles()`, `enable` of a disabled owner adds it
-- [ ] extend `TestScenarioView_DoesNotMutateInput` with a service carrying a `compose_after` slice
-- [ ] `ScanComposeIsolation`: a `compose_after` file resetting a `container_name:` set by the app's own overlay clears the finding — last-wins over the app overlay, because the tier follows the app group (mirror `TestScanComposeIsolation_ContainerNameReset`)
-- [ ] `ScanComposeCost`: a `compose_after` file that resets the app overlay's `build:` (`!reset`) and sets `image:` plus a `healthcheck.start_period` leaves `BuildServices` empty and `ExternalImages == []string{"<image ref>"}`, and `MaxStartPeriod` reports the `compose_after` value (give the app overlay a different or no baseline `start_period`) — the tier wins the cost merge too (mirror `TestScanComposeCost_OverlayResetClearsBuild`)
-- [ ] `dwe test list` cost profile (`internal/cli/test/profile_test.go`, next to `TestCostProfile_IgnoresLocalComposeExtra`): one scenario enabling and one disabling the owner of a `compose_after` file that adds a `build:` service — the profile's build facts differ between them (`profile.go:188` feeds `ScenarioView` into both scanners)
-- [ ] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/... ./internal/cli/test/...` - must pass before task 6
+- [x] `ScenarioView`: `compose_after` survives the view (not stripped like `LocalComposeExtra`)
+- [x] `ScenarioView`: a scenario `env.services.disable` of the owner drops its `compose_after` from `view.ComposeFiles()`, `enable` of a disabled owner adds it
+- [x] extend `TestScenarioView_DoesNotMutateInput` with a service carrying a `compose_after` slice
+- [x] `ScanComposeIsolation`: a `compose_after` file resetting a `container_name:` set by the app's own overlay clears the finding — last-wins over the app overlay, because the tier follows the app group (mirror `TestScanComposeIsolation_ContainerNameReset`)
+- [x] `ScanComposeCost`: a `compose_after` file that resets the app overlay's `build:` (`!reset`) and sets `image:` plus a `healthcheck.start_period` leaves `BuildServices` empty and `ExternalImages == []string{"<image ref>"}`, and `MaxStartPeriod` reports the `compose_after` value (give the app overlay a different or no baseline `start_period`) — the tier wins the cost merge too (mirror `TestScanComposeCost_OverlayResetClearsBuild`)
+- [x] `dwe test list` cost profile (`internal/cli/test/profile_test.go`, next to `TestCostProfile_IgnoresLocalComposeExtra`): one scenario enabling and one disabling the owner of a `compose_after` file that adds a `build:` service — the profile's build facts differ between them (`profile.go:188` feeds `ScenarioView` into both scanners)
+- [x] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/... ./internal/cli/test/...` - must pass before task 6
 
 ### Task 6: reference docs, RU mirrors, CHANGELOG
 

@@ -3,6 +3,7 @@ package envtest
 import (
 	"maps"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -16,7 +17,7 @@ func viewFixture() *config.DweConfig {
 		Compose: config.ComposeConfig{Base: "compose.yaml", Extra: []string{"local.compose.yml"}},
 		Services: map[string]config.ServiceConfig{
 			"core":  {Type: config.ServiceTypeApp, Required: true, Enabled: true, Compose: []string{"core.yml"}},
-			"redis": {Type: config.ServiceTypeInfra, Enabled: false, Compose: []string{"redis.yml"}, LocalComposeExtra: []string{"redis.local.yml"}},
+			"redis": {Type: config.ServiceTypeInfra, Enabled: false, Compose: []string{"redis.yml"}, LocalComposeExtra: []string{"redis.local.yml"}, ComposeAfter: []string{"redis-after.yml"}},
 		},
 		Raw: map[string]any{
 			"compose": map[string]any{"base": "compose.yaml", "extra": []any{"local.compose.yml"}},
@@ -243,6 +244,9 @@ func TestScenarioView_DoesNotMutateInput(t *testing.T) {
 	if cfg.Compose.Extra == nil {
 		t.Error("input Compose.Extra was cleared")
 	}
+	if got := cfg.Services["redis"].ComposeAfter; !slices.Equal(got, []string{"redis-after.yml"}) {
+		t.Errorf("input redis ComposeAfter mutated: %v", got)
+	}
 
 	// No cross-contamination between the views.
 	if got, ok := config.ResolvePath(plain.Raw, "vars.ports.valkey"); !ok || got != 6379 {
@@ -289,5 +293,71 @@ func TestScenarioView_DoesNotMutateScenarioEnv(t *testing.T) {
 	}
 	if got, _ := config.ResolvePath(view.Raw, "vars.ports.other"); got != 7000 {
 		t.Errorf("view vars.ports.other = %v, want 7000", got)
+	}
+}
+
+// composeAfterFixture builds a config for the compose_after propagation tests:
+// an always-enabled app, a tool enabled by default whose compose_after file
+// therefore reaches ComposeFiles(), and a tool disabled by default whose
+// compose_after file does not — until a scenario toggles either.
+func composeAfterFixture() *config.DweConfig {
+	return &config.DweConfig{
+		Compose: config.ComposeConfig{Base: "compose.yaml"},
+		Services: map[string]config.ServiceConfig{
+			"app":    {Type: config.ServiceTypeApp, Required: true, Enabled: true, Compose: []string{"app.yml"}},
+			"otel":   {Type: config.ServiceTypeTool, Enabled: true, Compose: []string{"otel.yml"}, ComposeAfter: []string{"otel-after.yml"}},
+			"beacon": {Type: config.ServiceTypeTool, Enabled: false, Compose: []string{"beacon.yml"}, ComposeAfter: []string{"beacon-after.yml"}},
+		},
+	}
+}
+
+// TestScenarioView_ComposeAfterSurvives pins that ComposeAfter, unlike
+// LocalComposeExtra, is not stripped by the view — it is a tracked field, not
+// a per-developer overlay, so the scenario's copy must run it too.
+func TestScenarioView_ComposeAfterSurvives(t *testing.T) {
+	view := ScenarioView(composeAfterFixture(), ScenarioEnv{})
+	if got := view.Services["otel"].ComposeAfter; !slices.Equal(got, []string{"otel-after.yml"}) {
+		t.Errorf("otel ComposeAfter = %v, want [otel-after.yml]", got)
+	}
+}
+
+// TestScenarioView_ComposeAfterFollowsEnabledToggle pins that a
+// compose_after file's presence in the view's ComposeFiles() tracks its
+// owning service's effective Enabled state after the scenario's toggles —
+// the same `all || svc.Enabled` gate composeFiles applies, evaluated on the
+// view rather than the project config.
+func TestScenarioView_ComposeAfterFollowsEnabledToggle(t *testing.T) {
+	tests := []struct {
+		name string
+		env  ScenarioEnv
+		want map[string]bool // compose_after file -> whether it appears in ComposeFiles()
+	}{
+		{
+			name: "no toggles: enabled owner's file present, disabled owner's absent",
+			env:  ScenarioEnv{},
+			want: map[string]bool{"otel-after.yml": true, "beacon-after.yml": false},
+		},
+		{
+			name: "disable of the enabled owner drops its compose_after",
+			env:  ScenarioEnv{Services: ScenarioServices{Disable: []string{"otel"}}},
+			want: map[string]bool{"otel-after.yml": false},
+		},
+		{
+			name: "enable of the disabled owner adds its compose_after",
+			env:  ScenarioEnv{Services: ScenarioServices{Enable: []string{"beacon"}}},
+			want: map[string]bool{"beacon-after.yml": true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			view := ScenarioView(composeAfterFixture(), tt.env)
+			files := view.ComposeFiles()
+			for file, want := range tt.want {
+				if got := slices.Contains(files, file); got != want {
+					t.Errorf("ComposeFiles() contains %s = %v, want %v (files=%v)", file, got, want, files)
+				}
+			}
+		})
 	}
 }
