@@ -49,7 +49,7 @@ Inspect output (`dwe commands -i <id>`) is allowed on hidden commands and shows 
 # workspace/services/db/commands.yml — disappears when db is disabled
 group:
   title: Database
-  hide: '{{ not (index .services "db" "enabled") }}'
+  hide: '{{ not (index .Raw "services" "db" "enabled") }}'
 
 commands:
   migrate:
@@ -58,9 +58,11 @@ commands:
   # individual command can also be hidden:
   reset_engine:
     type: shell
-    hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+    hide: '{{ eq (index .Raw "vars" "db_engine") "sqlite" }}'
     cmd: db reset --engine
 ```
+
+Inside `{{ }}` the merged config is `.Raw` — there is no top-level `.services`. `index .Raw "services" "<name>" "enabled"` reads a service toggle; free-form switches such as `db_engine` belong under [`vars:`](../workspace.md), where `${vars.db_engine}` reads them too.
 
 ## Bridge visibility
 

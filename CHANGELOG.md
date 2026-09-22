@@ -18,7 +18,12 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
+  reference no longer fail to evaluate: config is read through `.Raw`
+  (`index .Raw "services" "db" "enabled"`), not a non-existent `.services`.
+  A copied example used to leave the command visible without any error.
 
 ## [0.6.2] - 2026-09-16
 

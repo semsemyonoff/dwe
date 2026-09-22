@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ be6285666208
+> Translated from: reference/config/commands/directives.md @ 4c62e193f67f
 
 # Директивы команд
 
@@ -51,7 +51,7 @@
 # workspace/services/db/commands.yml — исчезает, когда db выключен
 group:
   title: База данных
-  hide: '{{ not (index .services "db" "enabled") }}'
+  hide: '{{ not (index .Raw "services" "db" "enabled") }}'
 
 commands:
   migrate:
@@ -60,9 +60,11 @@ commands:
   # команда тоже может быть скрыта индивидуально:
   reset_engine:
     type: shell
-    hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+    hide: '{{ eq (index .Raw "vars" "db_engine") "sqlite" }}'
     cmd: db reset --engine
 ```
+
+Внутри `{{ }}` смерженный конфиг лежит в `.Raw` — top-level `.services` нет. `index .Raw "services" "<name>" "enabled"` читает переключатель сервиса; произвольные флаги вроде `db_engine` живут в [`vars:`](../workspace.md), откуда их читает и `${vars.db_engine}`.
 
 ## Видимость через bridge
 

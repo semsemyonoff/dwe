@@ -8,7 +8,7 @@ package docs
 var ContentHashes = map[string]string{
 	"README.md":                                "93af0098060d",
 	"guides/add-a-service.md":                  "c5ab3861731c",
-	"guides/author-project-commands.md":        "f568b0f4673c",
+	"guides/author-project-commands.md":        "3c8d6c4e3776",
 	"guides/background-daemons.md":             "b2dcd1937aba",
 	"guides/brand-your-project.md":             "c74cf1229066",
 	"guides/daily-workflow.md":                 "2424341da74f",
@@ -36,7 +36,7 @@ var ContentHashes = map[string]string{
 	"reference/concepts/pipelines.md":          "90f4492272d4",
 	"reference/concepts/project-layout.md":     "a66fc3498eb8",
 	"reference/concepts/state-and-locks.md":    "4ede6d512f0e",
-	"reference/config/commands/directives.md":  "be6285666208",
+	"reference/config/commands/directives.md":  "4c62e193f67f",
 	"reference/config/commands/index.md":       "5a22f686ce2f",
 	"reference/config/commands/templating.md":  "f0fff008deb3",
 	"reference/config/commands/types.md":       "b286fcce120a",
