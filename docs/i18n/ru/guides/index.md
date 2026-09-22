@@ -1,4 +1,4 @@
-> Translated from: guides/index.md @ dbb95f9fd530
+> Translated from: guides/index.md @ 741830772008
 
 # Руководства
 
@@ -36,6 +36,7 @@
 ### Интеграции
 
 - [Интеграция со Starship](starship.md) — компактный, проектно-ориентированный сегмент DWE внутри промта [Starship](https://starship.rs/).
+- [Наблюдаемость с OpenTelemetry](observability-otel.md) — опциональный tool-сервис `otel` (бандл Grafana LGTM), чей оверлей инструментирует ваши app-сервисы; рецепты под каждый язык и текстовый поиск трейсов для агента.
 
 ## См. также
 

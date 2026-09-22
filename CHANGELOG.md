@@ -20,6 +20,14 @@ generated from commit subjects and stay on the
 
 ### Added
 
+- New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
+  — an opt-in `otel` tool service whose compose overlay also patches the app
+  services, with instrumentation recipes for Python, Go and Node and a text
+  trace lookup for coding agents.
+- The service reference documents how relative paths in a `compose:` overlay
+  resolve: against the directory of the first `-f` file (`compose.base`), not
+  the overlay's own directory. See
+  [`compose`](docs/reference/config/services/fields.md).
 - `dwe validate` warns `hide: expression does not evaluate` when a `hide:` on a
   command or group fails to render against the project config. At runtime
   such an expression is fail-open and leaves the command visible. The check
