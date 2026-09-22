@@ -60,6 +60,11 @@ generated from commit subjects and stay on the
   the container's stderr. Under `-o json` the banner is no longer printed at
   all, so stderr carries only the error envelope. Scripts that parsed the
   banner from stdout must read stderr.
+- `dwe logs` help and the `AGENTS.md` files `dwe init` scaffolds no longer
+  describe the command as streaming: it prints the last `--tail` lines and
+  exits unless `--follow` is passed, so a coding agent can call it
+  non-interactively. Existing projects keep their `AGENTS.md` until it is
+  edited or regenerated.
 
 ### Fixed
 

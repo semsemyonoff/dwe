@@ -11,7 +11,7 @@ var ContentHashes = map[string]string{
 	"guides/author-project-commands.md":        "3c8d6c4e3776",
 	"guides/background-daemons.md":             "b2dcd1937aba",
 	"guides/brand-your-project.md":             "c74cf1229066",
-	"guides/daily-workflow.md":                 "2424341da74f",
+	"guides/daily-workflow.md":                 "f5be01c30cf7",
 	"guides/index.md":                          "741830772008",
 	"guides/integration-tests.md":              "c48a7e440867",
 	"guides/joining-a-project.md":              "8e830b51dfe5",

@@ -51,7 +51,8 @@ Inspecting the environment:
 - `dwe` — project dashboard / header
 - `dwe status` — stack health, per-service state and container names
 - `dwe info` — environment summary (URLs, hosts, ports)
-- `dwe logs [service]` — stream container logs
+- `dwe logs [service] [--tail N]` — container logs (prints and exits; `--follow`
+  to stream)
 - `dwe validate` — static project-config validation
 
 Lifecycle and reference:

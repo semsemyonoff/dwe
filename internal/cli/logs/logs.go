@@ -52,12 +52,13 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "logs [service]",
-		Short: "Stream container logs for a service (or the whole stack)",
-		Long: `Stream Docker container logs for a project service.
+		Short: "Show container logs for a service (or the whole stack)",
+		Long: `Show Docker container logs for a project service.
 
-With a service name, streams that one service's container. With NO argument,
-streams the logs of the whole stack (all enabled services), like
-'docker compose logs'.
+With a service name, shows that one service's container. With NO argument,
+shows the logs of the whole stack (all enabled services), like
+'docker compose logs'. By default the last --tail lines print and the command
+exits; --follow keeps streaming new lines.
 
 The target container is resolved by its compose project + service labels, so it
 works regardless of any container_name override or compose's default
