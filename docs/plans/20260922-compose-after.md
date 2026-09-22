@@ -398,11 +398,11 @@ it.
 - Modify: `internal/core/workflow/deploy/journal/hash.go` (`serviceConfigToMap` :247-275)
 - Modify: `internal/core/workflow/deploy/journal/hash_test.go`
 
-- [ ] **before** changing `hash.go`, capture `ServiceConfigHash` of a fixed fixture service (no `compose_after`, a representative set of fields) and pin it as a literal in a new test — this is the "no redeploy on upgrade" guarantee, checked against the pre-change value rather than against itself. Capturing it at this point is equivalent to capturing it at the branch base: Tasks 1–3 add a struct field and touch `composeFiles` / `ResolveServiceExtends` only, and `serviceConfigToMap` builds its map from named fields, so a new `ServiceConfig` field cannot reach the hash until this task adds it (if in doubt, compute the literal on `879f058f` with the same fixture and compare)
-- [ ] `serviceConfigToMap`: add `m["compose_after"] = svc.ComposeAfter` only when `len > 0`
-- [ ] test: `serviceConfigToMap` of a service without `compose_after` has no `compose_after` key
-- [ ] test: adding a `compose_after` entry changes the hash, and reordering two entries changes it again
-- [ ] run `go test ./internal/core/workflow/deploy/journal/...` (the literal pin must still pass after the change) - must pass before task 5
+- [x] **before** changing `hash.go`, capture `ServiceConfigHash` of a fixed fixture service (no `compose_after`, a representative set of fields) and pin it as a literal in a new test — this is the "no redeploy on upgrade" guarantee, checked against the pre-change value rather than against itself. Capturing it at this point is equivalent to capturing it at the branch base: Tasks 1–3 add a struct field and touch `composeFiles` / `ResolveServiceExtends` only, and `serviceConfigToMap` builds its map from named fields, so a new `ServiceConfig` field cannot reach the hash until this task adds it (if in doubt, compute the literal on `879f058f` with the same fixture and compare)
+- [x] `serviceConfigToMap`: add `m["compose_after"] = svc.ComposeAfter` only when `len > 0`
+- [x] test: `serviceConfigToMap` of a service without `compose_after` has no `compose_after` key
+- [x] test: adding a `compose_after` entry changes the hash, and reordering two entries changes it again
+- [x] run `go test ./internal/core/workflow/deploy/journal/...` (the literal pin must still pass after the change) - must pass before task 5
 
 ### Task 5: the scanners and `dwe test` inherit the tier
 
