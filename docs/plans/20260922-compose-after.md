@@ -481,11 +481,11 @@ has only the `files`, `raw` and `argv` subcommands
 (`internal/cli/compose/compose.go:18-25`); the merged config is read through
 `raw`.
 
-- [ ] on a temp project with an app defined in `compose/app.yml` (with `command:` and an `environment:` key) and an enabled tool whose `compose_after` file overrides both: `"$repo/bin/dwe" compose files` lists the tool's file after `compose/app.yml`, and `"$repo/bin/dwe" compose raw -- config` shows the tool's `command:` and env value
-- [ ] `"$repo/bin/dwe" services disable <tool>` on that project: `"$repo/bin/dwe" compose files` no longer lists its `compose_after` file
-- [ ] `services.<name>.compose_after` added to that project's `workspace/local.yml`: `"$repo/bin/dwe" validate` reports a load failure whose message names `workspace/local.yml` and `services.<name>.compose_after` (the diagnostic's `File` field is `workspace.yml`, set by the workspace validator)
-- [ ] backward compatibility is covered by Task 2's byte-identical row and Task 4's literal hash pin — no separate binary comparison
-- [ ] `make build`, `make lint`, `make test` clean
+- [x] on a temp project with an app defined in `compose/app.yml` (with `command:` and an `environment:` key) and an enabled tool whose `compose_after` file overrides both: `"$repo/bin/dwe" compose files` lists the tool's file after `compose/app.yml`, and `"$repo/bin/dwe" compose raw -- config` shows the tool's `command:` and env value
+- [x] `"$repo/bin/dwe" services disable <tool>` on that project: `"$repo/bin/dwe" compose files` no longer lists its `compose_after` file
+- [x] `services.<name>.compose_after` added to that project's `workspace/local.yml`: `"$repo/bin/dwe" validate` reports a load failure whose message names `workspace/local.yml` and `services.<name>.compose_after` (the diagnostic's `File` field is `workspace.yml`, set by the workspace validator)
+- [x] backward compatibility is covered by Task 2's byte-identical row and Task 4's literal hash pin — no separate binary comparison
+- [x] `make build`, `make lint`, `make test` clean
 
 ### Task 9: [Final] Update documentation
 
