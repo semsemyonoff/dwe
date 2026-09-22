@@ -712,7 +712,8 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	// Services with an empty Type are emitted last in the same pass as apps so
 	// tests that build ServiceConfig literals without setting Type still work.
 	// Order is part of the public surface — overlay precedence depends on it
-	// (pinned by TestComposeFiles_grouped_tool_infra_app).
+	// (pinned by TestComposeFiles_grouped_tool_infra_app for the groups and
+	// TestComposeFiles_composeAfterTier for the compose_after tier after them).
 	emitGroup := func(match func(ServiceType) bool) {
 		for _, name := range slices.Sorted(maps.Keys(c.Services)) {
 			svc := c.Services[name]

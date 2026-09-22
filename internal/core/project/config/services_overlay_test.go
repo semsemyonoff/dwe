@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -984,6 +985,8 @@ project:
 type: app
 container: app-parent
 required: true
+compose:
+  - parent.yml
 compose_after:
   - after-shared.yml
 `)
@@ -997,15 +1000,10 @@ extends: parent
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	files := cfg.ComposeFiles()
-	count := 0
-	for _, f := range files {
-		if f == "after-shared.yml" {
-			count++
-		}
-	}
-	if count != 2 {
-		t.Errorf("after-shared.yml appears %d times in ComposeFiles(), want 2 (no dedup, once per service: %v)", count, files)
+	// Both inherited copies land in the compose_after tier, after the app group.
+	want := []string{"parent.yml", "parent.yml", "after-shared.yml", "after-shared.yml"}
+	if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
+		t.Errorf("ComposeFiles() = %v, want %v (no dedup, once per service)", got, want)
 	}
 }
 

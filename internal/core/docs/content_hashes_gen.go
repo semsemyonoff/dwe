@@ -7,7 +7,7 @@ package docs
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
 	"README.md":                                "93af0098060d",
-	"guides/add-a-service.md":                  "1c0a0a6f8530",
+	"guides/add-a-service.md":                  "0ba33903849c",
 	"guides/author-project-commands.md":        "f568b0f4673c",
 	"guides/background-daemons.md":             "b2dcd1937aba",
 	"guides/brand-your-project.md":             "c74cf1229066",
@@ -16,7 +16,7 @@ var ContentHashes = map[string]string{
 	"guides/integration-tests.md":              "c48a7e440867",
 	"guides/joining-a-project.md":              "8e830b51dfe5",
 	"guides/localize-for-your-team.md":         "7651e1c5c14c",
-	"guides/observability-otel.md":             "fc439897b34d",
+	"guides/observability-otel.md":             "f90ce8a131db",
 	"guides/preflight-checks.md":               "0118a90a2c11",
 	"guides/shared-ide-and-agent-config.md":    "8e10b630fa17",
 	"guides/starship.md":                       "585d118b6b71",
@@ -30,7 +30,7 @@ var ContentHashes = map[string]string{
 	"internals/tui-keymap.md":                  "739fe9a61f5d",
 	"reference/concepts/architecture.md":       "eb472f58e59e",
 	"reference/concepts/bridge.md":             "f21a702ba0e5",
-	"reference/concepts/docker.md":             "eb5627b31496",
+	"reference/concepts/docker.md":             "d3b298a7ba27",
 	"reference/concepts/getting-started.md":    "75667afc4ae1",
 	"reference/concepts/git.md":                "a7a84a97ba51",
 	"reference/concepts/index.md":              "a216b4a46f13",

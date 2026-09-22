@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/docker.md @ eb5627b31496
+> Translated from: reference/concepts/docker.md @ d3b298a7ba27
 
 # Интеграция с Docker
 
@@ -77,7 +77,7 @@ compose/services/api.yml          # app оверлей
 
 Переопределения списка compose-файлов на уровне `docker.local.yml` нет. Локальные оверрайды лежат в:
 
-- `workspace/local.yml` — `enabled: true|false` на сервис, порты, хосты, пользовательские env. Влияет на содержимое списка через набор enabled.
+- `workspace/local.yml` — `enabled: true|false` на сервис, порты, хосты, пользовательские env. Влияет на содержимое списка через набор enabled и напрямую добавляет `-f` файлы через `services.<name>.compose.extra` (выводится внутри группы этого сервиса, до всех файлов `compose_after`) и общепроектный `compose.extra` (добавляется последним).
 - `workspace/docker.local.yml` — переопределения политики (имя проекта, args, process env, топология). **Не** добавляет и не удаляет `-f` файлы.
 
 Чтобы посмотреть итоговый список, запустите `dwe compose files`.

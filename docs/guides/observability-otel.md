@@ -7,7 +7,7 @@ dwe services enable otel --apply    # backend up, services export to it
 dwe services disable otel --apply   # gone; services run their plain config again
 ```
 
-There is no "pack" mechanism in DWE and none is needed: a **tool service whose compose overlay also patches the neighbouring app services** is the whole feature. Enabled, the overlay is passed to Compose and both halves apply; disabled, the file is never read, so the app services run exactly their base definition with zero overhead.
+There is no "pack" mechanism in DWE and none is needed: a **tool service whose `compose:` overlay ships the backend and whose `compose_after:` overlay patches the neighbouring app services** is the whole feature. Enabled, both files are passed to Compose; disabled, neither is read, so the app services run exactly their base definition with zero overhead.
 
 What you end up with:
 
@@ -160,13 +160,14 @@ Do not expect a dashboard to move between languages. Metric names follow the ins
 
 ## 3. Instrumenting the services
 
-The overlay carries the OTEL_* environment; what each service does with it depends on the language. The goal for every recipe is the same: the app repo carries no diff when the tool is off, and as little as possible when it is on.
+The app patch (`compose/otel-apps.yml`) carries the OTEL_* environment; what each service does with it depends on the language. The goal for every recipe is the same: the app repo carries no diff when the tool is off, and as little as possible when it is on.
 
 ### Python — zero diff
 
-Auto-instrumentation via `opentelemetry-instrument`, layered over the project venv at container start. The overlay replaces the app `command`:
+Auto-instrumentation via `opentelemetry-instrument`, layered over the project venv at container start. The app patch replaces the app `command`:
 
 ```yaml
+# compose/otel-apps.yml
   app:
     command:
       - uv
@@ -265,6 +266,7 @@ Modules: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, `go.opentel
 Node loads instrumentation before the app when told to with `--import`; nothing in the app repo changes. The packages live in a directory of the workspace with their own `package.json`, mounted into the container and installed on first start:
 
 ```yaml
+# compose/otel-apps.yml
   site:
     environment:
       NODE_OPTIONS: "--import /opt/otel-node/register.mjs"
@@ -279,6 +281,8 @@ Node loads instrumentation before the app when told to with `--import`; nothing 
       OTEL_LOGS_EXPORTER: "none"
       OTEL_NODE_ENABLED_INSTRUMENTATIONS: "http,undici"
       OTEL_BSP_SCHEDULE_DELAY: "1000"
+      # Turns off the SSR half of an in-app Sentry SDK — see the traps below.
+      SENTRY_DSN: ""
     volumes:
       - ./workspace/otel/node:/opt/otel-node
 ```
@@ -297,7 +301,7 @@ workspace/otel/node/
 
 Undici (the global `fetch`) is hooked through `diagnostics_channel`, so an SSR framework calling the backend propagates `traceparent` with no code. Things that break the zero-diff promise or add noise:
 
-- **A Sentry SDK v8+ in the app.** `Sentry.init` runs its own OpenTelemetry setup. The `@opentelemetry/api` global registry is first-wins, so an SDK registered from `--import` keeps the provider, but Sentry's preloaded http/undici instrumentations still run and emit a second server span for every request through *your* provider. `compose/otel-apps.yml` now sets `SENTRY_DSN: ""` directly — a whole-value `environment:` key like this wins over the app's own overlay — so the SSR half of Sentry is off while the tool is on for any app that treats a falsy `SENTRY_DSN` as disabled. An app whose init code falls back to a hardcoded default DSN when the variable is nullish (`dsn: process.env.SENTRY_DSN ?? defaultDsn`) sees the empty string as a non-nullish value and still initializes Sentry with it; that app needs `register.mjs`'s `delete process.env.SENTRY_DSN` to actually unset the variable instead. The browser half (`PUBLIC_*`, inlined at build) is untouched. Say so in the overlay's comments.
+- **A Sentry SDK v8+ in the app.** `Sentry.init` runs its own OpenTelemetry setup. The `@opentelemetry/api` global registry is first-wins, so an SDK registered from `--import` keeps the provider, but Sentry's preloaded http/undici instrumentations still run and emit a second server span for every request through *your* provider. The `site:` patch in `compose/otel-apps.yml` sets `SENTRY_DSN: ""` — a whole-value `environment:` key like this wins over the app's own overlay — so the SSR half of Sentry is off while the tool is on for any app that treats a falsy `SENTRY_DSN` as disabled. An app whose init code falls back to a hardcoded default DSN when the variable is nullish (`dsn: process.env.SENTRY_DSN ?? defaultDsn`) sees the empty string as a non-nullish value and still initializes Sentry with it; for that app, add `delete process.env.SENTRY_DSN` to `register.mjs` to actually unset the variable instead. The browser half (`PUBLIC_*`, inlined at build) is untouched. Say so in the overlay's comments.
 - **Health probes.** The compose healthcheck's own process is skipped by the `argv[1]` guard, but its request still reaches the instrumented server. Filtering inside the http instrumentation config misses spans other instrumentations create, so drop them in a `SpanProcessor` wrapper around the `BatchSpanProcessor` (`onEnd`: path `/` with no `user-agent`, `/@vite/`, `/@fs/`, `/node_modules/`, `/__astro*`), which sits downstream of every instrumentation. Note that a healthcheck which renders a full page still produces real backend traffic every interval, and the backend traces it.
 - **No `http.route` on the site side.** The framework does not feed a route template to the instrumentation, so server spans are named by path. Group by path prefix in the lookup tool.
 
@@ -365,4 +369,4 @@ Without such a pointer an agent bypasses `dwe` altogether (`docker logs`, `docke
 
 - [Adding a service](add-a-service.md) — the tool-service shape this guide builds on.
 - [Authoring project commands](author-project-commands.md) — `service_exec`, `hide:`, `${args}`.
-- [`../reference/config/services/index.md`](../reference/config/services/index.md) — `type: tool`, `compose:` overlays, `hosts:`.
+- [`../reference/config/services/index.md`](../reference/config/services/index.md) — `type: tool`, `compose:` and `compose_after:` overlays, `hosts:`.

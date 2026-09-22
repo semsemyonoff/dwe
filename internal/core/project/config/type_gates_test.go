@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -173,25 +175,23 @@ func TestComposeFiles_composeAfterTier(t *testing.T) {
 	})
 
 	t.Run("required owner is always present", func(t *testing.T) {
-		services := baseServices()
-		otel := services["otel"]
-		otel.Required = true
-		otel.Enabled = true
-		services["otel"] = otel
-		cfg := &DweConfig{
-			Compose:  ComposeConfig{Base: "compose.yaml"},
-			Services: services,
+		// Through LoadConfig: required: true forces Enabled even when
+		// defaults.yml says otherwise, so the compose_after file stays in the chain.
+		dir := t.TempDir()
+		ws := "schema_version: \"1\"\nproject:\n  name: tbm\n  prefix: dwe\ncompose:\n  base: compose.yaml\n"
+		if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(ws), 0o644); err != nil {
+			t.Fatal(err)
 		}
-		want := []string{
-			"compose.yaml",
-			"tool-otel.yml",
-			"infra-cache.yml",
-			"app-web.yml",
-			"after-cache.yml",
-			"after-otel-1.yml",
-			"after-otel-2.yml",
-			"after-web.yml",
+		writeServiceFolder(t, dir, "otel", "type: tool\ncontainer: otel\nrequired: true\ncompose_after:\n  - after-otel.yml\n")
+		defaults := "schema_version: \"1\"\nservices:\n  otel:\n    enabled: false\n"
+		if err := os.WriteFile(filepath.Join(dir, "workspace", "defaults.yml"), []byte(defaults), 0o644); err != nil {
+			t.Fatal(err)
 		}
+		cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		want := []string{"compose.yaml", "after-otel.yml"}
 		if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
 			t.Errorf("ComposeFiles() = %v, want %v", got, want)
 		}

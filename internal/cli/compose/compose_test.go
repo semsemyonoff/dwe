@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -485,10 +486,6 @@ func TestComposeFilesCmd_RunE(t *testing.T) {
 
 func TestComposeFilesCmd_RunE_composeAfterTier(t *testing.T) {
 	dir := makeMinimalProject(t)
-	composeYAML := "services:\n  web:\n    image: nginx\n"
-	if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte(composeYAML), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	toolDir := filepath.Join(dir, "workspace", "services", "otel")
 	if err := os.MkdirAll(toolDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -504,12 +501,6 @@ func TestComposeFilesCmd_RunE_composeAfterTier(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
-	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
-	if err != nil {
-		t.Fatalf("LoadConfigOrWrap: %v", err)
-	}
-	want := cfg.ComposeFiles()
-
 	cmd := newComposeFilesCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -517,18 +508,11 @@ func TestComposeFilesCmd_RunE_composeAfterTier(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
-	if len(got) != len(want) {
-		t.Fatalf("printed lines = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-	// compose_after file must be the last line in this fixture (no bridge
-	// overlay, no project-wide local.yml extra).
-	if got[len(got)-1] != "compose/otel-apps.yml" {
-		t.Errorf("last printed line = %q, want compose/otel-apps.yml", got[len(got)-1])
+	// The minimal project declares no compose.base, and the tool has no
+	// compose: of its own, so the compose_after file is the whole chain.
+	want := []string{"compose/otel-apps.yml"}
+	if !slices.Equal(got, want) {
+		t.Errorf("printed lines = %v, want %v", got, want)
 	}
 }
 
