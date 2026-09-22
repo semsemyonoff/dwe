@@ -61,7 +61,8 @@ Nothing else is needed for Grafana behind the proxy — its own vhost at the roo
 
 ```yaml
 # compose/otel.yml — the otel backend AND the patch of the app services.
-# Relative bind-mount paths resolve against the PROJECT ROOT, not compose/.
+# Relative bind-mount paths resolve against the directory of the first -f file
+# (compose.base — the project root in the usual layout), not compose/.
 services:
   otel:
     # Pin it: `:latest` is sticky in the local image cache. 0.33.1 is multi-arch.
@@ -201,7 +202,15 @@ func Init(ctx context.Context) (shutdown func(context.Context) error, err error)
 	if err != nil {
 		return nil, err
 	}
-	res, _ := resource.New(ctx, resource.WithFromEnv(), resource.WithProcess())
+	res, _ := resource.New(ctx,
+		resource.WithFromEnv(),
+		// Not WithProcess(): it includes WithProcessCommandArgs(), which would put
+		// argv — DSNs, tokens passed as flags — into every exported resource.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+	)
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(time.Second)),
 		sdktrace.WithResource(res),
@@ -237,7 +246,10 @@ r.Use(func(next http.Handler) http.Handler {
 // pgx pool: attach the tracer to the pool config. sqlc-generated queries start
 // with `-- name: GetEntries :many`; without a name func that comment line
 // becomes the span name, so derive it from the header instead.
-cfg, _ := pgxpool.ParseConfig(dsn)
+cfg, err := pgxpool.ParseConfig(dsn)
+if err != nil {
+	return nil, fmt.Errorf("parse database DSN: %w", err)
+}
 cfg.ConnConfig.Tracer = otelpgx.NewTracer(
 	otelpgx.WithIncludeQueryParameters(), // literal parameter values in spans: dev sink only
 	otelpgx.WithSpanNameFunc(sqlcSpanName),
@@ -274,7 +286,7 @@ Node loads instrumentation before the app when told to with `--import`; nothing 
       - ./workspace/otel/node:/opt/otel-node
 ```
 
-```
+```text
 workspace/otel/node/
   package.json         # @opentelemetry/api (same 1.x as the app's own copy!),
   package-lock.json    # auto-instrumentations-node, sdk-node, sdk-trace-base,

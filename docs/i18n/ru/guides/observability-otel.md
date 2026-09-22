@@ -1,4 +1,4 @@
-> Translated from: guides/observability-otel.md @ 55c468d11a9a
+> Translated from: guides/observability-otel.md @ 6fe2b188eb59
 
 # Наблюдаемость с OpenTelemetry
 
@@ -63,7 +63,8 @@ http://otel.myproject.localhost {
 
 ```yaml
 # compose/otel.yml — бэкенд otel И патч app-сервисов.
-# Относительные пути bind-маунтов разрешаются от КОРНЯ ПРОЕКТА, а не от compose/.
+# Относительные пути bind-маунтов разрешаются от каталога первого -f файла
+# (compose.base — корень проекта при обычной раскладке), а не от compose/.
 services:
   otel:
     # Пиньте версию: `:latest` залипает в локальном кэше образов. 0.33.1 — multi-arch.
@@ -203,7 +204,15 @@ func Init(ctx context.Context) (shutdown func(context.Context) error, err error)
 	if err != nil {
 		return nil, err
 	}
-	res, _ := resource.New(ctx, resource.WithFromEnv(), resource.WithProcess())
+	res, _ := resource.New(ctx,
+		resource.WithFromEnv(),
+		// Не WithProcess(): он включает WithProcessCommandArgs(), и argv — DSN,
+		// токены, переданные флагами, — попал бы в каждый экспортируемый ресурс.
+		resource.WithProcessPID(),
+		resource.WithProcessExecutableName(),
+		resource.WithProcessRuntimeName(),
+		resource.WithProcessRuntimeVersion(),
+	)
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(time.Second)),
 		sdktrace.WithResource(res),
@@ -239,7 +248,10 @@ r.Use(func(next http.Handler) http.Handler {
 // Пул pgx: подключаем трейсер к конфигу пула. Запросы, сгенерированные sqlc,
 // начинаются с `-- name: GetEntries :many`; без функции имени эта строка-комментарий
 // становится именем спана, поэтому выводим его из заголовка.
-cfg, _ := pgxpool.ParseConfig(dsn)
+cfg, err := pgxpool.ParseConfig(dsn)
+if err != nil {
+	return nil, fmt.Errorf("parse database DSN: %w", err)
+}
 cfg.ConnConfig.Tracer = otelpgx.NewTracer(
 	otelpgx.WithIncludeQueryParameters(), // буквальные значения параметров в спанах: только для dev-приёмника
 	otelpgx.WithSpanNameFunc(sqlcSpanName),
@@ -276,7 +288,7 @@ Node загружает инструментирование раньше при
       - ./workspace/otel/node:/opt/otel-node
 ```
 
-```
+```text
 workspace/otel/node/
   package.json         # @opentelemetry/api (та же 1.x, что и собственная копия приложения!),
   package-lock.json    # auto-instrumentations-node, sdk-node, sdk-trace-base,
