@@ -76,7 +76,7 @@ type Item struct {
 	// Description is the full text; the filter matches against it.
 	Description string
 	// Summary is the one-line text shown in list rows and the fallback
-	// selector. Empty falls back to the first line of Description.
+	// selector. Empty falls back to model.SummaryLine(Description).
 	Summary    string
 	Type       string
 	Private    bool

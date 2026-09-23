@@ -27,8 +27,12 @@ func TestRowText(t *testing.T) {
 		{"summary of multi-line", "\nRun\nmore", "Run", "Run", true},
 		{"summary equals single line", "Run it", "Run it", "Run it", false},
 		{"summary only folded a tab", "Run\tit", "Run it", "Run it", false},
-		{"no summary keeps raw first line", "a\nb", "", "a", true},
+		{"no summary uses first line", "a\nb", "", "a", true},
 		{"no summary single line", "value", "", "value", false},
+		{"no summary skips leading blank line", "\n  a\nb", "", "a", true},
+		{"no summary whitespace-only", " \n\t\n", "", "", false},
+		{"no summary trailing newline is not more", "text\n", "", "text", false},
+		{"no summary vars value with spaces", "a b c", "", "a b c", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,5 +85,24 @@ func TestFilter_MatchesBeyondSummary(t *testing.T) {
 	f.recompute([]Item{summaryItem, {ID: "other", Description: "unrelated", Summary: "unrelated"}}, false)
 	if len(f.matched) != 1 || f.matched[0] != 0 {
 		t.Errorf("filter must match text past the summary; matched=%v", f.matched)
+	}
+}
+
+// TestCmdDelegate_FallbackNormalized: without a Summary, a whitespace-only
+// description gets the no-description layout and a one-line `|` description
+// ("text\n") gets no more-marker, even when selected.
+func TestCmdDelegate_FallbackNormalized(t *testing.T) {
+	t.Parallel()
+	d := newCmdDelegate(80, true)
+
+	blank := stripANSI(renderDelegate(t, d, []list.Item{newListItem(0, Item{ID: "a.blank", Description: " \n\t", Type: "shell"})}, 0, 0))
+	empty := stripANSI(renderDelegate(t, d, []list.Item{newListItem(0, Item{ID: "a.blank", Type: "shell"})}, 0, 0))
+	if blank != empty {
+		t.Errorf("whitespace-only description must render like no description:\n got %q\nwant %q", blank, empty)
+	}
+
+	one := stripANSI(renderDelegate(t, d, []list.Item{newListItem(0, Item{ID: "a.one", Description: "text\n", Type: "shell"})}, 0, 0))
+	if !strings.Contains(one, "text") || strings.Contains(one, "…") || strings.Contains(one, "(i)") {
+		t.Errorf("one-line description must show without a more-marker; got %q", one)
 	}
 }

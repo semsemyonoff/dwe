@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // listItem adapts an Item for bubbles/v2/list. The original-items index is
@@ -37,16 +39,17 @@ func (it Item) displayLine() string {
 }
 
 // rowText returns the single line a row shows and whether the description
-// holds more than that line. Without a caller-supplied summary it keeps the
-// raw first line, so non-command consumers (the vars browser) are unchanged.
+// holds more than that line. Without a caller-supplied summary it derives one
+// with model.SummaryLine, so a whitespace-only description gets the
+// no-description layout and a trailing newline is not "more"; the vars
+// browser's values are already single-line, so SummaryLine leaves them as is.
 // Whitespace-normalized comparison keeps a summary that only folded a tab
 // from counting as "more".
 func rowText(desc, summary string) (line string, more bool) {
-	if summary != "" {
-		return summary, strings.Join(strings.Fields(desc), " ") != strings.Join(strings.Fields(summary), " ")
+	if summary == "" {
+		summary = model.SummaryLine(desc)
 	}
-	first, _, more := strings.Cut(desc, "\n")
-	return first, more
+	return summary, strings.Join(strings.Fields(desc), " ") != strings.Join(strings.Fields(summary), " ")
 }
 
 // FilterValue is the haystack used by list.DefaultFilter. Concatenating id and
