@@ -64,6 +64,13 @@ generated from commit subjects and stay on the
   pair as `.Summary` next to `.Description` on `.Commands` and
   `.CommandGroups` entries. See
   [Description and summary](docs/reference/config/commands/directives.md#description-and-summary).
+- `dwe compose files`, `dwe compose argv` and `dwe compose raw` take `--all`
+  to use every configured overlay, disabled services included, like
+  `dwe docker pull|build --all`. It is meant for inspection: disabled overlays
+  may conflict, so the combined chain is not guaranteed to be valid. On `raw`
+  the flag goes before `--` (after it, `--all` reaches `docker compose`), and
+  `--bare --all` is rejected. See
+  [`docker.md`](docs/reference/config/docker.md#related-commands).
 
 ### Changed
 
