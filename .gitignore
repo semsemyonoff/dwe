@@ -39,3 +39,7 @@
 /web/src/content/docs/
 /web/src/sidebar.generated.mjs
 /web/src/version.generated.mjs
+
+# Python bytecode (examples/otel/ ships a script with unit tests).
+__pycache__/
+*.pyc
