@@ -77,6 +77,13 @@ generated from commit subjects and stay on the
   `-v` included — as `dwe docker` does. See
   [`docker.md`](docs/reference/config/docker.md#related-commands).
 
+- `dwe validate` warns when a `service_exec`, `service_run` or `daemon`
+  command's `service:` (or `runner.service:`) names no compose service in any
+  overlay, disabled services included, with a "did you mean" hint. Such a typo
+  used to validate clean and fail only at run time. Templated values and
+  projects whose compose chain cannot be fully read are skipped. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
+
 ### Changed
 
 - The first non-empty line of a command's `description:` is now its summary,

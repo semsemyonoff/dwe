@@ -103,6 +103,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	// are the set of daemon field markers (service, container_template,
 	// on_already_running, stop_timeout, controls) already surfaced richly.
 	categorisedDaemonFields := make(map[string]map[string]bool)
+	targets := &composeTargets{cfg: ctx.Cfg, root: ctx.ProjectRoot}
 	for _, cf := range parsedFiles {
 		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
 		for _, name := range sortedCommandNames(cf) {
@@ -138,6 +139,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 
 			diags = append(diags, notifyDaemonDiagnostics(cmd, relFile)...)
 			diags = append(diags, hideDiagnostics(cmd, relFile, ctx.Cfg)...)
+			diags = append(diags, serviceTargetDiagnostics(cmd, relFile, targets)...)
 			diags = append(diags, bridgeDiagnostics(
 				fmt.Sprintf("commands:%s", cmd.ID), cmd.ID, relFile, cmd.Bridge, ctx.Cfg)...)
 		}
