@@ -1,4 +1,4 @@
-> Translated from: guides/observability-otel.md @ 5b5af5ac0906
+> Translated from: guides/observability-otel.md @ 3c29cdf8c733
 
 # Наблюдаемость с OpenTelemetry
 
@@ -481,7 +481,7 @@ commands:
     workdir: /workspace/src
     argv: [python3, /opt/otel/traces.py, "${args}"]
     messages:
-      error: "otel.traces failed — is the app running? (dwe run); is otel enabled? (dwe services enable otel --apply)"
+      error: "otel.traces failed — see the message above (exit 2: backend unreachable, is otel enabled? dwe services enable otel --apply; exit 3: Tempo rejected the query)"
 ```
 
 Если ни в одном контейнере нет Python (стек на PHP), не заводите второй tool-сервис: объявите одноразовый compose-сервис в том же `compose/otel.yml`, за профилем, чтобы `up` никогда его не поднимал, и нацельте на него `service_run`. `service:` принимает имя compose-сервиса, так что каталог в `workspace/services/` ему не нужен; `service_run` всегда передаёт `--entrypoint ""`, поэтому argv сам называет интерпретатор:

@@ -479,7 +479,7 @@ commands:
     workdir: /workspace/src
     argv: [python3, /opt/otel/traces.py, "${args}"]
     messages:
-      error: "otel.traces failed — is the app running? (dwe run); is otel enabled? (dwe services enable otel --apply)"
+      error: "otel.traces failed — see the message above (exit 2: backend unreachable, is otel enabled? dwe services enable otel --apply; exit 3: Tempo rejected the query)"
 ```
 
 If no container carries Python (a PHP stack), do not add a second tool service: declare a throwaway compose service in the same `compose/otel.yml`, behind a profile so `up` never starts it, and target it with `service_run`. `service:` takes a compose service name, so the service needs no `workspace/services/` folder; `service_run` always passes `--entrypoint ""`, so the argv names the interpreter:
