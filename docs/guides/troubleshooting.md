@@ -123,7 +123,7 @@ dwe compose raw -- config
 dwe compose raw --all -- config    # the chain with disabled services' overlays too
 ```
 
-`dwe compose raw` is a low-level pass-through: DWE resolves the compose file list and project name, then hands the rest of the argv to `docker compose` unchanged. No policy args, no overlays beyond the ones already on disk. `--all` (also on `compose files` and `compose argv`) adds the overlays of disabled services — for inspection only, since they may conflict and the combined chain need not be valid; it must come before `--`, after which `--all` goes to `docker compose` itself. Use it as a diagnostic, not a daily-driver — the higher-level `dwe` commands exist for a reason — but it is the right tool when you are debugging DWE itself or reproducing an issue against the compose CLI directly. Reference: [`../reference/config/docker.md`](../reference/config/docker.md).
+`dwe compose raw` is a low-level pass-through: DWE resolves the compose file list and project name, then hands the rest of the argv to `docker compose` unchanged. No policy args, no overlays beyond the ones already on disk. `--all` (also on `compose files` and `compose argv`) adds the overlays of disabled services — for inspection only, since they may conflict and the combined chain need not be valid; it must come before the first `docker compose` argument, so `dwe compose raw -- ps --all` passes `--all` to `docker compose` itself. Use it as a diagnostic, not a daily-driver — the higher-level `dwe` commands exist for a reason — but it is the right tool when you are debugging DWE itself or reproducing an issue against the compose CLI directly. Reference: [`../reference/config/docker.md`](../reference/config/docker.md).
 
 ## Verbose & debug output
 

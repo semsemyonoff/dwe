@@ -440,9 +440,10 @@ func TestParseRawFlags(t *testing.T) {
 			wantRest: []string{"ps", "--all"},
 		},
 		{
-			name:     "all directly after separator passes through to compose",
+			name:     "all directly after leading separator is still dwe's flag",
 			args:     []string{"--", "--all", "ps"},
-			wantRest: []string{"--all", "ps"},
+			wantAll:  true,
+			wantRest: []string{"ps"},
 		},
 		{
 			name:     "all after positional passes through to compose",
@@ -450,9 +451,26 @@ func TestParseRawFlags(t *testing.T) {
 			wantRest: []string{"ps", "--all"},
 		},
 		{
-			name:     "bare after separator passes through to compose",
+			name:     "bare directly after leading separator is still dwe's flag",
 			args:     []string{"--", "--bare"},
-			wantRest: []string{"--bare"},
+			wantBare: true,
+			wantRest: nil,
+		},
+		{
+			name:     "bare on both sides of leading separator",
+			args:     []string{"--bare", "--", "--bare", "up"},
+			wantBare: true,
+			wantRest: []string{"up"},
+		},
+		{
+			name:     "second separator before positional passes through",
+			args:     []string{"--", "--", "ps"},
+			wantRest: []string{"--", "ps"},
+		},
+		{
+			name:     "bare after positional passes through to compose",
+			args:     []string{"--", "up", "--bare"},
+			wantRest: []string{"up", "--bare"},
 		},
 		{
 			name:     "all before separator and after it",
@@ -589,10 +607,16 @@ func TestComposeArgvCmd_all(t *testing.T) {
 			wantTail:  []string{"config"},
 		},
 		{
-			name:      "all after command is still dwe's flag",
+			name:      "all after command passes through to compose",
 			args:      []string{"ps", "--all"},
-			wantFiles: allChain,
-			wantTail:  []string{"ps"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"ps", "--all"},
+		},
+		{
+			name:      "all trailing a command's own args passes through",
+			args:      []string{"exec", "app", "ls", "--all"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"exec", "app", "ls", "--all"},
 		},
 		{
 			name:      "all after separator passes through to compose",
@@ -600,10 +624,69 @@ func TestComposeArgvCmd_all(t *testing.T) {
 			wantFiles: enabledChain,
 			wantTail:  []string{"ps", "--all"},
 		},
+		{
+			name:      "separator after command is dropped as before",
+			args:      []string{"ps", "--", "-q"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"ps", "-q"},
+		},
+		{
+			name:      "leading separator is dropped, a later one kept",
+			args:      []string{"--", "run", "app", "--", "ls"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"run", "--rm", "app", "--", "ls"},
+		},
+		{
+			name:      "only the first separator after command is dropped",
+			args:      []string{"run", "--", "app", "--", "ls"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"run", "--rm", "app", "--", "ls"},
+		},
+		{
+			name:      "all before separator and command",
+			args:      []string{"--all", "--", "ps"},
+			wantFiles: allChain,
+			wantTail:  []string{"ps"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := newComposeArgvCmd(&cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")})
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs(tt.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			argv := strings.Fields(buf.String())
+			if got := fFiles(argv); !slices.Equal(got, tt.wantFiles) {
+				t.Errorf("-f files = %q, want %q (argv %q)", got, tt.wantFiles, argv)
+			}
+			if !slices.Equal(argv[len(argv)-len(tt.wantTail):], tt.wantTail) {
+				t.Errorf("argv %q does not end with %q", argv, tt.wantTail)
+			}
+		})
+	}
+}
+
+// TestComposeArgvCmd_allThroughTree runs argv via the `compose` parent, so the
+// non-interspersed parsing is checked after cobra merges the parent's flags.
+func TestComposeArgvCmd_allThroughTree(t *testing.T) {
+	dir := makeOverlayProject(t)
+	tests := []struct {
+		name      string
+		args      []string
+		wantFiles []string
+		wantTail  []string
+	}{
+		{name: "trailing all reaches compose", args: []string{"argv", "exec", "app", "ls", "--all"}, wantFiles: enabledChain, wantTail: []string{"exec", "app", "ls", "--all"}},
+		{name: "leading all widens the chain", args: []string{"argv", "--all", "ps"}, wantFiles: allChain, wantTail: []string{"ps"}},
+		{name: "separator after command dropped", args: []string{"argv", "ps", "--", "-q"}, wantFiles: enabledChain, wantTail: []string{"ps", "-q"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewCmd("", &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")})
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)

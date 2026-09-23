@@ -67,9 +67,13 @@ generated from commit subjects and stay on the
 - `dwe compose files`, `dwe compose argv` and `dwe compose raw` take `--all`
   to use every configured overlay, disabled services included, like
   `dwe docker pull|build --all`. It is meant for inspection: disabled overlays
-  may conflict, so the combined chain is not guaranteed to be valid. On `raw`
-  the flag goes before `--` (after it, `--all` reaches `docker compose`), and
-  `--bare --all` is rejected. See
+  may conflict, so the combined chain is not guaranteed to be valid. On `argv`
+  and `raw` the flag goes before the first `docker compose` argument (on `raw`
+  a leading `--` may come first, as with `--bare`), so `dwe compose argv exec
+  app ls --all` and `dwe compose raw -- ps --all` pass `--all` to
+  `docker compose`; `--bare --all` is rejected. `argv` now hands every
+  argument after the compose command to `docker compose` — root flags such as
+  `-v` included — as `dwe docker` does. See
   [`docker.md`](docs/reference/config/docker.md#related-commands).
 
 ### Changed

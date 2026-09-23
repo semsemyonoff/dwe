@@ -284,5 +284,5 @@ process_env:
 - `dwe docker up|down|stop|restart|logs|ps|exec|run|pull|build` — lifecycle and image-management commands (`up` accepts `--wait` to block until services are healthy)
 - `dwe compose files` — show active compose file list
 - `dwe compose argv` — show full effective argv
-- `--all` on `dwe compose files|argv|raw` — use every configured overlay, disabled services included. For inspection only: disabled overlays may conflict, so the combined chain is not guaranteed to be valid
+- `--all` on `dwe compose files|argv|raw` — use every configured overlay, disabled services included. For inspection only: disabled overlays may conflict, so the combined chain is not guaranteed to be valid. On `argv` and `raw` it must come before the first `docker compose` argument (`raw` also accepts it right after a leading `--`, like `--bare`); later, as in `dwe compose raw -- ps --all`, it goes to `docker compose` itself
 - `dwe render env` — manually regenerate `.env`

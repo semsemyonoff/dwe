@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -66,9 +67,11 @@ compose unchanged:
 	dwe compose raw -- ps -a
 	dwe compose raw --all -- config
 
---bare and --all are recognized only before -- and before the first docker
-compose argument, so "dwe compose raw -- ps --all" passes --all to docker compose.
---bare and --all are mutually exclusive.`,
+--bare and --all are dwe's own flags up to the first docker compose argument,
+a single leading -- included: "dwe compose raw -- --all config" widens the -f
+chain, while "dwe compose raw -- ps --all" passes --all to docker compose.
+--bare and --all are mutually exclusive. Every other argument, --help included,
+goes to docker compose; "dwe help compose raw" shows this help.`,
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// DisableFlagParsing is on: dwe's own flags are parsed by hand.
@@ -109,8 +112,9 @@ compose argument, so "dwe compose raw -- ps --all" passes --all to docker compos
 		},
 		SilenceUsage: true,
 	}
-	// Declared for --help only: with DisableFlagParsing cobra never parses
-	// them; parseRawFlags does.
+	// Declared so they show up in `dwe help compose raw`. With
+	// DisableFlagParsing cobra never parses them (and `raw --help` reaches
+	// docker compose); parseRawFlags does.
 	cmd.Flags().Bool("bare", false, "inject only the project name, no -f files (for a standalone compose file)")
 	cmd.Flags().Bool("all", false, allFlagUsage)
 	return cmd
@@ -138,24 +142,26 @@ func buildRawComposeArgs(cfg *config.DweConfig, composeProject string, opts rawF
 }
 
 // parseRawFlags extracts --bare and --all from the arg list and returns the
-// remaining args with the leading "--" separator stripped. dwe flags and that
-// separator are recognized only before any positional argument and before the
-// separator itself; from then on every token — "--bare", "--all" and further
-// "--" included — passes through to docker compose unchanged.
+// remaining args with the leading "--" separator stripped. dwe flags are
+// recognized in any position up to the first token that is neither a dwe flag
+// nor that single leading "--" (so "-- --bare" still sets bare, as it always
+// has); from that token on everything — "--bare", "--all" and further "--"
+// included — passes through to docker compose unchanged.
 func parseRawFlags(args []string) (opts rawFlags, rest []string, err error) {
-	dweArgsEnded := false
+	separatorSkipped := false
+	positionalStarted := false
 	for _, arg := range args {
 		switch {
-		case dweArgsEnded:
+		case positionalStarted:
 			rest = append(rest, arg)
 		case arg == "--bare":
 			opts.bare = true
 		case arg == "--all":
 			opts.all = true
-		case arg == "--":
-			dweArgsEnded = true
+		case arg == "--" && !separatorSkipped:
+			separatorSkipped = true
 		default:
-			dweArgsEnded = true
+			positionalStarted = true
 			rest = append(rest, arg)
 		}
 	}
@@ -183,11 +189,16 @@ func newComposeArgvCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Use:   "argv [--all] <command> [args...]",
 		Short: "Show the full docker compose command that would be executed",
 		Long: `Show the full docker compose command that dwe docker <command> would execute,
-without running it. Arguments meant for docker compose that look like flags
-must follow --, otherwise dwe parses them: "dwe compose argv ps --all" widens
-the -f chain, "dwe compose argv ps -- --all" passes --all to docker compose.`,
+without running it. --all is recognized only before <command>; everything from
+<command> on goes to docker compose, so "dwe compose argv --all ps" widens the
+-f chain while "dwe compose argv ps --all" passes --all to docker compose. The
+first standalone -- is dropped, so "dwe compose argv up -- -d" prints "up -d".`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// args[0] is never "--" here: pflag consumes a "--" that precedes
+			// <command>, so MinimumNArgs(1) still guarantees the command.
+			args = dropFirstSeparator(args, cmd.ArgsLenAtDash())
+
 			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
 				return err
@@ -212,14 +223,33 @@ the -f chain, "dwe compose argv ps -- --all" passes --all to docker compose.`,
 		SilenceUsage: true,
 	}
 	cmd.Flags().BoolVar(&all, "all", false, allFlagUsage)
+	// Flags after <command> belong to docker compose, as with `dwe docker`:
+	// `argv exec app ls --all` must print --all, not widen the chain.
+	cmd.Flags().SetInterspersed(false)
 	return cmd
+}
+
+// dropFirstSeparator removes the first standalone "--" from args unless pflag
+// already consumed one (argsLenAtDash >= 0). With interspersed parsing off,
+// pflag stops at <command> and leaves a later "--" in args; before, it always
+// swallowed the first one, and `argv up -- -d` printed "up -d". Dropping it
+// keeps that output for every invocation that was valid before.
+func dropFirstSeparator(args []string, argsLenAtDash int) []string {
+	if argsLenAtDash >= 0 {
+		return args
+	}
+	i := slices.Index(args, "--")
+	if i < 0 {
+		return args
+	}
+	return slices.Delete(slices.Clone(args), i, i+1)
 }
 
 func newComposeFilesCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
 		Use:   "files [--all]",
-		Short: "Print resolved compose file list (base + enabled overlays), one per line",
+		Short: "Print resolved compose file list (base + enabled overlays, or every overlay with --all), one per line",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
