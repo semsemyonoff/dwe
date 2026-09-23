@@ -70,7 +70,7 @@ An overlay may also patch **neighbouring** services — a tool's overlay adding 
 ## 5. Validate (read) and hand off
 
 ```shell
-dwe validate config --output json   # service.yml schema, missing compose files, healthchecks without start_period
+dwe validate config --output json   # service.yml schema, missing compose files, compose healthcheck: blocks of enabled services without start_period (info)
 dwe validate --output json
 ```
 

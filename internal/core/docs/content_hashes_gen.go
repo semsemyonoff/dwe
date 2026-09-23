@@ -23,7 +23,7 @@ var ContentHashes = map[string]string{
 	"guides/start-a-new-project.md":            "430fcd59fe14",
 	"guides/switching-tasks-with-snapshots.md": "83b43f46c197",
 	"guides/troubleshooting.md":                "3dbfae6701f3",
-	"guides/upgrading.md":                      "796d948bdbbe",
+	"guides/upgrading.md":                      "775a6e04c5b6",
 	"guides/write-snapshot-workflows.md":       "b02f8eabca3e",
 	"internals/architecture.md":                "cb1aa72beee3",
 	"internals/packages.md":                    "a3f882e4b8c3",

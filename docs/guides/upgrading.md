@@ -35,7 +35,7 @@ Three things worth doing before you trust the new version in a project:
 Nothing in a project has to change, and no redeploy is needed. Three behaviours moved:
 
 - **The `dwe cmd` banner is on stderr.** The `▶ <id>  [<type>]  <description>` line used to open the command's stdout; a script that skipped or parsed that first line now receives the command's own output only, and under `--output json` the banner is not printed at all. The banner also shows only the first line of a multi-line `description:`.
-- **`dwe validate` may report new findings in an existing project**: a `hide:` that does not evaluate, a missing file under `compose:` / `compose_after:` / `compose.base`, a command whose `service:` names no compose service, and an info note for a healthcheck without `start_period`. They point at mistakes that were already there. None of these checks runs in preflight, so none blocks a lifecycle command.
+- **`dwe validate` may report new findings in an existing project**: a `hide:` that does not evaluate, a missing file under `compose:` / `compose_after:` / `compose.base`, a command whose `service:` names no compose service, and an info note for a `healthcheck:` in the active compose chain without `start_period` (an image's own `HEALTHCHECK` is not inspected). They point at mistakes that were already there. None of these checks runs in preflight, so none blocks a lifecycle command.
 - **`dwe compose argv` no longer reads dwe flags after the compose command.** `dwe compose argv exec app ls --all` now prints `--all` as part of the command; put dwe's own flags first (`dwe compose argv --all ps`, `dwe -v compose argv ps`).
 
 ## Upgrading to 0.6.2

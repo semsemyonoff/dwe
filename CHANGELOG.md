@@ -34,7 +34,7 @@ Nothing yet.
 - `dwe validate` catches mistakes that used to surface only at run time: a
   `hide:` that does not evaluate, a missing file under `compose:` /
   `compose_after:` / `compose.base`, a command `service:` that names no compose
-  service, and (info) a healthcheck without `start_period`. See
+  service, and (info) a compose `healthcheck:` without `start_period`. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
 - `dwe compose files|argv|raw --all` include the overlays of disabled
   services, like `dwe docker pull|build --all`.
