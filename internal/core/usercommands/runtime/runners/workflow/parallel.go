@@ -21,12 +21,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
-// writerLinePrinter routes trace lines into one parallel sub-step's output
-// writer. Each sub-step owns its writer, so no locking is needed.
-type writerLinePrinter struct{ w io.Writer }
-
-func (p writerLinePrinter) PrintLine(s string) { _, _ = io.WriteString(p.w, s+"\n") }
-
 // subResult collects the outcome of one parallel sub-step. Each goroutine
 // writes to its own results[i] index; the post-Wait emit pass reads sequentially.
 type subResult struct {
@@ -259,7 +253,7 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 			// Attribute the sub-step's -v/--debug echoes to its own tee, as the
 			// pipeline's parallel path does: the global printer and the stderr
 			// fallback would land un-framed in the middle of the live block.
-			subCtx := trace.WithLinePrinter(gctx, writerLinePrinter{w: tee})
+			subCtx := trace.WithLinePrinter(gctx, trace.WriterPrinter(tee))
 			err := r.runCommandStep(subCtx, gRC, i, sub)
 			atEOF = true
 			tee.Flush()

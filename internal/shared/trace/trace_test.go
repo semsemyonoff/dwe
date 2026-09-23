@@ -3,6 +3,8 @@ package trace
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -359,4 +361,38 @@ func (s *safeWriter) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.w.Write(p)
+}
+
+// TestWriterPrinterSerializesConcurrentLines shares ONE WriterPrinter across
+// goroutines over a plain bytes.Buffer, which is not itself safe for
+// concurrent writes: the printer's own mutex is what keeps every line whole
+// (and -race quiet), per the LinePrinter contract.
+func TestWriterPrinterSerializesConcurrentLines(t *testing.T) {
+	reset(t)
+	Configure(nil, LevelVerbose)
+
+	var buf bytes.Buffer
+	ctx := WithLinePrinter(context.Background(), WriterPrinter(&buf))
+
+	const goroutines, perG = 8, 50
+	var wg sync.WaitGroup
+	for g := range goroutines {
+		wg.Go(func() {
+			for i := range perG {
+				Decision(ctx, "g%d-line%03d", g, i)
+			}
+		})
+	}
+	wg.Wait()
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	if len(lines) != goroutines*perG {
+		t.Fatalf("got %d lines, want %d", len(lines), goroutines*perG)
+	}
+	for _, l := range lines {
+		var g, i int
+		if n, err := fmt.Sscanf(l, "g%d-line%03d", &g, &i); n != 2 || err != nil || len(l) != len(fmt.Sprintf("g%d-line%03d", g, i)) {
+			t.Fatalf("torn line %q", l)
+		}
+	}
 }

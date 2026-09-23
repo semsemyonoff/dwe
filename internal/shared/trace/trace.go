@@ -57,6 +57,26 @@ type LinePrinter interface {
 	PrintLine(s string)
 }
 
+// WriterPrinter adapts w to a LinePrinter that writes each line followed by a
+// newline. Writes are serialized by a per-printer mutex, which is what makes
+// it satisfy the LinePrinter concurrency contract; it does not order them
+// against other writers of w (a child process writing into the same sub-step
+// buffer), which must serialize on their own.
+func WriterPrinter(w io.Writer) LinePrinter {
+	return &writerPrinter{w: w}
+}
+
+type writerPrinter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (p *writerPrinter) PrintLine(s string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, _ = io.WriteString(p.w, s+"\n")
+}
+
 // printerEntry pairs a registered global printer with a unique id so its
 // restore can remove exactly its own entry, even when concurrent callers
 // restore out of order.
