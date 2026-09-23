@@ -103,6 +103,7 @@ Host probes (docker/git/ports) are built in; this file adds project checks: `che
 ```yaml
 checks:
   - id: marketplace-credentials-set
+    description: Marketplace credentials are set   # required
     stages: [post-setup]           # after the wizard, never at the pre-wizard gate
     severity: error
     hint: "Set vars.app.marketplace.* in workspace/local.yml, or run `dwe deploy`."
@@ -119,7 +120,7 @@ Run: `dwe validate checks --output json`, `dwe validate --stage post-setup --out
 
 ## 7. `docker.yml` — loaded separately
 
-Pins `project_name` (resolved lowercased; default `${project.prefix}-${project.name}`), declares shared cache volumes (`resources.volumes.<name>: {name, shared: true, ensure_before: [up, deploy]}`), `compose.base`, and `build.prepull_bases`. Per-dev override in gitignored `docker.local.yml`; per-key, not full-replacement. Schema: `dwe docs show config/docker --lang en`.
+Pins `project_name` (resolved lowercased; default `${project.prefix}-${project.name}`), declares shared cache volumes (`resources.volumes.<name>: {name, shared: true, ensure_before: [up, deploy]}`), per-subcommand compose `args:`, and `build.prepull_bases`. The compose base file is not here — it is the root config's `compose.base`. Per-dev override in gitignored `docker.local.yml`; per-key, not full-replacement. Schema: `dwe docs show config/docker --lang en`.
 
 ## 8. Handoff
 

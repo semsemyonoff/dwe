@@ -6,7 +6,7 @@ Order: pick the type → folder (= key) → container → toggle → extras → 
 
 ## 1. Pick the type
 
-- **`app`** — owns source (`dir`), render packs, its own `deploy.yml`, `extends`, `cli`, `generated`.
+- **`app`** — owns source (`dir`), render packs, `extends`, `cli`, `generated`. A per-service `deploy.yml` / `reset.yml` is valid for any type.
 - **`tool`** — a side GUI / utility (dbgate, mailpit, redis-insight). No source.
 - **`infra`** — a backing service others depend on (proxy, db, varnish); may own the public HTTP port (`port_via` for `dwe info`).
 
@@ -55,7 +55,7 @@ Model host ports under `services.<name>.ports` (or route them through a `vars:` 
 
 ## 3. app-only extras
 
-`dir` / `dir_internal` / `work_dir_internal` (mount the whole hub — `SKILL.md` § Rules); `dirs: [...]` (extra hub subdirs); `render.config.template:` (config pack) and `generated:` (harvested secrets) — both in `render-and-vars.md`; `cli: {mode, shell, user, workdir, env}` (how `service_exec` and `dwe shell` enter the container); `bridge: {enabled: true}` (opt the container into the host bridge so `dwe cmd` / `vars` work from inside it).
+`dir` / `dir_internal` / `work_dir_internal` (mount the whole hub — `SKILL.md` § Rules); `dirs: [...]` (extra hub subdirs); `render.config.template:` (config pack) and `generated:` (harvested secrets) — both in `render-and-vars.md`; `cli: {mode, shell, user, workdir, env}` (how `service_exec` and `dwe shell` enter the container). Any type: `bridge: {enabled: true}` (opt the container into the host bridge so `dwe cmd` / `vars` work from inside it).
 
 ## 4. Container, toggle, variant
 
@@ -70,7 +70,7 @@ An overlay may also patch **neighbouring** services — a tool's overlay adding 
 ## 5. Validate (read) and hand off
 
 ```shell
-dwe validate config services --output json
+dwe validate config --output json   # service.yml schema, missing compose files, compose healthcheck: blocks of enabled services without start_period (info)
 dwe validate --output json
 ```
 
