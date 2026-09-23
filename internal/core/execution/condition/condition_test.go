@@ -609,3 +609,40 @@ func evalBuiltinSwitchVerbs(t *testing.T) []string {
 	}
 	return verbs
 }
+
+func TestValidatePredicate(t *testing.T) {
+	tests := []struct {
+		predicate string
+		wantErr   string // substring; "" means valid
+	}{
+		{"dir-exists workspace", ""},
+		{"  file-missing a path with spaces  ", ""},
+		{"generated-missing db password", ""},
+		{"dir-exist foo", `unknown builtin predicate "dir-exist"`},
+		{"yes", `expected "<verb> <path>"`},
+		{"file-exists", `expected "<verb> <path>"`},
+		{"file-exists   ", `expected "<verb> <path>"`},
+		{"generated-missing db", `expected "<svc> <field>"`},
+		{"generated-missing db a b", `expected "<svc> <field>"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.predicate, func(t *testing.T) {
+			err := condition.ValidatePredicate(tt.predicate)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
+			}
+			// The evaluator must reject it with the very same error, so the
+			// static check cannot drift from runtime.
+			_, evalErr := condition.EvalBuiltin(tt.predicate, t.TempDir())
+			if evalErr == nil || evalErr.Error() != err.Error() {
+				t.Errorf("EvalBuiltin error = %v, want %v", evalErr, err)
+			}
+		})
+	}
+}

@@ -10,10 +10,21 @@ package commands
 // cannot render leaves the command visible, reported only as a log line at
 // each invocation. Rendering is side-effect free (the template FuncMap is
 // hermetic); the rendered cmd:/builtin predicate is never evaluated here.
+//
+// The rendered result is then classified the way the runtime does: a literal
+// boolean ("", "false", "0", "true", "1") or a `cmd:` command is accepted as is
+// (the command is not run; only an empty one is reported), anything else must
+// be a `when:` predicate that condition.ValidatePredicate accepts — the same
+// verb and arity checks EvalBuiltin applies, with no filesystem access. The
+// result depends on the current config, so a template branch not taken with
+// it is not checked.
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
@@ -52,7 +63,8 @@ func hideExprDiagnostics(expr, target, label, relFile string, cfg *config.DweCon
 	if cfg == nil {
 		return nil
 	}
-	if _, err := tpl.RenderCommand(expr, registry.HideRenderContext(cfg)); err != nil {
+	rendered, err := tpl.RenderCommand(expr, registry.HideRenderContext(cfg))
+	if err != nil {
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "commands",
@@ -62,5 +74,36 @@ func hideExprDiagnostics(expr, target, label, relFile string, cfg *config.DweCon
 			Hint:     "config is under .Raw, e.g. `index .Raw \"services\" \"db\" \"enabled\"`; until fixed the command stays visible",
 		}}
 	}
+	if err := checkRenderedHide(rendered); err != nil {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityWarning,
+			Domain:   "commands",
+			Target:   target,
+			File:     relFile,
+			Message:  fmt.Sprintf("%s: hide: expression renders to %q, which is neither a boolean nor a known predicate: %v", label, strings.TrimSpace(rendered), err),
+			Hint:     "a hide: must render to true/false/1/0 or empty, `cmd: <shell command>`, or a predicate such as `dir-exists <path>` (see `dwe docs show config/conditions`); until fixed the command stays visible",
+		}}
+	}
 	return nil
+}
+
+// checkRenderedHide mirrors tpl.EvalCommandCondition's classification of a
+// rendered expression without evaluating it.
+func checkRenderedHide(rendered string) error {
+	switch strings.TrimSpace(rendered) {
+	case "", "false", "0", "true", "1":
+		return nil
+	}
+	kind, payload := condition.Classify(rendered)
+	switch kind {
+	case condition.KindCmd:
+		if payload == "" {
+			return errors.New("empty `cmd:` command")
+		}
+		return nil
+	case condition.KindBuiltin:
+		return condition.ValidatePredicate(payload)
+	default:
+		return errors.New("the rendered text still contains a template")
+	}
 }

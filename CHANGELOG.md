@@ -40,6 +40,13 @@ generated from commit subjects and stay on the
   command or group fails to render against the project config. At runtime
   such an expression is fail-open and leaves the command visible. The check
   only renders: a `cmd:` or builtin predicate is never executed.
+- `dwe validate` also warns `hide: expression renders to "…", which is neither
+  a boolean nor a known predicate` when a `hide:` renders to something runtime
+  cannot evaluate — `yes`, an unknown predicate verb such as `dir-exist`, a
+  predicate without its arguments, or an empty `cmd:`. Such an expression is
+  fail-open at runtime and leaves the command visible. Nothing is executed or
+  probed on disk, and only the branch the current config takes is checked. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
 - `dwe validate` warns (`config.compose_files`) when a file listed under a
   service's `compose:` or `compose_after:` does not exist, for every service
   whether enabled or not, or when `compose.base` does not exist. A typo used to surface only as a `docker compose`
