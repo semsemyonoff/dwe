@@ -8,7 +8,10 @@ type CommandSummary struct {
 	ID          string
 	Group       string
 	Description string
-	Type        string
+	// Summary is SummaryLine(Description): the first non-empty line, for
+	// one-line lists. Description stays the full text.
+	Summary string
+	Type    string
 	// Service is DeclaredService(): the compose service / container name. It
 	// may be an unrendered ${...} expression — consumers must not treat it as
 	// a resolved name.
@@ -24,6 +27,8 @@ type CommandGroupSummary struct {
 	ID          string
 	Title       string
 	Description string
+	// Summary is SummaryLine(Description), as on CommandSummary.
+	Summary string
 	// Count is len(reg.List(ID)) in the registry state passed to the builder.
 	Count int
 }

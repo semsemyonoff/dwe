@@ -27,7 +27,8 @@ func TestComposeFiles_bridgeOverlayChainPosition(t *testing.T) {
 		Services: map[string]ServiceConfig{
 			"main": {Type: ServiceTypeApp, Enabled: true,
 				Compose:           []string{"compose/main.yml"},
-				LocalComposeExtra: []string{"compose/main.local.yml"}},
+				LocalComposeExtra: []string{"compose/main.local.yml"},
+				ComposeAfter:      []string{"compose/main.after.yml"}},
 			"redis": {Type: ServiceTypeInfra, Enabled: true,
 				Compose: []string{"compose/redis.yml"}},
 		},
@@ -40,20 +41,23 @@ func TestComposeFiles_bridgeOverlayChainPosition(t *testing.T) {
 		"compose/redis.yml",
 		"compose/main.yml",
 		"compose/main.local.yml",
+		"compose/main.after.yml",
 		"compose.local.yml",
 	}
 	if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
 		t.Errorf("ComposeFiles without overlay = %v, want %v", got, want)
 	}
 
-	// Overlay present → inserted after the service groups and BEFORE the
-	// project-wide local.yml overlays, so local.yml keeps the last word.
+	// Overlay present → inserted after the service groups (including
+	// compose_after) and BEFORE the project-wide local.yml overlays, so
+	// local.yml keeps the last word.
 	writeBridgeOverlayFixture(t, dir)
 	want = []string{
 		"compose.yaml",
 		"compose/redis.yml",
 		"compose/main.yml",
 		"compose/main.local.yml",
+		"compose/main.after.yml",
 		BridgeOverlayRelPath,
 		"compose.local.yml",
 	}
@@ -62,6 +66,40 @@ func TestComposeFiles_bridgeOverlayChainPosition(t *testing.T) {
 	}
 	if got := cfg.ComposeFilesAll(); !slices.Equal(got, want) {
 		t.Errorf("ComposeFilesAll with overlay = %v, want %v", got, want)
+	}
+}
+
+// TestComposeFilesTracked_dropsMachineLocalFiles pins that the tracked chain
+// keeps every git-tracked overlay — disabled services and compose_after
+// included — and drops exactly the machine-local ones: both local.yml tiers
+// and the generated bridge overlay.
+func TestComposeFilesTracked_dropsMachineLocalFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeBridgeOverlayFixture(t, dir)
+	cfg := &DweConfig{
+		Compose: ComposeConfig{Base: "compose.yaml", Extra: []string{"compose.local.yml"}},
+		Services: map[string]ServiceConfig{
+			"main": {Type: ServiceTypeApp, Enabled: true,
+				Compose:           []string{"compose/main.yml"},
+				LocalComposeExtra: []string{"compose/main.local.yml"},
+				ComposeAfter:      []string{"compose/main.after.yml"}},
+			"otel": {Type: ServiceTypeTool, Enabled: false,
+				Compose:           []string{"compose/otel.yml"},
+				LocalComposeExtra: []string{"compose/otel.local.yml"},
+				ComposeAfter:      []string{"compose/otel.after.yml"}},
+		},
+		Raw: map[string]any{"__configPath": filepath.Join(dir, "workspace.yml")},
+	}
+
+	want := []string{
+		"compose.yaml",
+		"compose/otel.yml",
+		"compose/main.yml",
+		"compose/main.after.yml",
+		"compose/otel.after.yml",
+	}
+	if got := cfg.ComposeFilesTracked(); !slices.Equal(got, want) {
+		t.Errorf("ComposeFilesTracked = %v, want %v", got, want)
 	}
 }
 

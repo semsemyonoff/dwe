@@ -58,6 +58,9 @@ type runOpts struct {
 	// through ${args}; a command that does not reference it rejects a non-empty
 	// slice — see checkPassThroughArgs.
 	PassThroughArgs []string
+	// NoHeader suppresses the ▶ run banner. Set under -o json, where stderr
+	// is reserved for the error envelope.
+	NoHeader bool
 }
 
 // NewCmd builds the `dwe commands` command tree.
@@ -232,6 +235,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					Locale:          flags.Locale,
 					PrefilledParams: prefilledFromTUI,
 					PassThroughArgs: through,
+					NoHeader:        flags.Output == "json",
 				},
 			)
 		},

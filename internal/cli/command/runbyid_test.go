@@ -174,6 +174,57 @@ func TestRunCommandByID_UnknownID_Error(t *testing.T) {
 	}
 }
 
+// TestRunCommandByID_RunHeaderOnStderr pins the stream split: the ▶ banner is
+// diagnostics, so `dwe cmd <id> | …` must see only the command's own output.
+func TestRunCommandByID_RunHeaderOnStderr(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db",
+		Type: usercommands.CommandTypeShell, Cmd: "echo hi",
+	}
+	reg := newTestRegistry(def)
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	err := runCommandByID(context.Background(), strings.NewReader(""), stdout, stderr,
+		newCfg(), reg, t.TempDir(), "db.up", runOpts{Yes: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.runCalls != 1 {
+		t.Fatalf("runner should be invoked once; got %d", s.runCalls)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout must stay empty for the command's own output; got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "▶") || !strings.Contains(stderr.String(), "db.up") {
+		t.Errorf("run header should be on stderr; got %q", stderr.String())
+	}
+}
+
+// TestRunCommandByID_NoHeader covers -o json: stderr is reserved for the
+// error envelope there, so the banner is written to neither stream.
+func TestRunCommandByID_NoHeader(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db",
+		Type: usercommands.CommandTypeShell, Cmd: "echo hi",
+	}
+	reg := newTestRegistry(def)
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	err := runCommandByID(context.Background(), strings.NewReader(""), stdout, stderr,
+		newCfg(), reg, t.TempDir(), "db.up", runOpts{Yes: true, NoHeader: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.runCalls != 1 {
+		t.Fatalf("runner should be invoked once; got %d", s.runCalls)
+	}
+	if strings.Contains(stdout.String(), "▶") || strings.Contains(stderr.String(), "▶") {
+		t.Errorf("banner must be suppressed; stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
 // --- private guard -------------------------------------------------------
 
 func TestRunCommandByID_PrivateDirectRun_Error(t *testing.T) {

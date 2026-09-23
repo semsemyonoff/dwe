@@ -491,7 +491,7 @@ A host port written as a variable (`"${VALKEY_PORT:-6379}:6379"`, `$PORT`, `${PO
 
 The first row is why a traced variable needs no scenario config at all, and why removing an `env.vars: { <path>: auto }` line changes nothing. A `required: true` service listed under `env.services.disable` stays enabled in the copy, exactly as the config loader resolves the generated `local.yml`, so its ports are still remapped and a second-row finding is covered.
 
-Whatever the rule, a scenario also covers the finding when the compose file that publishes the port is not in its stack: a service's own compose files (`compose:` in its `service.yml`, plus its `local.yml` overlays) leave the chain when the scenario disables the service, so nothing in them binds a port in that copy. A `required: true` service stays enabled, so its files stay in; a service declared in the root compose file never leaves it. A file reached only through a per-developer `compose.extra` overlay is never in the stack — no view carries those.
+Whatever the rule, a scenario also covers the finding when the compose file that publishes the port is not in its stack: a service's own compose files (`compose:` and `compose_after:` in its `service.yml`, plus its `local.yml` overlays) leave the chain when the scenario disables the service, so nothing in them binds a port in that copy. A `required: true` service stays enabled, so its files stay in; a service declared in the root compose file never leaves it. A file reached only through a per-developer `compose.extra` overlay is never in the stack — no view carries those.
 
 The finding is never blocking. Each caller filters it by its own view:
 

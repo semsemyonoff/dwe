@@ -133,13 +133,19 @@ type rawCheckEntry struct {
 // findClosestStage returns a known stage name if the input is within
 // Levenshtein distance 2, else empty string.
 func findClosestStage(input string) string {
-	knownStages := []string{"deploy", "run", "stop", "command", "post-setup"}
+	return ClosestMatch(input, []string{"deploy", "run", "stop", "command", "post-setup"})
+}
+
+// ClosestMatch returns the candidate within Levenshtein distance 2 of input —
+// the first one at the smallest distance, in candidate order — or "" when none
+// is that close. It is the shared "did you mean" source for diagnostics.
+func ClosestMatch(input string, candidates []string) string {
 	const maxDistance = 2
 
 	var closest string
 	closestDist := maxDistance + 1
 
-	for _, known := range knownStages {
+	for _, known := range candidates {
 		d := levenshteinDistance(input, known)
 		if d <= maxDistance && d < closestDist {
 			closest = known

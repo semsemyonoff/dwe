@@ -87,7 +87,7 @@ commands:
 | Field | Type | Description |
 |-------|------|-------------|
 | `group.title` | string | Display title shown by `dwe commands list` |
-| `group.description` | string | Short description shown next to the group |
+| `group.description` | string | Short description shown next to the group; like a command's, only its first non-empty line is shown there (see [Description and summary](directives.md#description-and-summary)) |
 | `group.hide` | string | Optional condition expression; when truthy, hides the group and cascades to every descendant (commands and sub-groups). See [Hide condition](directives.md#hide-condition). |
 | `commands` | map | Named command definitions (key = local name) |
 
@@ -300,8 +300,8 @@ When `dwe commands` is invoked without an exact command ID on an interactive ter
 
 ```json
 {"commands":[
-  {"id":"app.install","group":"app","title":"install","description":"Install application dependencies","type":"service_exec","service":"app-main","params":[{"name":"env","type":"string","required":true}]},
-  {"id":"db.migrate","group":"db","title":"migrate","description":"Run database migrations","type":"shell"}
+  {"id":"app.install","group":"app","title":"install","description":"Install application dependencies","summary":"Install application dependencies","type":"service_exec","service":"app-main","params":[{"name":"env","type":"string","required":true}]},
+  {"id":"db.migrate","group":"db","title":"migrate","description":"Run database migrations","summary":"Run database migrations","type":"shell"}
 ]}
 ```
 
@@ -309,7 +309,8 @@ When `dwe commands` is invoked without an exact command ID on an interactive ter
 |-----|-------|
 | `id`, `title`, `type` | always present; `title` is the last segment of `id` |
 | `group` | omitted for a command outside any group |
-| `description` | omitted when empty. **Localized**: with a non-English locale it carries the translation from `workspace/i18n/<lang>.yml`, so match commands on `id`, never on this text |
+| `description` | omitted when empty. The full text. **Localized**: with a non-English locale it carries the translation from `workspace/i18n/<lang>.yml`, so match commands on `id`, never on this text |
+| `summary` | omitted when empty. The first non-empty line of `description` — see [Description and summary](directives.md#description-and-summary). `dwe commands -i <id> --output json` carries the same pair |
 | `service` | omitted when the command declares none. The **declared** value, not a rendered one — a templated `service: app-${param.service}` is printed verbatim, so it is not always a literal container name. The `.start` / `.logs` / `.stop` / `.restart` commands a `type: daemon` expands into carry the daemon's own service |
 | `private` | only with `--all` |
 | `params` | omitted when the command has none; full parameter details are in `dwe commands -i <id> --output json` |

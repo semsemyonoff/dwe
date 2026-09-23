@@ -588,6 +588,35 @@ services:
 	hasDiag(t, diags, validate.SeverityOK, "")
 }
 
+func TestServicesValidator_ComposeAfterAllowedAllTypes(t *testing.T) {
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    dir: ./services/api
+    compose_after:
+      - compose/api-after.yml
+  worker:
+    type: infra
+    container: worker
+    compose_after:
+      - compose/worker-after.yml
+  adminer:
+    type: tool
+    container: adminer
+    compose_after:
+      - compose/adminer-after.yml
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error: %s", d.Message)
+		require.NotEqual(t, validate.SeverityWarning, d.Severity, "unexpected warning: %s", d.Message)
+	}
+	hasDiag(t, diags, validate.SeverityOK, "")
+}
+
 func TestServicesValidator_InfraExtendsRejected(t *testing.T) {
 	body := `
 services:

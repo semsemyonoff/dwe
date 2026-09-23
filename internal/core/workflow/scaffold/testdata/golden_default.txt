@@ -138,7 +138,8 @@ Inspecting the environment:
 - `dwe` — project dashboard / header
 - `dwe status` — stack health, per-service state and container names
 - `dwe info` — environment summary (URLs, hosts, ports)
-- `dwe logs [service]` — stream container logs
+- `dwe logs [service] [--tail N]` — container logs (prints and exits; `--follow`
+  to stream)
 - `dwe validate` — static project-config validation
 
 Lifecycle and reference:
@@ -560,7 +561,7 @@ flags and docs pointers. Read it once, then navigate on demand.
 {{ if .ServiceCommandGroups }}
 ## Declared commands
 
-{{ range $g := .ServiceCommandGroups }}{{ with or $g.Description $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
+{{ range $g := .ServiceCommandGroups }}{{ with or $g.Summary $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
 {{ end }}{{ end }}
 Before any task that falls under a group description above — tests, linters,
 formatters, builds, codegen, migrations, seeds, cache or token management,
@@ -582,7 +583,8 @@ npm/composer/make/docker command directly until that check has been made.
   it before tests, linters, builds, migrations and similar tasks, and prefer a
   matching command (`dwe cmd <id>`) over invoking the underlying tool directly
 - `dwe shell {{ .Resolved }} -c '<cmd>'` — a one-off command inside the container
-- `dwe logs {{ .Resolved }}` — stream this service's logs
+- `dwe logs {{ .Resolved }} [--tail N]` — this service's logs (prints and exits;
+  `--follow` to stream)
 - `dwe status` — stack health and container names
 
 > This file is **generated** by `dwe render ai` from

@@ -30,6 +30,7 @@ flowchart LR
 - `render.config` — inherited wholesale when the child declares no `render.config:` block of its own (parent's block is cloned); a child that declares its own `render.config:` keeps it and does not merge with the parent's.
 - `generated` — inherited when the child declares no `generated:` map of its own (parent's map is cloned); a child with its own `generated:` map wholly replaces the parent's, not merged.
 - `compose` — inherited when the child declares no `compose:` list of its own (parent's list is cloned); the child's own list wholly replaces the parent's, not merged.
+- `compose_after` — inherited independently of `compose`, with the same rule: cloned from the parent when the child declares no `compose_after:` list of its own; the child's own list wholly replaces the parent's, not merged. A parent and a child that are both enabled emit the inherited file twice — no deduplication, same as an inherited `compose:` list.
 - `container`, `required`, `depends_on` — never inherited. A child that omits `container` defaults to its service folder name at load time. Each child specifies its own `depends_on`.
 
 ## Topological sort

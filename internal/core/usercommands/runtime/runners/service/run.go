@@ -7,6 +7,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // RunRunner executes type=service_run commands via `docker compose run --rm`.
@@ -45,6 +46,7 @@ func (r *RunRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
+	trace.Exec(ctx, c)
 	defer runio.WireChildIO(rc, c)()
 	return c.Run()
 }

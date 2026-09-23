@@ -1056,6 +1056,156 @@ func TestLoadConfig_composeAbsent(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_composeAfterDecodesInOrder(t *testing.T) {
+	servicesYML := `
+services:
+  main:
+    type: app
+    container: app-main
+    required: true
+    dir: ./services/main
+    compose_after:
+      - compose/after/main-1.yml
+      - compose/after/main-2.yml
+  cache:
+    type: infra
+    container: cache
+    compose_after:
+      - compose/after/cache.yml
+  otel:
+    type: tool
+    container: otel
+    compose_after:
+      - compose/after/otel-1.yml
+      - compose/after/otel-2.yml
+`
+	minimalComposeAfterDefaultsYML := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalComposeAfterDefaultsYML, "", servicesYML, noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if want := []string{"compose/after/main-1.yml", "compose/after/main-2.yml"}; !slicesEqual(cfg.Services["main"].ComposeAfter, want) {
+		t.Errorf("Services[main].ComposeAfter = %v, want %v", cfg.Services["main"].ComposeAfter, want)
+	}
+	if want := []string{"compose/after/cache.yml"}; !slicesEqual(cfg.Services["cache"].ComposeAfter, want) {
+		t.Errorf("Services[cache].ComposeAfter = %v, want %v", cfg.Services["cache"].ComposeAfter, want)
+	}
+	if want := []string{"compose/after/otel-1.yml", "compose/after/otel-2.yml"}; !slicesEqual(cfg.Services["otel"].ComposeAfter, want) {
+		t.Errorf("Services[otel].ComposeAfter = %v, want %v", cfg.Services["otel"].ComposeAfter, want)
+	}
+}
+
+func TestLoadConfig_composeAfterScalarIsLoadError(t *testing.T) {
+	servicesYML := `
+services:
+  otel:
+    type: tool
+    container: otel
+    compose_after: compose/after/otel.yml
+`
+	minimalDefaults := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaults, "", servicesYML, noToolsYML)
+	if _, err := LoadConfig(path); err == nil {
+		t.Fatal("LoadConfig: expected error for scalar compose_after, got nil")
+	}
+}
+
+func TestLoadConfig_composeAfterTypoRejected(t *testing.T) {
+	servicesYML := `
+services:
+  otel:
+    type: tool
+    container: otel
+    compose_afer:
+      - compose/after/otel.yml
+`
+	minimalDefaults := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaults, "", servicesYML, noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("LoadConfig: expected error for typo compose_afer, got nil")
+	}
+	if !errors.Is(err, ErrServiceFieldNotAllowed) {
+		t.Errorf("err = %v, want errors.Is ErrServiceFieldNotAllowed", err)
+	}
+}
+
+// TestLoadConfig_composeAfterRejectedInOverlayLayers pins the "no
+// compose_after in overlay layers" non-goal: services.<name>.compose_after is
+// a structural field, not in OverlayAllowedKeys, so both a shared layer
+// (defaults.yml) and workspace/local.yml reject it — same as any other
+// structural field (container, dir, compose, ...). There is no per-developer
+// escape hatch for it, unlike services.<name>.compose.extra.
+func TestLoadConfig_composeAfterRejectedInOverlayLayers(t *testing.T) {
+	servicesYML := `
+services:
+  otel:
+    type: tool
+    container: otel
+`
+	minimalDefaults := `
+schema_version: "1"
+runtime:
+  use_https: false
+  spx:
+    path: ""
+`
+	overlayServices := `
+services:
+  otel:
+    compose_after:
+      - compose/after/otel.yml
+`
+
+	t.Run("defaults.yml", func(t *testing.T) {
+		defaults := minimalDefaults + overlayServices
+		path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", servicesYML, noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatal("LoadConfig: expected error for services.otel.compose_after in defaults.yml, got nil")
+		}
+		if !strings.Contains(err.Error(), "defaults.yml") {
+			t.Errorf("err = %v, want it to name defaults.yml", err)
+		}
+		if !strings.Contains(err.Error(), "services.otel.compose_after") {
+			t.Errorf("err = %v, want it to name services.otel.compose_after", err)
+		}
+	})
+
+	t.Run("local.yml", func(t *testing.T) {
+		path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaults, overlayServices, servicesYML, noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatal("LoadConfig: expected error for services.otel.compose_after in local.yml, got nil")
+		}
+		if !strings.Contains(err.Error(), "local.yml") {
+			t.Errorf("err = %v, want it to name local.yml", err)
+		}
+		if !strings.Contains(err.Error(), "services.otel.compose_after") {
+			t.Errorf("err = %v, want it to name services.otel.compose_after", err)
+		}
+	})
+}
+
 // --- Config Validation ---
 
 func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {
@@ -4382,9 +4532,10 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 				LocalComposeExtra: []string{"compose/tools/adminer.local.yml"},
 			},
 			"mailhog": {
-				Type:    ServiceTypeTool,
-				Enabled: true,
-				Compose: []string{"compose/tools/mailhog.yml"},
+				Type:         ServiceTypeTool,
+				Enabled:      true,
+				Compose:      []string{"compose/tools/mailhog.yml"},
+				ComposeAfter: []string{"compose/tools/mailhog.after.yml"},
 			},
 			"postgres": {
 				Type:              ServiceTypeInfra,
@@ -4393,9 +4544,10 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 				LocalComposeExtra: []string{"compose/infra/postgres.local.yml"},
 			},
 			"redis": {
-				Type:    ServiceTypeInfra,
-				Enabled: false, // disabled — excluded in active
-				Compose: []string{"compose/infra/redis.yml"},
+				Type:         ServiceTypeInfra,
+				Enabled:      false, // disabled — excluded in active
+				Compose:      []string{"compose/infra/redis.yml"},
+				ComposeAfter: []string{"compose/infra/redis.after.yml"},
 			},
 			"api": {
 				Type:              ServiceTypeApp,
@@ -4418,6 +4570,8 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 		"compose/infra/postgres.yml", "compose/infra/postgres.local.yml",
 		"compose/apps/api.yml", "compose/apps/api.local.yml",
 		"compose/apps/web.yml",
+		// compose_after tier: only mailhog's — redis is disabled.
+		"compose/tools/mailhog.after.yml",
 		"compose.local.yml", "compose.local.2.yml",
 	}
 	if got := cfg.ComposeFiles(); !slicesEqual(got, wantActive) {
@@ -4432,6 +4586,8 @@ func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
 		"compose/infra/redis.yml",
 		"compose/apps/api.yml", "compose/apps/api.local.yml",
 		"compose/apps/web.yml",
+		// compose_after tier: both, sorted by service name (mailhog < redis).
+		"compose/tools/mailhog.after.yml", "compose/infra/redis.after.yml",
 		"compose.local.yml", "compose.local.2.yml",
 	}
 	if got := cfg.ComposeFilesAll(); !slicesEqual(got, wantAll) {

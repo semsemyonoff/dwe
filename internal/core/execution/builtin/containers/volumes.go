@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
@@ -129,7 +130,9 @@ func RemoveVolumesByProjectPrefix(ctx context.Context, dockerBin, projectName st
 // listDockerVolumes returns every docker volume name (`docker volume ls -q`),
 // with blank lines trimmed out.
 func listDockerVolumes(ctx context.Context, dockerBin string) ([]string, error) {
-	out, err := exec.CommandContext(ctx, dockerBin, "volume", "ls", "-q").Output() //nolint:gosec
+	cmd := exec.CommandContext(ctx, dockerBin, "volume", "ls", "-q") //nolint:gosec
+	trace.Probe(ctx, cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +149,9 @@ func listDockerVolumes(ctx context.Context, dockerBin string) ([]string, error) 
 // On failure it returns an error carrying docker's stderr so the caller can
 // report exactly why the volume could not be removed.
 func removeDockerVolume(ctx context.Context, dockerBin, vol string) error {
-	out, err := exec.CommandContext(ctx, dockerBin, "volume", "rm", vol).CombinedOutput() //nolint:gosec
+	cmd := exec.CommandContext(ctx, dockerBin, "volume", "rm", vol) //nolint:gosec
+	trace.Exec(ctx, cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return fmt.Errorf("%w: %s", err, msg)

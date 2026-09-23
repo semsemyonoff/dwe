@@ -456,6 +456,31 @@ func TestScanComposeIsolation_ContainerNameReset(t *testing.T) {
 	require.Equal(t, "later-name", findings[0].Value)
 }
 
+// TestScanComposeIsolation_ComposeAfterWinsOverAppOverlay pins that the
+// compose_after tier is scanned in ITS chain position — after the app group
+// — so a tool's compose_after file resetting a container_name the app's own
+// overlay set clears the finding, mirroring
+// TestScanComposeIsolation_ContainerNameReset but through real Services
+// groups (app + tool) rather than a bare -f list, since compose_after's
+// position depends on ComposeFiles() grouping the tool's file after the
+// app's.
+func TestScanComposeIsolation_ComposeAfterWinsOverAppOverlay(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	appFile := filepath.Join(root, "app.yml")
+	afterFile := filepath.Join(root, "otel-after.yml")
+	require.NoError(t, os.WriteFile(appFile, []byte("services:\n  app:\n    image: busybox\n    container_name: base-name\n"), 0o644))
+	require.NoError(t, os.WriteFile(afterFile, []byte("services:\n  app:\n    container_name: !reset null\n"), 0o644))
+
+	cfg := &DweConfig{
+		Services: map[string]ServiceConfig{
+			"web":  {Type: ServiceTypeApp, Enabled: true, Compose: []string{appFile}},
+			"otel": {Type: ServiceTypeTool, Enabled: true, ComposeAfter: []string{afterFile}},
+		},
+	}
+	require.Empty(t, ScanComposeIsolation(cfg, root))
+}
+
 // TestScanComposeIsolation_ContainerNameOverrideTag pins the sibling merge tag:
 // `!override` replaces the merged value rather than clearing it, so the tagged
 // value is a perfectly ordinary container_name finding.
@@ -972,6 +997,33 @@ func TestScanComposeCost_OverlayResetClearsBuild(t *testing.T) {
 	require.Equal(t, []string{"busybox"}, facts.ExternalImages)
 }
 
+// TestScanComposeCost_ComposeAfterWinsCostMerge pins that the compose_after
+// tier wins the cost merge too, mirroring
+// TestScanComposeCost_OverlayResetClearsBuild but through real Services
+// groups: a tool's compose_after file resets the app overlay's `build:`,
+// sets `image:` and a `healthcheck.start_period`, and those values are what
+// the facts report — because compose_after is scanned after the app group,
+// not because of chain position within a single Extra list.
+func TestScanComposeCost_ComposeAfterWinsCostMerge(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	appFile := filepath.Join(root, "app.yml")
+	afterFile := filepath.Join(root, "otel-after.yml")
+	require.NoError(t, os.WriteFile(appFile, []byte("services:\n  app:\n    image: busybox\n    build:\n      context: .\n"), 0o644))
+	require.NoError(t, os.WriteFile(afterFile, []byte("services:\n  app:\n    build: !reset null\n    image: otel/patched:1\n    healthcheck:\n      start_period: 45s\n"), 0o644))
+
+	cfg := &DweConfig{
+		Services: map[string]ServiceConfig{
+			"web":  {Type: ServiceTypeApp, Enabled: true, Compose: []string{appFile}},
+			"otel": {Type: ServiceTypeTool, Enabled: true, ComposeAfter: []string{afterFile}},
+		},
+	}
+	facts := ScanComposeCost(cfg, root)
+	require.Empty(t, facts.BuildServices)
+	require.Equal(t, []string{"otel/patched:1"}, facts.ExternalImages)
+	require.Equal(t, 45*time.Second, facts.MaxStartPeriod)
+}
+
 // TestScanComposeCost_OverlayResetClearsImage pins the same on `image:`. The
 // value must not be read as a plain string either — yaml.v3 leaves the unknown
 // tag unresolved, so `!reset null` would report an image literally named "null".
@@ -1015,5 +1067,146 @@ func TestScanComposeCost_UnreadableFileSkippedSilently(t *testing.T) {
 	facts := ScanComposeCost(cfg, t.TempDir())
 	require.Empty(t, facts.BuildServices)
 	require.Empty(t, facts.ExternalImages)
+	require.Zero(t, facts.MaxStartPeriod)
+}
+
+// TestScanComposeHealthchecks pins which merged healthchecks count as having
+// an active test and no start_period across the -f chain.
+func TestScanComposeHealthchecks(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		docs []string
+		want []string // "service@compose-N.yml"
+	}{
+		{
+			name: "test without start_period is reported",
+			docs: []string{"services:\n  db:\n    image: postgres:16\n    healthcheck:\n      test: [\"CMD\", \"pg_isready\"]\n      interval: 30s\n"},
+			want: []string{"db@compose-0.yml"},
+		},
+		{
+			name: "string test form is reported",
+			docs: []string{"services:\n  db:\n    healthcheck:\n      test: pg_isready\n"},
+			want: []string{"db@compose-0.yml"},
+		},
+		{
+			name: "start_period present is silent",
+			docs: []string{"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"pg_isready\"]\n      start_period: 60s\n"},
+		},
+		{
+			name: "explicit zero start_period is silent",
+			docs: []string{"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"true\"]\n      start_period: 0s\n"},
+		},
+		{
+			name: "no healthcheck is silent",
+			docs: []string{"services:\n  db:\n    image: postgres:16\n"},
+		},
+		{
+			name: "healthcheck without test is silent",
+			docs: []string{"services:\n  db:\n    healthcheck:\n      interval: 5s\n"},
+		},
+		{
+			name: "disable: true is silent",
+			docs: []string{"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"true\"]\n      disable: true\n"},
+		},
+		{
+			name: "test NONE is silent",
+			docs: []string{"services:\n  db:\n    healthcheck:\n      test: [\"NONE\"]\n"},
+		},
+		{
+			// Mapping merge: an earlier start_period survives a later file
+			// that only changes the test.
+			name: "start_period from an earlier file survives",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n      start_period: 30s\n",
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"b\"]\n",
+			},
+		},
+		{
+			name: "later file adds start_period",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n",
+				"services:\n  db:\n    healthcheck:\n      start_period: 30s\n",
+			},
+		},
+		{
+			name: "later file disables the healthcheck",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n",
+				"services:\n  db:\n    healthcheck:\n      disable: true\n",
+			},
+		},
+		{
+			name: "start_period reset in a later file is reported",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n      start_period: 30s\n",
+				"services:\n  db:\n    healthcheck:\n      start_period: !reset null\n",
+			},
+			want: []string{"db@compose-1.yml"},
+		},
+		{
+			name: "disable: false in a later file re-enables",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n      disable: true\n",
+				"services:\n  db:\n    healthcheck:\n      disable: false\n",
+			},
+			want: []string{"db@compose-1.yml"},
+		},
+		{
+			name: "reset drops the healthcheck",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n",
+				"services:\n  db:\n    healthcheck: !reset null\n",
+			},
+		},
+		{
+			// !override replaces the mapping, so the earlier start_period
+			// no longer applies; the finding points at the overriding file.
+			name: "override drops an earlier start_period",
+			docs: []string{
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"a\"]\n      start_period: 30s\n",
+				"services:\n  db:\n    healthcheck: !override\n      test: [\"CMD\", \"b\"]\n",
+			},
+			want: []string{"db@compose-1.yml"},
+		},
+		{
+			name: "patch file adding a test is where start_period belongs",
+			docs: []string{
+				"services:\n  app:\n    image: busybox\n  db:\n    image: postgres\n",
+				"services:\n  db:\n    healthcheck:\n      test: [\"CMD\", \"pg_isready\"]\n  app:\n    healthcheck:\n      test: [\"CMD\", \"true\"]\n",
+			},
+			want: []string{"app@compose-1.yml", "db@compose-1.yml"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			paths := make([]string, 0, len(tt.docs))
+			for i, doc := range tt.docs {
+				p := filepath.Join(root, "compose-"+strconv.Itoa(i)+".yml")
+				require.NoError(t, os.WriteFile(p, []byte(doc), 0o644))
+				paths = append(paths, p)
+			}
+			cfg := &DweConfig{Compose: ComposeConfig{Base: paths[0], Extra: paths[1:]}}
+
+			var got []string
+			for _, f := range ScanComposeHealthchecks(cfg, root) {
+				got = append(got, f.Service+"@"+filepath.Base(f.File))
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestScanComposeCost_StartPeriodResetClears pins that `start_period: !reset`
+// in a later file clears the earlier value instead of reading the tag's raw
+// text.
+func TestScanComposeCost_StartPeriodResetClears(t *testing.T) {
+	t.Parallel()
+	facts := costChain(t,
+		"services:\n  app:\n    image: busybox\n    healthcheck:\n      start_period: 300s\n",
+		"services:\n  app:\n    healthcheck:\n      start_period: !reset null\n",
+	)
 	require.Zero(t, facts.MaxStartPeriod)
 }

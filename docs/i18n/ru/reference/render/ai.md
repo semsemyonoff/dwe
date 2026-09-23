@@ -1,4 +1,4 @@
-> Translated from: reference/render/ai.md @ 24897ff7ef55
+> Translated from: reference/render/ai.md @ 1d06a08a9e37
 
 # dwe render ai
 
@@ -254,6 +254,7 @@ Go-овский `text/template` разрешает dot-сегменты, тол�
 | `.ID` | идентификатор команды (`admin.lint`) |
 | `.Group` | идентификатор группы (`admin`) |
 | `.Description` | авторское `description:`, **без перевода** — пакеты не локализуются, поэтому отрендеренный файл побайтово одинаков при любой активной локали |
+| `.Summary` | первая непустая строка `.Description` — используйте её для однострочных пунктов списка, поскольку многострочное `description: \|` вырвется за пределы пункта markdown. См. [Описание и краткая строка](../config/commands/directives.md#описание-и-краткая-строка) |
 | `.Type` | `service_exec`, `script`, `shell`, `workflow`, … — показывает, заходит ли команда в контейнер вообще |
 | `.Service` | объявленный `service:` (имя compose-сервиса / контейнера); для команд `.start` / `.logs` / `.stop` / `.restart`, в которые разворачивается `type: daemon`, — собственный сервис демона. Может быть неотрендеренным выражением вроде `app-${param.service}` |
 
@@ -264,6 +265,7 @@ Go-овский `text/template` разрешает dot-сегменты, тол�
 | `.ID` | идентификатор группы (`services.magento`) |
 | `.Title` | последний сегмент идентификатора (`magento` для `services.magento`), как в текстовом листинге — `title:` из заголовка не используется |
 | `.Description` | `description:` из заголовка группы; может быть пустым |
+| `.Summary` | первая непустая строка `.Description`; может быть пустой |
 | `.Count` | число публичных команд в группе, включая вложенные группы |
 
 Группа попадает в список, только если у неё есть `title` или `description` в заголовке `group:` либо собственные команды, **и** под ней есть хотя бы одна публичная команда. Поэтому группы, которые никто не объявлял, в список не попадают: точечный идентификатор вроде `services.magento` неявно создаёт узел `services`, и без заголовка `group:` или собственных команд такому узлу нечего вывести, поэтому он не появляется.
@@ -282,7 +284,7 @@ Go-овский `text/template` разрешает dot-сегменты, тол�
 {{ if .ServiceCommandGroups }}
 ## Declared commands
 
-{{ range $g := .ServiceCommandGroups }}{{ with or $g.Description $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
+{{ range $g := .ServiceCommandGroups }}{{ with or $g.Summary $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
 {{ end }}{{ end }}
 Before any task that falls under a group description above — tests, linters,
 formatters, builds, codegen, migrations, seeds, cache or token management,

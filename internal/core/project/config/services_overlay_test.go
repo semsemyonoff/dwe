@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -889,6 +890,120 @@ extends: parent
 	}
 	if got, want := cfg.Services["overrider"].LocalComposeExtra, []string{"child.local.yml"}; !equalStrings(got, want) {
 		t.Errorf("overrider.LocalComposeExtra = %v, want %v (child wins)", got, want)
+	}
+}
+
+// TestLoadConfig_extendsInheritsParentComposeAfter mirrors
+// TestLoadConfig_extendsInheritsParentLocalComposeExtra for ComposeAfter: a
+// child with extends: but no compose_after: of its own inherits the parent's;
+// a child with its own compose_after: keeps only its own (no merge); a child
+// that declares its own compose: but not compose_after: still inherits the
+// parent's compose_after: (the two lists inherit independently); mutating the
+// inheritor's slice must not corrupt the parent's.
+func TestLoadConfig_extendsInheritsParentComposeAfter(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: app-parent
+required: true
+compose_after:
+  - after-parent.yml
+`)
+	writeServiceFolder(t, dir, "inheritor", `
+type: app
+container: app-inheritor
+required: true
+extends: parent
+`)
+	writeServiceFolder(t, dir, "overrider", `
+type: app
+container: app-overrider
+required: true
+extends: parent
+compose_after:
+  - after-overrider.yml
+`)
+	writeServiceFolder(t, dir, "own-compose", `
+type: app
+container: app-own-compose
+required: true
+extends: parent
+compose:
+  - own-compose.yml
+`)
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got, want := cfg.Services["parent"].ComposeAfter, []string{"after-parent.yml"}; !equalStrings(got, want) {
+		t.Errorf("parent.ComposeAfter = %v, want %v", got, want)
+	}
+	if got, want := cfg.Services["inheritor"].ComposeAfter, []string{"after-parent.yml"}; !equalStrings(got, want) {
+		t.Errorf("inheritor.ComposeAfter = %v, want %v (must inherit from parent)", got, want)
+	}
+	if got, want := cfg.Services["overrider"].ComposeAfter, []string{"after-overrider.yml"}; !equalStrings(got, want) {
+		t.Errorf("overrider.ComposeAfter = %v, want %v (child wins, no merge)", got, want)
+	}
+	if got, want := cfg.Services["own-compose"].ComposeAfter, []string{"after-parent.yml"}; !equalStrings(got, want) {
+		t.Errorf("own-compose.ComposeAfter = %v, want %v (inherits compose_after independently of its own compose:)", got, want)
+	}
+	if got, want := cfg.Services["own-compose"].Compose, []string{"own-compose.yml"}; !equalStrings(got, want) {
+		t.Errorf("own-compose.Compose = %v, want %v (own, not inherited)", got, want)
+	}
+
+	inheritor := cfg.Services["inheritor"]
+	inheritor.ComposeAfter[0] = "MUTATED.yml"
+	if parent := cfg.Services["parent"]; parent.ComposeAfter[0] != "after-parent.yml" {
+		t.Errorf("parent.ComposeAfter corrupted by mutating inheritor's slice: %v", parent.ComposeAfter)
+	}
+}
+
+// TestComposeFiles_extendsComposeAfterNoDedup pins the decided no-dedup
+// policy for an inherited compose_after: file — a parent and a child that
+// both enable emit the same inherited compose_after file twice, once per
+// service, ordered by service name (matching the policy for an inherited
+// compose: list).
+func TestComposeFiles_extendsComposeAfterNoDedup(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: app-parent
+required: true
+compose:
+  - parent.yml
+compose_after:
+  - after-shared.yml
+`)
+	writeServiceFolder(t, dir, "zchild", `
+type: app
+container: app-zchild
+required: true
+extends: parent
+`)
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// Both inherited copies land in the compose_after tier, after the app group.
+	want := []string{"parent.yml", "parent.yml", "after-shared.yml", "after-shared.yml"}
+	if got := cfg.ComposeFiles(); !slices.Equal(got, want) {
+		t.Errorf("ComposeFiles() = %v, want %v (no dedup, once per service)", got, want)
 	}
 }
 

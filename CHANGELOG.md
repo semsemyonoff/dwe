@@ -20,6 +20,51 @@ generated from commit subjects and stay on the
 
 Nothing yet.
 
+## [0.6.3] - 2026-09-23
+
+### Added
+
+- New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
+  — an opt-in `otel` tool service, instrumentation recipes for Python, Go,
+  Node and PHP / Laravel, and a text trace lookup for coding agents that ships
+  in [`examples/otel/`](examples/otel/README.md).
+- `service.yml` `compose_after:` — overlay files emitted after every service
+  group, so a tool's patch wins over keys an app sets in its own overlay. See
+  [`compose_after`](docs/reference/config/services/fields.md).
+- `dwe validate` catches mistakes that used to surface only at run time: a
+  `hide:` that does not evaluate, a missing file under `compose:` /
+  `compose_after:` / `compose.base`, a command `service:` that names no compose
+  service, and (info) a compose `healthcheck:` without `start_period`. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
+- `dwe compose files|argv|raw --all` include the overlays of disabled
+  services, like `dwe docker pull|build --all`.
+- `dwe commands list|-i --output json` carry a `summary` key; render packs get
+  `.Summary` next to `.Description`.
+
+### Changed
+
+- **The `dwe cmd` banner goes to stderr**, and is not printed under
+  `--output json`, so `dwe cmd X | …` receives only the command's output. See
+  [Upgrading DWE](docs/guides/upgrading.md).
+- One-line surfaces — the run banner, the `dwe commands` tree, completion, the
+  command browser, `dwe docs llms-txt` — show only the first line of a
+  multi-line `description:`; `dwe commands -i` keeps the full text. See
+  [Description and summary](docs/reference/config/commands/directives.md#description-and-summary).
+- `dwe compose argv` hands every argument after the compose command to
+  `docker compose`, as `dwe docker` does.
+
+### Fixed
+
+- `-v` / `--debug` echo what a user command spawns — `service_exec` /
+  `service_run`, `shell`, `script`, a daemon's `.start` / `.stop` / `.logs` —
+  and the `docker` calls of pipeline builtins. See
+  [Verbose & debug output](docs/guides/troubleshooting.md#verbose--debug-output).
+- The `hide:` examples in the
+  [command directives](docs/reference/config/commands/directives.md#hide-condition)
+  read config through `.Raw`; the old `.services` form never evaluated.
+- `dwe logs` help and the scaffolded `AGENTS.md` no longer call the command
+  streaming: it prints and exits unless `--follow` is given.
+
 ## [0.6.2] - 2026-09-16
 
 ### Added
@@ -326,7 +371,8 @@ Nothing yet.
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0

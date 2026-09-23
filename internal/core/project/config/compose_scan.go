@@ -68,6 +68,9 @@ type composeScanDoc struct {
 	Services map[string]composeScanService     `yaml:"services"`
 	Volumes  map[string]composeScanNamedEntity `yaml:"volumes"`
 	Networks map[string]composeScanNamedEntity `yaml:"networks"`
+	// Include is read only for its presence: a top-level include: pulls in
+	// files outside the -f chain, so ComposeServiceNames cannot prove absence.
+	Include yaml.Node `yaml:"include"`
 }
 
 // composeScanService decodes every field as a yaml.Node rather than its natural
@@ -84,10 +87,37 @@ type composeScanService struct {
 	Healthcheck   yaml.Node `yaml:"healthcheck"`
 }
 
-// composeScanHealthcheck is the narrow healthcheck shape ScanComposeCost needs.
+// composeScanHealthcheck is the narrow healthcheck shape ScanComposeCost and
+// ScanComposeHealthchecks need.
+// Every field is a yaml.Node so a `!reset` on it is visible (see mergeTagOf)
+// and an explicit `disable: false` is distinguishable from an absent key.
 type composeScanHealthcheck struct {
-	Disable     bool   `yaml:"disable"`
-	StartPeriod string `yaml:"start_period"`
+	Disable     yaml.Node `yaml:"disable"`
+	StartPeriod yaml.Node `yaml:"start_period"`
+	Test        yaml.Node `yaml:"test"`
+}
+
+// disabled reports whether this file's healthcheck sets `disable: true`.
+func (h composeScanHealthcheck) disabled() bool {
+	v, _ := boolNode(h.Disable)
+	return v
+}
+
+// boolNode reads a boolean scalar. declared is false for an absent key, a
+// `!reset`, or a value that is not a boolean.
+func boolNode(n yaml.Node) (value, declared bool) {
+	if mergeTagOf(n) == mergeReset {
+		return false, false
+	}
+	n = resolveAlias(n)
+	if n.Kind != yaml.ScalarNode {
+		return false, false
+	}
+	var b bool
+	if err := n.Decode(&b); err != nil {
+		return false, false
+	}
+	return b, true
 }
 
 type composeScanNamedEntity struct {
@@ -269,8 +299,17 @@ type parsedComposeFile struct {
 // returning it, and dropping the whole file over one odd field would silently
 // blind the scanner to that file's blocking findings.
 func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
-	files := cfg.ComposeFiles()
-	out := make([]parsedComposeFile, 0, len(files))
+	out, _ := parseComposeFileList(cfg.ComposeFiles(), projectRoot)
+	return out
+}
+
+// parseComposeFileList is parseComposeFiles over an explicit chain. clean
+// reports whether every file was read and decoded without any error — a
+// tolerated *yaml.TypeError included, since the partly decoded document may
+// be missing exactly the key a caller is looking for.
+func parseComposeFileList(files []string, projectRoot string) (out []parsedComposeFile, clean bool) {
+	out = make([]parsedComposeFile, 0, len(files))
+	clean = true
 
 	for _, rel := range files {
 		abs := rel
@@ -280,10 +319,12 @@ func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
 
 		data, err := os.ReadFile(abs)
 		if err != nil {
+			clean = false
 			continue
 		}
 		var doc composeScanDoc
 		if err := yaml.Unmarshal(data, &doc); err != nil {
+			clean = false
 			if _, ok := errors.AsType[*yaml.TypeError](err); !ok {
 				continue
 			}
@@ -292,7 +333,44 @@ func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
 		out = append(out, parsedComposeFile{doc: doc, file: abs})
 	}
 
-	return out
+	return out, clean
+}
+
+// ComposeServiceNames returns the sorted compose service names declared across
+// every git-tracked overlay (cfg.ComposeFilesTracked()), disabled services
+// included, so a name that only exists while some tool is enabled still
+// counts. Machine-local overlays (local.yml compose.extra, the bridge
+// overlay) are left out: the answer must not depend on one developer's state,
+// and a stale local path must not silence the check for that machine.
+//
+// complete is false when the set cannot prove that a name is absent: no
+// compose file is configured, a file in the chain could not be read or fully
+// decoded (a compose file inside a deploy-cloned source tree is legitimately
+// missing on a fresh checkout), or a file pulls in more files through a
+// top-level include:. Callers must treat an incomplete set as "unknown", not
+// as "empty".
+func ComposeServiceNames(cfg *DweConfig, projectRoot string) (names []string, complete bool) {
+	if cfg == nil {
+		return nil, false
+	}
+	files := cfg.ComposeFilesTracked()
+	if len(files) == 0 {
+		return nil, false
+	}
+	parsed, clean := parseComposeFileList(files, projectRoot)
+	if !clean {
+		return nil, false
+	}
+	seen := make(map[string]struct{})
+	for _, pf := range parsed {
+		if nodeDeclared(pf.doc.Include) {
+			return nil, false
+		}
+		for name := range pf.doc.Services {
+			seen[name] = struct{}{}
+		}
+	}
+	return slices.Sorted(maps.Keys(seen)), true
 }
 
 // ComposeCostFacts summarises what bringing a project's active compose chain
@@ -363,7 +441,9 @@ func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
 
 			hc, declared := decodeHealthcheck(svc.Healthcheck)
 			switch {
-			case mergeTagOf(svc.Healthcheck) == mergeReset, declared && hc.Disable:
+			case mergeTagOf(svc.Healthcheck) == mergeReset, declared && hc.disabled():
+				facts.startPeriod = 0
+			case declared && mergeTagOf(hc.StartPeriod) == mergeReset:
 				facts.startPeriod = 0
 			case declared:
 				if d, ok := parseStartPeriod(hc); ok {
@@ -393,6 +473,101 @@ func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
 	slices.Sort(out.ExternalImages)
 
 	return out
+}
+
+// HealthcheckWithoutStartPeriod is a compose service in the active chain whose
+// merged healthcheck runs a test but declares no start_period.
+type HealthcheckWithoutStartPeriod struct {
+	Service string
+	// File is the last compose file in the chain that declares this
+	// service's healthcheck — where a start_period belongs.
+	File string
+}
+
+// ScanComposeHealthchecks reports every compose service in the active chain
+// (cfg.ComposeFiles()) whose merged healthcheck has an active test but no
+// start_period. Without one, the probes a slow-starting service fails while
+// booting count against retries from the first second, so `docker compose up
+// --wait` can declare it unhealthy before it ever had a chance.
+//
+// healthcheck: is a mapping, so compose merges it key by key across the -f
+// chain: a later file's test: or start_period: replaces an earlier one, and an
+// earlier start_period survives a later file that does not mention it.
+// `!reset` drops the whole healthcheck and `!override` replaces it. Only
+// compose-declared healthchecks are visible — one baked into the image is not.
+func ScanComposeHealthchecks(cfg *DweConfig, projectRoot string) []HealthcheckWithoutStartPeriod {
+	type hcState struct {
+		test, disabled, startPeriod bool
+		file                        string
+	}
+
+	merged := make(map[string]*hcState)
+	for _, pf := range parseComposeFiles(cfg, projectRoot) {
+		for name, svc := range pf.doc.Services {
+			tag := mergeTagOf(svc.Healthcheck)
+			if tag == mergeReset {
+				delete(merged, name)
+				continue
+			}
+			hc, declared := decodeHealthcheck(svc.Healthcheck)
+			if !declared {
+				continue
+			}
+			st, ok := merged[name]
+			if !ok || tag == mergeOverride {
+				st = &hcState{}
+				merged[name] = st
+			}
+			st.file = pf.file
+			if nodeDeclared(hc.Test) {
+				st.test = healthcheckTestActive(hc.Test)
+			}
+			// Mapping keys merge last-one-wins, so a later `disable: false`
+			// re-enables and a later `!reset` drops an earlier value.
+			if mergeTagOf(hc.Disable) == mergeReset {
+				st.disabled = false
+			} else if v, ok := boolNode(hc.Disable); ok {
+				st.disabled = v
+			}
+			// Any declared value counts, even 0s: an explicit start_period is
+			// the author's decision, not an omission.
+			if mergeTagOf(hc.StartPeriod) == mergeReset {
+				st.startPeriod = false
+			} else if scalarValue(hc.StartPeriod) != "" {
+				st.startPeriod = true
+			}
+		}
+	}
+
+	var out []HealthcheckWithoutStartPeriod
+	for _, name := range slices.Sorted(maps.Keys(merged)) {
+		st := merged[name]
+		if st.test && !st.disabled && !st.startPeriod {
+			out = append(out, HealthcheckWithoutStartPeriod{Service: name, File: st.file})
+		}
+	}
+	return out
+}
+
+// healthcheckTestActive reports whether a healthcheck test: runs a probe.
+// `["NONE"]` disables the image's healthcheck, `!reset` drops the key, and an
+// empty value declares nothing.
+func healthcheckTestActive(n yaml.Node) bool {
+	if mergeTagOf(n) == mergeReset {
+		return false
+	}
+	n = resolveAlias(n)
+	switch n.Kind {
+	case yaml.SequenceNode:
+		if len(n.Content) == 0 {
+			return false
+		}
+		return scalarValue(*n.Content[0]) != "NONE"
+	case yaml.ScalarNode:
+		return scalarValue(n) != ""
+	default:
+		return false
+	}
 }
 
 // maxAliasHops bounds resolveAlias. The YAML spec forbids anchoring an alias
@@ -505,10 +680,11 @@ func nodePresent(n yaml.Node) bool {
 // parser cannot read yields (0, false) — the scanner stays advisory and never
 // errors on a compose file docker itself accepts.
 func parseStartPeriod(h composeScanHealthcheck) (time.Duration, bool) {
-	if h.Disable || h.StartPeriod == "" {
+	sp := scalarValue(h.StartPeriod)
+	if h.disabled() || sp == "" || mergeTagOf(h.StartPeriod) == mergeReset {
 		return 0, false
 	}
-	d, err := time.ParseDuration(strings.ReplaceAll(h.StartPeriod, " ", ""))
+	d, err := time.ParseDuration(strings.ReplaceAll(sp, " ", ""))
 	if err != nil || d < 0 {
 		return 0, false
 	}

@@ -4,11 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestShellValidate(t *testing.T) {
@@ -111,4 +114,38 @@ func TestShellRunTimeout(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("timeout took too long: %v", elapsed)
 	}
+}
+
+// TestShellRunTraceEcho pins that the shell builtin — a user-authored command,
+// in a step body or a check: — echoes its `sh -c` at Verbose, the same level
+// as a `type: shell` check, and not at the default level. Not parallel: the
+// trace level is process-global.
+func TestShellRunTraceEcho(t *testing.T) {
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+	for _, lvl := range []trace.Level{trace.LevelOff, trace.LevelVerbose} {
+		trace.Configure(nil, lvl)
+		p := &linesPrinter{}
+		ctx := trace.WithLinePrinter(context.Background(), p)
+		if err := (Shell{}).Run(ctx, map[string]any{"cmd": "test -d ."}, spec.ExecContext{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		want := []string{"$ sh -c 'test -d .'"}
+		if lvl == trace.LevelOff {
+			want = nil
+		}
+		if !slices.Equal(p.lines, want) {
+			t.Errorf("level %d: trace lines = %q, want %q", lvl, p.lines, want)
+		}
+	}
+}
+
+type linesPrinter struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (p *linesPrinter) PrintLine(s string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lines = append(p.lines, s)
 }

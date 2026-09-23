@@ -54,13 +54,20 @@ func registryIDCompletion(flags *cmdctx.RootFlags, includePrivate bool) func(*co
 		}
 		translator := i18n.TranslatorOrNop(flags.I18n)
 		for _, d := range defs {
-			entry := d.ID
-			desc := translator.CommandDescription(flags.Locale, d.ID, d.Description)
-			if desc != "" {
-				entry = cobra.CompletionWithDesc(d.ID, desc)
-			}
-			completions = append(completions, entry)
+			completions = append(completions, commandCompletionEntry(d, translator, flags.Locale))
 		}
 		return completions, cobra.ShellCompDirectiveNoFileComp
 	}
+}
+
+// commandCompletionEntry is one completion candidate: the ID, plus the
+// translated summary when there is one. The summary is single-line and
+// tab-free — the shell reads one candidate per line and a tab separates the
+// value from its description.
+func commandCompletionEntry(d *usercommands.CommandDef, translator i18n.Translator, locale string) string {
+	desc := usercommands.SummaryLine(translator.CommandDescription(locale, d.ID, d.Description))
+	if desc == "" {
+		return d.ID
+	}
+	return cobra.CompletionWithDesc(d.ID, desc)
 }

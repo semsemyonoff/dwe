@@ -120,9 +120,10 @@ When DWE's compose wrapper is in the way — you need a flag DWE does not pass, 
 dwe compose raw -- ps -a
 dwe compose raw -- exec main env
 dwe compose raw -- config
+dwe compose raw --all -- config    # the chain with disabled services' overlays too
 ```
 
-`dwe compose raw` is a low-level pass-through: DWE resolves the compose file list and project name, then hands the rest of the argv to `docker compose` unchanged. No policy args, no overlays beyond the ones already on disk. Use it as a diagnostic, not a daily-driver — the higher-level `dwe` commands exist for a reason — but it is the right tool when you are debugging DWE itself or reproducing an issue against the compose CLI directly. Reference: [`../reference/config/docker.md`](../reference/config/docker.md).
+`dwe compose raw` is a low-level pass-through: DWE resolves the compose file list and project name, then hands the rest of the argv to `docker compose` unchanged. No policy args, no overlays beyond the ones already on disk. `--all` (also on `compose files` and `compose argv`) adds the overlays of disabled services — for inspection only, since they may conflict and the combined chain need not be valid; it must come before the first `docker compose` argument, so `dwe compose raw -- ps --all` passes `--all` to `docker compose` itself. Use it as a diagnostic, not a daily-driver — the higher-level `dwe` commands exist for a reason — but it is the right tool when you are debugging DWE itself or reproducing an issue against the compose CLI directly. Reference: [`../reference/config/docker.md`](../reference/config/docker.md).
 
 ## Verbose & debug output
 
@@ -135,13 +136,13 @@ dwe run --debug     # firehose: everything -v shows, plus the internals
 DWE_DEBUG=1 dwe run # env equivalent of --debug
 ```
 
-`-v, --verbose` echoes the commands DWE executes (docker/compose lifecycle, raw `docker stop/restart/rm`, `sh -c …`, nested `dwe …`, git) each as a copy-pasteable `$ …` line, plus the key pipeline **decisions**: which step ran or was skipped and why (`when:` results, phase gates, `state: already deployed`, files-gate), and the preflight pass/fail summary.
+`-v, --verbose` echoes the commands DWE executes (docker/compose lifecycle, raw `docker stop/restart/rm`, `sh -c …`, nested `dwe …`, git, and the child a user command spawns — the `docker compose exec`/`run` of a `service_exec`/`service_run` command, the host process of a `shell`/`script`/`dwe` command, an `argv_append_from` expression, the `docker` calls behind a daemon's `.start`/`.stop`/`.restart`/`.logs`, and the spawns of builtins such as `shell`, the daemon reap in `dwe stop` and `docker_remove_project_volumes`) each as a copy-pasteable `$ …` line (values a command passes through the environment — its `env:`, params with `env:` — are not shown: a `service_exec`/`service_run` line carries only `-e KEY`, and the value travels in the child's environment, so re-running the line by hand needs those variables exported first), plus the key pipeline **decisions**: which step ran or was skipped and why (`when:` results, phase gates, `state: already deployed`, files-gate), and the preflight pass/fail summary.
 
 `--debug` (or `DWE_DEBUG=1`) is a **superset** of `-v`. On top of the verbose stream it adds the firehose: read-only docker probe commands (`docker compose ps`), subprocess timings and exit codes, full compose environment overrides and working directory, config-resolution internals, and everything emitted through `log/slog` at Debug level. `--debug` installs the slog Debug handler; `-v` does not. When both the flag and the env var disagree, the flag wins; `DWE_DEBUG=0` (or `false`/`no`/`off`/empty) is treated as off.
 
 The two are designed to combine cleanly with everything else:
 
-- **Read-only probes stay out of verbose.** `dwe status -v` does *not* spam `docker compose ps` — those probes are Debug-only. Use `dwe status --debug` if you want to see them.
+- **Read-only probes stay out of verbose.** `dwe status -v` does *not* spam `docker compose ps` — those probes are Debug-only, and so are the ones that decide what a command runs (a daemon's `docker ps` "is it running" check, a `service_exec`'s exec-or-run check, `docker volume ls`). Use `--debug` if you want to see them.
 - **JSON stays clean.** `dwe status -v --output json | jq .` parses: the JSON document is the only thing on stdout, every diagnostic line is on stderr. The same holds for `--debug`. For non-diagnostic commands, if the command errors the `{"error":{…}}` envelope is still the final structure on stderr. Diagnostic commands like `dwe validate` are the exception — they always emit diagnostics-as-data on stdout, even at severity=error.
 - **Zero overhead when off.** With neither flag set, there is no diagnostic output, no slog handler is installed, and existing `Warn`/`Error` behavior is unchanged.
 

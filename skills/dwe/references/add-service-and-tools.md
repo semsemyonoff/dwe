@@ -6,7 +6,7 @@ Order: pick the type → folder (= key) → container → toggle → extras → 
 
 ## 1. Pick the type
 
-- **`app`** — owns source (`dir`), render packs, its own `deploy.yml`, `extends`, `cli`, `generated`.
+- **`app`** — owns source (`dir`), render packs, `extends`, `cli`, `generated`. A per-service `deploy.yml` / `reset.yml` is valid for any type.
 - **`tool`** — a side GUI / utility (dbgate, mailpit, redis-insight). No source.
 - **`infra`** — a backing service others depend on (proxy, db, varnish); may own the public HTTP port (`port_via` for `dwe info`).
 
@@ -18,7 +18,7 @@ dwe docs show config/services/examples --lang en
 
 ## 2. Folder = key
 
-`workspace/services/<name>/service.yml` is required; the folder name **is** the key. Required fields: `type:` + `container:` (compose service name). Common: `icon:`, `ports:` (named map), `hosts:` (named map), `compose:` (overlays this service activates), `required: true` or a toggle (§ 4).
+`workspace/services/<name>/service.yml` is required; the folder name **is** the key. Required fields: `type:` + `container:` (compose service name). Common: `icon:`, `ports:` (named map), `hosts:` (named map), `compose:` (overlays this service activates), `compose_after:` (overlays emitted after every service group — patches over other services' own overlays), `required: true` or a toggle (§ 4).
 
 ```yaml
 # tool
@@ -55,11 +55,13 @@ Model host ports under `services.<name>.ports` (or route them through a `vars:` 
 
 ## 3. app-only extras
 
-`dir` / `dir_internal` / `work_dir_internal` (mount the whole hub — `SKILL.md` § Rules); `dirs: [...]` (extra hub subdirs); `render.config.template:` (config pack) and `generated:` (harvested secrets) — both in `render-and-vars.md`; `cli: {mode, shell, user, workdir, env}` (how `service_exec` and `dwe shell` enter the container); `bridge: {enabled: true}` (opt the container into the host bridge so `dwe cmd` / `vars` work from inside it).
+`dir` / `dir_internal` / `work_dir_internal` (mount the whole hub — `SKILL.md` § Rules); `dirs: [...]` (extra hub subdirs); `render.config.template:` (config pack) and `generated:` (harvested secrets) — both in `render-and-vars.md`; `cli: {mode, shell, user, workdir, env}` (how `service_exec` and `dwe shell` enter the container). Any type: `bridge: {enabled: true}` (opt the container into the host bridge so `dwe cmd` / `vars` work from inside it).
 
 ## 4. Container, toggle, variant
 
-The container lives in a compose file, not in `service.yml`: the **base** (`compose.yaml`, or whatever `docker.yml` `compose.base` names) for `required` infra, or **overlays** the service's `compose:` list activates (convention: `compose/tools/<name>.yml`, `compose/services/<name>.yml`, `compose/services/<svc>/<variant>.yml`). Overlays consume `.env` vars and patch the proxy vhost. Assembly: `dwe docs show config/docker --lang en`, `concepts/docker`.
+The container lives in a compose file, not in `service.yml`: the **base** (`compose.yaml`, or whatever the root config's `compose.base` names — usually set in `workspace/defaults.yml`) for `required` infra, or **overlays** the service's `compose:` list activates (convention: `compose/tools/<name>.yml`, `compose/services/<name>.yml`, `compose/services/<svc>/<variant>.yml`). Overlays consume `.env` vars and patch the proxy vhost. Assembly: `dwe docs show config/docker --lang en`, `concepts/docker`.
+
+An overlay may also patch **neighbouring** services — a tool's overlay adding env and mounts to an app, so one toggle switches a whole feature — with no `depends_on` on the optional service in the base; merge rules and file-order traps: `dwe docs show guides/observability-otel#2-the-overlay --lang en`. An overlay that patches app services belongs in `compose_after:`, not `compose:`, so it lands after the apps' own overlays and wins whole-value merges (`command:`, `environment:` keys). A one-off helper the tool needs (a lookup script, a CLI) is a `profiles:`-gated compose service in the same overlay, targeted by `type: service_run` — no service folder; `service_run` passes `--entrypoint ""`, so `argv:` names the interpreter (the guide's PHP recipe; the script itself ships in dwe's `examples/otel/`).
 
 - **Optional** service: omit `required:`, add `services.<name>.enabled: false|true` to `workspace/defaults.yml`. Required services are not listed there.
 - **Variant** via `extends: <parent>` (a `main-debug` reusing the parent's image / source / render, adding an overlay and a `cli.env` tweak). Deepest-extends-wins on render collisions; a child sharing the parent's hub is a render alias. `dwe docs show config/services/extends --lang en`.
@@ -68,7 +70,7 @@ The container lives in a compose file, not in `service.yml`: the **base** (`comp
 ## 5. Validate (read) and hand off
 
 ```shell
-dwe validate config services --output json
+dwe validate config --output json   # service.yml schema, missing compose files, compose healthcheck: blocks of enabled services without start_period (info)
 dwe validate --output json
 ```
 

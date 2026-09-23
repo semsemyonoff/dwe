@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ be6285666208
+> Translated from: reference/config/commands/directives.md @ 8effef5e9cbb
 
 # Директивы команд
 
@@ -7,6 +7,7 @@
 ## Содержание
 
 - [Идентичность и видимость](#идентичность-и-видимость)
+- [Описание и краткая строка](#описание-и-краткая-строка)
 - [Видимость через bridge](#видимость-через-bridge)
 - [Подтверждение](#подтверждение)
 - [Поток подтверждения](#поток-подтверждения)
@@ -25,11 +26,29 @@
 | Поле | Тип | По умолчанию | Описание |
 |-------|------|---------|-------------|
 | `type` | enum | обязательно | Одно из `shell`, `dwe`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
-| `description` | string | — | Человекочитаемое описание, отображаемое в DWE CLI (селекторы, `commands list`, `commands -i`) |
+| `description` | string | — | Человекочитаемое описание. Его первая непустая строка — краткая строка (summary) команды, которую показывают однострочные поверхности; `commands -i` показывает полный текст. См. [Описание и краткая строка](#описание-и-краткая-строка) |
 | `private` | bool | `false` | Скрывает из `dwe commands list` и блокирует прямой `commands run`; всё ещё вызываема из сценариев и пайплайнов |
 | `hide` | string | `""` | Выражение-условие. Когда вычисляется в truthy на runtime — команда трактуется как несуществующая: не отображается в `dwe commands`, completion и TUI; отклоняется при прямом вызове; шаги workflow, ссылающиеся на неё, авто-скипаются с `SkipReason="hidden"`. Синтаксис тот же, что у workflow `when:` — см. [Условие hide](#условие-hide) ниже. |
 | `bridge` | block | отсутствует | Включает команду в контейнерную поверхность [host bridge](../../concepts/bridge.md) — без него команда host-only и невидима для in-container шима `dwe`. См. [Видимость через bridge](#видимость-через-bridge) ниже. |
 | `notify` | bool | `false` | Отправить десктопное уведомление по завершении команды. См. [Уведомления](#уведомления) ниже. |
+
+## Описание и краткая строка
+
+**Краткая строка** (summary) команды — первая непустая строка её `description:` (уже после перевода, если `workspace/i18n/<lang>.yml` его переопределяет); полный текст — развёрнутая форма. Однострочные поверхности показывают только краткую строку: баннер запуска `dwe cmd`, дерево `dwe commands`, автодополнение shell, строки интерактивного браузера и его селектора для узкого терминала, список команд `dwe docs llms-txt`, индекс `dwe docs generate` и ссылки на шаги workflow. `dwe commands -i`, панель inspect в браузере и страница команды в `docs generate` печатают полный текст, и фильтр `/` в браузере ищет по нему. `--output json` отдаёт оба: `description` — полный текст, `summary` — его первая строка. `description:` группы подчиняется тому же правилу.
+
+Поэтому ставьте первой однострочную краткую строку, а заметки об использовании и примеры — после неё:
+
+```yaml
+commands:
+  migrate:
+    type: shell
+    description: |
+      Run database migrations
+      Pass --set step=N to roll forward N steps only.
+    cmd: php artisan migrate
+```
+
+Переносы строк сохраняет только литеральный блок (`|`). Свёрнутый блок (`>`) склеивает строки через пробел, поэтому краткой строкой становится весь абзац.
 
 ## Условие hide
 
@@ -51,7 +70,7 @@
 # workspace/services/db/commands.yml — исчезает, когда db выключен
 group:
   title: База данных
-  hide: '{{ not (index .services "db" "enabled") }}'
+  hide: '{{ not (index .Raw "services" "db" "enabled") }}'
 
 commands:
   migrate:
@@ -60,9 +79,11 @@ commands:
   # команда тоже может быть скрыта индивидуально:
   reset_engine:
     type: shell
-    hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+    hide: '{{ eq (index .Raw "vars" "db_engine") "sqlite" }}'
     cmd: db reset --engine
 ```
+
+Внутри `{{ }}` смерженный конфиг лежит в `.Raw` — top-level `.services` нет. `index .Raw "services" "<name>" "enabled"` читает переключатель сервиса; произвольные флаги вроде `db_engine` живут в [`vars:`](../workspace.md), откуда их читает и `${vars.db_engine}`.
 
 ## Видимость через bridge
 

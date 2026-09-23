@@ -34,7 +34,7 @@ Locked rules:
 - `depends_on:` may not reference a `type: tool` entry. This is enforced at load (`ErrDependsOnTool`), not only at validate time.
 - `workspace/services/<name>/deploy.yml` is supported for **any service type** (app, tool, infra). Full deploy (`dwe deploy run`) enumerates every **enabled** service that has a `deploy.yml`; `dwe deploy run --service <name>` works for any service type with a deploy file regardless of enabled state.
 - `ports:` is always `map[string]int` and `hosts:` is always `map[string]string`. There is no `port:` / `host:` scalar shorthand. A single-port entry writes `ports: { http: 8025 }`.
-- Type semantics partition `docker compose` file emission to `tool → infra → app` order.
+- Type semantics partition `docker compose` file emission to `tool → infra → app → compose_after` order.
 
 `type: infra` services may be optional (`required: false`) — they take a `compose:` overlay and are toggleable via `dwe services enable|disable <name>` like apps and tools. Required infra (`required: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
 
@@ -56,6 +56,7 @@ This separation ensures that build and deploy logic is explicit (defined only in
 | `container`       |   ✓   |   ✓    |    ✓    |
 | `required`        |   ✓   |   ✓    |    ✓    |
 | `compose`         |   ✓   |   ✓    |    ✓    |
+| `compose_after`   |   ✓   |   ✓    |    ✓    |
 | `ports`           |   ✓   |   ✓    |    ✓    |
 | `hosts`           |   ✓   |   ✓    |    ✓    |
 | `icon`            |   ✓   |   ✓    |    ✓    |
@@ -85,7 +86,7 @@ A disallowed field is a hard load error (`ErrServiceFieldNotAllowed`). Validatio
 - For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices and maps are copied defensively, so mutating a child never corrupts the parent.
 - The `dirs` field is deduplicated across parent and child (parent first, child appended). `cli.env` is recursively merged: parent provides defaults, child wins on key conflicts.
 - After loading, `enabled` is resolved from the 3-layer merge (`services.<name>.enabled`); required services force `enabled: true`.
-- Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `extends`, …) belong in `workspace/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.
+- Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `compose_after`, `extends`, …) belong in `workspace/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.
 - `ports:` and `hosts:` are **deep-merged by entry name** on top of the declared map: a per-developer override under `workspace/local.yml` only touches the listed keys; declared entries the overlay does not mention are preserved. New entries may also be introduced via overlay. This is a first-class DWE feature: developers routinely need to remap a port that clashes with something already bound on their host, or switch their `*.local` hostname, without editing the shared `workspace/services/<name>/service.yml`.
 - Each resolved service (including the post-overlay `ports` / `hosts` nested maps) is injected into `DweConfig.Raw["services"]` so dot-paths like `services.main.ports.http` and `services.adminer.hosts.web` resolve in export rules, `docker.yml` templates, command `default_from:`, and `info.yml` references.
 - Port values are bounded `1..65535` at load time (both in `service.yml` and in overlay layers).

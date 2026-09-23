@@ -21,11 +21,13 @@ group:
   title: Main Artisan
   description: Everyday php artisan utilities for the main service
   bridge: { enabled: true, services: [main] }      # optional; children inherit (§ 6)
-  # hide: '{{ not .Raw.services.main.enabled }}'   # conditional visibility
+  # hide: '{{ not (index .Raw "services" "main" "enabled") }}'   # conditional visibility; config is .Raw
 
 commands:
   # per-command map; keys become the last ID segment
 ```
+
+The first non-empty line of a command's or group's `description:` is its summary — the only text one-line surfaces show (run banner, listing, completion, llms-txt), so write that line first and put usage notes after it in a `|` block (`>` folds everything into one line); JSON output carries both `description` and `summary`.
 
 One file per framework namespace (`commands/services/main/migrate.yml` → `services.main.migrate.{run,status,rollback}`), each entry a `service_exec` wrapping the binary verb; set `service:` / `bridge:` once on the group header.
 
@@ -45,7 +47,7 @@ db-seed:
   cmd: "php artisan db:seed{{ with .Params.class }} --class={{ . }}{{ end }}"
 ```
 
-**`service_run`** — throwaway container; works before the stack is up (pre-up `chown` as `user: root`, one-shot installs):
+**`service_run`** — throwaway container; works before the stack is up (pre-up `chown` as `user: root`, one-shot installs). It starts with `--no-deps --entrypoint ""` (so does a `service_exec` falling back to run): the image's `ENTRYPOINT` is dropped, so `argv:` names the program itself. `service:` is always a **compose service name** — a `profiles:`-gated helper defined only in an overlay is a valid target.
 
 ```yaml
 chown-src:
@@ -126,7 +128,7 @@ Running a command from **inside** a service container is opt-in, default-deny: a
 
 ```shell
 dwe cmd -i <id> --output json
-dwe validate commands --output json
+dwe validate commands --output json   # also: a service: naming no compose service, a hide: that does not evaluate
 ```
 
 A command referenced from a pipeline step (`type: command`) applies when the user runs that pipeline (`dwe deploy run` / `dwe run`); a standalone command is run by the user via `dwe cmd <id>` — or by you when the task it carries only reads or verifies (`SKILL.md` § Running project tasks).

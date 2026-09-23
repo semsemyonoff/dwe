@@ -31,7 +31,10 @@ type commandEntryJSON struct {
 	Group       string `json:"group,omitempty"`
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
+	// Summary is the first non-empty line of Description
+	// (usercommands.SummaryLine); Description stays the full text.
+	Summary string `json:"summary,omitempty"`
+	Type    string `json:"type"`
 	// Service is the declared value, not a rendered one: a templated
 	// `service: app-${param.svc}` is emitted verbatim.
 	Service string           `json:"service,omitempty"`
@@ -99,11 +102,13 @@ func buildParamEntriesJSON(def *usercommands.CommandDef, translator i18n.Transla
 
 // commandDefToEntryJSON converts a single CommandDef to its JSON list entry.
 func commandDefToEntryJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandEntryJSON {
+	desc := translator.CommandDescription(locale, def.ID, def.Description)
 	return commandEntryJSON{
 		ID:          def.ID,
 		Group:       def.Group,
 		Title:       def.LocalName,
-		Description: translator.CommandDescription(locale, def.ID, def.Description),
+		Description: desc,
+		Summary:     usercommands.SummaryLine(desc),
 		Type:        string(def.Type),
 		Service:     def.DeclaredService(),
 		Private:     def.Private,
@@ -170,6 +175,22 @@ func writeCommandsList(cmd *cobra.Command, flags *cmdctx.RootFlags, reg *usercom
 	return nil
 }
 
+// commandBrowserItem projects one command into a browser row: the row shows
+// the translated summary, while the filter and the inspect view keep the full
+// description.
+func commandBrowserItem(d *usercommands.CommandDef, translator i18n.Translator, locale string, inspect func(width int) string) cmdbrowser.Item {
+	desc := translator.CommandDescription(locale, d.ID, d.Description)
+	return cmdbrowser.Item{
+		ID:          d.ID,
+		Description: desc,
+		Summary:     usercommands.SummaryLine(desc),
+		Type:        string(d.Type),
+		Private:     d.Private,
+		ParamCount:  len(d.Params),
+		Inspect:     inspect,
+	}
+}
+
 // selectCommandFn is the function signature for interactive command selection.
 // It receives a slice of CommandDefs and a display title, and returns the chosen ID.
 type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string, error)
@@ -198,19 +219,11 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
-			curDef := d
-			items[i] = cmdbrowser.Item{
-				ID:          d.ID,
-				Description: translator.CommandDescription(locale, d.ID, d.Description),
-				Type:        string(d.Type),
-				Private:     d.Private,
-				ParamCount:  len(d.Params),
-				Inspect: func(width int) string {
-					var buf bytes.Buffer
-					printInspectAt(&buf, curDef, cfg, reg, width, translator, locale, baseDir)
-					return buf.String()
-				},
-			}
+			items[i] = commandBrowserItem(d, translator, locale, func(width int) string {
+				var buf bytes.Buffer
+				printInspectAt(&buf, d, cfg, reg, width, translator, locale, baseDir)
+				return buf.String()
+			})
 		}
 		opts := cmdbrowser.DefaultOptions()
 		opts.IncludePrivate = includePrivate
@@ -427,7 +440,7 @@ func groupNodeToSingleNode(gn *usercommands.GroupNode, includePrivate bool, tran
 	if !includePrivate && len(children) == 0 {
 		return nil
 	}
-	desc := translator.GroupDescription(locale, gn.ID, gn.Meta.Description)
+	desc := usercommands.SummaryLine(translator.GroupDescription(locale, gn.ID, gn.Meta.Description))
 	node := &render.TreeNode{
 		Label:    translator.GroupTitle(locale, gn.ID, gn.Name),
 		Desc:     desc,
@@ -443,7 +456,7 @@ func commandDefToTreeNode(cmd *usercommands.CommandDef, translator i18n.Translat
 		tags = append(tags, "private")
 	}
 	tags = append(tags, string(cmd.Type))
-	desc := translator.CommandDescription(locale, cmd.ID, cmd.Description)
+	desc := usercommands.SummaryLine(translator.CommandDescription(locale, cmd.ID, cmd.Description))
 	return &render.TreeNode{
 		Label: cmd.ID,
 		Tags:  tags,

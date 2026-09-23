@@ -165,7 +165,7 @@ services:
       - "${WEB_HTTP_PORT}:80"
 ```
 
-The compose file list also picks up `workspace/docker.local.yml` last, so per-developer overrides (alternate images, debug ports, extra volumes) compose on top of the tracked overlays without editing them. See [`docker.yml`](../config/docker.md) and [Docker integration](docker.md) for the full assembly.
+The compose file list finishes with tracked `compose_after:` patches (per-service, emitted after every service group — for an overlay that must win over another service's own overlay) and then the project-wide `workspace/local.yml` `compose.extra`, so per-developer overrides (alternate images, debug ports, extra volumes) compose on top of the tracked overlays without editing them. `workspace/docker.local.yml` is compose **policy** (project name, per-subcommand args, process env), not a file in the `-f` chain. See [`docker.yml`](../config/docker.md) and [Docker integration](docker.md) for the full assembly.
 
 ## Service images (`images/`)
 

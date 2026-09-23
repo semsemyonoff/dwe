@@ -542,7 +542,7 @@ func resolveMapPath(m map[string]any, path string) any {
 // Evaluation flow:
 // 1. Empty expr → true
 // 2. Render ${...} and {{ }} against RenderContext
-// 3. Classify the rendered result (cmd:, builtin predicate, or literal)
+// 3. Classify the rendered result via ClassifyRenderedCondition
 // 4. For literals, apply boolean-value fast-path (true/1 → true; false/0/"" → false)
 // 5. For predicates/commands, delegate to condition.EvalBuiltin/EvalCmd
 //
@@ -559,31 +559,70 @@ func EvalCommandCondition(expr string, ctx *RenderContext, projectRoot string) (
 		return false, fmt.Errorf("eval when %q: %w", expr, err)
 	}
 
-	// After rendering, check for literal boolean values first (from ${param.*} or ${context.*})
+	rc := ClassifyRenderedCondition(rendered)
+	switch rc.Kind {
+	case RenderedLiteral:
+		return rc.Literal, nil
+	case RenderedCmd:
+		ok, err := condition.EvalCmd(rc.Payload, projectRoot)
+		if err != nil {
+			return false, fmt.Errorf("eval when %q: %w", expr, err)
+		}
+		return ok, nil
+	case RenderedPredicate:
+		ok, err := condition.EvalBuiltin(rc.Payload, projectRoot)
+		if err != nil {
+			return false, fmt.Errorf("eval when %q: %w", expr, err)
+		}
+		return ok, nil
+	default: // RenderedTemplate — unreachable post-render, but defend against it
+		return false, fmt.Errorf("eval when %q: unexpected residual template", expr)
+	}
+}
+
+// RenderedKind is the class of an already-rendered command condition.
+type RenderedKind int
+
+const (
+	// RenderedLiteral is a literal boolean: "", "false", "0", "true" or "1"
+	// (surrounding whitespace ignored); RenderedCondition.Literal holds it.
+	RenderedLiteral RenderedKind = iota
+	// RenderedCmd is a `cmd:` shell command; Payload is the trimmed command,
+	// possibly empty.
+	RenderedCmd
+	// RenderedPredicate is anything else; Payload is the builtin predicate
+	// text, which may still be an unknown verb or have the wrong arity.
+	RenderedPredicate
+	// RenderedTemplate is a residual "{{" template, which a successful
+	// render never leaves.
+	RenderedTemplate
+)
+
+// RenderedCondition is the classification of a rendered command condition.
+type RenderedCondition struct {
+	Kind    RenderedKind
+	Literal bool
+	Payload string
+}
+
+// ClassifyRenderedCondition classifies the output of RenderCommand the way
+// EvalCommandCondition evaluates it, without evaluating anything. It is the
+// single source of that dispatch, shared with static `hide:` validation so the
+// two cannot drift.
+func ClassifyRenderedCondition(rendered string) RenderedCondition {
 	switch strings.TrimSpace(rendered) {
 	case "", "false", "0":
-		return false, nil
+		return RenderedCondition{Kind: RenderedLiteral, Literal: false}
 	case "true", "1":
-		return true, nil
+		return RenderedCondition{Kind: RenderedLiteral, Literal: true}
 	}
-
-	// Not a literal boolean; classify as cmd: or builtin predicate
 	kind, payload := condition.Classify(rendered)
-
 	switch kind {
 	case condition.KindCmd:
-		ok, err := condition.EvalCmd(payload, projectRoot)
-		if err != nil {
-			return false, fmt.Errorf("eval when %q: %w", expr, err)
-		}
-		return ok, nil
+		return RenderedCondition{Kind: RenderedCmd, Payload: payload}
 	case condition.KindBuiltin:
-		ok, err := condition.EvalBuiltin(payload, projectRoot)
-		if err != nil {
-			return false, fmt.Errorf("eval when %q: %w", expr, err)
-		}
-		return ok, nil
-	default: // KindTemplate — unreachable post-render, but defend against it
-		return false, fmt.Errorf("eval when %q: unexpected residual template", expr)
+		return RenderedCondition{Kind: RenderedPredicate, Payload: payload}
+	default:
+		return RenderedCondition{Kind: RenderedTemplate, Payload: payload}
 	}
 }

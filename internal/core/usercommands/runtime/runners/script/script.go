@@ -16,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Runner executes type=script commands by running one or more script files.
@@ -211,6 +212,7 @@ func (s *Runner) execScript(ctx context.Context, rc spec.RunContext, shell, scri
 		}
 	}
 
+	trace.Exec(ctx, c)
 	defer runio.WireChildIO(rc, c)()
 
 	if err := c.Run(); err != nil {
