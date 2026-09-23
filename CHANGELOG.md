@@ -23,8 +23,18 @@ generated from commit subjects and stay on the
 - New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
   — an opt-in `otel` tool service whose `compose:` overlay ships the backend
   and whose `compose_after:` overlay patches the app services, with
-  instrumentation recipes for Python, Go and Node and a text trace lookup for
-  coding agents.
+  instrumentation recipes for Python, Go, Node and PHP (php-fpm / Laravel:
+  the extension built but not enabled in the image, a separate Composer vendor
+  loaded through `auto_prepend_file`), nginx and Caddy vhosts, and a text trace
+  lookup for coding agents. The lookup script ships in
+  [`examples/otel/`](examples/otel/README.md) with its unit tests; its
+  `services` subcommand queries a time window, so a service whose spans Tempo
+  has already flushed to completed blocks is no longer missing from the list.
+- The command reference documents that `type: service_run` (and a
+  `service_exec` that falls back to `run`) starts the container with
+  `--no-deps --entrypoint ""`: the image's `ENTRYPOINT` is dropped, so
+  `argv:` must name the program itself. See
+  [`service_run`](docs/reference/config/commands/types.md#type-service_run).
 - The service reference documents how relative paths in a `compose:` overlay
   resolve: against the directory of the first `-f` file (`compose.base`), not
   the overlay's own directory. See
