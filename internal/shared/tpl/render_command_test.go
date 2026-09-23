@@ -997,3 +997,32 @@ func TestEvalCommandCondition_hideDocExamples(t *testing.T) {
 		}
 	})
 }
+
+// TestClassifyRenderedCondition pins the dispatch EvalCommandCondition and
+// the static hide: validator share.
+func TestClassifyRenderedCondition(t *testing.T) {
+	tests := []struct {
+		name     string
+		rendered string
+		want     RenderedCondition
+	}{
+		{"empty", "", RenderedCondition{Kind: RenderedLiteral, Literal: false}},
+		{"blank", "  \n", RenderedCondition{Kind: RenderedLiteral, Literal: false}},
+		{"false", "false", RenderedCondition{Kind: RenderedLiteral, Literal: false}},
+		{"zero", "0", RenderedCondition{Kind: RenderedLiteral, Literal: false}},
+		{"true", " true ", RenderedCondition{Kind: RenderedLiteral, Literal: true}},
+		{"one", "1", RenderedCondition{Kind: RenderedLiteral, Literal: true}},
+		{"cmd", "cmd:  test -f x ", RenderedCondition{Kind: RenderedCmd, Payload: "test -f x"}},
+		{"empty cmd", "cmd:   ", RenderedCondition{Kind: RenderedCmd, Payload: ""}},
+		{"predicate", " dir-exists src ", RenderedCondition{Kind: RenderedPredicate, Payload: "dir-exists src"}},
+		{"unknown word", "yes", RenderedCondition{Kind: RenderedPredicate, Payload: "yes"}},
+		{"residual template", "{{ x }}", RenderedCondition{Kind: RenderedTemplate, Payload: "{{ x }}"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyRenderedCondition(tt.rendered); got != tt.want {
+				t.Errorf("ClassifyRenderedCondition(%q) = %+v, want %+v", tt.rendered, got, tt.want)
+			}
+		})
+	}
+}

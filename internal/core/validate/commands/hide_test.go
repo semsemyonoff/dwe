@@ -167,7 +167,7 @@ func TestHideDiagnostics_RenderedResult(t *testing.T) {
 		{"generated-missing with one arg", "generated-missing db", `expected "<svc> <field>"`},
 		{"cmd is not executed", "cmd: touch " + sentinel, ""},
 		{"cmd test", "cmd: test -f x", ""},
-		{"empty cmd", "cmd:   ", "empty `cmd:` command"},
+		{"empty cmd", "cmd:   ", "db.reset: hide: expression renders to an empty `cmd:` command"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -188,6 +188,17 @@ func TestHideDiagnostics_RenderedResult(t *testing.T) {
 			}
 			if !strings.Contains(d.Message, tc.want) {
 				t.Errorf("message %q does not contain %q", d.Message, tc.want)
+			}
+			if tc.name == "empty cmd" {
+				// Its own message: "cmd:" is not "neither a boolean nor a
+				// known predicate", and runtime fails on it rather than hiding.
+				if d.Message != tc.want {
+					t.Errorf("message = %q, want %q", d.Message, tc.want)
+				}
+				if !strings.Contains(d.Hint, "evaluation error at runtime") {
+					t.Errorf("hint should say an empty cmd: fails at runtime; got %q", d.Hint)
+				}
+				return
 			}
 			if !strings.Contains(d.Hint, "true/false/1/0") || !strings.Contains(d.Hint, "cmd:") {
 				t.Errorf("hint should list the valid results; got %q", d.Hint)
