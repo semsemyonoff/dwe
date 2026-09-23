@@ -85,6 +85,19 @@ class TraceQLBuildingTests(unittest.TestCase):
             '{ kind = server && trace:rootName !~ "worker .*" }',
         )
 
+    def test_unanchor_groups_alternation(self):
+        # `.*a|b.*` would be `(.*a)|(b.*)`: each branch anchored on its inner end.
+        self.assertEqual(traces.unanchor("a|b"), ".*(?:a|b).*")
+        self.assertEqual(traces.unanchor("^GET|POST"), "(?:GET|POST).*")
+        self.assertEqual(traces.unanchor("^GET|POST$"), "GET|POST")
+        self.assertEqual(
+            traces.build_traceql(root_regex="GET|POST"),
+            '{ trace:rootName =~ ".*(?:GET|POST).*" }',
+        )
+        rx = re.compile(traces.unanchor("GET|POST"))
+        self.assertTrue(rx.fullmatch("handle POST /x"))
+        self.assertTrue(rx.fullmatch("GET /y done"))
+
     def test_unanchor_keeps_explicit_wildcards_and_escaped_dollar(self):
         self.assertEqual(traces.unanchor(".*foo.*"), ".*foo.*")
         self.assertEqual(traces.unanchor("price\\$"), ".*price\\$.*")
@@ -864,6 +877,82 @@ class TagValuesTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), "main\n")
         _, params = self.calls[0]
         self.assertEqual(params["end"] - params["start"], 7200)
+
+
+class TempoErrorMappingTests(unittest.TestCase):
+    """A 4xx means Tempo is up and refused the request, so it must not be
+    reported as "backend unreachable … is the service enabled?"."""
+
+    def setUp(self):
+        self._orig = traces._http_get
+
+    def tearDown(self):
+        traces._http_get = self._orig
+
+    def _stub(self, status, body):
+        def fake(url, params=None, timeout=8.0):
+            return status, body
+
+        traces._http_get = fake
+
+    def _run_main(self, argv):
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = traces.main(argv)
+        return code, err.getvalue()
+
+    def test_400_on_search_is_query_rejected_with_tempo_reason(self):
+        self._stub(400, b'invalid TraceQL query: parse error at line 1, col 3: syntax error\n')
+        with self.assertRaises(traces.QueryRejected) as ctx:
+            traces.tempo_search("http://t", "{ bogus")
+        self.assertEqual(ctx.exception.status, 400)
+        self.assertEqual(ctx.exception.detail, "invalid TraceQL query: parse error at line 1, col 3: syntax error")
+
+    def test_4xx_exits_3_and_prints_reason(self):
+        self._stub(400, b"range specified by start and end exceeds 168h0m0s. received start=1 end=2")
+        code, err = self._run_main(["list", "--last", "400h"])
+        self.assertEqual(code, traces.EXIT_QUERY_REJECTED)
+        self.assertEqual(code, 3)
+        self.assertIn("tempo rejected the query (HTTP 400): range specified by start and end exceeds 168h0m0s", err)
+        self.assertNotIn("unreachable", err)
+
+    def test_4xx_on_tag_values_and_trace_fetch(self):
+        self._stub(400, b"bad request")
+        with self.assertRaises(traces.QueryRejected):
+            traces.tempo_tag_values("http://t", "resource.service.name", 0, 1)
+        with self.assertRaises(traces.QueryRejected):
+            traces.tempo_get_trace("http://t", "0" * 32)
+
+    def test_404_on_trace_fetch_stays_not_found(self):
+        self._stub(404, b"trace not found")
+        with self.assertRaises(traces.TraceNotFound):
+            traces.tempo_get_trace("http://t", "0" * 32)
+
+    def test_5xx_is_unreachable_with_status(self):
+        for status in (500, 502, 503):
+            self._stub(status, b"Tempo is starting")
+            code, err = self._run_main(["list"])
+            self.assertEqual(code, traces.EXIT_UNREACHABLE)
+            self.assertIn(f"otel backend unreachable at http://otel:3200 (HTTP {status})", err)
+
+    def test_connection_error_is_unreachable_without_status(self):
+        def fake(url, params=None, timeout=8.0):
+            raise traces.BackendUnreachable(url)
+
+        traces._http_get = fake
+        code, err = self._run_main(["list"])
+        self.assertEqual(code, 2)
+        self.assertIn("otel backend unreachable at http://otel:3200/api/search — is the service enabled?", err)
+
+    def test_long_body_is_trimmed_to_one_line(self):
+        detail = traces._error_detail(("x" * 1000 + "\n\tmore").encode())
+        self.assertLessEqual(len(detail), traces._DETAIL_MAX)
+        self.assertTrue(detail.endswith("…"))
+        self.assertNotIn("\n", detail)
+        self.assertEqual(traces._error_detail(b""), "(empty response body)")
+
+    def test_help_documents_exit_codes(self):
+        self.assertIn("3  Tempo rejected the query", traces.build_parser().format_help())
 
 
 class SelftestFixtureTests(unittest.TestCase):

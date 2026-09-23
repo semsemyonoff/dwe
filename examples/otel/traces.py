@@ -49,11 +49,25 @@ def otlp_url() -> str:
 
 
 class BackendUnreachable(Exception):
-    """Any connection failure talking to Tempo / the OTLP endpoint."""
+    """A connection failure talking to Tempo / the OTLP endpoint, or a 5xx
+    (Tempo answers 503 while it is still starting)."""
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, status: Optional[int] = None):
         super().__init__(url)
         self.url = url
+        self.status = status
+
+
+class QueryRejected(Exception):
+    """Tempo answered 4xx: it is up, but refused the request — bad TraceQL, an
+    invalid regex, a `--last` window over its search limit. Carries Tempo's own
+    explanation, trimmed, because that is the only useful part."""
+
+    def __init__(self, url: str, status: int, detail: str):
+        super().__init__(f"{status}: {detail}")
+        self.url = url
+        self.status = status
+        self.detail = detail
 
 
 class TraceNotFound(Exception):
@@ -170,6 +184,11 @@ def unanchor(pattern: str) -> str:
         pattern, tail = pattern[:-1], ""
     elif pattern.endswith(".*"):
         tail = ""
+    # Alternation binds loosest: `.*GET|POST.*` is `(.*GET)|(POST.*)`, i.e.
+    # anchored on both inner ends. Group it so the padding applies to every
+    # branch; Tempo's regex engine (Go RE2) accepts the non-capturing form.
+    if "|" in pattern and (head or tail):
+        pattern = f"(?:{pattern})"
     return f"{head}{pattern}{tail}"
 
 
@@ -238,6 +257,29 @@ def _http_post_json(url: str, payload: Dict[str, Any], timeout: float = 8.0) -> 
         raise BackendUnreachable(url) from e
 
 
+_DETAIL_MAX = 300
+
+
+def _error_detail(body: bytes) -> str:
+    """Tempo's error body, whitespace-collapsed and capped for one stderr line."""
+    text = " ".join(body.decode("utf-8", errors="replace").split())
+    if len(text) > _DETAIL_MAX:
+        text = text[: _DETAIL_MAX - 1] + "…"
+    return text or "(empty response body)"
+
+
+def _raise_for_status(url: str, status: int, body: bytes) -> None:
+    """Map a non-200 Tempo answer: 4xx means Tempo is up and rejected the
+    request (QueryRejected, with its explanation); anything else — 5xx, or a
+    503 while Tempo is still starting — means it is not serving
+    (BackendUnreachable)."""
+    if status == 200:
+        return
+    if 400 <= status < 500:
+        raise QueryRejected(url, status, _error_detail(body))
+    raise BackendUnreachable(url, status)
+
+
 # --------------------------------------------------------------------------
 # Tempo client
 # --------------------------------------------------------------------------
@@ -256,8 +298,7 @@ def tempo_search(
     if end_s is not None:
         params["end"] = int(end_s)
     status, body = _http_get(f"{base_url}/api/search", params)
-    if status != 200:
-        raise BackendUnreachable(base_url)
+    _raise_for_status(base_url, status, body)
     return json.loads(body)
 
 
@@ -273,8 +314,7 @@ def tempo_get_trace(base_url: str, trace_id: str) -> Dict[str, Any]:
     status, body = _http_get(f"{base_url}/api/v2/traces/{trace_id}")
     if status == 404:
         raise TraceNotFound(trace_id)
-    if status != 200:
-        raise BackendUnreachable(base_url)
+    _raise_for_status(base_url, status, body)
     data = json.loads(body)
     trace = data.get("trace", {}) or {}
     if not trace.get("resourceSpans"):
@@ -293,8 +333,7 @@ def tempo_tag_values(base_url: str, tag: str, start_s: int, end_s: int) -> List[
     returns `[{"type": ..., "value": ...}]`; plain strings are accepted too."""
     params = {"start": int(start_s), "end": int(end_s)}
     status, body = _http_get(f"{base_url}/api/v2/search/tag/{tag}/values", params)
-    if status != 200:
-        raise BackendUnreachable(base_url)
+    _raise_for_status(base_url, status, body)
     data = json.loads(body)
     values: List[str] = []
     for v in data.get("tagValues", []) or []:
@@ -1395,6 +1434,21 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
 
 SUBCOMMANDS = ("summary", "list", "show", "traceparent", "services", "selftest")
 
+# Exit codes. 2 is shared with argparse's own usage errors on purpose: both
+# mean "fix the invocation"; 3 means Tempo is up but refused the request.
+EXIT_NOT_FOUND = 1  # trace id unknown to Tempo; selftest failure
+EXIT_USAGE = 2  # invalid flag value (argparse usage errors exit 2 too)
+EXIT_UNREACHABLE = 2  # no connection, or Tempo answered 5xx (503 while starting)
+EXIT_QUERY_REJECTED = 3  # Tempo answered 4xx: bad TraceQL / regex / window; its reason is printed
+
+_EXIT_CODES_HELP = """exit codes:
+  0  success
+  1  trace not found; selftest failed
+  2  invalid arguments, or the otel backend is unreachable (no connection, HTTP 5xx)
+  3  Tempo rejected the query (HTTP 4xx: bad TraceQL, invalid regex, window too
+     long); Tempo's reason is printed on stderr
+"""
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -1404,6 +1458,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Start with `summary` to see where the load, slowness, or errors are, "
             "then drill in with `list` and `show`."
         ),
+        epilog=_EXIT_CODES_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="subcommand")
 
@@ -1477,14 +1533,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         return args.func(args)
     except BackendUnreachable as e:
-        _err(f"otel backend unreachable at {e.url} — is the service enabled? (dwe services enable otel --apply)")
-        return 2
+        answered = f" (HTTP {e.status})" if e.status else ""
+        _err(
+            f"otel backend unreachable at {e.url}{answered} — is the service enabled? "
+            "(dwe services enable otel --apply)"
+        )
+        return EXIT_UNREACHABLE
+    except QueryRejected as e:
+        _err(f"tempo rejected the query (HTTP {e.status}): {e.detail}")
+        return EXIT_QUERY_REJECTED
     except TraceNotFound as e:
         _err(f"trace not found: {e.trace_id}")
-        return 1
+        return EXIT_NOT_FOUND
     except ValueError as e:
         _err(str(e))
-        return 2
+        return EXIT_USAGE
 
 
 if __name__ == "__main__":

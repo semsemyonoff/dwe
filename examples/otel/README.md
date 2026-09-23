@@ -26,6 +26,17 @@ cp examples/otel/traces.py examples/otel/test_traces.py workspace/otel/
 
 `-h` works on every subcommand. Both the old and the new semantic-convention keys are read (`db.statement` / `db.query.text`, `http.method` / `http.request.method`, …), so Python, Go, Node and PHP instrumentations render the same way.
 
+Regex flags (`--name`, `--root`, `--exclude-root`) match substrings: TraceQL anchors `=~` fully, so the script pads the pattern with `.*` on each side it was not anchored with `^` / `$`, grouping an alternation first — `GET|POST` becomes `.*(?:GET|POST).*`.
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. |
+| `1` | Trace not found; `selftest` failed. |
+| `2` | Invalid arguments, or the otel backend is unreachable: no connection, or Tempo answered 5xx (it answers `503` while still starting). |
+| `3` | Tempo is up but rejected the request with a 4xx — bad TraceQL in `-q`, an invalid regex, a `--last` window over its search limit. Tempo's reason is printed on stderr. |
+
 ## Tests
 
 Pure-logic unit tests, no network:
