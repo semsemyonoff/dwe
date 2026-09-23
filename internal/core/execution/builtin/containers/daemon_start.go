@@ -14,6 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // startArgsInput holds all pre-rendered fields needed to build the
@@ -251,6 +252,7 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 	var stderr strings.Builder
 	cmd.Stdout = ectx.Output.Writer()
 	cmd.Stderr = &stderr
+	trace.Exec(ctx, cmd)
 	if err := cmd.Run(); err != nil {
 		errOut := stderr.String()
 		// TOCTOU translation: docker emits "is already in use by container"
@@ -278,6 +280,7 @@ func isDaemonRunning(ctx context.Context, compose *docker.Compose, fullName stri
 	args := []string{"ps", "-q", "--filter", "name=^" + regexp.QuoteMeta(fullName) + "$", "--filter", "status=running"}
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 	cmd.Env = compose.BuildEnv()
+	trace.Probe(ctx, cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return false, err

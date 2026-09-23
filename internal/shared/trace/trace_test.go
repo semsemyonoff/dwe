@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -393,6 +394,34 @@ func TestWriterPrinterSerializesConcurrentLines(t *testing.T) {
 		var g, i int
 		if n, err := fmt.Sscanf(l, "g%d-line%03d", &g, &i); n != 2 || err != nil || len(l) != len(fmt.Sprintf("g%d-line%03d", g, i)) {
 			t.Fatalf("torn line %q", l)
+		}
+	}
+}
+
+func TestExecAndProbeLevels(t *testing.T) {
+	for _, tt := range []struct {
+		lvl       Level
+		wantExec  bool
+		wantProbe bool
+	}{
+		{LevelOff, false, false},
+		{LevelVerbose, true, false},
+		{LevelDebug, true, true},
+	} {
+		reset(t)
+		var buf bytes.Buffer
+		Configure(&buf, tt.lvl)
+		Exec(context.Background(), exec.Command("docker", "stop", "web"))
+		Probe(context.Background(), exec.Command("docker", "ps", "-q"))
+		Exec(context.Background(), nil)
+		Exec(context.Background(), &exec.Cmd{})
+
+		got := buf.String()
+		if has := strings.Contains(got, "$ docker stop web\n"); has != tt.wantExec {
+			t.Errorf("level %d: exec echoed = %v (%q)", tt.lvl, has, got)
+		}
+		if has := strings.Contains(got, "$ docker ps -q\n"); has != tt.wantProbe {
+			t.Errorf("level %d: probe echoed = %v (%q)", tt.lvl, has, got)
 		}
 	}
 }

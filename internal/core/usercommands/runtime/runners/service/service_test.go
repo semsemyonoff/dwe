@@ -1693,7 +1693,7 @@ func stubContainerRunning(t *testing.T, running bool, err error) *int {
 	t.Helper()
 	calls := 0
 	prev := containerRunningFn
-	containerRunningFn = func(*docker.Compose, string) (bool, error) {
+	containerRunningFn = func(context.Context, *docker.Compose, string) (bool, error) {
 		calls++
 		return running, err
 	}

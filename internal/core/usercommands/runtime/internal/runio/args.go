@@ -11,6 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // argsShellExpansion is what a ${args} slot becomes inside a `cmd:` string, and
@@ -158,7 +159,7 @@ func AppendArgvFrom(ctx context.Context, rc spec.RunContext, argv []string) ([]s
 	c.Stdout = &stdout
 	c.Stderr = StderrOf(rc)
 
-	TraceCommand(ctx, c)
+	trace.Exec(ctx, c)
 	if err := c.Run(); err != nil {
 		return nil, fmt.Errorf("argv_append_from %q: %w", rc.Cmd.ArgvAppendFrom, err)
 	}

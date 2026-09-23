@@ -14,6 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // DaemonLogs implements docker_daemon_logs.
@@ -93,6 +94,7 @@ func (DaemonLogs) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 	}
 	cmd.WaitDelay = 3 * time.Second
 
+	trace.Exec(ctx, cmd)
 	if err := cmd.Run(); err != nil {
 		// Treat SIGINT-induced exit as success (user-initiated detach).
 		var exitErr *exec.ExitError

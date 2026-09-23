@@ -128,9 +128,16 @@ generated from commit subjects and stay on the
   already did for pipeline steps: `dwe -v cmd <id>` prints the
   `docker compose … exec|run …` of a `service_exec` / `service_run` command,
   the host `sh -c …` of a `shell` / `dwe` command, the interpreter and path of
-  a `script`, and an `argv_append_from` expression, each as a `$ …` line on
-  stderr with secrets redacted. Inside a workflow `parallel:` group the line
-  lands in that sub-step's own output. See
+  a `script`, an `argv_append_from` expression, and the `docker` calls of a
+  daemon's `.start` / `.stop` / `.restart` / `.logs`, each as a `$ …` line on
+  stderr with secrets redacted. The same holds for builtins in any pipeline:
+  the `shell` builtin's `sh -c`, the `docker stop` of the daemon reap in
+  `dwe stop`, and `docker_remove_project_volumes`' `docker volume rm`. The
+  read-only probes that decide what to run (`docker ps`, `docker volume ls`,
+  a `service_exec`'s exec-or-run check) echo only under `--debug`. Values
+  passed through the environment are not shown: a compose line carries
+  `-e KEY` only, now in sorted order. Inside a workflow `parallel:` group the
+  line lands in that sub-step's own output. See
   [Verbose & debug output](docs/guides/troubleshooting.md#verbose--debug-output).
 - The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
   reference no longer fail to evaluate: config is read through `.Raw`

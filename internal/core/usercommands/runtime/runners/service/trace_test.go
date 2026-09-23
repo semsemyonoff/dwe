@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
@@ -136,6 +137,34 @@ func TestBuildCommand_EnvFlagsSortedAndValueless(t *testing.T) {
 		}
 		if !slices.Contains(c.Env, "ALPHA=alpha-value") {
 			t.Fatalf("cmd.Env lacks ALPHA=alpha-value")
+		}
+	}
+}
+
+// TestExecRunner_ProbeEchoesAtDebugOnly pins the exec-or-run container probe
+// (`docker compose ps`) to Debug: -v shows the spawned command, not the
+// read-only probe that chose between exec and run.
+func TestExecRunner_ProbeEchoesAtDebugOnly(t *testing.T) {
+	stubDockerOnPath(t)
+	for _, lvl := range []trace.Level{trace.LevelVerbose, trace.LevelDebug} {
+		var buf bytes.Buffer
+		trace.Configure(&buf, lvl)
+		t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+		rc := makeServiceExecCtx("app-main", "", "", model.ExecModeExecOrRun, "", []string{"php", "-v"})
+		rc.ProjectRoot = t.TempDir()
+		rc.Stdout = &bytes.Buffer{}
+		rc.Stderr = &bytes.Buffer{}
+		if err := (&ExecRunner{}).Run(context.Background(), rc); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		got := buf.String()
+		probed := strings.Contains(got, " ps --status running")
+		if probed != (lvl == trace.LevelDebug) {
+			t.Errorf("level %d: probe echoed = %v\ntrace:\n%s", lvl, probed, got)
+		}
+		if !strings.Contains(got, " run --no-deps ") {
+			t.Errorf("level %d: spawned run not echoed\ntrace:\n%s", lvl, got)
 		}
 	}
 }

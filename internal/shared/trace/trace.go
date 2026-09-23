@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -179,6 +180,28 @@ func Command(ctx context.Context, name string, args ...string) {
 		parts = append(parts, Redact(a))
 	}
 	emit(ctx, "$ "+FormatCommand(parts))
+}
+
+// Exec is Command over an *exec.Cmd the caller built: it echoes c.Args at
+// Verbose+ exactly as they will be spawned. Call it immediately before the
+// child's stdio is wired, with the ctx the caller received — inside a parallel
+// sub-step that ctx carries the sub-step's printer — so the line precedes the
+// child's first byte. A nil or argv-less c is ignored.
+func Exec(ctx context.Context, c *exec.Cmd) {
+	if c == nil || len(c.Args) == 0 {
+		return
+	}
+	Command(ctx, c.Args[0], c.Args[1:]...)
+}
+
+// Probe is Exec for a read-only probe (ps, inspect, volume ls): it echoes at
+// Debug only, so -v shows the commands that change state rather than burying
+// them under the probes that decide whether to run them.
+func Probe(ctx context.Context, c *exec.Cmd) {
+	if !Enabled(LevelDebug) {
+		return
+	}
+	Exec(ctx, c)
 }
 
 // Decision emits a pipeline decision (step run/skip + reason, when:/condition

@@ -9,6 +9,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // DweRunner executes type=dwe commands by invoking the current dwe
@@ -55,7 +56,7 @@ func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 		}
 	}
 
-	runio.TraceCommand(ctx, cmd)
+	trace.Exec(ctx, cmd)
 	defer runio.WireChildIO(rc, cmd)()
 	return cmd.Run()
 }
