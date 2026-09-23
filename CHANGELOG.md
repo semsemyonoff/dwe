@@ -18,6 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.6.3] - 2026-09-23
+
 ### Added
 
 - New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
@@ -367,7 +371,8 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semsemyonoff/dwe/compare/v0.5.0...v0.6.0
