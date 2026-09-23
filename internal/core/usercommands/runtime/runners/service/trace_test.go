@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -102,5 +103,39 @@ func TestRunners_TraceRedactsSecrets(t *testing.T) {
 	}
 	if !strings.Contains(got, secrets.RedactPlaceholder) {
 		t.Fatalf("trace echo %q lacks the redaction placeholder", got)
+	}
+}
+
+// TestBuildCommand_EnvFlagsSortedAndValueless pins that the `-e KEY` flags come
+// out in sorted order (map iteration would reshuffle argv, and so the -v echo,
+// between runs) and that no value lands in argv — values travel via cmd.Env.
+func TestBuildCommand_EnvFlagsSortedAndValueless(t *testing.T) {
+	rc := makeServiceExecCtx("app-main", "", "", ExecModeExec, "", []string{"env"})
+	rc.Cmd.Env = map[string]string{
+		"ZETA": "zeta-value", "ALPHA": "alpha-value", "MID": "mid-value",
+		"BETA": "beta-value", "OMEGA": "omega-value",
+	}
+	want := []string{"ALPHA", "BETA", "MID", "OMEGA", "ZETA"}
+
+	for range 20 {
+		c, err := (&ExecRunner{}).BuildCommand(context.Background(), rc, testCompose("dwe-laravel", nil))
+		if err != nil {
+			t.Fatalf("BuildCommand: %v", err)
+		}
+		var keys []string
+		for i, a := range c.Args {
+			if a == "-e" && i+1 < len(c.Args) {
+				keys = append(keys, c.Args[i+1])
+			}
+			if strings.Contains(a, "-value") {
+				t.Fatalf("env value %q leaked into argv %q", a, c.Args)
+			}
+		}
+		if !slices.Equal(keys, want) {
+			t.Fatalf("-e keys = %v, want %v", keys, want)
+		}
+		if !slices.Contains(c.Env, "ALPHA=alpha-value") {
+			t.Fatalf("cmd.Env lacks ALPHA=alpha-value")
+		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -447,7 +448,9 @@ func buildDockerComposeCmd(
 		}
 	}
 
-	for k := range envVars {
+	// Sorted so argv — and its -v echo — is deterministic. Only the key goes
+	// into argv; the value travels via cmd.Env so it never shows in `ps`.
+	for _, k := range slices.Sorted(maps.Keys(envVars)) {
 		args = append(args, "-e", k)
 	}
 

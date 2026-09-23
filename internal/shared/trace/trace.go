@@ -160,7 +160,9 @@ func Redact(s string) string {
 }
 
 // Command echoes an executed command at Verbose+ as a copy-pasteable line
-// prefixed with "$ ".
+// prefixed with "$ ". Only argv is shown: variables the caller sets on the
+// child's environment are not, so a line whose command reads them (compose's
+// `-e KEY`) needs them exported before it is re-run by hand.
 //
 // Each argument is redacted BEFORE FormatCommand quotes it: quoteArg escapes
 // an embedded apostrophe by breaking out of the surrounding single quotes, so
