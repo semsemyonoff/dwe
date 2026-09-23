@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -126,8 +125,8 @@ func EvalBuiltin(predicate, projectRoot string) (bool, error) {
 		return !isFileExisting(path), nil
 	case "generated-missing":
 		// "generated-missing <svc> <field>" — NOT a single path. Re-split rel
-		// (the whole remaining string from SplitN above) on whitespace into its
-		// two sub-args; do NOT reuse the joined path/rel single-path variable.
+		// (everything after the verb, as parsePredicate returned it) on
+		// whitespace into its two sub-args; do NOT use the joined path.
 		return evalGeneratedMissing(rel, projectRoot)
 	default:
 		return false, fmt.Errorf("unknown builtin predicate %q", verb)
@@ -144,6 +143,16 @@ func ValidatePredicate(predicate string) error {
 	return err
 }
 
+// predicateVerbs indexes Predicates() by name, built once for parsePredicate.
+var predicateVerbs = func() map[string]struct{} {
+	entries := Predicates()
+	set := make(map[string]struct{}, len(entries))
+	for _, p := range entries {
+		set[p.Name] = struct{}{}
+	}
+	return set
+}()
+
 // parsePredicate splits "<verb> <args>" on the first space (both halves
 // trimmed) and checks the verb against Predicates() and the arity of
 // generated-missing. The evaluator's switch still owns the verbs it can run;
@@ -156,7 +165,7 @@ func parsePredicate(predicate string) (verb, args string, err error) {
 	}
 	verb = strings.TrimSpace(parts[0])
 	args = strings.TrimSpace(parts[1])
-	if !slices.ContainsFunc(Predicates(), func(p PredicateEntry) bool { return p.Name == verb }) {
+	if _, ok := predicateVerbs[verb]; !ok {
 		return "", "", fmt.Errorf("unknown builtin predicate %q", verb)
 	}
 	if verb == "generated-missing" {
