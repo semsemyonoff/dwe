@@ -39,7 +39,7 @@ var ContentHashes = map[string]string{
 	"reference/concepts/state-and-locks.md":    "4ede6d512f0e",
 	"reference/config/commands/directives.md":  "8effef5e9cbb",
 	"reference/config/commands/index.md":       "f205f5a0e058",
-	"reference/config/commands/templating.md":  "72804f1f09c4",
+	"reference/config/commands/templating.md":  "0ad4aa3d837e",
 	"reference/config/commands/types.md":       "b286fcce120a",
 	"reference/config/commands/validation.md":  "aa749b8c4482",
 	"reference/config/conditions.md":           "89a0f0e6c5e2",

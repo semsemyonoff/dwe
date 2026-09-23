@@ -67,7 +67,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `files.*.path`, `files.*.candidates[].path/glob/match` | yes |
 | `params.*.default_from`, `context.*.from` | no — plain dot-paths only |
 | Workflow `steps[].with[<key>]`, `steps[].when` | yes |
-| `description`, `group.title`, `group.description` | no — printed verbatim by `commands list` / `commands -i` / completion (one-line surfaces print only the first line, see [Description and summary](directives.md#description-and-summary)) |
+| `description`, `group.title`, `group.description` | no — printed verbatim; `commands -i` and JSON `description` keep the full text, while one-line surfaces (`commands list` tree, completion, run banner) show only the first non-empty line of a description; `group.title` is never shortened (see [Description and summary](directives.md#description-and-summary)) |
 
 ## Command-template space (the full reference)
 
