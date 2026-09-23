@@ -10,7 +10,7 @@ dwe status --output json                  # whole stack; `dwe status deploy <svc
 dwe logs <svc> --tail 0 --output json     # full log (default --tail 50); -f streams
 ```
 
-Deeper, still read-only: `dwe compose argv up` (exact compose argv), `dwe compose files` (ordered overlay list), `dwe docker ps`, `dwe deploy state show` (the journal, YAML). `-v` / `--debug` echo to **stderr** only, so `dwe run --debug 2>debug.log` keeps stdout clean. Guide: `dwe docs show guides/troubleshooting --lang en`.
+Deeper, still read-only: `dwe compose argv up` (exact compose argv), `dwe compose files` (ordered overlay list; `--all`, also on `argv`/`raw`, adds disabled services' overlays for inspection), `dwe docker ps`, `dwe deploy state show` (the journal, YAML). `-v` / `--debug` echo to **stderr** only, so `dwe run --debug 2>debug.log` keeps stdout clean. Guide: `dwe docs show guides/troubleshooting --lang en`.
 
 ## Symptom → command
 

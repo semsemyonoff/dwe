@@ -78,7 +78,7 @@ There is no `docker.local.yml`-level override of the compose file list. Local ov
 - `workspace/local.yml` — per-service `enabled: true|false`, ports, hosts, custom envs. Affects the list contents via the enabled set, and adds `-f` files directly through `services.<name>.compose.extra` (emitted inside that service's group, before every `compose_after` file) and the project-wide `compose.extra` (appended last).
 - `workspace/docker.local.yml` — per-policy overrides (project name, args, process env, topology). Does **not** add or remove `-f` files.
 
-To inspect the effective list run `dwe compose files`.
+To inspect the effective list run `dwe compose files`; `dwe compose files --all` lists every configured overlay, disabled services included (`argv` and `raw` take `--all` too). That wider chain is for inspection only — disabled overlays may conflict, so it is not guaranteed to be valid.
 
 ## Process environment
 
