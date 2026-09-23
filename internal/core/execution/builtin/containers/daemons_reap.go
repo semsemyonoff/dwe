@@ -19,6 +19,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // DaemonsReap implements daemons_reap.
@@ -104,6 +105,7 @@ func (DaemonsReap) Run(ctx context.Context, _ map[string]any, ectx spec.ExecCont
 		cmd.Stdout = io.Discard
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
+		trace.Exec(ctx, cmd)
 		if err := cmd.Run(); err != nil {
 			errOut := strings.TrimSpace(stderr.String())
 			if strings.Contains(errOut, "No such container") {
@@ -144,6 +146,7 @@ func listDaemons(ctx context.Context, compose *docker.Compose, projectFull strin
 	args = append(args, daemon.FilterArgsByLabels(projectFull, "")...)
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 	cmd.Env = compose.BuildEnv()
+	trace.Probe(ctx, cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		// If the docker binary is not on PATH there are by definition no

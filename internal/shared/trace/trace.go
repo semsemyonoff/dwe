@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -55,6 +56,26 @@ const (
 // newline). Implementations must be safe for concurrent use.
 type LinePrinter interface {
 	PrintLine(s string)
+}
+
+// WriterPrinter adapts w to a LinePrinter that writes each line followed by a
+// newline. Writes are serialized by a per-printer mutex, which is what makes
+// it satisfy the LinePrinter concurrency contract; it does not order them
+// against other writers of w (a child process writing into the same sub-step
+// buffer), which must serialize on their own.
+func WriterPrinter(w io.Writer) LinePrinter {
+	return &writerPrinter{w: w}
+}
+
+type writerPrinter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (p *writerPrinter) PrintLine(s string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, _ = io.WriteString(p.w, s+"\n")
 }
 
 // printerEntry pairs a registered global printer with a unique id so its
@@ -140,7 +161,9 @@ func Redact(s string) string {
 }
 
 // Command echoes an executed command at Verbose+ as a copy-pasteable line
-// prefixed with "$ ".
+// prefixed with "$ ". Only argv is shown: variables the caller sets on the
+// child's environment are not, so a line whose command reads them (compose's
+// `-e KEY`) needs them exported before it is re-run by hand.
 //
 // Each argument is redacted BEFORE FormatCommand quotes it: quoteArg escapes
 // an embedded apostrophe by breaking out of the surrounding single quotes, so
@@ -157,6 +180,28 @@ func Command(ctx context.Context, name string, args ...string) {
 		parts = append(parts, Redact(a))
 	}
 	emit(ctx, "$ "+FormatCommand(parts))
+}
+
+// Exec is Command over an *exec.Cmd the caller built: it echoes c.Args at
+// Verbose+ exactly as they will be spawned. Call it immediately before the
+// child's stdio is wired, with the ctx the caller received — inside a parallel
+// sub-step that ctx carries the sub-step's printer — so the line precedes the
+// child's first byte. A nil or argv-less c is ignored.
+func Exec(ctx context.Context, c *exec.Cmd) {
+	if c == nil || len(c.Args) == 0 {
+		return
+	}
+	Command(ctx, c.Args[0], c.Args[1:]...)
+}
+
+// Probe is Exec for a read-only probe (ps, inspect, volume ls): it echoes at
+// Debug only, so -v shows the commands that change state rather than burying
+// them under the probes that decide whether to run them.
+func Probe(ctx context.Context, c *exec.Cmd) {
+	if !Enabled(LevelDebug) {
+		return
+	}
+	Exec(ctx, c)
 }
 
 // Decision emits a pipeline decision (step run/skip + reason, when:/condition

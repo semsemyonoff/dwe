@@ -15,6 +15,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // errDaemonNoSuchContainer signals that the target container does not exist
@@ -35,6 +36,7 @@ func stopDaemonContainer(ctx context.Context, compose *docker.Compose, name stri
 	cmd.Stdout = io.Discard
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
+	trace.Exec(ctx, cmd)
 	if err := cmd.Run(); err != nil {
 		errOut := strings.TrimSpace(stderr.String())
 		if strings.Contains(errOut, "No such container") {

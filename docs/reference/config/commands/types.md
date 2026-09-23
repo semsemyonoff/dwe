@@ -358,6 +358,8 @@ artisan-tinker:
 
 `mode` is not a valid field for `service_run` (it always uses `docker compose run --rm`) — writing `mode:` at all is rejected at load time; omit it.
 
+The container is started as `docker compose run --rm --no-deps --entrypoint "" <service> …`: services it depends on are not started, and the image's (or the compose service's) `ENTRYPOINT` is dropped, so `argv:` must name the program itself — `[python3, /opt/tool/script.py, "${args}"]`, not `[/opt/tool/script.py]` relying on an entrypoint. `service:` is a compose service name, so a service that exists only in a compose overlay under `profiles:` (never started by `up`) is a valid target. The same `--entrypoint ""` applies to a `service_exec` that ends up in `run` (`mode: run`, or `exec-or-run` with the container stopped).
+
 `argv_append_from` is accepted here on the same terms as on `service_exec`: the expression runs on the host and its output lines are appended to `argv` — see [Computed arguments](directives.md#computed-arguments-argv_append_from).
 
 ### Runner override block

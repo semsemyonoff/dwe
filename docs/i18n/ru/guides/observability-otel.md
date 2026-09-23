@@ -1,4 +1,4 @@
-> Translated from: guides/observability-otel.md @ 315678b415a0
+> Translated from: guides/observability-otel.md @ 3c29cdf8c733
 
 # Наблюдаемость с OpenTelemetry
 
@@ -14,7 +14,7 @@ dwe services disable otel --apply   # его нет; сервисы снова �
 Что получится в итоге:
 
 - `grafana/otel-lgtm` — OTel Collector + Tempo (трейсы) + Loki (логи) + Prometheus (метрики) + Grafana в одном контейнере, доступный по `http://otel.<project>.localhost`. Loki в образе есть, но рецепты здесь не экспортируют логи приложений (`OTEL_LOGS_EXPORTER: "none"`): логи остаются в собственном выводе контейнера и коррелируют с трейсами там, где приложение пишет `trace_id`/`span_id` в свои строки логов (обёртка `slog` для Go ниже). Включить OTLP-логи можно (например, `OTEL_LOGS_EXPORTER: "otlp"` с дистрибутивом Python), но здесь это не описано и не проверено.
-- App-сервисы, экспортирующие OTLP в него и инструментированные под свой язык (ниже рецепты для Python, Go и Node).
+- App-сервисы, экспортирующие OTLP в него и инструментированные под свой язык (ниже рецепты для Python, Go, Node и PHP).
 - Текстовый поиск трейсов для агента (`dwe cmd otel.traces`) и раздел для вашего `AGENTS.md`, чтобы агент читал трейс раньше, чем код.
 
 ## 1. Tool-сервис
@@ -41,7 +41,7 @@ notes:
   disable: "Optional dev tool; the stack runs without it."
 ```
 
-Без `ports:` — Grafana доступна через vhost Caddy, а приём OTLP (`otel:4318`) и query API Tempo (`otel:3200`) используются только внутри compose-сети. Сервис `type: tool` не может объявлять `depends_on`, и ему это не нужно: dev-инструмент никогда не блокирует стек.
+Без `ports:` — Grafana доступна через vhost прокси, а приём OTLP (`otel:4318`) и query API Tempo (`otel:3200`) используются только внутри compose-сети. Сервис `type: tool` не может объявлять `depends_on`, и ему это не нужно: dev-инструмент никогда не блокирует стек.
 
 Выключите его по умолчанию в `workspace/defaults.yml` (тяжёлый образ, шесть процессов и инструментированное приложение, о котором никто не просил):
 
@@ -57,6 +57,43 @@ services:
 http://otel.myproject.localhost {
 	reverse_proxy otel:3000
 }
+```
+
+nginx не ленив: буквальный `proxy_pass http://otel:3000` разрешается один раз при старте, и nginx отказывается стартовать, если имени ещё нет, — контейнер `otel` создаётся одновременно с nginx и без `depends_on`. Вместо этого разрешайте имя на каждый запрос через DNS Docker, а шаблон vhost пусть монтирует в (всегда включённый) прокси-сервис сам оверлей otel — тогда nginx видит его, только пока инструмент включён:
+
+```nginx
+# configs/nginx/templates/tools/otel.conf.template — envsubst официального образа
+# подставляет только переменные, заданные в его окружении, так что $host остаётся.
+server {
+    listen 80;
+    server_name ${OTEL_HOST};
+    resolver 127.0.0.11 valid=10s;
+    set $otel_upstream http://otel:3000;
+    location / {
+        proxy_pass $otel_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;     # вебсокет Grafana Live
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+```yaml
+# compose/otel.yml — рядом с сервисом otel
+  nginx:
+    volumes:
+      - ./configs/nginx/templates/tools/otel.conf.template:/etc/nginx/templates/otel.conf.template:ro
+    environment:
+      OTEL_HOST: "${OTEL_HOST:-otel.myproject.localhost}"
+```
+
+```yaml
+# workspace/defaults.yml — .env несёт хост, только пока инструмент включён
+exports:
+  env:
+    - name: OTEL_HOST
+      from: services.otel.hosts.web
+      when: services.otel.enabled
 ```
 
 Запустите `dwe validate` перед первым `dwe run`: собственные валидаторы проекта могут пинить каждый опциональный сервис где-то ещё — например, сценарий интеграционного теста, перечисляющий, какие сервисы он включает и выключает, — и новый tool-сервис нужно добавить и туда.
@@ -121,6 +158,8 @@ services:
       OTEL_LOGS_EXPORTER: "none"
       # В dev сценарий «сделал запрос — посмотрел»: сбрасываем спаны каждую 1 с и
       # отправляем метрики каждые 10 с (панелям с rate() нужно два сэмпла).
+      # Это ручки конкретного языка для долгоживущего процесса: под php-fpm они
+      # ничего не делают — там каждый запрос собирает свежий SDK и сбрасывает всё при завершении.
       OTEL_BSP_SCHEDULE_DELAY: "1000"
       OTEL_METRIC_EXPORT_INTERVAL: "10000"
 ```
@@ -128,10 +167,11 @@ services:
 Ловушки, о которых стоит знать до первого `dwe run`:
 
 - **`dwe validate` не видит отсутствующий `start_period`.** Сбой проявляется как зависший или упавший `dwe run`, а не как предупреждение.
-- **Приложение отвечает 502 через прокси ~30 с после `enable --apply`**, пока его контейнер пересоздаётся. Ждите его health-эндпоинт, а не возврата из команды `dwe`.
+- **`enable|disable --apply` перезапускает весь стек.** Сервис без `on_enable` / `on_disable` получает `requires: restart` по умолчанию, то есть полный `dwe restart` — вместе с базой данных и сетью (~11 с на небольшом стеке Laravel), — и приложение отвечает 502 через прокси, пока его контейнер снова не станет healthy. Ждите его health-эндпоинт, а не возврата из команды `dwe`. Путь полегче — без `--apply`: `dwe services enable otel` записывает переключатель, затем `dwe run` (`compose up --wait` с `--remove-orphans` по умолчанию) пересоздаёт только контейнеры, чьё определение изменилось, — `otel`, пропатченные приложения, прокси, если оверлей его трогает, — и снимает ожидающий рестарт.
 - **Первые минуты все панели с `rate()` показывают «No data».** Это интервал экспорта, а не сломанный пайплайн; сделайте несколько запросов и сначала загляните в Explore → Tempo.
 - **`depends_on` на опциональный сервис в базовом `compose.yaml` ломает стек, пока этот сервис выключен.** Держите связку внутри оверлея.
 - **Патчите только сервисы, которые существуют всегда, когда включён инструмент.** В блоке патча нет ни `image:`, ни `build:`, поэтому он валиден только поверх определения из более раннего файла. Патчите сервис из базового `compose.yaml` или всегда включённый. Если пропатченное приложение живёт в собственном оверлее (например, `compose/services/site.yml`) и разработчик выключает его, оставив `otel` включённым, `compose/otel-apps.yml` всё равно объявляет `site:` только с `environment:` / `volumes:`, и Compose отвергает весь проект: у сервиса нет ни образа, ни контекста сборки. `compose_after:` чинит **порядок**, в котором эмитится патч, а не то, **существует ли** пропатченный сервис, — эта ловушка всё ещё актуальна.
+- **Варианты, собранные через `extends:`, не инструментированы.** Отладочный вариант, объявленный как `extends: {file: compose.yaml, service: app}`, читает базовый файл, а не патч из `compose_after:`, и молча работает без окружения OTEL_*. Если вместо этого пропатчить его в `compose/otel-apps.yml`, вы попадёте в предыдущую ловушку всякий раз, когда вариант выключен.
 - **`compose_after:` побеждает собственный оверлей приложения.** DWE эмитит файл из `compose_after:` после каждой группы сервисов (tool → infra → app; `dwe compose files` печатает цепочку), поэтому `compose/otel-apps.yml` идёт после `compose/<app>.yml` и выигрывает при каждом слиянии целым значением: `command:`, `healthcheck:` и любой ключ `environment:`, который задают оба файла. Новые env-ключи и дополнительные `volumes:` сливаются нормально из любого яруса. Переопределение целым значением кладите в `compose_after:` — обычный оверлей `compose:` по-прежнему проигрывает такое слияние более позднему оверлею приложения.
 
 ### Дашборды
@@ -321,11 +361,102 @@ Undici (глобальный `fetch`) перехватывается через 
 - **Health-пробы.** Собственный процесс compose-хелсчека пропускается проверкой `argv[1]`, но его запрос всё равно доходит до инструментированного сервера. Фильтрация в конфиге http-инструментирования пропускает спаны, которые создают другие инструментирования, поэтому отбрасывайте их в обёртке `SpanProcessor` вокруг `BatchSpanProcessor` (`onEnd`: путь `/` без `user-agent`, `/@vite/`, `/@fs/`, `/node_modules/`, `/__astro*`) — она стоит после всех инструментирований. Учтите, что хелсчек, рендерящий полную страницу, всё равно создаёт реальный трафик к бэкенду на каждом интервале, и бэкенд его трейсит.
 - **Нет `http.route` на стороне сайта.** Фреймворк не передаёт шаблон маршрута в инструментирование, так что серверные спаны именуются по пути. Группируйте по префиксу пути в инструменте поиска.
 
+### PHP (php-fpm, Laravel) — без диффа в приложении, одна строка в образе
+
+У автоинструментирования PHP две половины: C-расширение `opentelemetry` (движок хуков, который нельзя поставить при старте контейнера) и SDK с пакетами инструментирования (Composer). Обе остаются вне репозитория приложения. Расширение собирается в образ, но **не включается**; пакеты ставятся в отдельный vendor-каталог внутри воркспейса; оверлей монтирует ini, который загружает и то и другое, так что при выключенном инструменте PHP работает ровно как раньше.
+
+```dockerfile
+# Образ приложения. pecl нужны phpize и компилятор; Debian-образы php:*-fpm сохраняют и то и другое.
+# Без docker-php-ext-enable: ini в conf.d нет, поэтому .so никогда не загружается (паттерн xdebug).
+ARG OTEL_EXT_VER=1.4.2
+RUN pecl install -o -f opentelemetry-${OTEL_EXT_VER} && rm -rf /tmp/pear
+```
+
+Почему бы просто не включить его: загруженное расширение ставит observer API даже без единого зарегистрированного хука и стоит ~25% на микробенчмарке вызовов пользовательских функций. Если же гейтить его build-аргументом или вторым образом, каждое переключение потребует пересборки. Сама строка в образе требует одной пересборки — `dwe docker build <service>`, — потому что ни `dwe run`, ни `dwe services enable --apply` образы не пересобирают.
+
+```yaml
+# compose/otel-apps.yml — command: сливается целым значением, отсюда compose_after:
+  app:
+    command: ["/opt/otel-php/ensure.sh", "php-fpm", "-F"]   # ENTRYPOINT образа по-прежнему выполняется первым
+    volumes:
+      - ./workspace/otel/php:/opt/otel-php                  # rw: ensure.sh пишет build/
+      - ./workspace/otel/php/otel.ini:/usr/local/etc/php/conf.d/zz-otel.ini:ro
+    environment:
+      OTEL_PHP_AUTOLOAD_ENABLED: "true"
+      OTEL_SERVICE_NAME: "app"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${COMPOSE_PROJECT_NAME},deployment.environment.name=dev"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "none"   # периодический reader никогда не тикает внутри одного запроса
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PROPAGATORS: "tracecontext,baggage"
+      OTEL_PHP_DISABLED_INSTRUMENTATIONS: "pdo"   # один слой БД — см. ниже
+```
+
+```text
+workspace/otel/php/
+  composer.base.json   # open-telemetry/sdk, exporter-otlp, opentelemetry-auto-laravel, opentelemetry-auto-pdo;
+                       # allow-plugins: tbachert/spi (через него SDK находит экспортер и инструментирования)
+  ensure.sh            # composer update в build/ с проверкой хэша, не фатальный, затем exec "$@"
+  prepend.php          # auto_prepend_file: сначала автозагрузчик приложения, затем build/vendor
+  otel.ini             # extension=opentelemetry + auto_prepend_file=/opt/otel-php/prepend.php
+  .gitignore           # build/
+```
+
+**Отдельный vendor не должен тянуть второй Laravel.** Если разрешать его самостоятельно, `opentelemetry-auto-laravel` требует `laravel/framework`, и Composer ставит второй полный фреймворк (~75 пакетов) рядом с фреймворком приложения, часть — в других версиях: две копии одного класса за двумя автозагрузчиками. Поэтому `ensure.sh` пишет `build/composer.json` из `composer.base.json` и `composer.lock` приложения: каждый залоченный пакет попадает в `replace` ровно в своей залоченной версии, а всё, что эти пакеты сами заменяют или предоставляют (`illuminate/*`, `psr/http-client-implementation`, …), — в `provide`:
+
+```bash
+jq --slurpfile lock "$app_lock" '
+  ($lock[0].packages + ($lock[0]["packages-dev"] // [])) as $pkgs
+  | .replace = ($pkgs | map({(.name): .version}) | add)
+  | .provide = ($pkgs | map(. as $p | ((.replace // {}) + (.provide // {}))
+      | to_entries | map({(.key): (if .value == "self.version" then $p.version else .value end)}))
+      | flatten | add // {})
+' composer.base.json > build/composer.json
+(cd build && composer update --no-dev --no-interaction --quiet)
+```
+
+После этого Composer проверяет ограничения OTel-пакетов против того, что реально есть у приложения, и ставит только пакеты, нужные одному OTel (13 в тестовом проекте). Хэш покрывает `composer.base.json` и lock приложения, так что рестарт без изменений пропускает Composer, а `composer update` в приложении приводит к повторному разрешению при следующем старте; цена — доступ к Packagist на этом старте и отсутствие закоммиченного lock-файла у сайдкара.
+
+`prepend.php` подключает `vendor/autoload.php` **приложения** раньше, чем свой, — bootstrap-файлам SDK сразу нужны классы psr/guzzle/polyfill из приложения, а `getLoader()` Composer возвращает закэшированный загрузчик, когда `public/index.php` подключает его повторно. Кроме того, он ограничен по области действия: ini доходит до каждого PHP-процесса в контейнере, а загрузка vendor приложения в собственный процесс `composer` смешивает две версии Symfony Console:
+
+```php
+<?php
+(static function (): void {
+    $sapi = PHP_SAPI;
+    $script = (string) ($_SERVER['SCRIPT_FILENAME'] ?? '');
+    if ($sapi !== 'fpm-fcgi' && !($sapi === 'cli' && basename($script) === 'artisan')) {
+        return;
+    }
+    $app = '/workspace/src/vendor/autoload.php';
+    $otel = __DIR__ . '/build/vendor/autoload.php';
+    if (!extension_loaded('opentelemetry') || !is_file($app) || !is_file($otel)) {
+        return;
+    }
+    // Воркеры очереди: корневые спаны отбрасываем, джобы оставляем (они несут traceparent диспетчера).
+    if ($sapi === 'cli' && in_array($_SERVER['argv'][1] ?? '', ['queue:work', 'queue:listen'], true)
+        && getenv('OTEL_TRACES_SAMPLER') === false) {
+        putenv('OTEL_TRACES_SAMPLER=parentbased_always_off');
+    }
+    require $app;
+    require $otel;
+})();
+```
+
+Что получается: серверный спан на запрос с `http.route`, по одному спану `sql <VERB>` на запрос к БД с новыми ключами (`db.system.name`, `db.query.text`, плейсхолдеры, а не значения), корневой `Command <name>` для `php artisan <cmd>` и джоба из очереди как спан `process` **внутри трейса, который её отправил**, — Laravel передаёт `traceparent` в payload джобы. Весь стек добавил ~4,5 мс по p50 к приветственной странице на 11 мс. Ловушки:
+
+- **Один слой БД.** Наблюдатель запросов `opentelemetry-auto-laravel` уже даёт по спану на запрос; если активен ещё и `auto-pdo`, у каждого запроса появляются соседи `PDO::prepare` / `PDOStatement::execute` / `fetchAll`. Держите `pdo` в `OTEL_PHP_DISABLED_INSTRUMENTATIONS`, если вам не нужны `PDO::connect` или сырые PDO-вызовы в обход query builder.
+- **Шум от опроса очереди.** `queue:listen` каждые ~3 с запускает `queue:work --once`; без правила `parentbased_always_off` каждый опрос — это 3-секундный трейс примерно с 20 SQL-спанами, даже на пустой очереди. Обратная сторона: джоба, отправленная без контекста трейса (из процесса, который `prepend.php` пропускает, или поставленная в очередь, пока инструмент был выключен), не трейсится вовсе.
+- **`clear_env`.** По умолчанию в php-fpm `clear_env = yes` вычищает все переменные `OTEL_*` из воркеров, и ничего не трейсится, без единой ошибки. Официальный образ задаёт `clear_env = no`; собственный конфиг пула в проекте должен это сохранить.
+- **Экспорт всё равно занимает воркер.** Каждый запрос собирает свежий SDK и сбрасывает спаны в своём shutdown-обработчике, поэтому `OTEL_BSP_SCHEDULE_DELAY` здесь ничего не делает. Laravel сначала вызывает `fastcgi_finish_request()` — клиент не ждёт экспорта, а FPM-воркер ждёт.
+- **Коллектор лежит, оверлей включён** (`dwe stop otel`): запросы по-прежнему отвечают 200, но каждый пишет стек-трейс экспорта в лог FPM. Присмотритесь к `OTEL_PHP_LOG_DESTINATION`.
+
 ## 4. Трейсы текстом для агента
 
-Grafana — для людей. Агенту нужна команда с компактным выводом, и для этого достаточно HTTP API Tempo, причём всего двух эндпоинтов: `GET :3200/api/search?q=<TraceQL>&start=&end=&limit=&spss=` и `GET :3200/api/traces/<hex>`. Поисковый индекс отстаёт на 10–15 с; трейс по id читается сразу, и именно это делает цикл поиска ниже надёжным.
+Grafana — для людей. Агенту нужна команда с компактным выводом, и для этого достаточно HTTP API Tempo; основную работу делают два эндпоинта: `GET :3200/api/search?q=<TraceQL>&start=&end=&limit=` и `GET :3200/api/v2/traces/<hex>`. Трейсы скрипт читает через v2, потому что он возвращает стандартную форму OTLP (`{"trace": {"resourceSpans": […]}}`), а v1 (`/api/traces/<hex>`) отдаёт те же спаны под устаревшим ключом `batches`. На неизвестный id v2 отвечает пустым `200`, а не `404`, поэтому пустой `resourceSpans` означает «не найден». Поисковый индекс отстаёт на 10–60 с (наблюдалось ~45 с); трейс по id читается сразу, и именно это делает цикл поиска ниже надёжным. Запросам значений тегов (`/api/v2/search/tag/resource.service.name/values`) тоже нужны `start`/`end`: без них Tempo отвечает только из live store, и сервис, чьи спаны уже лежат в завершённых блоках — например, после рестарта `otel`, — выпадает из списка.
 
-Рецепт поставляет Python-скрипт только на stdlib (`workspace/otel/traces.py`) с подкомандами `summary`, `list`, `show <id>`, `traceparent`, `services` и `selftest`. Он работает внутри любого контейнера стека, где есть `python3`, — в самом образе `otel` есть только `curl` и `bash`; проверьте кандидата через `docker exec <container> python3 --version` (в Go- и PHP-образах на Debian он обычно есть, в Alpine — нет), — и монтируется оверлеем, так что команда существует ровно тогда, когда существует бэкенд:
+DWE поставляет для этого Python-скрипт только на stdlib в [`examples/otel/`](../../../../examples/otel/README.md) (`traces.py` вместе с юнит-тестами): подкоманды `summary`, `list`, `show <id>`, `traceparent`, `services` и `selftest`. Скопируйте его в `workspace/otel/`. Он работает внутри любого контейнера стека, где есть `python3`, — в самом образе `otel` есть только `curl` и `bash`, и в официальных образах `php:*` его тоже нет, включая Debian; проверьте кандидата через `docker exec <container> python3 --version`, — и монтируется оверлеем, так что команда существует ровно тогда, когда существует бэкенд:
 
 ```yaml
 # compose/otel-apps.yml, пропатченный app-сервис
@@ -350,10 +481,30 @@ commands:
     workdir: /workspace/src
     argv: [python3, /opt/otel/traces.py, "${args}"]
     messages:
-      error: "otel.traces failed — is the app running? (dwe run); is otel enabled? (dwe services enable otel --apply)"
+      error: "otel.traces failed — see the message above (exit 2: backend unreachable, is otel enabled? dwe services enable otel --apply; exit 3: Tempo rejected the query)"
 ```
 
-Если ни в одном контейнере нет Python, добавьте сайдкар `python:3-alpine` вторым tool-сервисом и направьте команду на него. Семантические конвенции сдвинулись: новые инструментирования (Go, Node) пишут `db.query.text` / `db.system.name` там, где старые пишут `db.statement` / `db.system`, и `http.request.method` / `url.path` вместо `http.method` / `http.target`. Инструмент поиска должен читать оба варианта.
+Если ни в одном контейнере нет Python (стек на PHP), не заводите второй tool-сервис: объявите одноразовый compose-сервис в том же `compose/otel.yml`, за профилем, чтобы `up` никогда его не поднимал, и нацельте на него `service_run`. `service:` принимает имя compose-сервиса, так что каталог в `workspace/services/` ему не нужен; `service_run` всегда передаёт `--entrypoint ""`, поэтому argv сам называет интерпретатор:
+
+```yaml
+# compose/otel.yml
+  otel-lookup:
+    image: python:3.13-alpine
+    profiles: ["tools"]          # никогда не поднимается `compose up`
+    working_dir: /opt/otel
+    volumes:
+      - ./workspace/otel:/opt/otel:ro
+```
+
+```yaml
+# workspace/commands/otel.yml
+  traces:
+    type: service_run            # compose run --rm, ~0.7 с на вызов
+    service: otel-lookup
+    argv: [python3, /opt/otel/traces.py, "${args}"]
+```
+
+Семантические конвенции сдвинулись: новые инструментирования (Go, Node) пишут `db.query.text` / `db.system.name` там, где старые пишут `db.statement` / `db.system`, и `http.request.method` / `url.path` вместо `http.method` / `http.target`. Инструмент поиска должен читать оба варианта.
 
 Цикл, которым пользуется агент:
 

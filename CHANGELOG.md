@@ -23,8 +23,20 @@ generated from commit subjects and stay on the
 - New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
   — an opt-in `otel` tool service whose `compose:` overlay ships the backend
   and whose `compose_after:` overlay patches the app services, with
-  instrumentation recipes for Python, Go and Node and a text trace lookup for
-  coding agents.
+  instrumentation recipes for Python, Go, Node and PHP (php-fpm / Laravel:
+  the extension built but not enabled in the image, a separate Composer vendor
+  loaded through `auto_prepend_file`), nginx and Caddy vhosts, and a text trace
+  lookup for coding agents. The lookup script ships in
+  [`examples/otel/`](examples/otel/README.md) with its unit tests: `summary`,
+  `list`, `show`, `traceparent`, `services` (service names over a time window,
+  default the last 24h, so services whose spans Tempo has already flushed to
+  completed blocks are listed too) and `selftest`. A query Tempo rejects exits
+  `3` with Tempo's reason; an unreachable backend exits `2`.
+- The command reference documents that `type: service_run` (and a
+  `service_exec` that falls back to `run`) starts the container with
+  `--no-deps --entrypoint ""`: the image's `ENTRYPOINT` is dropped, so
+  `argv:` must name the program itself. See
+  [`service_run`](docs/reference/config/commands/types.md#type-service_run).
 - The service reference documents how relative paths in a `compose:` overlay
   resolve: against the directory of the first `-f` file (`compose.base`), not
   the overlay's own directory. See
@@ -77,6 +89,15 @@ generated from commit subjects and stay on the
   `-v` included — as `dwe docker` does. See
   [`docker.md`](docs/reference/config/docker.md#related-commands).
 
+- `dwe validate` warns when a `service_exec`, `service_run` or `daemon`
+  command's `service:` (or `runner.service:`) names no compose service in any
+  git-tracked overlay, disabled services included, with a "did you mean" hint.
+  Such a typo used to validate clean and fail only at run time. `local.yml`
+  `compose.extra` overlays are not consulted, so every checkout gets the same
+  answer. Templated values and projects whose tracked compose files cannot be
+  fully read are skipped. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
+
 ### Changed
 
 - The first non-empty line of a command's `description:` is now its summary,
@@ -107,6 +128,21 @@ generated from commit subjects and stay on the
 
 ### Fixed
 
+- `-v` / `--debug` now echo the process a user command spawns, as they
+  already did for pipeline steps: `dwe -v cmd <id>` prints the
+  `docker compose … exec|run …` of a `service_exec` / `service_run` command,
+  the host `sh -c …` of a `shell` / `dwe` command, the interpreter and path of
+  a `script`, an `argv_append_from` expression, and the `docker` calls of a
+  daemon's `.start` / `.stop` / `.restart` / `.logs`, each as a `$ …` line on
+  stderr with secrets redacted. The same holds for builtins in any pipeline:
+  the `shell` builtin's `sh -c`, the `docker stop` of the daemon reap in
+  `dwe stop`, and `docker_remove_project_volumes`' `docker volume rm`. The
+  read-only probes that decide what to run (`docker ps`, `docker volume ls`,
+  a `service_exec`'s exec-or-run check) echo only under `--debug`. Values
+  passed through the environment are not shown: a compose line carries
+  `-e KEY` only, now in sorted order. Inside a workflow `parallel:` group the
+  line lands in that sub-step's own output. See
+  [Verbose & debug output](docs/guides/troubleshooting.md#verbose--debug-output).
 - The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
   reference no longer fail to evaluate: config is read through `.Raw`
   (`index .Raw "services" "db" "enabled"`), not a non-existent `.services`.

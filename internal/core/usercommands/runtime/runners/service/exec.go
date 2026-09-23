@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // ExecRunner executes type=service_exec commands via `docker compose exec`.
@@ -54,13 +56,13 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 	case model.ExecModeExecOrFail:
 		// Pre-check so that "service not running" surfaces as a clean dwe
 		// error rather than a raw compose stderr trace.
-		running, checkErr := containerRunningFn(compose, svc)
+		running, checkErr := containerRunningFn(ctx, compose, svc)
 		if checkErr == nil && !running {
 			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `dwe docker up %s`, or drop `mode: exec-or-fail` if a one-off ephemeral container is acceptable", svc, svc)
 		}
 		// On probe error we proceed; compose will fail with its own error if needed.
 	case model.ExecModeExecOrRun:
-		running, checkErr := containerRunningFn(compose, svc)
+		running, checkErr := containerRunningFn(ctx, compose, svc)
 		if checkErr != nil {
 			running = true
 		}
@@ -95,6 +97,7 @@ func (e *ExecRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
+	trace.Exec(ctx, c)
 	defer runio.WireChildIO(rc, c)()
 	return c.Run()
 }
@@ -446,7 +449,9 @@ func buildDockerComposeCmd(
 		}
 	}
 
-	for k := range envVars {
+	// Sorted so argv — and its -v echo — is deterministic. Only the key goes
+	// into argv; the value travels via cmd.Env so it never shows in `ps`.
+	for _, k := range slices.Sorted(maps.Keys(envVars)) {
 		args = append(args, "-e", k)
 	}
 
@@ -470,12 +475,13 @@ func buildDockerComposeCmd(
 var containerRunningFn = isContainerRunning
 
 // isContainerRunning checks whether the named service container is running.
-func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
+func isContainerRunning(ctx context.Context, compose *docker.Compose, service string) (bool, error) {
 	args := compose.BuildInternalArgs("ps", "--status", "running", "--format", "json", service)
 
-	cmd := exec.Command(compose.BinName(), args...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 	cmd.Dir = compose.BaseDir
 	cmd.Env = compose.BuildEnv()
+	trace.Probe(ctx, cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return false, fmt.Errorf("%s compose ps: %w", compose.BinName(), err)

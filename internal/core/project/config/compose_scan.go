@@ -68,6 +68,9 @@ type composeScanDoc struct {
 	Services map[string]composeScanService     `yaml:"services"`
 	Volumes  map[string]composeScanNamedEntity `yaml:"volumes"`
 	Networks map[string]composeScanNamedEntity `yaml:"networks"`
+	// Include is read only for its presence: a top-level include: pulls in
+	// files outside the -f chain, so ComposeServiceNames cannot prove absence.
+	Include yaml.Node `yaml:"include"`
 }
 
 // composeScanService decodes every field as a yaml.Node rather than its natural
@@ -296,8 +299,17 @@ type parsedComposeFile struct {
 // returning it, and dropping the whole file over one odd field would silently
 // blind the scanner to that file's blocking findings.
 func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
-	files := cfg.ComposeFiles()
-	out := make([]parsedComposeFile, 0, len(files))
+	out, _ := parseComposeFileList(cfg.ComposeFiles(), projectRoot)
+	return out
+}
+
+// parseComposeFileList is parseComposeFiles over an explicit chain. clean
+// reports whether every file was read and decoded without any error — a
+// tolerated *yaml.TypeError included, since the partly decoded document may
+// be missing exactly the key a caller is looking for.
+func parseComposeFileList(files []string, projectRoot string) (out []parsedComposeFile, clean bool) {
+	out = make([]parsedComposeFile, 0, len(files))
+	clean = true
 
 	for _, rel := range files {
 		abs := rel
@@ -307,10 +319,12 @@ func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
 
 		data, err := os.ReadFile(abs)
 		if err != nil {
+			clean = false
 			continue
 		}
 		var doc composeScanDoc
 		if err := yaml.Unmarshal(data, &doc); err != nil {
+			clean = false
 			if _, ok := errors.AsType[*yaml.TypeError](err); !ok {
 				continue
 			}
@@ -319,7 +333,44 @@ func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
 		out = append(out, parsedComposeFile{doc: doc, file: abs})
 	}
 
-	return out
+	return out, clean
+}
+
+// ComposeServiceNames returns the sorted compose service names declared across
+// every git-tracked overlay (cfg.ComposeFilesTracked()), disabled services
+// included, so a name that only exists while some tool is enabled still
+// counts. Machine-local overlays (local.yml compose.extra, the bridge
+// overlay) are left out: the answer must not depend on one developer's state,
+// and a stale local path must not silence the check for that machine.
+//
+// complete is false when the set cannot prove that a name is absent: no
+// compose file is configured, a file in the chain could not be read or fully
+// decoded (a compose file inside a deploy-cloned source tree is legitimately
+// missing on a fresh checkout), or a file pulls in more files through a
+// top-level include:. Callers must treat an incomplete set as "unknown", not
+// as "empty".
+func ComposeServiceNames(cfg *DweConfig, projectRoot string) (names []string, complete bool) {
+	if cfg == nil {
+		return nil, false
+	}
+	files := cfg.ComposeFilesTracked()
+	if len(files) == 0 {
+		return nil, false
+	}
+	parsed, clean := parseComposeFileList(files, projectRoot)
+	if !clean {
+		return nil, false
+	}
+	seen := make(map[string]struct{})
+	for _, pf := range parsed {
+		if nodeDeclared(pf.doc.Include) {
+			return nil, false
+		}
+		for name := range pf.doc.Services {
+			seen[name] = struct{}{}
+		}
+	}
+	return slices.Sorted(maps.Keys(seen)), true
 }
 
 // ComposeCostFacts summarises what bringing a project's active compose chain

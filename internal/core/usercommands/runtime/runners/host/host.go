@@ -16,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Runner executes type=shell commands on the host machine.
@@ -124,6 +125,7 @@ func (r *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
+	trace.Exec(ctx, c)
 	defer runio.WireChildIO(rc, c)()
 	return c.Run()
 }

@@ -12,7 +12,7 @@ There is no "pack" mechanism in DWE and none is needed: a **tool service whose `
 What you end up with:
 
 - `grafana/otel-lgtm` — OTel Collector + Tempo (traces) + Loki (logs) + Prometheus (metrics) + Grafana in one container, reachable at `http://otel.<project>.localhost`. Loki ships in the image, but the recipes here do not export application logs (`OTEL_LOGS_EXPORTER: "none"`): logs stay in the container's own output and correlate with traces where the app writes `trace_id`/`span_id` into its log lines (the Go `slog` wrapper below). Switching OTLP logs on (for example `OTEL_LOGS_EXPORTER: "otlp"` with Python's distro) is possible but not covered or verified here.
-- App services exporting OTLP to it, instrumented per language (recipes below for Python, Go and Node).
+- App services exporting OTLP to it, instrumented per language (recipes below for Python, Go, Node and PHP).
 - A text trace lookup for the agent (`dwe cmd otel.traces`) plus a section for your `AGENTS.md`, so the agent reads a trace before it reads the code.
 
 ## 1. The tool service
@@ -39,7 +39,7 @@ notes:
   disable: "Optional dev tool; the stack runs without it."
 ```
 
-No `ports:` — Grafana is reached through the Caddy vhost, and OTLP ingest (`otel:4318`) and Tempo's query API (`otel:3200`) are used only inside the compose network. A `type: tool` service cannot declare `depends_on`, and it must not: a dev tool never gates the stack.
+No `ports:` — Grafana is reached through the proxy vhost, and OTLP ingest (`otel:4318`) and Tempo's query API (`otel:3200`) are used only inside the compose network. A `type: tool` service cannot declare `depends_on`, and it must not: a dev tool never gates the stack.
 
 Turn it off by default in `workspace/defaults.yml` (heavy image, six processes, and an instrumented app nobody asked for):
 
@@ -55,6 +55,43 @@ Add the vhost to your Caddyfile. Caddy resolves the upstream lazily, so the bloc
 http://otel.myproject.localhost {
 	reverse_proxy otel:3000
 }
+```
+
+nginx is not lazy: a literal `proxy_pass http://otel:3000` is resolved once at startup, and nginx refuses to start when the name does not exist yet — the `otel` container is created alongside nginx with no `depends_on`. Resolve per request through Docker's DNS instead, and let the otel overlay mount the vhost template into the (always-on) proxy service, so nginx sees it only while the tool is on:
+
+```nginx
+# configs/nginx/templates/tools/otel.conf.template — the official image's
+# envsubst replaces only variables set in its environment, so $host stays.
+server {
+    listen 80;
+    server_name ${OTEL_HOST};
+    resolver 127.0.0.11 valid=10s;
+    set $otel_upstream http://otel:3000;
+    location / {
+        proxy_pass $otel_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;     # Grafana Live websocket
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+```yaml
+# compose/otel.yml — next to the otel service
+  nginx:
+    volumes:
+      - ./configs/nginx/templates/tools/otel.conf.template:/etc/nginx/templates/otel.conf.template:ro
+    environment:
+      OTEL_HOST: "${OTEL_HOST:-otel.myproject.localhost}"
+```
+
+```yaml
+# workspace/defaults.yml — .env carries the host only while the tool is on
+exports:
+  env:
+    - name: OTEL_HOST
+      from: services.otel.hosts.web
+      when: services.otel.enabled
 ```
 
 Run `dwe validate` before the first `dwe run`: a project's own validators may pin every optional service somewhere else too — an integration-test scenario that lists which services it enables and disables, for instance — and a new tool service has to be added there as well.
@@ -119,6 +156,8 @@ services:
       OTEL_LOGS_EXPORTER: "none"
       # Dev is "make a request, then look it up": flush spans every 1 s and
       # push metrics every 10 s (rate() panels need two samples to draw).
+      # Per-language knobs for a long-lived process: no-ops under php-fpm,
+      # where each request builds a fresh SDK and flushes at shutdown.
       OTEL_BSP_SCHEDULE_DELAY: "1000"
       OTEL_METRIC_EXPORT_INTERVAL: "10000"
 ```
@@ -126,10 +165,11 @@ services:
 Traps worth knowing before the first `dwe run`:
 
 - **`dwe validate` does not see the missing `start_period`.** The failure shows up as a hung or failed `dwe run`, not as a warning.
-- **The app answers 502 through the proxy for ~30 s after `enable --apply`** while its container is recreated. Wait for its health endpoint, not for the `dwe` command to return.
+- **`enable|disable --apply` restarts the whole stack.** A service without `on_enable` / `on_disable` gets the default `requires: restart`, i.e. a full `dwe restart` — database and network included (~11 s on a small Laravel stack) — and the app answers 502 through the proxy until its container is healthy again. Wait for its health endpoint, not for the `dwe` command to return. The lighter route is to drop `--apply`: `dwe services enable otel` writes the toggle, then `dwe run` (`compose up --wait` with the default `--remove-orphans`) recreates only the containers whose definition changed — `otel`, the patched apps, the proxy if the overlay touches it — and clears the pending restart.
 - **The first minutes show "No data" in every `rate()` panel.** That is the export interval, not a broken pipeline; make some requests and look in Explore → Tempo first.
 - **A `depends_on` on an optional service in the base `compose.yaml` breaks the stack while that service is disabled.** Keep the coupling inside the overlay.
 - **Patch only services that exist whenever the tool is on.** A patch block carries no `image:` or `build:`, so it is valid only on top of a definition from an earlier file. Patch a service from the base `compose.yaml`, or an always-on one. If the patched app lives in its own overlay (`compose/services/site.yml`, say) and a developer disables that app while `otel` stays enabled, `compose/otel-apps.yml` still declares `site:` with only `environment:` / `volumes:`, and Compose rejects the whole project because the service has neither an image nor a build context. `compose_after:` fixes the **order** the patch is emitted in, not whether the patched service **exists** — this trap is still live.
+- **Variants built with `extends:` are not instrumented.** A debug variant declared as `extends: {file: compose.yaml, service: app}` reads the base file, not the `compose_after:` patch, so it runs without the OTEL_* environment, silently. Patching it in `compose/otel-apps.yml` instead hits the previous trap whenever the variant is off.
 - **`compose_after:` wins over an app's own overlay.** DWE emits a `compose_after:` file after every service group (tool → infra → app; `dwe compose files` prints the chain), so `compose/otel-apps.yml` lands after `compose/<app>.yml` and wins every whole-value merge: `command:`, `healthcheck:`, and any `environment:` key both files set. New env keys and extra `volumes:` merge fine from either tier. Put a whole-value override in `compose_after:` — a plain `compose:` overlay still loses that merge to a later app overlay.
 
 ### Dashboards
@@ -319,11 +359,102 @@ Undici (the global `fetch`) is hooked through `diagnostics_channel`, so an SSR f
 - **Health probes.** The compose healthcheck's own process is skipped by the `argv[1]` guard, but its request still reaches the instrumented server. Filtering inside the http instrumentation config misses spans other instrumentations create, so drop them in a `SpanProcessor` wrapper around the `BatchSpanProcessor` (`onEnd`: path `/` with no `user-agent`, `/@vite/`, `/@fs/`, `/node_modules/`, `/__astro*`), which sits downstream of every instrumentation. Note that a healthcheck which renders a full page still produces real backend traffic every interval, and the backend traces it.
 - **No `http.route` on the site side.** The framework does not feed a route template to the instrumentation, so server spans are named by path. Group by path prefix in the lookup tool.
 
+### PHP (php-fpm, Laravel) — no app diff, one image line
+
+PHP auto-instrumentation has two halves: the `opentelemetry` C extension (the hook engine, which cannot be installed at container start) and the SDK plus instrumentation packages (Composer). Both stay out of the app repo. The extension is built into the image but **not enabled**; the packages go into a vendor directory of their own under the workspace; the overlay mounts the ini that loads both, so with the tool off PHP runs exactly as before.
+
+```dockerfile
+# The app image. pecl needs phpize + a compiler; the Debian php:*-fpm images keep both.
+# No docker-php-ext-enable: no conf.d ini, so the .so is never loaded (the xdebug pattern).
+ARG OTEL_EXT_VER=1.4.2
+RUN pecl install -o -f opentelemetry-${OTEL_EXT_VER} && rm -rf /tmp/pear
+```
+
+Why not simply enable it: a loaded extension installs the observer API even with no hooks registered and costs ~25% on a microbenchmark of user-function calls. Gating it by a build arg or a second image instead would force a rebuild on every toggle. The image line itself needs one rebuild — `dwe docker build <service>` — because neither `dwe run` nor `dwe services enable --apply` rebuilds images.
+
+```yaml
+# compose/otel-apps.yml — command: is a whole-value key, hence compose_after:
+  app:
+    command: ["/opt/otel-php/ensure.sh", "php-fpm", "-F"]   # the image ENTRYPOINT still runs first
+    volumes:
+      - ./workspace/otel/php:/opt/otel-php                  # rw: ensure.sh writes build/
+      - ./workspace/otel/php/otel.ini:/usr/local/etc/php/conf.d/zz-otel.ini:ro
+    environment:
+      OTEL_PHP_AUTOLOAD_ENABLED: "true"
+      OTEL_SERVICE_NAME: "app"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=${COMPOSE_PROJECT_NAME},deployment.environment.name=dev"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "none"   # a periodic reader never ticks inside one request
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PROPAGATORS: "tracecontext,baggage"
+      OTEL_PHP_DISABLED_INSTRUMENTATIONS: "pdo"   # one DB layer — see below
+```
+
+```text
+workspace/otel/php/
+  composer.base.json   # open-telemetry/sdk, exporter-otlp, opentelemetry-auto-laravel, opentelemetry-auto-pdo;
+                       # allow-plugins: tbachert/spi (the SDK finds exporter + instrumentations through it)
+  ensure.sh            # hash-gated composer update into build/, non-fatal, then exec "$@"
+  prepend.php          # auto_prepend_file: the app's autoloader first, then build/vendor
+  otel.ini             # extension=opentelemetry + auto_prepend_file=/opt/otel-php/prepend.php
+  .gitignore           # build/
+```
+
+**A sidecar vendor must not pull a second Laravel.** Resolved on its own, `opentelemetry-auto-laravel` requires `laravel/framework`, and Composer installs a second full framework (~75 packages) next to the app's, some at different versions — two copies of one class behind two autoloaders. `ensure.sh` therefore writes `build/composer.json` from `composer.base.json` plus the app's `composer.lock`: every locked package goes under `replace` at its exact locked version, and whatever those packages replace or provide (`illuminate/*`, `psr/http-client-implementation`, …) goes under `provide`:
+
+```bash
+jq --slurpfile lock "$app_lock" '
+  ($lock[0].packages + ($lock[0]["packages-dev"] // [])) as $pkgs
+  | .replace = ($pkgs | map({(.name): .version}) | add)
+  | .provide = ($pkgs | map(. as $p | ((.replace // {}) + (.provide // {}))
+      | to_entries | map({(.key): (if .value == "self.version" then $p.version else .value end)}))
+      | flatten | add // {})
+' composer.base.json > build/composer.json
+(cd build && composer update --no-dev --no-interaction --quiet)
+```
+
+Composer then checks the OTel constraints against what the app really has and installs only the OTel-only packages (13 in the test project). The hash covers `composer.base.json` and the app lock, so an unchanged restart skips Composer and a `composer update` in the app re-resolves on the next start; the price is Packagist access on that start and no committed lock for the sidecar.
+
+`prepend.php` requires the **app's** `vendor/autoload.php` before the sidecar's — the SDK's bootstrap files need the app's psr/guzzle/polyfill classes at once, and Composer's `getLoader()` returns the cached loader when `public/index.php` requires it again. It is also scoped, because the ini reaches every PHP process in the container and loading the app's vendor into `composer`'s own process mixes two Symfony Console versions:
+
+```php
+<?php
+(static function (): void {
+    $sapi = PHP_SAPI;
+    $script = (string) ($_SERVER['SCRIPT_FILENAME'] ?? '');
+    if ($sapi !== 'fpm-fcgi' && !($sapi === 'cli' && basename($script) === 'artisan')) {
+        return;
+    }
+    $app = '/workspace/src/vendor/autoload.php';
+    $otel = __DIR__ . '/build/vendor/autoload.php';
+    if (!extension_loaded('opentelemetry') || !is_file($app) || !is_file($otel)) {
+        return;
+    }
+    // Queue workers: drop root spans, keep jobs (they carry the dispatcher's traceparent).
+    if ($sapi === 'cli' && in_array($_SERVER['argv'][1] ?? '', ['queue:work', 'queue:listen'], true)
+        && getenv('OTEL_TRACES_SAMPLER') === false) {
+        putenv('OTEL_TRACES_SAMPLER=parentbased_always_off');
+    }
+    require $app;
+    require $otel;
+})();
+```
+
+What you get: a server span per request with `http.route`, one `sql <VERB>` span per query with the new keys (`db.system.name`, `db.query.text`, placeholders, not values), a `Command <name>` root for `php artisan <cmd>`, and a queued job as a `process` span **inside the trace that dispatched it** — Laravel carries `traceparent` in the job payload. The whole stack added ~4.5 ms at p50 to an 11 ms welcome page. Traps:
+
+- **One DB layer.** `opentelemetry-auto-laravel`'s query watcher already emits a span per query; with `auto-pdo` also active each statement gains `PDO::prepare` / `PDOStatement::execute` / `fetchAll` siblings. Keep `pdo` in `OTEL_PHP_DISABLED_INSTRUMENTATIONS` unless you need `PDO::connect` or raw PDO calls that bypass the query builder.
+- **Queue polling noise.** `queue:listen` spawns `queue:work --once` every ~3 s; without the `parentbased_always_off` rule each poll is a 3-second trace with ~20 SQL spans, even on an empty queue. The flip side: a job dispatched with no trace context (from a process `prepend.php` skips, or queued while the tool was off) is not traced at all.
+- **`clear_env`.** php-fpm's default `clear_env = yes` strips every `OTEL_*` variable from the workers and nothing is traced, with no error. The official image sets `clear_env = no`; a project's own pool config has to keep it.
+- **Export still costs the worker.** Every request builds a fresh SDK and flushes in its shutdown handler, so `OTEL_BSP_SCHEDULE_DELAY` does nothing here. Laravel calls `fastcgi_finish_request()` first — the client does not wait for the export, but the FPM worker does.
+- **Collector down, overlay on** (`dwe stop otel`): requests still answer 200, but each writes an export stack trace to the FPM log. Consider `OTEL_PHP_LOG_DESTINATION`.
+
 ## 4. Traces as text for the agent
 
-Grafana is for humans. An agent needs a command with compact output — Tempo's HTTP API is enough for that and it only takes two endpoints: `GET :3200/api/search?q=<TraceQL>&start=&end=&limit=&spss=` and `GET :3200/api/traces/<hex>`. The search index lags 10–15 s; a trace is readable by id at once, which is what makes the lookup loop below reliable.
+Grafana is for humans. An agent needs a command with compact output — Tempo's HTTP API is enough for that, and two endpoints carry the lookup: `GET :3200/api/search?q=<TraceQL>&start=&end=&limit=` and `GET :3200/api/v2/traces/<hex>`. The lookup reads traces through v2 because it returns the standard OTLP shape (`{"trace": {"resourceSpans": […]}}`); v1 (`/api/traces/<hex>`) returns the same spans under a legacy `batches` key. v2 answers an unknown id with an empty `200` rather than a `404`, so an empty `resourceSpans` means not found. The search index lags 10–60 s (~45 s observed); a trace is readable by id at once, which is what makes the lookup loop below reliable. Tag-value lookups (`/api/v2/search/tag/resource.service.name/values`) need `start`/`end` too: without them Tempo answers from its live store only, and a service whose spans are already in completed blocks — after an `otel` restart, say — drops out of the list.
 
-The recipe ships a stdlib-only Python script (`workspace/otel/traces.py`) with `summary`, `list`, `show <id>`, `traceparent`, `services` and `selftest` subcommands. It runs inside any container of the stack that has `python3` — the `otel` image itself has only `curl` and `bash`; check a candidate with `docker exec <container> python3 --version` (Debian-based Go and PHP images usually carry one, Alpine ones do not) — and is mounted by the overlay so the command exists exactly when the backend does:
+DWE ships a stdlib-only Python script for this in [`examples/otel/`](../../examples/otel/README.md) (`traces.py` plus its unit tests): `summary`, `list`, `show <id>`, `traceparent`, `services` and `selftest` subcommands. Copy it to `workspace/otel/`. It runs inside any container of the stack that has `python3` — the `otel` image itself has only `curl` and `bash`, and neither do the official `php:*` images, Debian ones included; check a candidate with `docker exec <container> python3 --version` — and is mounted by the overlay so the command exists exactly when the backend does:
 
 ```yaml
 # compose/otel-apps.yml, the patched app service
@@ -348,10 +479,30 @@ commands:
     workdir: /workspace/src
     argv: [python3, /opt/otel/traces.py, "${args}"]
     messages:
-      error: "otel.traces failed — is the app running? (dwe run); is otel enabled? (dwe services enable otel --apply)"
+      error: "otel.traces failed — see the message above (exit 2: backend unreachable, is otel enabled? dwe services enable otel --apply; exit 3: Tempo rejected the query)"
 ```
 
-If no container carries Python, add a `python:3-alpine` sidecar as a second tool service and point the command at it. Semantic conventions moved: newer instrumentations (Go, Node) emit `db.query.text` / `db.system.name` where older ones emit `db.statement` / `db.system`, and `http.request.method` / `url.path` instead of `http.method` / `http.target`. A lookup tool has to read both.
+If no container carries Python (a PHP stack), do not add a second tool service: declare a throwaway compose service in the same `compose/otel.yml`, behind a profile so `up` never starts it, and target it with `service_run`. `service:` takes a compose service name, so the service needs no `workspace/services/` folder; `service_run` always passes `--entrypoint ""`, so the argv names the interpreter:
+
+```yaml
+# compose/otel.yml
+  otel-lookup:
+    image: python:3.13-alpine
+    profiles: ["tools"]          # never started by `compose up`
+    working_dir: /opt/otel
+    volumes:
+      - ./workspace/otel:/opt/otel:ro
+```
+
+```yaml
+# workspace/commands/otel.yml
+  traces:
+    type: service_run            # compose run --rm, ~0.7 s per call
+    service: otel-lookup
+    argv: [python3, /opt/otel/traces.py, "${args}"]
+```
+
+Semantic conventions moved: newer instrumentations (Go, Node) emit `db.query.text` / `db.system.name` where older ones emit `db.statement` / `db.system`, and `http.request.method` / `url.path` instead of `http.method` / `http.target`. A lookup tool has to read both.
 
 The loop the agent uses:
 

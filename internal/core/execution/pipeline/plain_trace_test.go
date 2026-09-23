@@ -126,11 +126,11 @@ func TestWriterLinePrinterCtxAttribution(t *testing.T) {
 	defer trace.Configure(nil, trace.LevelOff)
 
 	var global bytes.Buffer
-	restore := trace.SetPrinter(writerLinePrinter{w: &global})
+	restore := trace.SetPrinter(trace.WriterPrinter(&global))
 	defer restore()
 
 	var sub bytes.Buffer
-	ctx := trace.WithLinePrinter(context.Background(), writerLinePrinter{w: &sub})
+	ctx := trace.WithLinePrinter(context.Background(), trace.WriterPrinter(&sub))
 
 	trace.Command(ctx, "docker", "stop", "web")
 
@@ -166,7 +166,7 @@ func TestWriterLinePrinterParallelAttribution(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			ctx := trace.WithLinePrinter(context.Background(), writerLinePrinter{w: bufs[idx]})
+			ctx := trace.WithLinePrinter(context.Background(), trace.WriterPrinter(bufs[idx]))
 			trace.Command(ctx, "echo", "sub", string(rune('a'+idx)))
 		}(i)
 	}

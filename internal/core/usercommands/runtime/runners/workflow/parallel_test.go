@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // clearColorEnv guarantees the colour-control vars are absent for one test, so
@@ -632,6 +633,43 @@ func TestWorkflowRunner_Parallel_AlwaysShowOutput_DefaultsToFailureOnly(t *testi
 	} {
 		if strings.Contains(errOut, unwanted) {
 			t.Errorf("did not expect %q in stderr (default should hide success output); got:\n%s", unwanted, errOut)
+		}
+	}
+}
+
+// TestWorkflowRunner_Parallel_TraceAttributedToSubStep pins that a parallel
+// sub-step's `-v` echo goes into that sub-step's own captured output, never to
+// the process-wide trace sink, which would paint over the live block.
+func TestWorkflowRunner_Parallel_TraceAttributedToSubStep(t *testing.T) {
+	var sink bytes.Buffer
+	trace.Configure(&sink, trace.LevelVerbose)
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+	dir := t.TempDir()
+	a := makeShellLeaf("wf.ok-a", `echo greeting-a`)
+	b := makeShellLeaf("wf.ok-b", `echo greeting-b`)
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.traced",
+		Group:     "wf",
+		LocalName: "traced",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				AlwaysShowOutput: true,
+				Steps:            []WorkflowStep{{Command: "wf.ok-a"}, {Command: "wf.ok-b"}},
+			}},
+		},
+	}
+	_, errOut, err := runParallelWorkflowCtx(t, dir, buildWorkflowRegistry(wf, a, b), wf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr:\n%s", err, errOut)
+	}
+	if strings.Contains(sink.String(), "greeting") {
+		t.Errorf("sub-step echo reached the global trace sink:\n%s", sink.String())
+	}
+	for _, want := range []string{"$ sh -c 'echo greeting-a'", "$ sh -c 'echo greeting-b'"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("expected %q in the sub-step output dump; got:\n%s", want, errOut)
 		}
 	}
 }

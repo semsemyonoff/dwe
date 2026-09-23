@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 const shellDefaultTimeout = 10 * time.Second
@@ -92,6 +93,9 @@ func (Shell) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext
 	// and Wait returns.
 	c.WaitDelay = 100 * time.Millisecond
 
+	// Verbose, not Debug: the command is user-authored, and a `check:` of
+	// type shell echoes at the same level.
+	trace.Exec(runCtx, c)
 	err = c.Run()
 	if timeout > 0 && runCtx.Err() == context.DeadlineExceeded {
 		return fmt.Errorf("timeout after %s", timeout)
