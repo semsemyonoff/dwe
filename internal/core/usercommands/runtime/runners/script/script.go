@@ -211,6 +211,7 @@ func (s *Runner) execScript(ctx context.Context, rc spec.RunContext, shell, scri
 		}
 	}
 
+	runio.TraceCommand(ctx, c)
 	defer runio.WireChildIO(rc, c)()
 
 	if err := c.Run(); err != nil {

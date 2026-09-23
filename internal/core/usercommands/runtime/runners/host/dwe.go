@@ -55,6 +55,7 @@ func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 		}
 	}
 
+	runio.TraceCommand(ctx, cmd)
 	defer runio.WireChildIO(rc, cmd)()
 	return cmd.Run()
 }

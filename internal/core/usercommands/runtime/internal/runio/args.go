@@ -158,6 +158,7 @@ func AppendArgvFrom(ctx context.Context, rc spec.RunContext, argv []string) ([]s
 	c.Stdout = &stdout
 	c.Stderr = StderrOf(rc)
 
+	TraceCommand(ctx, c)
 	if err := c.Run(); err != nil {
 		return nil, fmt.Errorf("argv_append_from %q: %w", rc.Cmd.ArgvAppendFrom, err)
 	}

@@ -45,6 +45,7 @@ func (r *RunRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
+	runio.TraceCommand(ctx, c)
 	defer runio.WireChildIO(rc, c)()
 	return c.Run()
 }

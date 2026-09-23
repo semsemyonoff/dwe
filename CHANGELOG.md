@@ -107,6 +107,14 @@ generated from commit subjects and stay on the
 
 ### Fixed
 
+- `-v` / `--debug` now echo the process a user command spawns, as they
+  already did for pipeline steps: `dwe -v cmd <id>` prints the
+  `docker compose … exec|run …` of a `service_exec` / `service_run` command,
+  the host `sh -c …` of a `shell` / `dwe` command, the interpreter and path of
+  a `script`, and an `argv_append_from` expression, each as a `$ …` line on
+  stderr with secrets redacted. Inside a workflow `parallel:` group the line
+  lands in that sub-step's own output. See
+  [Verbose & debug output](docs/guides/troubleshooting.md#verbose--debug-output).
 - The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
   reference no longer fail to evaluate: config is read through `.Raw`
   (`index .Raw "services" "db" "enabled"`), not a non-existent `.services`.
