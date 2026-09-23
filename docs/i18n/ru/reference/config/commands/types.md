@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ b286fcce120a
+> Translated from: reference/config/commands/types.md @ c97951f90b65
 
 # Типы команд
 
@@ -359,6 +359,8 @@ artisan-tinker:
 ```
 
 `mode` — недопустимое поле для `service_run` (он всегда использует `docker compose run --rm`) — любое указание `mode:` отвергается на этапе загрузки; опускайте его.
+
+Контейнер запускается как `docker compose run --rm --no-deps --entrypoint "" <service> …`: сервисы, от которых он зависит, не поднимаются, а `ENTRYPOINT` образа (или compose-сервиса) отбрасывается, поэтому `argv:` должен сам называть программу — `[python3, /opt/tool/script.py, "${args}"]`, а не `[/opt/tool/script.py]` в расчёте на entrypoint. `service:` — имя compose-сервиса, так что сервис, который существует только в compose-оверлее под `profiles:` (и никогда не поднимается `up`), — допустимая цель. Тот же `--entrypoint ""` действует и для `service_exec`, который в итоге уходит в `run` (`mode: run` или `exec-or-run` при остановленном контейнере).
 
 `argv_append_from` принимается здесь на тех же условиях, что и в `service_exec`: выражение выполняется на хосте, а строки его вывода дописываются в `argv` — см. [Вычисляемые аргументы](directives.md#вычисляемые-аргументы-argv_append_from).
 
