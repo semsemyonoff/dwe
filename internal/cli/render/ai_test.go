@@ -2109,8 +2109,9 @@ func TestNewAICmd_declaredCommandsHeadingAbsent(t *testing.T) {
 
 // TestShippedHubTemplate_groupLineFallback executes the shipped template
 // directly, since authored group text reaches TemplateData only through the
-// builder: description wins, title is the fallback, and a group with neither
-// prints no line rather than `- **id** —  — N declared`.
+// builder: the description's summary wins, title is the fallback, and a group
+// with neither prints no line rather than `- **id** —  — N declared`. A
+// multi-line description contributes only its first line to the list item.
 func TestShippedHubTemplate_groupLineFallback(t *testing.T) {
 	tmpl, err := template.New("AGENTS.md").Option("missingkey=error").Parse(shippedHubAgentsTemplate(t))
 	if err != nil {
@@ -2126,7 +2127,7 @@ func TestShippedHubTemplate_groupLineFallback(t *testing.T) {
 		},
 		CommandGroups: []model.CommandGroupSummary{
 			{ID: "bare", Count: 1},
-			{ID: "desc", Title: "Desc title", Description: "Desc text", Count: 1},
+			{ID: "desc", Title: "Desc title", Description: "Desc text\nMore detail", Summary: "Desc text", Count: 1},
 			{ID: "title", Title: "Title only", Count: 1},
 		},
 	}
@@ -2143,7 +2144,7 @@ func TestShippedHubTemplate_groupLineFallback(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", w, got)
 		}
 	}
-	for _, w := range []string{"Desc title", "**bare**", "—  —"} {
+	for _, w := range []string{"Desc title", "**bare**", "—  —", "More detail"} {
 		if strings.Contains(got, w) {
 			t.Errorf("unexpected %q in:\n%s", w, got)
 		}

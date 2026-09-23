@@ -154,9 +154,10 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 	return nil
 }
 
-// stepCommandDescription returns the localized description for the command
-// referenced by a workflow step, or "" when the command is unknown or has no
-// description. Used by workflow rendering to annotate step IDs.
+// stepCommandDescription returns the localized one-line summary
+// (usercommands.SummaryLine) for the command referenced by a workflow step, or
+// "" when the command is unknown or has no description. Used by workflow
+// rendering to annotate step IDs inside list items.
 func stepCommandDescription(reg *usercommands.Registry, store *i18n.Store, locale, commandID string) string {
 	if reg == nil || commandID == "" {
 		return ""
@@ -165,7 +166,7 @@ func stepCommandDescription(reg *usercommands.Registry, store *i18n.Store, local
 	if err != nil {
 		return ""
 	}
-	return store.CommandDescription(locale, target.ID, target.Description)
+	return usercommands.SummaryLine(store.CommandDescription(locale, target.ID, target.Description))
 }
 
 // writeCommandMarkdown writes a single command's documentation to a markdown file.
@@ -553,8 +554,8 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 				if def.Private {
 					private = " *(private)*"
 				}
-				// Use i18n lookup for description
-				desc := store.CommandDescription(locale, def.ID, def.Description)
+				// A list item holds one line; the full text is on the command's page.
+				desc := usercommands.SummaryLine(store.CommandDescription(locale, def.ID, def.Description))
 				if desc == "" {
 					desc = string(def.Type)
 				}

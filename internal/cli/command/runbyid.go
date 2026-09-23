@@ -302,8 +302,9 @@ func prepareParams(cfg *config.DweConfig, def *usercommands.CommandDef, provided
 
 // printRunHeader writes a one-line banner identifying the command about to
 // execute so the user has context for the runner output that follows.
-// Format: `▶ <id>  [<type>]  <description>`. Type and description are omitted
-// when empty.
+// Format: `▶ <id>  [<type>]  <summary>`, where the summary is the first
+// non-empty line of the translated description (usercommands.SummaryLine). Type
+// and summary are omitted when empty.
 //
 // The banner goes to stderr, so the v1 styles helpers (whose color profile is
 // detected from stdout) would colour it by the wrong stream: stripped under
@@ -317,7 +318,7 @@ func printRunHeader(w io.Writer, def *usercommands.CommandDef, translator i18n.T
 	if def.Type != "" {
 		parts = append(parts, muted.Render("["+string(def.Type)+"]"))
 	}
-	desc := translator.CommandDescription(locale, def.ID, def.Description)
+	desc := usercommands.SummaryLine(translator.CommandDescription(locale, def.ID, def.Description))
 	if desc != "" {
 		parts = append(parts, muted.Render(desc))
 	}

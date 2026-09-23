@@ -40,7 +40,7 @@ flowchart LR
 |---------|---------|
 | `dwe docker <subcommand>` | Public lifecycle API. Policy args applied. Use in Makefiles, deploy steps, and YAML commands. |
 | `dwe compose raw <args...>` | Low-level diagnostic pass-through. No policy args. Use for debugging only. |
-| `dwe compose files` | Show active compose file list (diagnostic). |
+| `dwe compose files` | Show active compose file list (diagnostic). `--all` also lists overlays of disabled services. |
 | `dwe compose argv` | Show full effective argv including policy args (diagnostic). |
 
 Only `dwe docker` subcommands are allowed in Makefiles, YAML command definitions, and deploy steps. Direct `docker compose` calls bypass policy and must not appear in any automation.
@@ -284,4 +284,5 @@ process_env:
 - `dwe docker up|down|stop|restart|logs|ps|exec|run|pull|build` — lifecycle and image-management commands (`up` accepts `--wait` to block until services are healthy)
 - `dwe compose files` — show active compose file list
 - `dwe compose argv` — show full effective argv
+- `--all` on `dwe compose files|argv|raw` — use every configured overlay, disabled services included. For inspection only: disabled overlays may conflict, so the combined chain is not guaranteed to be valid. On `argv` and `raw` it must come before the first `docker compose` argument (`raw` also accepts it right after a leading `--`, like `--bare`); later, as in `dwe compose raw -- ps --all`, it goes to `docker compose` itself
 - `dwe render env` — manually regenerate `.env`

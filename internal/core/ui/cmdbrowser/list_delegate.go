@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // listItem adapts an Item for bubbles/v2/list. The original-items index is
@@ -15,12 +17,39 @@ import (
 // header marks a non-selectable pseudo-header row; no producer sets it today
 // (the single-panel layout that used them is gone).
 type listItem struct {
-	origIdx    int
-	id         string
+	origIdx int
+	id      string
+	// desc is the full description (filter haystack); summary is the row
+	// text — see Item.Summary.
 	desc       string
+	summary    string
 	typ        string
 	paramCount int
 	header     bool
+}
+
+func newListItem(idx int, it Item) listItem {
+	return listItem{origIdx: idx, id: it.ID, desc: it.Description, summary: it.Summary, typ: it.Type, paramCount: it.ParamCount}
+}
+
+// displayLine is the one-line row text for the fallback selector.
+func (it Item) displayLine() string {
+	line, _ := rowText(it.Description, it.Summary)
+	return line
+}
+
+// rowText returns the single line a row shows and whether the description
+// holds more than that line. Without a caller-supplied summary it derives one
+// with model.SummaryLine, so a whitespace-only description gets the
+// no-description layout and a trailing newline is not "more"; the vars
+// browser's values are already single-line, so SummaryLine leaves them as is.
+// Whitespace-normalized comparison keeps a summary that only folded a tab
+// from counting as "more".
+func rowText(desc, summary string) (line string, more bool) {
+	if summary == "" {
+		summary = model.SummaryLine(desc)
+	}
+	return summary, strings.Join(strings.Fields(desc), " ") != strings.Join(strings.Fields(summary), " ")
 }
 
 // FilterValue is the haystack used by list.DefaultFilter. Concatenating id and
@@ -122,15 +151,10 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	line1 := cursor + idStyled + pad + paramBadge + gap + badge
 
 	// Collapse multi-line descriptions (YAML literal blocks carry `\n`) to
-	// their first line. Without this the item overflows Height()=2 and the
-	// right panel's frame stretches under JoinHorizontal — the "torn right
-	// border" symptom users see when long-description commands are listed.
-	desc := li.desc
-	hadMore := false
-	if idx := strings.IndexByte(desc, '\n'); idx >= 0 {
-		desc = desc[:idx]
-		hadMore = true
-	}
+	// one line. Without this the item overflows Height()=2 and the right
+	// panel's frame stretches under JoinHorizontal — the "torn right border"
+	// symptom users see when long-description commands are listed.
+	desc, hadMore := rowText(li.desc, li.summary)
 	if desc == "" {
 		_, _ = fmt.Fprintf(w, "%s\n%s", line1, strings.Repeat(" ", cursorW))
 		return

@@ -339,3 +339,23 @@ func TestCoreDocsImportsNoInternalPackageOutsideDocs(t *testing.T) {
 		}
 	}
 }
+
+// TestCollectCommandSummaries_MultiLineUsesSummary: each command is one
+// markdown list item, so a `|` description must contribute only its first
+// line — the rest would fall outside the item.
+func TestCollectCommandSummaries_MultiLineUsesSummary(t *testing.T) {
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{
+		ID:          "db.migrate",
+		Description: "\r\nRun migrations\r\nUsage: dwe cmd db.migrate\r\n",
+		Type:        usercommands.CommandTypeShell,
+	})
+	result := collectCommandSummaries(reg, i18n.NopTranslator{}, "")
+	require.Len(t, result, 1)
+	require.Equal(t, "Run migrations", result[0].Description)
+
+	out, err := llmstxt.Generate(llmstxt.Opts{ProjectRoot: t.TempDir(), Commands: result})
+	require.NoError(t, err)
+	require.Contains(t, out, "Run migrations")
+	require.NotContains(t, out, "Usage:")
+}

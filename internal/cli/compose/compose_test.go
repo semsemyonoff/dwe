@@ -2,6 +2,7 @@ package compose
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -357,13 +358,15 @@ func TestComposeArgvCmd(t *testing.T) {
 	}
 }
 
-// TestExtractBareFlag verifies --bare parsing from raw args.
-func TestExtractBareFlag(t *testing.T) {
+// TestParseRawFlags verifies --bare / --all parsing from raw args.
+func TestParseRawFlags(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
 		wantBare bool
+		wantAll  bool
 		wantRest []string
+		wantErr  error
 	}{
 		{
 			name:     "no flags",
@@ -413,23 +416,349 @@ func TestExtractBareFlag(t *testing.T) {
 			wantBare: false,
 			wantRest: []string{"run", "app-main", "php", "artisan", "test", "--", "--filter", "Foo"},
 		},
+		{
+			name:     "all before separator",
+			args:     []string{"--all", "--", "config"},
+			wantAll:  true,
+			wantRest: []string{"config"},
+		},
+		{
+			name:     "all without separator",
+			args:     []string{"--all", "config", "--services"},
+			wantAll:  true,
+			wantRest: []string{"config", "--services"},
+		},
+		{
+			name:     "all only",
+			args:     []string{"--all"},
+			wantAll:  true,
+			wantRest: nil,
+		},
+		{
+			name:     "all after separator passes through to compose",
+			args:     []string{"--", "ps", "--all"},
+			wantRest: []string{"ps", "--all"},
+		},
+		{
+			name:     "all directly after leading separator is still dwe's flag",
+			args:     []string{"--", "--all", "ps"},
+			wantAll:  true,
+			wantRest: []string{"ps"},
+		},
+		{
+			name:     "all after positional passes through to compose",
+			args:     []string{"ps", "--all"},
+			wantRest: []string{"ps", "--all"},
+		},
+		{
+			name:     "bare directly after leading separator is still dwe's flag",
+			args:     []string{"--", "--bare"},
+			wantBare: true,
+			wantRest: nil,
+		},
+		{
+			name:     "bare on both sides of leading separator",
+			args:     []string{"--bare", "--", "--bare", "up"},
+			wantBare: true,
+			wantRest: []string{"up"},
+		},
+		{
+			name:     "second separator before positional passes through",
+			args:     []string{"--", "--", "ps"},
+			wantRest: []string{"--", "ps"},
+		},
+		{
+			name:     "bare after positional passes through to compose",
+			args:     []string{"--", "up", "--bare"},
+			wantRest: []string{"up", "--bare"},
+		},
+		{
+			name:     "all before separator and after it",
+			args:     []string{"--all", "--", "ps", "--all"},
+			wantAll:  true,
+			wantRest: []string{"ps", "--all"},
+		},
+		{
+			name:    "bare and all are mutually exclusive",
+			args:    []string{"--bare", "--all", "--", "ps"},
+			wantErr: errBareWithAll,
+		},
+		{
+			name:    "all and bare are mutually exclusive in either order",
+			args:    []string{"--all", "--bare"},
+			wantErr: errBareWithAll,
+		},
+		{
+			name:     "bare with all passed through to compose is fine",
+			args:     []string{"--bare", "--", "ps", "--all"},
+			wantBare: true,
+			wantRest: []string{"ps", "--all"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bare, rest := extractBareFlag(tt.args)
-			if bare != tt.wantBare {
-				t.Errorf("bare = %v, want %v", bare, tt.wantBare)
+			opts, rest, err := parseRawFlags(tt.args)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
-			if len(rest) != len(tt.wantRest) {
-				t.Fatalf("rest = %v, want %v", rest, tt.wantRest)
+			if opts.bare != tt.wantBare {
+				t.Errorf("bare = %v, want %v", opts.bare, tt.wantBare)
 			}
-			for i := range rest {
-				if rest[i] != tt.wantRest[i] {
-					t.Errorf("rest[%d] = %q, want %q", i, rest[i], tt.wantRest[i])
-				}
+			if opts.all != tt.wantAll {
+				t.Errorf("all = %v, want %v", opts.all, tt.wantAll)
+			}
+			if !slices.Equal(rest, tt.wantRest) {
+				t.Errorf("rest = %q, want %q", rest, tt.wantRest)
 			}
 		})
+	}
+}
+
+// makeOverlayProject extends makeMinimalProject with a compose base and two
+// tool overlays: otel (enabled) and adminer (disabled). The active chain is
+// base + otel; ComposeFilesAll adds adminer, sorted ahead of otel.
+func makeOverlayProject(t *testing.T) string {
+	t.Helper()
+	dir := makeMinimalProject(t)
+	cfgYAML := "project:\n  name: test\n  prefix: dwe\ncompose:\n  base: compose.yaml\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"adminer", "otel"} {
+		svcDir := filepath.Join(dir, "workspace", "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		svcYML := "type: tool\ncontainer: " + name + "\ncompose:\n  - compose/" + name + ".yml\n"
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(svcYML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defaultsYML := "schema_version: \"1\"\nservices:\n  otel:\n    enabled: true\n  adminer:\n    enabled: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+var (
+	enabledChain = []string{"compose.yaml", "compose/otel.yml"}
+	allChain     = []string{"compose.yaml", "compose/adminer.yml", "compose/otel.yml"}
+)
+
+// fFiles returns the values of every -f flag in argv, in order.
+func fFiles(argv []string) []string {
+	var files []string
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == "-f" {
+			files = append(files, argv[i+1])
+		}
+	}
+	return files
+}
+
+func TestComposeFilesCmd_all(t *testing.T) {
+	dir := makeOverlayProject(t)
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{name: "enabled overlays only", args: nil, want: enabledChain},
+		{name: "all overlays", args: []string{"--all"}, want: allChain},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newComposeFilesCmd(&cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")})
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs(tt.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("printed lines = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComposeArgvCmd_all(t *testing.T) {
+	dir := makeOverlayProject(t)
+	tests := []struct {
+		name      string
+		args      []string
+		wantFiles []string
+		wantTail  []string
+	}{
+		{
+			name:      "enabled overlays only",
+			args:      []string{"config"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"config"},
+		},
+		{
+			name:      "all before command",
+			args:      []string{"--all", "config"},
+			wantFiles: allChain,
+			wantTail:  []string{"config"},
+		},
+		{
+			name:      "all after command passes through to compose",
+			args:      []string{"ps", "--all"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"ps", "--all"},
+		},
+		{
+			name:      "all trailing a command's own args passes through",
+			args:      []string{"exec", "app", "ls", "--all"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"exec", "app", "ls", "--all"},
+		},
+		{
+			name:      "all after separator passes through to compose",
+			args:      []string{"ps", "--", "--all"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"ps", "--all"},
+		},
+		{
+			name:      "separator after command is dropped as before",
+			args:      []string{"ps", "--", "-q"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"ps", "-q"},
+		},
+		{
+			name:      "leading separator is dropped, a later one kept",
+			args:      []string{"--", "run", "app", "--", "ls"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"run", "--rm", "app", "--", "ls"},
+		},
+		{
+			name:      "only the first separator after command is dropped",
+			args:      []string{"run", "--", "app", "--", "ls"},
+			wantFiles: enabledChain,
+			wantTail:  []string{"run", "--rm", "app", "--", "ls"},
+		},
+		{
+			name:      "all before separator and command",
+			args:      []string{"--all", "--", "ps"},
+			wantFiles: allChain,
+			wantTail:  []string{"ps"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newComposeArgvCmd(&cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")})
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs(tt.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			argv := strings.Fields(buf.String())
+			if got := fFiles(argv); !slices.Equal(got, tt.wantFiles) {
+				t.Errorf("-f files = %q, want %q (argv %q)", got, tt.wantFiles, argv)
+			}
+			if !slices.Equal(argv[len(argv)-len(tt.wantTail):], tt.wantTail) {
+				t.Errorf("argv %q does not end with %q", argv, tt.wantTail)
+			}
+		})
+	}
+}
+
+// TestComposeArgvCmd_allThroughTree runs argv via the `compose` parent, so the
+// non-interspersed parsing is checked after cobra merges the parent's flags.
+func TestComposeArgvCmd_allThroughTree(t *testing.T) {
+	dir := makeOverlayProject(t)
+	tests := []struct {
+		name      string
+		args      []string
+		wantFiles []string
+		wantTail  []string
+	}{
+		{name: "trailing all reaches compose", args: []string{"argv", "exec", "app", "ls", "--all"}, wantFiles: enabledChain, wantTail: []string{"exec", "app", "ls", "--all"}},
+		{name: "leading all widens the chain", args: []string{"argv", "--all", "ps"}, wantFiles: allChain, wantTail: []string{"ps"}},
+		{name: "separator after command dropped", args: []string{"argv", "ps", "--", "-q"}, wantFiles: enabledChain, wantTail: []string{"ps", "-q"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewCmd("", &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")})
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs(tt.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			argv := strings.Fields(buf.String())
+			if got := fFiles(argv); !slices.Equal(got, tt.wantFiles) {
+				t.Errorf("-f files = %q, want %q (argv %q)", got, tt.wantFiles, argv)
+			}
+			if !slices.Equal(argv[len(argv)-len(tt.wantTail):], tt.wantTail) {
+				t.Errorf("argv %q does not end with %q", argv, tt.wantTail)
+			}
+		})
+	}
+}
+
+// TestBuildRawComposeArgs covers `dwe compose raw` argv construction end to
+// end from the raw args, short of executing docker.
+func TestBuildRawComposeArgs(t *testing.T) {
+	dir := makeOverlayProject(t)
+	cfg, err := config.LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "enabled overlays only",
+			args: []string{"--", "config"},
+			want: []string{"-p", "dwe-test", "-f", "compose.yaml", "-f", "compose/otel.yml", "config"},
+		},
+		{
+			name: "all overlays",
+			args: []string{"--all", "--", "config"},
+			want: []string{"-p", "dwe-test", "-f", "compose.yaml", "-f", "compose/adminer.yml", "-f", "compose/otel.yml", "config"},
+		},
+		{
+			name: "all after separator reaches compose, chain stays enabled-only",
+			args: []string{"--", "ps", "--all"},
+			want: []string{"-p", "dwe-test", "-f", "compose.yaml", "-f", "compose/otel.yml", "ps", "--all"},
+		},
+		{
+			name: "bare drops every -f",
+			args: []string{"--bare", "--", "-f", "installer.yml", "up"},
+			want: []string{"-p", "dwe-test", "-f", "installer.yml", "up"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts, rest, err := parseRawFlags(tt.args)
+			if err != nil {
+				t.Fatalf("parseRawFlags: %v", err)
+			}
+			got := buildRawComposeArgs(cfg, "dwe-test", opts, rest)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("argv = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestComposeRawCmd_bareWithAll pins that the conflict is reported before any
+// config load or docker exec.
+func TestComposeRawCmd_bareWithAll(t *testing.T) {
+	cmd := newComposeRawCmd(&cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"})
+	if err := cmd.RunE(cmd, []string{"--bare", "--all", "--", "ps"}); !errors.Is(err, errBareWithAll) {
+		t.Fatalf("err = %v, want %v", err, errBareWithAll)
 	}
 }
 

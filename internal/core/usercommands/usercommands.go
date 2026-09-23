@@ -177,6 +177,13 @@ func LoadRegistryFromConfigPath(configPath string) (*Registry, error) {
 	return reg, nil
 }
 
+// SummaryLine returns the first non-empty line of a (translated) command or
+// group description — the one-line summary shown on list surfaces. See
+// model.SummaryLine.
+func SummaryLine(desc string) string {
+	return model.SummaryLine(desc)
+}
+
 // CommandIndex projects reg into the shared agent-facing command and group
 // summaries, both sorted by ID. A nil registry yields two nil slices.
 //
@@ -197,10 +204,12 @@ func CommandIndex(reg *Registry, tr i18n.Translator, locale string) ([]model.Com
 	defs := reg.List("")
 	commands := make([]model.CommandSummary, 0, len(defs))
 	for _, def := range defs {
+		desc := tr.CommandDescription(locale, def.ID, def.Description)
 		commands = append(commands, model.CommandSummary{
 			ID:          def.ID,
 			Group:       def.Group,
-			Description: tr.CommandDescription(locale, def.ID, def.Description),
+			Description: desc,
+			Summary:     model.SummaryLine(desc),
 			Type:        string(def.Type),
 			Service:     def.DeclaredService(),
 		})
@@ -222,10 +231,12 @@ func CommandIndex(reg *Registry, tr i18n.Translator, locale string) ([]model.Com
 		if count == 0 {
 			return
 		}
+		desc := tr.GroupDescription(locale, gn.ID, gn.Meta.Description)
 		groups = append(groups, model.CommandGroupSummary{
 			ID:          gn.ID,
 			Title:       tr.GroupTitle(locale, gn.ID, gn.Name),
-			Description: tr.GroupDescription(locale, gn.ID, gn.Meta.Description),
+			Description: desc,
+			Summary:     model.SummaryLine(desc),
 			Count:       count,
 		})
 	}

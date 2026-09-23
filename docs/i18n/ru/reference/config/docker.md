@@ -1,4 +1,4 @@
-> Translated from: reference/config/docker.md @ eee6eb15cea7
+> Translated from: reference/config/docker.md @ 72a0d549e21a
 
 # docker.yml / docker.local.yml
 
@@ -42,7 +42,7 @@ flowchart LR
 |---------|---------|
 | `dwe docker <subcommand>` | Публичный lifecycle API. Применяются policy-args. Используйте в Makefile'ах, шагах деплоя и YAML-командах. |
 | `dwe compose raw <args...>` | Низкоуровневая диагностическая прокидка. Без policy-args. Используйте только для отладки. |
-| `dwe compose files` | Показать список активных compose-файлов (диагностика). |
+| `dwe compose files` | Показать список активных compose-файлов (диагностика). `--all` добавляет оверлеи выключенных сервисов. |
 | `dwe compose argv` | Показать полный итоговый argv, включая policy-args (диагностика). |
 
 В Makefile'ах, декларациях YAML-команд и шагах деплоя разрешены только подкоманды `dwe docker`. Прямые вызовы `docker compose` обходят политику и не должны появляться ни в какой автоматизации.
@@ -286,4 +286,5 @@ process_env:
 - `dwe docker up|down|stop|restart|logs|ps|exec|run|pull|build` — команды lifecycle и управления образами (`up` принимает `--wait`, чтобы блокироваться до готовности сервисов)
 - `dwe compose files` — показать список активных compose-файлов
 - `dwe compose argv` — показать полный итоговый argv
+- `--all` у `dwe compose files|argv|raw` — взять все настроенные оверлеи, включая выключенные сервисы. Только для просмотра: оверлеи выключенных сервисов могут конфликтовать, поэтому итоговая цепочка не обязательно валидна. У `argv` и `raw` флаг ставится до первого аргумента `docker compose` (`raw` принимает его и сразу после ведущего `--`, как `--bare`); дальше, как в `dwe compose raw -- ps --all`, он уходит в сам `docker compose`
 - `dwe render env` — вручную регенерировать `.env`

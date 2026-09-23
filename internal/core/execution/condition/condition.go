@@ -100,13 +100,10 @@ func Predicates() []PredicateEntry {
 //	generated-missing <svc> <field> — true if the field is absent from the
 //	    generated-value store (.dwe/generated.yml) or the store is missing
 func EvalBuiltin(predicate, projectRoot string) (bool, error) {
-	predicate = strings.TrimSpace(predicate)
-	parts := strings.SplitN(predicate, " ", 2)
-	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
-		return false, fmt.Errorf("builtin predicate %q: expected \"<verb> <path>\"", predicate)
+	verb, rel, err := parsePredicate(predicate)
+	if err != nil {
+		return false, err
 	}
-	verb := strings.TrimSpace(parts[0])
-	rel := strings.TrimSpace(parts[1])
 	path := rel
 	if !filepath.IsAbs(rel) {
 		path = filepath.Join(projectRoot, rel)
@@ -128,12 +125,55 @@ func EvalBuiltin(predicate, projectRoot string) (bool, error) {
 		return !isFileExisting(path), nil
 	case "generated-missing":
 		// "generated-missing <svc> <field>" — NOT a single path. Re-split rel
-		// (the whole remaining string from SplitN above) on whitespace into its
-		// two sub-args; do NOT reuse the joined path/rel single-path variable.
+		// (everything after the verb, as parsePredicate returned it) on
+		// whitespace into its two sub-args; do NOT use the joined path.
 		return evalGeneratedMissing(rel, projectRoot)
 	default:
 		return false, fmt.Errorf("unknown builtin predicate %q", verb)
 	}
+}
+
+// ValidatePredicate statically checks a builtin predicate string — a verb
+// from Predicates() followed by the arguments it needs — without touching the
+// filesystem. EvalBuiltin runs the same checks first, so a predicate accepted
+// here never fails EvalBuiltin on its verb or arity; the error texts are the
+// evaluator's.
+func ValidatePredicate(predicate string) error {
+	_, _, err := parsePredicate(predicate)
+	return err
+}
+
+// predicateVerbs indexes Predicates() by name, built once for parsePredicate.
+var predicateVerbs = func() map[string]struct{} {
+	entries := Predicates()
+	set := make(map[string]struct{}, len(entries))
+	for _, p := range entries {
+		set[p.Name] = struct{}{}
+	}
+	return set
+}()
+
+// parsePredicate splits "<verb> <args>" on the first space (both halves
+// trimmed) and checks the verb against Predicates() and the arity of
+// generated-missing. The evaluator's switch still owns the verbs it can run;
+// TestPredicates_MatchEvalBuiltinSwitch keeps the two lists equal.
+func parsePredicate(predicate string) (verb, args string, err error) {
+	predicate = strings.TrimSpace(predicate)
+	parts := strings.SplitN(predicate, " ", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+		return "", "", fmt.Errorf("builtin predicate %q: expected \"<verb> <path>\"", predicate)
+	}
+	verb = strings.TrimSpace(parts[0])
+	args = strings.TrimSpace(parts[1])
+	if _, ok := predicateVerbs[verb]; !ok {
+		return "", "", fmt.Errorf("unknown builtin predicate %q", verb)
+	}
+	if verb == "generated-missing" {
+		if _, _, err := ParseGeneratedMissing(args); err != nil {
+			return "", "", err
+		}
+	}
+	return verb, args, nil
 }
 
 // ParseGeneratedMissing splits the "<svc> <field>" argument string of a

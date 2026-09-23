@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ 5a22f686ce2f
+> Translated from: reference/config/commands/index.md @ f205f5a0e058
 
 # commands/
 
@@ -89,7 +89,7 @@ commands:
 | Поле | Тип | Описание |
 |-------|------|-------------|
 | `group.title` | string | Отображаемый заголовок, показываемый в `dwe commands list` |
-| `group.description` | string | Короткое описание, отображаемое рядом с группой |
+| `group.description` | string | Короткое описание, отображаемое рядом с группой; как и у команды, там показывается только его первая непустая строка (см. [Описание и краткая строка](directives.md#описание-и-краткая-строка)) |
 | `group.hide` | string | Опциональное выражение-условие; когда truthy, скрывает группу и каскадно — все её потомки (команды и подгруппы). См. [Условие hide](directives.md#условие-hide). |
 | `commands` | map | Именованные определения команд (ключ = локальное имя) |
 
@@ -302,8 +302,8 @@ db.start:
 
 ```json
 {"commands":[
-  {"id":"app.install","group":"app","title":"install","description":"Install application dependencies","type":"service_exec","service":"app-main","params":[{"name":"env","type":"string","required":true}]},
-  {"id":"db.migrate","group":"db","title":"migrate","description":"Run database migrations","type":"shell"}
+  {"id":"app.install","group":"app","title":"install","description":"Install application dependencies","summary":"Install application dependencies","type":"service_exec","service":"app-main","params":[{"name":"env","type":"string","required":true}]},
+  {"id":"db.migrate","group":"db","title":"migrate","description":"Run database migrations","summary":"Run database migrations","type":"shell"}
 ]}
 ```
 
@@ -311,7 +311,8 @@ db.start:
 |------|------------|
 | `id`, `title`, `type` | есть всегда; `title` — последний сегмент `id` |
 | `group` | опускается для команды вне групп |
-| `description` | опускается, если пусто. **Локализуется**: при неанглийской локали содержит перевод из `workspace/i18n/<lang>.yml`, поэтому сопоставляйте команды по `id`, а не по этому тексту |
+| `description` | опускается, если пусто. Полный текст. **Локализуется**: при неанглийской локали содержит перевод из `workspace/i18n/<lang>.yml`, поэтому сопоставляйте команды по `id`, а не по этому тексту |
+| `summary` | опускается, если пусто. Первая непустая строка `description` — см. [Описание и краткая строка](directives.md#описание-и-краткая-строка). `dwe commands -i <id> --output json` содержит ту же пару |
 | `service` | опускается, если команда его не объявляет. Это **объявленное** значение, а не отрендеренное — шаблонный `service: app-${param.service}` печатается как есть, так что это не всегда буквальное имя контейнера. Команды `.start` / `.logs` / `.stop` / `.restart`, в которые разворачивается `type: daemon`, несут собственный сервис демона |
 | `private` | только с `--all` |
 | `params` | опускается, если параметров нет; полное описание параметров — в `dwe commands -i <id> --output json` |

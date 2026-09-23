@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/docker.md @ d3b298a7ba27
+> Translated from: reference/concepts/docker.md @ 5f209df73e0f
 
 # Интеграция с Docker
 
@@ -80,7 +80,7 @@ compose/services/api.yml          # app оверлей
 - `workspace/local.yml` — `enabled: true|false` на сервис, порты, хосты, пользовательские env. Влияет на содержимое списка через набор enabled и напрямую добавляет `-f` файлы через `services.<name>.compose.extra` (выводится внутри группы этого сервиса, до всех файлов `compose_after`) и общепроектный `compose.extra` (добавляется последним).
 - `workspace/docker.local.yml` — переопределения политики (имя проекта, args, process env, топология). **Не** добавляет и не удаляет `-f` файлы.
 
-Чтобы посмотреть итоговый список, запустите `dwe compose files`.
+Чтобы посмотреть итоговый список, запустите `dwe compose files`; `dwe compose files --all` выводит все настроенные оверлеи, включая выключенные сервисы (`argv` и `raw` тоже принимают `--all`). Эта расширенная цепочка — только для просмотра: оверлеи выключенных сервисов могут конфликтовать, поэтому она не обязательно валидна.
 
 ## Окружение процесса
 

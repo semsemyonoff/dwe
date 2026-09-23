@@ -40,6 +40,14 @@ generated from commit subjects and stay on the
   command or group fails to render against the project config. At runtime
   such an expression is fail-open and leaves the command visible. The check
   only renders: a `cmd:` or builtin predicate is never executed.
+- `dwe validate` also warns `hide: expression renders to "…", which is neither
+  a boolean nor a known predicate` when a `hide:` renders to something runtime
+  cannot evaluate — `yes`, an unknown predicate verb such as `dir-exist` or a
+  predicate without its arguments — and ``hide: expression renders to an empty
+  `cmd:` command`` for a bare `cmd:`. Such an expression is fail-open at
+  runtime and leaves the command visible. Nothing is executed or
+  probed on disk, and only the branch the current config takes is checked. See
+  [`validate.md`](docs/reference/config/validate.md#validation-domains).
 - `dwe validate` warns (`config.compose_files`) when a file listed under a
   service's `compose:` or `compose_after:` does not exist, for every service
   whether enabled or not, or when `compose.base` does not exist. A typo used to surface only as a `docker compose`
@@ -51,8 +59,39 @@ generated from commit subjects and stay on the
   slow-starting service whose boot-time probes use up `retries` fails the
   whole run. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
+- `dwe commands list --output json` and `dwe commands -i <id> --output json`
+  add a `summary` key: the first non-empty line of the command's (translated)
+  description. `description` keeps the full text. Render packs get the same
+  pair as `.Summary` next to `.Description` on `.Commands` and
+  `.CommandGroups` entries. See
+  [Description and summary](docs/reference/config/commands/directives.md#description-and-summary).
+- `dwe compose files`, `dwe compose argv` and `dwe compose raw` take `--all`
+  to use every configured overlay, disabled services included, like
+  `dwe docker pull|build --all`. It is meant for inspection: disabled overlays
+  may conflict, so the combined chain is not guaranteed to be valid. On `argv`
+  and `raw` the flag goes before the first `docker compose` argument (on `raw`
+  a leading `--` may come first, as with `--bare`), so `dwe compose argv exec
+  app ls --all` and `dwe compose raw -- ps --all` pass `--all` to
+  `docker compose`; `--bare --all` is rejected. `argv` now hands every
+  argument after the compose command to `docker compose` — root flags such as
+  `-v` included — as `dwe docker` does. See
+  [`docker.md`](docs/reference/config/docker.md#related-commands).
 
 ### Changed
+
+- The first non-empty line of a command's `description:` is now its summary,
+  and one-line surfaces show only that line: the `dwe cmd` run banner, the
+  `dwe commands` tree (group descriptions too), shell completion, the rows of
+  the interactive command browser and its narrow-terminal selector, the
+  `dwe docs llms-txt` command list, the `dwe docs generate` index and workflow
+  step references in `dwe commands -i` and generated docs. A multi-line
+  `description: |` with usage notes used to be printed whole, breaking
+  completion candidates and markdown list items. `dwe commands -i`, the
+  browser's inspect panel and each generated command page still show the full
+  text, and the browser filter still searches it. The `Declared commands`
+  block in the `AGENTS.md` template `dwe init` scaffolds now prints a group's
+  `.Summary` instead of its `.Description`; existing projects keep their
+  template, and packs reading `.Description` render exactly as before.
 
 - The `▶ <id>  [<type>]  <description>` banner that `dwe cmd` / `dwe commands`
   prints before running a command now goes to stderr, so `dwe cmd X | …`

@@ -135,3 +135,91 @@ func TestGroupHideDiagnostics_RenderCheck(t *testing.T) {
 		t.Errorf("unexpected diagnostic: %+v", diags[0])
 	}
 }
+
+// TestHideDiagnostics_RenderedResult covers what runtime does after rendering:
+// a result that is neither a literal boolean, a `cmd:` nor a well-formed
+// predicate is silently fail-open at runtime, so the validator must flag it —
+// without running the command or probing the filesystem.
+func TestHideDiagnostics_RenderedResult(t *testing.T) {
+	cfg := &config.DweConfig{Raw: map[string]any{
+		"services": map[string]any{"db": map[string]any{"enabled": true}},
+	}}
+	sentinel := filepath.Join(t.TempDir(), "executed")
+
+	tests := []struct {
+		name string
+		hide string
+		want string // message substring; "" means no diagnostic
+	}{
+		{"true", "true", ""},
+		{"false", "false", ""},
+		{"one", "1", ""},
+		{"zero", "0", ""},
+		{"renders empty", `{{ if false }}x{{ end }}`, ""},
+		{"template renders true", `{{ index .Raw "services" "db" "enabled" }}`, ""},
+		{"padded boolean", "  true  ", ""},
+		{"yes", "yes", `renders to "yes", which is neither a boolean nor a known predicate`},
+		{"known predicate", "dir-exists workspace", ""},
+		{"generated-missing", "generated-missing db password", ""},
+		{"unknown verb", "dir-exist foo", `unknown builtin predicate "dir-exist"`},
+		{"unknown verb from a template branch", `{{ if index .Raw "services" "db" "enabled" }}dir-exist foo{{ end }}`, `renders to "dir-exist foo"`},
+		{"predicate without argument", "file-exists", `renders to "file-exists"`},
+		{"generated-missing with one arg", "generated-missing db", `expected "<svc> <field>"`},
+		{"cmd is not executed", "cmd: touch " + sentinel, ""},
+		{"cmd test", "cmd: test -f x", ""},
+		{"empty cmd", "cmd:   ", "db.reset: hide: expression renders to an empty `cmd:` command"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := model.CommandDef{ID: "db.reset", Hide: tc.hide}
+			diags := hideDiagnostics(cmd, "workspace/commands/db.yml", cfg)
+			if tc.want == "" {
+				if len(diags) != 0 {
+					t.Fatalf("want no diagnostics, got %+v", diags)
+				}
+				return
+			}
+			if len(diags) != 1 {
+				t.Fatalf("want 1 diagnostic, got %+v", diags)
+			}
+			d := diags[0]
+			if d.Severity != validate.SeverityWarning || d.Domain != "commands" || d.Target != "commands:db.reset" || d.File != "workspace/commands/db.yml" {
+				t.Errorf("unexpected diagnostic shape: %+v", d)
+			}
+			if !strings.Contains(d.Message, tc.want) {
+				t.Errorf("message %q does not contain %q", d.Message, tc.want)
+			}
+			if tc.name == "empty cmd" {
+				// Its own message: "cmd:" is not "neither a boolean nor a
+				// known predicate", and runtime fails on it rather than hiding.
+				if d.Message != tc.want {
+					t.Errorf("message = %q, want %q", d.Message, tc.want)
+				}
+				if !strings.Contains(d.Hint, "evaluation error at runtime") {
+					t.Errorf("hint should say an empty cmd: fails at runtime; got %q", d.Hint)
+				}
+				return
+			}
+			if !strings.Contains(d.Hint, "true/false/1/0") || !strings.Contains(d.Hint, "cmd:") {
+				t.Errorf("hint should list the valid results; got %q", d.Hint)
+			}
+		})
+	}
+	if _, err := os.Stat(sentinel); err == nil {
+		t.Error("cmd: hide was executed by the validator")
+	}
+}
+
+func TestGroupHideDiagnostics_RenderedResult(t *testing.T) {
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+	if diags := groupHideDiagnostics("db", "dir-missing workspace/services/db", "commands/db.yml", cfg); len(diags) != 0 {
+		t.Fatalf("valid predicate: want no diagnostics, got %+v", diags)
+	}
+	diags := groupHideDiagnostics("db", "yes", "commands/db.yml", cfg)
+	if len(diags) != 1 {
+		t.Fatalf("expected 1 diagnostic, got %d (%+v)", len(diags), diags)
+	}
+	if diags[0].Target != "group:db" || !strings.Contains(diags[0].Message, `group "db": hide: expression renders to "yes"`) {
+		t.Errorf("unexpected diagnostic: %+v", diags[0])
+	}
+}

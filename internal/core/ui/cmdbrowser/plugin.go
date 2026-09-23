@@ -155,7 +155,7 @@ func (b *browser) refreshList() {
 	out := make([]list.Item, 0, len(idxs))
 	for _, idx := range idxs {
 		it := b.items[idx]
-		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type, paramCount: it.ParamCount})
+		out = append(out, newListItem(idx, it))
 	}
 	b.list.SetItems(out)
 }
@@ -634,7 +634,7 @@ func (b *browser) refreshFilterMatches() {
 	out := make([]list.Item, 0, len(b.filter.matched))
 	for _, idx := range b.filter.matched {
 		it := b.items[idx]
-		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type, paramCount: it.ParamCount})
+		out = append(out, newListItem(idx, it))
 	}
 	b.list.SetItems(out)
 	if b.opts.AutoCollapseEmpty {

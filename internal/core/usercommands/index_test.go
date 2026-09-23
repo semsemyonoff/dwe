@@ -381,3 +381,57 @@ commands:
 		t.Fatalf("after ApplyVisibility: ops=%+v ok=%v cmds=%d, want Count 1 and 1 command", ops, ok, len(cmds))
 	}
 }
+
+// TestCommandIndex_Summary: the index carries the full description for packs
+// that render a section, plus the one-line summary for packs and llms-txt
+// lines. Daemon synthetics and the daemon's group inherit it naturally.
+func TestCommandIndex_Summary(t *testing.T) {
+	reg := loadIndexRegistry(t, map[string]string{
+		"db.yml": `
+group:
+  description: |
+    Database tasks
+    Second group line
+commands:
+  migrate:
+    type: shell
+    description: |
+
+      Run migrations
+      Usage: dwe cmd db.migrate
+    cmd: echo m
+  worker:
+    type: daemon
+    description: |
+      Queue worker
+      Starts php artisan queue:work
+    service: app-main
+    argv: [php, artisan, queue:work]
+    daemon:
+      container_template: "{project}-queue"
+`,
+	})
+	cmds, groups := usercommands.CommandIndex(reg, i18n.NopTranslator{}, "")
+
+	byID := map[string]model.CommandSummary{}
+	for _, c := range cmds {
+		byID[c.ID] = c
+	}
+	m := byID["db.migrate"]
+	if m.Summary != "Run migrations" || !strings.Contains(m.Description, "Usage:") {
+		t.Errorf("db.migrate: Summary=%q Description=%q", m.Summary, m.Description)
+	}
+	if s := byID["db.worker.start"].Summary; s != "Queue worker" {
+		t.Errorf("daemon synthetic summary = %q, want %q", s, "Queue worker")
+	}
+
+	for id, want := range map[string]string{"db": "Database tasks", "db.worker": "Queue worker"} {
+		g, ok := groupByID(groups, id)
+		if !ok {
+			t.Fatalf("group %s missing: %+v", id, groups)
+		}
+		if g.Summary != want || !strings.Contains(g.Description, "\n") {
+			t.Errorf("group %s: Summary=%q Description=%q", id, g.Summary, g.Description)
+		}
+	}
+}
