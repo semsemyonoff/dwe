@@ -30,6 +30,14 @@ Three things worth doing before you trust the new version in a project:
    `dwe bridge status` shows the running daemon; `dwe version` from inside a bridged container shows which build it answers with.
 3. **Force a redeploy when the release notes say so.** A behaviour change that does not alter the deployment hash is invisible to `dwe deploy run`, which will report `already up-to-date` and skip the very step whose semantics moved. `dwe deploy run --force` re-runs every step; `when:` guards still apply.
 
+## Upgrading to 0.6.3
+
+Nothing in a project has to change, and no redeploy is needed. Three behaviours moved:
+
+- **The `dwe cmd` banner is on stderr.** The `▶ <id>  [<type>]  <description>` line used to open the command's stdout; a script that skipped or parsed that first line now receives the command's own output only, and under `--output json` the banner is not printed at all. The banner also shows only the first line of a multi-line `description:`.
+- **`dwe validate` may report new findings in an existing project**: a `hide:` that does not evaluate, a missing file under `compose:` / `compose_after:` / `compose.base`, a command whose `service:` names no compose service, and an info note for a healthcheck without `start_period`. They point at mistakes that were already there. None of these checks runs in preflight, so none blocks a lifecycle command.
+- **`dwe compose argv` no longer reads dwe flags after the compose command.** `dwe compose argv exec app ls --all` now prints `--all` as part of the command; put dwe's own flags first (`dwe compose argv --all ps`, `dwe -v compose argv ps`).
+
 ## Upgrading to 0.6.2
 
 ### Integration tests

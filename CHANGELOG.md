@@ -21,132 +21,45 @@ generated from commit subjects and stay on the
 ### Added
 
 - New guide: [Observability with OpenTelemetry](docs/guides/observability-otel.md)
-  — an opt-in `otel` tool service whose `compose:` overlay ships the backend
-  and whose `compose_after:` overlay patches the app services, with
-  instrumentation recipes for Python, Go, Node and PHP (php-fpm / Laravel:
-  the extension built but not enabled in the image, a separate Composer vendor
-  loaded through `auto_prepend_file`), nginx and Caddy vhosts, and a text trace
-  lookup for coding agents. The lookup script ships in
-  [`examples/otel/`](examples/otel/README.md) with its unit tests: `summary`,
-  `list`, `show`, `traceparent`, `services` (service names over a time window,
-  default the last 24h, so services whose spans Tempo has already flushed to
-  completed blocks are listed too) and `selftest`. A query Tempo rejects exits
-  `3` with Tempo's reason; an unreachable backend exits `2`.
-- The command reference documents that `type: service_run` (and a
-  `service_exec` that falls back to `run`) starts the container with
-  `--no-deps --entrypoint ""`: the image's `ENTRYPOINT` is dropped, so
-  `argv:` must name the program itself. See
-  [`service_run`](docs/reference/config/commands/types.md#type-service_run).
-- The service reference documents how relative paths in a `compose:` overlay
-  resolve: against the directory of the first `-f` file (`compose.base`), not
-  the overlay's own directory. See
-  [`compose`](docs/reference/config/services/fields.md).
-- New `service.yml` field `compose_after:` — compose overlay files emitted
-  after every service group (tool → infra → app) and before the generated
-  bridge overlay and the project-wide `local.yml` `compose.extra`, under the
-  same enabled gate as `compose:`. Lets a patch win over whole-value keys
-  (`command:`, `healthcheck:`, an `environment:` entry) an app sets in its own
-  overlay, instead of losing to it because the app group emits later. See
+  — an opt-in `otel` tool service, instrumentation recipes for Python, Go,
+  Node and PHP / Laravel, and a text trace lookup for coding agents that ships
+  in [`examples/otel/`](examples/otel/README.md).
+- `service.yml` `compose_after:` — overlay files emitted after every service
+  group, so a tool's patch wins over keys an app sets in its own overlay. See
   [`compose_after`](docs/reference/config/services/fields.md).
-- `dwe validate` warns `hide: expression does not evaluate` when a `hide:` on a
-  command or group fails to render against the project config. At runtime
-  such an expression is fail-open and leaves the command visible. The check
-  only renders: a `cmd:` or builtin predicate is never executed.
-- `dwe validate` also warns `hide: expression renders to "…", which is neither
-  a boolean nor a known predicate` when a `hide:` renders to something runtime
-  cannot evaluate — `yes`, an unknown predicate verb such as `dir-exist` or a
-  predicate without its arguments — and ``hide: expression renders to an empty
-  `cmd:` command`` for a bare `cmd:`. Such an expression is fail-open at
-  runtime and leaves the command visible. Nothing is executed or
-  probed on disk, and only the branch the current config takes is checked. See
+- `dwe validate` catches mistakes that used to surface only at run time: a
+  `hide:` that does not evaluate, a missing file under `compose:` /
+  `compose_after:` / `compose.base`, a command `service:` that names no compose
+  service, and (info) a healthcheck without `start_period`. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
-- `dwe validate` warns (`config.compose_files`) when a file listed under a
-  service's `compose:` or `compose_after:` does not exist, for every service
-  whether enabled or not, or when `compose.base` does not exist. A typo used to surface only as a `docker compose`
-  error on the next `dwe run`. See
-  [`validate.md`](docs/reference/config/validate.md#validation-domains).
-- `dwe validate` notes (`config.healthcheck_start_period`, info) a compose
-  service in the active chain whose healthcheck runs a test but sets no
-  `start_period`. `dwe run` waits with `docker compose up --wait`, so a
-  slow-starting service whose boot-time probes use up `retries` fails the
-  whole run. See
-  [`validate.md`](docs/reference/config/validate.md#validation-domains).
-- `dwe commands list --output json` and `dwe commands -i <id> --output json`
-  add a `summary` key: the first non-empty line of the command's (translated)
-  description. `description` keeps the full text. Render packs get the same
-  pair as `.Summary` next to `.Description` on `.Commands` and
-  `.CommandGroups` entries. See
-  [Description and summary](docs/reference/config/commands/directives.md#description-and-summary).
-- `dwe compose files`, `dwe compose argv` and `dwe compose raw` take `--all`
-  to use every configured overlay, disabled services included, like
-  `dwe docker pull|build --all`. It is meant for inspection: disabled overlays
-  may conflict, so the combined chain is not guaranteed to be valid. On `argv`
-  and `raw` the flag goes before the first `docker compose` argument (on `raw`
-  a leading `--` may come first, as with `--bare`), so `dwe compose argv exec
-  app ls --all` and `dwe compose raw -- ps --all` pass `--all` to
-  `docker compose`; `--bare --all` is rejected. `argv` now hands every
-  argument after the compose command to `docker compose` — root flags such as
-  `-v` included — as `dwe docker` does. See
-  [`docker.md`](docs/reference/config/docker.md#related-commands).
-
-- `dwe validate` warns when a `service_exec`, `service_run` or `daemon`
-  command's `service:` (or `runner.service:`) names no compose service in any
-  git-tracked overlay, disabled services included, with a "did you mean" hint.
-  Such a typo used to validate clean and fail only at run time. `local.yml`
-  `compose.extra` overlays are not consulted, so every checkout gets the same
-  answer. Templated values and projects whose tracked compose files cannot be
-  fully read are skipped. See
-  [`validate.md`](docs/reference/config/validate.md#validation-domains).
+- `dwe compose files|argv|raw --all` include the overlays of disabled
+  services, like `dwe docker pull|build --all`.
+- `dwe commands list|-i --output json` carry a `summary` key; render packs get
+  `.Summary` next to `.Description`.
 
 ### Changed
 
-- The first non-empty line of a command's `description:` is now its summary,
-  and one-line surfaces show only that line: the `dwe cmd` run banner, the
-  `dwe commands` tree (group descriptions too), shell completion, the rows of
-  the interactive command browser and its narrow-terminal selector, the
-  `dwe docs llms-txt` command list, the `dwe docs generate` index and workflow
-  step references in `dwe commands -i` and generated docs. A multi-line
-  `description: |` with usage notes used to be printed whole, breaking
-  completion candidates and markdown list items. `dwe commands -i`, the
-  browser's inspect panel and each generated command page still show the full
-  text, and the browser filter still searches it. The `Declared commands`
-  block in the `AGENTS.md` template `dwe init` scaffolds now prints a group's
-  `.Summary` instead of its `.Description`; existing projects keep their
-  template, and packs reading `.Description` render exactly as before.
-
-- The `▶ <id>  [<type>]  <description>` banner that `dwe cmd` / `dwe commands`
-  prints before running a command now goes to stderr, so `dwe cmd X | …`
-  receives only the command's own output; through the host bridge it reaches
-  the container's stderr. Under `-o json` the banner is no longer printed at
-  all, so stderr carries only the error envelope. Scripts that parsed the
-  banner from stdout must read stderr.
-- `dwe logs` help and the `AGENTS.md` files `dwe init` scaffolds no longer
-  describe the command as streaming: it prints the last `--tail` lines and
-  exits unless `--follow` is passed, so a coding agent can call it
-  non-interactively. Existing projects keep their `AGENTS.md` until it is
-  edited or regenerated.
+- **The `dwe cmd` banner goes to stderr**, and is not printed under
+  `--output json`, so `dwe cmd X | …` receives only the command's output. See
+  [Upgrading DWE](docs/guides/upgrading.md).
+- One-line surfaces — the run banner, the `dwe commands` tree, completion, the
+  command browser, `dwe docs llms-txt` — show only the first line of a
+  multi-line `description:`; `dwe commands -i` keeps the full text. See
+  [Description and summary](docs/reference/config/commands/directives.md#description-and-summary).
+- `dwe compose argv` hands every argument after the compose command to
+  `docker compose`, as `dwe docker` does.
 
 ### Fixed
 
-- `-v` / `--debug` now echo the process a user command spawns, as they
-  already did for pipeline steps: `dwe -v cmd <id>` prints the
-  `docker compose … exec|run …` of a `service_exec` / `service_run` command,
-  the host `sh -c …` of a `shell` / `dwe` command, the interpreter and path of
-  a `script`, an `argv_append_from` expression, and the `docker` calls of a
-  daemon's `.start` / `.stop` / `.restart` / `.logs`, each as a `$ …` line on
-  stderr with secrets redacted. The same holds for builtins in any pipeline:
-  the `shell` builtin's `sh -c`, the `docker stop` of the daemon reap in
-  `dwe stop`, and `docker_remove_project_volumes`' `docker volume rm`. The
-  read-only probes that decide what to run (`docker ps`, `docker volume ls`,
-  a `service_exec`'s exec-or-run check) echo only under `--debug`. Values
-  passed through the environment are not shown: a compose line carries
-  `-e KEY` only, now in sorted order. Inside a workflow `parallel:` group the
-  line lands in that sub-step's own output. See
+- `-v` / `--debug` echo what a user command spawns — `service_exec` /
+  `service_run`, `shell`, `script`, a daemon's `.start` / `.stop` / `.logs` —
+  and the `docker` calls of pipeline builtins. See
   [Verbose & debug output](docs/guides/troubleshooting.md#verbose--debug-output).
-- The `hide:` examples in the [command directives](docs/reference/config/commands/directives.md#hide-condition)
-  reference no longer fail to evaluate: config is read through `.Raw`
-  (`index .Raw "services" "db" "enabled"`), not a non-existent `.services`.
-  A copied example used to leave the command visible without any error.
+- The `hide:` examples in the
+  [command directives](docs/reference/config/commands/directives.md#hide-condition)
+  read config through `.Raw`; the old `.services` form never evaluated.
+- `dwe logs` help and the scaffolded `AGENTS.md` no longer call the command
+  streaming: it prints and exits unless `--follow` is given.
 
 ## [0.6.2] - 2026-09-16
 
