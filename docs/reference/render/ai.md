@@ -252,6 +252,7 @@ Every AI, IDE and git pack receives the project's command registry as plain data
 | `.ID` | command id (`admin.lint`) |
 | `.Group` | group id (`admin`) |
 | `.Description` | the authored `description:`, **never translated** — packs do not localize, so the rendered file is byte-identical whatever the active locale |
+| `.Summary` | the first non-empty line of `.Description` — use it for one-line list items, since a multi-line `description: \|` would break out of a markdown bullet. See [Description and summary](../config/commands/directives.md#description-and-summary) |
 | `.Type` | `service_exec`, `script`, `shell`, `workflow`, … — tells whether the command enters a container at all |
 | `.Service` | the declared `service:` (a compose service / container name); for the `.start` / `.logs` / `.stop` / `.restart` commands a `type: daemon` expands into, the daemon's own service. May be an unrendered expression such as `app-${param.service}` |
 
@@ -262,6 +263,7 @@ Entries of `.CommandGroups`:
 | `.ID` | group id (`services.magento`) |
 | `.Title` | the last id segment (`magento` for `services.magento`), as in the text listing — the header's `title:` is not used |
 | `.Description` | the group header's `description:`; may be empty |
+| `.Summary` | the first non-empty line of `.Description`; may be empty |
 | `.Count` | number of public commands under the group, nested groups included |
 
 A group is listed only when it has a `group:` title or description, or commands of its own, **and** at least one public command under it. Groups nobody authored are therefore left out: a dotted id like `services.magento` implicitly creates a `services` node, and without a `group:` header or commands of its own that node has nothing to print, so it never appears.
@@ -280,7 +282,7 @@ The `default` pack scaffolded by `dwe init` renders the block below into each hu
 {{ if .ServiceCommandGroups }}
 ## Declared commands
 
-{{ range $g := .ServiceCommandGroups }}{{ with or $g.Description $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
+{{ range $g := .ServiceCommandGroups }}{{ with or $g.Summary $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
 {{ end }}{{ end }}
 Before any task that falls under a group description above — tests, linters,
 formatters, builds, codegen, migrations, seeds, cache or token management,

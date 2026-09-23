@@ -6,6 +6,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -25,11 +26,7 @@ func buildRegistryCompletions(defs []*usercommands.CommandDef, includePrivate bo
 		defs = filtered
 	}
 	for _, d := range defs {
-		entry := d.ID
-		if d.Description != "" {
-			entry = cobra.CompletionWithDesc(d.ID, d.Description)
-		}
-		completions = append(completions, entry)
+		completions = append(completions, commandCompletionEntry(d, i18n.NopTranslator{}, ""))
 	}
 	return completions
 }

@@ -467,7 +467,7 @@ func TestBuildCommandInspectJSON_argvAppendFrom(t *testing.T) {
 }
 
 // TestCommandEntryJSON_existingKeyOrder pins the pre-existing keys by name and
-// relative order: the description/service additions must stay additive.
+// relative order: the description/summary/service additions must stay additive.
 func TestCommandEntryJSON_existingKeyOrder(t *testing.T) {
 	def := &usercommands.CommandDef{
 		ID:          "app.install",
@@ -501,14 +501,14 @@ func TestCommandEntryJSON_existingKeyOrder(t *testing.T) {
 			t.Fatalf("decode value: %v", err)
 		}
 	}
-	want := []string{"id", "group", "title", "description", "type", "service", "private", "params"}
+	want := []string{"id", "group", "title", "description", "summary", "type", "service", "private", "params"}
 	if strings.Join(keys, ",") != strings.Join(want, ",") {
 		t.Fatalf("keys: got %v, want %v", keys, want)
 	}
 	existing := []string{"id", "group", "title", "type", "private", "params"}
 	var filtered []string
 	for _, k := range keys {
-		if k != "description" && k != "service" {
+		if k != "description" && k != "summary" && k != "service" {
 			filtered = append(filtered, k)
 		}
 	}

@@ -19,6 +19,7 @@ type commandInspectJSON struct {
 	ID               string            `json:"id"`
 	Type             string            `json:"type"`
 	Description      string            `json:"description,omitempty"`
+	Summary          string            `json:"summary,omitempty"`
 	Private          bool              `json:"private,omitempty"`
 	Hidden           bool              `json:"hidden,omitempty"`
 	Hide             string            `json:"hide,omitempty"`
@@ -101,10 +102,12 @@ func scriptShell(s *usercommands.ScriptDef) string {
 
 // buildCommandInspectJSON converts a CommandDef to its JSON inspect representation.
 func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandInspectJSON {
+	desc := translator.CommandDescription(locale, def.ID, def.Description)
 	data := commandInspectJSON{
 		ID:          def.ID,
 		Type:        string(def.Type),
-		Description: translator.CommandDescription(locale, def.ID, def.Description),
+		Description: desc,
+		Summary:     usercommands.SummaryLine(desc),
 		Private:     def.Private,
 		Hidden:      def.Hidden,
 		Hide:        def.Hide,
@@ -228,7 +231,7 @@ func inspectStepDescription(reg *usercommands.Registry, translator i18n.Translat
 	if err != nil {
 		return ""
 	}
-	desc := translator.CommandDescription(locale, target.ID, target.Description)
+	desc := usercommands.SummaryLine(translator.CommandDescription(locale, target.ID, target.Description))
 	if desc == "" {
 		return ""
 	}

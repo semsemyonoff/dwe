@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/templating.md @ f0fff008deb3
+> Translated from: reference/config/commands/templating.md @ 72804f1f09c4
 
 # Шаблонизация в файлах команд
 
@@ -69,7 +69,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `files.*.path`, `files.*.candidates[].path/glob/match` | да |
 | `params.*.default_from`, `context.*.from` | нет — только обычные точечные пути |
 | `steps[].with[<key>]`, `steps[].when` в workflow | да |
-| `description`, `group.title`, `group.description` | нет — печатается дословно `commands list` / `commands -i` / completion |
+| `description`, `group.title`, `group.description` | нет — печатается дословно `commands list` / `commands -i` / completion (однострочные поверхности печатают только первую строку, см. [Описание и краткая строка](directives.md#описание-и-краткая-строка)) |
 
 ## Template-пространство команды (полный справочник)
 

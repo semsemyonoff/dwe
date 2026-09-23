@@ -51,8 +51,28 @@ generated from commit subjects and stay on the
   slow-starting service whose boot-time probes use up `retries` fails the
   whole run. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
+- `dwe commands list --output json` and `dwe commands -i <id> --output json`
+  add a `summary` key: the first non-empty line of the command's (translated)
+  description. `description` keeps the full text. Render packs get the same
+  pair as `.Summary` next to `.Description` on `.Commands` and
+  `.CommandGroups` entries. See
+  [Description and summary](docs/reference/config/commands/directives.md#description-and-summary).
 
 ### Changed
+
+- The first non-empty line of a command's `description:` is now its summary,
+  and one-line surfaces show only that line: the `dwe cmd` run banner, the
+  `dwe commands` tree (group descriptions too), shell completion, the rows of
+  the interactive command browser and its narrow-terminal selector, the
+  `dwe docs llms-txt` command list, the `dwe docs generate` index and workflow
+  step references in `dwe commands -i` and generated docs. A multi-line
+  `description: |` with usage notes used to be printed whole, breaking
+  completion candidates and markdown list items. `dwe commands -i`, the
+  browser's inspect panel and each generated command page still show the full
+  text, and the browser filter still searches it. The `Declared commands`
+  block in the `AGENTS.md` template `dwe init` scaffolds now prints a group's
+  `.Summary` instead of its `.Description`; existing projects keep their
+  template, and packs reading `.Description` render exactly as before.
 
 - The `▶ <id>  [<type>]  <description>` banner that `dwe cmd` / `dwe commands`
   prints before running a command now goes to stderr, so `dwe cmd X | …`

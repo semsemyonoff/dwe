@@ -561,7 +561,7 @@ flags and docs pointers. Read it once, then navigate on demand.
 {{ if .ServiceCommandGroups }}
 ## Declared commands
 
-{{ range $g := .ServiceCommandGroups }}{{ with or $g.Description $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
+{{ range $g := .ServiceCommandGroups }}{{ with or $g.Summary $g.Title }}- **{{ $g.ID }}** — {{ . }} — {{ $g.Count }} declared: `dwe commands list {{ $g.ID }} --output json`
 {{ end }}{{ end }}
 Before any task that falls under a group description above — tests, linters,
 formatters, builds, codegen, migrations, seeds, cache or token management,

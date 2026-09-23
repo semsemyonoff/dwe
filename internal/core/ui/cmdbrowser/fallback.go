@@ -41,7 +41,7 @@ func runFallback(title string, items []Item, includePrivate bool) (Result, error
 		if !includePrivate && it.Private {
 			continue
 		}
-		si = append(si, widgets.SelectorItem{Label: it.ID, Description: it.Description})
+		si = append(si, widgets.SelectorItem{Label: it.ID, Description: it.displayLine()})
 		selectorIdx = append(selectorIdx, i)
 	}
 	idx, err := runSelectorFn(title, si)

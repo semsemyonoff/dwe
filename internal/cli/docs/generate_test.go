@@ -483,3 +483,44 @@ func TestGenRegistryMarkdown_RejectsPathTraversal(t *testing.T) {
 		}
 	})
 }
+
+// TestGenCommandsIndex_MultiLineSummary: the index is a markdown list, so a
+// `|` description contributes its first line there, while the per-command page
+// keeps the full text.
+func TestGenCommandsIndex_MultiLineSummary(t *testing.T) {
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{
+		ID:          "db.migrate",
+		Group:       "db",
+		LocalName:   "migrate",
+		Type:        usercommands.CommandTypeShell,
+		Description: "Run migrations\nUsage: dwe cmd db.migrate\n",
+		Cmd:         "true",
+	})
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := genCommandsIndex(reg, dir, false, store, "en"); err != nil {
+		t.Fatal(err)
+	}
+	if err := genRegistryMarkdown(reg, dir, false, store, "en"); err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(index), "— Run migrations\n") || strings.Contains(string(index), "Usage:") {
+		t.Errorf("index must list the summary only:\n%s", index)
+	}
+	page, err := os.ReadFile(filepath.Join(dir, "db", "migrate.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), "Usage: dwe cmd db.migrate") {
+		t.Errorf("command page must keep the full description:\n%s", page)
+	}
+}

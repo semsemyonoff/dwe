@@ -27,6 +27,8 @@ commands:
   # per-command map; keys become the last ID segment
 ```
 
+The first non-empty line of a command's or group's `description:` is its summary — the only text one-line surfaces show (run banner, listing, completion, llms-txt), so write that line first and put usage notes after it in a `|` block (`>` folds everything into one line); JSON output carries both `description` and `summary`.
+
 One file per framework namespace (`commands/services/main/migrate.yml` → `services.main.migrate.{run,status,rollback}`), each entry a `service_exec` wrapping the binary verb; set `service:` / `bridge:` once on the group header.
 
 ## 3. Pick the type

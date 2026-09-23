@@ -72,11 +72,15 @@ const (
 // so the user can see at a glance which commands take parameters (and how
 // many) before opening the param form.
 type Item struct {
-	ID          string
+	ID string
+	// Description is the full text; the filter matches against it.
 	Description string
-	Type        string
-	Private     bool
-	ParamCount  int
+	// Summary is the one-line text shown in list rows and the fallback
+	// selector. Empty falls back to the first line of Description.
+	Summary    string
+	Type       string
+	Private    bool
+	ParamCount int
 	// Inspect builds the long-form description shown in the inspect viewport.
 	// It receives the viewport's content width and must wrap to it — viewports
 	// do not soft-wrap, so pre-rendering at a wider width clips the right edge

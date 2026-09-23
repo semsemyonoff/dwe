@@ -5,6 +5,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 ## Contents
 
 - [Identity and visibility](#identity-and-visibility)
+- [Description and summary](#description-and-summary)
 - [Bridge visibility](#bridge-visibility)
 - [Confirmation](#confirmation)
 - [Confirmation flow](#confirmation-flow)
@@ -23,11 +24,29 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `type` | enum | required | One of `shell`, `dwe`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
-| `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands -i`) |
+| `description` | string | — | Human-readable description. Its first non-empty line is the command's summary, shown on one-line surfaces; `commands -i` shows the full text. See [Description and summary](#description-and-summary) |
 | `private` | bool | `false` | Hides from `dwe commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
 | `hide` | string | `""` | Condition expression. When truthy at runtime, the command is treated as if it does not exist: invisible in `dwe commands`, completion, and TUI; rejected on direct invocation; and workflow steps targeting it are auto-skipped with `SkipReason="hidden"`. Same syntax as workflow step `when:` — see [Hide condition](#hide-condition) below. |
 | `bridge` | block | absent | Opts the command in to the container surface of the [host bridge](../../concepts/bridge.md) — without it the command is host-only and invisible to the in-container `dwe` shim. See [Bridge visibility](#bridge-visibility) below. |
 | `notify` | bool | `false` | Fire a desktop notification when the command finishes. See [Notifications](#notifications) below. |
+
+## Description and summary
+
+The **summary** of a command is the first non-empty line of its `description:` (after translation, when `workspace/i18n/<lang>.yml` overrides it); the full text is the long form. One-line surfaces show only the summary: the `dwe cmd` run banner, the `dwe commands` tree, shell completion, the rows of the interactive browser and its narrow-terminal selector, the `dwe docs llms-txt` command list, the `dwe docs generate` index and workflow step references. `dwe commands -i`, the browser's inspect panel and the per-command `docs generate` page print the full text, and the browser's `/` filter searches it. `--output json` carries both: `description` is the full text and `summary` its first line. A group's `description:` follows the same rule.
+
+So put a one-line summary first and usage notes or examples after it:
+
+```yaml
+commands:
+  migrate:
+    type: shell
+    description: |
+      Run database migrations
+      Pass --set step=N to roll forward N steps only.
+    cmd: php artisan migrate
+```
+
+Only a literal block (`|`) keeps line breaks. A folded block (`>`) joins its lines with spaces, so the whole paragraph becomes the summary.
 
 ## Hide condition
 
