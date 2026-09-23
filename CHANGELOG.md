@@ -27,9 +27,11 @@ generated from commit subjects and stay on the
   the extension built but not enabled in the image, a separate Composer vendor
   loaded through `auto_prepend_file`), nginx and Caddy vhosts, and a text trace
   lookup for coding agents. The lookup script ships in
-  [`examples/otel/`](examples/otel/README.md) with its unit tests; its
-  `services` subcommand queries a time window, so a service whose spans Tempo
-  has already flushed to completed blocks is no longer missing from the list.
+  [`examples/otel/`](examples/otel/README.md) with its unit tests: `summary`,
+  `list`, `show`, `traceparent`, `services` (service names over a time window,
+  default the last 24h, so services whose spans Tempo has already flushed to
+  completed blocks are listed too) and `selftest`. A query Tempo rejects exits
+  `3` with Tempo's reason; an unreachable backend exits `2`.
 - The command reference documents that `type: service_run` (and a
   `service_exec` that falls back to `run`) starts the container with
   `--no-deps --entrypoint ""`: the image's `ENTRYPOINT` is dropped, so
