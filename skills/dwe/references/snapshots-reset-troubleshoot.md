@@ -32,7 +32,7 @@ dwe docs show guides/write-snapshot-workflows --lang en
 
 ### Authoring `workspace/snapshot.yml`
 
-Top-level: `dir`, `rollback_target` (what `dwe snapshot rollback` restores — create it once after a clean deploy), `require_matching_config`, `pack.exclude`; two pipelines `create:` / `restore:` of steps (`command:` + `with:`, `parallel:`, `when:`).
+Top-level: `dir`, `rollback_target` (what `dwe snapshot rollback` restores — create it once after a clean deploy), `require_matching_config`, `pack.exclude`; workflow blocks `create:` / `restore:` (+ optional `remove:`, run by `dwe snapshot remove`) of steps (`command:` + `with:`, `parallel:`, `when:`).
 
 Load-bearing rules:
 
