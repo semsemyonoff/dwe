@@ -69,6 +69,40 @@ func TestComposeFiles_bridgeOverlayChainPosition(t *testing.T) {
 	}
 }
 
+// TestComposeFilesTracked_dropsMachineLocalFiles pins that the tracked chain
+// keeps every git-tracked overlay — disabled services and compose_after
+// included — and drops exactly the machine-local ones: both local.yml tiers
+// and the generated bridge overlay.
+func TestComposeFilesTracked_dropsMachineLocalFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeBridgeOverlayFixture(t, dir)
+	cfg := &DweConfig{
+		Compose: ComposeConfig{Base: "compose.yaml", Extra: []string{"compose.local.yml"}},
+		Services: map[string]ServiceConfig{
+			"main": {Type: ServiceTypeApp, Enabled: true,
+				Compose:           []string{"compose/main.yml"},
+				LocalComposeExtra: []string{"compose/main.local.yml"},
+				ComposeAfter:      []string{"compose/main.after.yml"}},
+			"otel": {Type: ServiceTypeTool, Enabled: false,
+				Compose:           []string{"compose/otel.yml"},
+				LocalComposeExtra: []string{"compose/otel.local.yml"},
+				ComposeAfter:      []string{"compose/otel.after.yml"}},
+		},
+		Raw: map[string]any{"__configPath": filepath.Join(dir, "workspace.yml")},
+	}
+
+	want := []string{
+		"compose.yaml",
+		"compose/otel.yml",
+		"compose/main.yml",
+		"compose/main.after.yml",
+		"compose/otel.after.yml",
+	}
+	if got := cfg.ComposeFilesTracked(); !slices.Equal(got, want) {
+		t.Errorf("ComposeFilesTracked = %v, want %v", got, want)
+	}
+}
+
 func TestComposeFiles_bridgeOverlayRequiresConfigPath(t *testing.T) {
 	// Configs built without LoadConfig carry no __configPath — the overlay
 	// existence check has no root to probe and must stay silent.

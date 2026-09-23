@@ -87,6 +87,36 @@ func TestServiceTargetDiagnostics(t *testing.T) {
 			extra:   map[string]string{"workspace/services/otel/compose.yml": ""},
 		},
 		{
+			// local.yml overlays are per-developer: a service only they declare
+			// is not a target every checkout can reach.
+			name:    "local.yml compose.extra does not count",
+			command: "type: service_exec\n    service: local-only\n    cmd: ls",
+			extra: map[string]string{
+				"workspace/local.yml": "compose:\n  extra: [local.compose.yml]\n",
+				"local.compose.yml":   "services:\n  local-only:\n    image: busybox\n",
+			},
+			wantMsg:  `service: "local-only" is not a service in any compose overlay, disabled services included`,
+			wantHint: "known compose services: app, otel-lookup",
+		},
+		{
+			// LoadConfig tolerates a missing per-service extra of a disabled
+			// service; it must not blind the check on this machine.
+			name:    "missing local.yml extra of a disabled service does not silence the check",
+			command: "type: service_run\n    service: otel-lookupx\n    cmd: ls",
+			extra: map[string]string{
+				"workspace/local.yml": "services:\n  otel:\n    compose:\n      extra: [gone.yml]\n",
+			},
+			wantMsg:  `service: "otel-lookupx" is not a service in any compose overlay, disabled services included`,
+			wantHint: `did you mean "otel-lookup"?`,
+		},
+		{
+			name:     "no tracked compose service at all",
+			command:  "type: service_exec\n    service: app\n    cmd: ls",
+			extra:    map[string]string{"docker-compose.yml": "services: {}\n", "workspace/services/otel/compose.yml": "services: {}\n"},
+			wantMsg:  `service: "app" is not a service in any compose overlay, disabled services included`,
+			wantHint: "no compose services are declared in the tracked compose files",
+		},
+		{
 			name:    "top-level include silences the check",
 			command: "type: service_run\n    service: from-include\n    cmd: ls",
 			extra:   map[string]string{"docker-compose.yml": "include: [more.yml]\nservices:\n  app:\n    image: php\n"},

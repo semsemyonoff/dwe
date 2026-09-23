@@ -43,8 +43,8 @@ func (t *composeTargets) load() {
 }
 
 // serviceTargetDiagnostics warns when a service_exec / service_run / daemon
-// command names a compose service that no overlay declares — a typo that
-// otherwise only surfaces as a compose error at run time.
+// command names a compose service that no git-tracked overlay declares — a
+// typo that otherwise only surfaces as a compose error at run time.
 //
 // Silent whenever absence cannot be proven: a templated value (resolved per
 // invocation), no loaded config, or a compose chain that is not fully
@@ -87,6 +87,9 @@ func serviceTargetHint(svc string, targets *composeTargets) string {
 	}
 	if alt := config.ClosestMatch(svc, targets.names); alt != "" {
 		return fmt.Sprintf("did you mean %q?", alt)
+	}
+	if len(targets.names) == 0 {
+		return "no compose services are declared in the tracked compose files (compose.base, compose:, compose_after:)"
 	}
 	return "known compose services: " + strings.Join(targets.names, ", ")
 }

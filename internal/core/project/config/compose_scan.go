@@ -337,9 +337,11 @@ func parseComposeFileList(files []string, projectRoot string) (out []parsedCompo
 }
 
 // ComposeServiceNames returns the sorted compose service names declared across
-// EVERY configured overlay (cfg.ComposeFilesAll()), disabled services
+// every git-tracked overlay (cfg.ComposeFilesTracked()), disabled services
 // included, so a name that only exists while some tool is enabled still
-// counts.
+// counts. Machine-local overlays (local.yml compose.extra, the bridge
+// overlay) are left out: the answer must not depend on one developer's state,
+// and a stale local path must not silence the check for that machine.
 //
 // complete is false when the set cannot prove that a name is absent: no
 // compose file is configured, a file in the chain could not be read or fully
@@ -351,7 +353,7 @@ func ComposeServiceNames(cfg *DweConfig, projectRoot string) (names []string, co
 	if cfg == nil {
 		return nil, false
 	}
-	files := cfg.ComposeFilesAll()
+	files := cfg.ComposeFilesTracked()
 	if len(files) == 0 {
 		return nil, false
 	}

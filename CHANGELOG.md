@@ -89,9 +89,11 @@ generated from commit subjects and stay on the
 
 - `dwe validate` warns when a `service_exec`, `service_run` or `daemon`
   command's `service:` (or `runner.service:`) names no compose service in any
-  overlay, disabled services included, with a "did you mean" hint. Such a typo
-  used to validate clean and fail only at run time. Templated values and
-  projects whose compose chain cannot be fully read are skipped. See
+  git-tracked overlay, disabled services included, with a "did you mean" hint.
+  Such a typo used to validate clean and fail only at run time. `local.yml`
+  `compose.extra` overlays are not consulted, so every checkout gets the same
+  answer. Templated values and projects whose tracked compose files cannot be
+  fully read are skipped. See
   [`validate.md`](docs/reference/config/validate.md#validation-domains).
 
 ### Changed

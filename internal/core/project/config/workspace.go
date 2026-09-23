@@ -682,7 +682,7 @@ const BridgeOverlayRelPath = ".dwe/compose.bridge.yml"
 // patch anything. This is the canonical file list used by all compose-aware
 // CLI operations.
 func (c *DweConfig) ComposeFiles() []string {
-	return c.composeFiles(false)
+	return c.composeFiles(false, true)
 }
 
 // ComposeFilesAll returns the ordered list of all configured compose files,
@@ -694,15 +694,25 @@ func (c *DweConfig) ComposeFiles() []string {
 // overlays are always appended last. Used by --all flags to override the
 // active set.
 func (c *DweConfig) ComposeFilesAll() []string {
-	return c.composeFiles(true)
+	return c.composeFiles(true, true)
+}
+
+// ComposeFilesTracked is ComposeFilesAll without anything machine-local: no
+// workspace/local.yml overlays (project-wide or per-service compose.extra) and
+// no generated host-bridge overlay. What remains is exactly what git-tracked
+// config declares, so a static check over it (dwe validate) gives every
+// developer the same answer whatever their local.yml or bridge state.
+func (c *DweConfig) ComposeFilesTracked() []string {
+	return c.composeFiles(true, false)
 }
 
 // composeFiles assembles the ordered -f chain for docker compose. Per-service
 // local overlays (svc.LocalComposeExtra) reuse the same `all || svc.Enabled`
 // gate as svc.Compose. The compose_after tier reuses the same gate in a
 // separate pass after all three service groups. Project-wide local overlays
-// (c.Compose.Extra) are appended unconditionally at the very end.
-func (c *DweConfig) composeFiles(all bool) []string {
+// (c.Compose.Extra) are appended unconditionally at the very end. local=false
+// drops both local.yml tiers and the bridge overlay.
+func (c *DweConfig) composeFiles(all, local bool) []string {
 	files := make([]string, 0, 1+len(c.Services))
 	if c.Compose.Base != "" {
 		files = append(files, c.Compose.Base)
@@ -724,7 +734,7 @@ func (c *DweConfig) composeFiles(all bool) []string {
 				if len(svc.Compose) > 0 {
 					files = append(files, svc.Compose...)
 				}
-				if len(svc.LocalComposeExtra) > 0 {
+				if local && len(svc.LocalComposeExtra) > 0 {
 					files = append(files, svc.LocalComposeExtra...)
 				}
 			}
@@ -749,11 +759,11 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	// project-wide local.yml overlays — local.yml stays the user
 	// customization channel and keeps the last word over anything the bridge
 	// overlay sets (design D8 chain position).
-	if c.bridgeOverlayExists() {
+	if local && c.bridgeOverlayExists() {
 		files = append(files, BridgeOverlayRelPath)
 	}
 
-	if len(c.Compose.Extra) > 0 {
+	if local && len(c.Compose.Extra) > 0 {
 		files = append(files, c.Compose.Extra...)
 	}
 
