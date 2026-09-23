@@ -828,9 +828,11 @@ def db_operation_of(attrs: Dict[str, Any]) -> Optional[str]:
     return attrs.get("db.operation") or attrs.get("db.operation.name")
 
 
-def fold_key(span: Span) -> Tuple[str, Optional[str]]:
+def fold_key(span: Span) -> Tuple[str, Optional[str], str]:
+    # The status is part of the key so an errored sibling never folds into a
+    # "×N" line: it renders on its own, with its ERROR and exception lines.
     stmt = statement_of(span)
-    return (span.name, normalize_statement(stmt) if stmt else None)
+    return (span.name, normalize_statement(stmt) if stmt else None, span.status_code)
 
 
 @dataclass

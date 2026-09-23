@@ -121,6 +121,7 @@ func TestShellRunTimeout(t *testing.T) {
 // as a `type: shell` check, and not at the default level. Not parallel: the
 // trace level is process-global.
 func TestShellRunTraceEcho(t *testing.T) {
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
 	for _, lvl := range []trace.Level{trace.LevelOff, trace.LevelVerbose} {
 		trace.Configure(nil, lvl)
 		p := &linesPrinter{}
@@ -136,7 +137,6 @@ func TestShellRunTraceEcho(t *testing.T) {
 			t.Errorf("level %d: trace lines = %q, want %q", lvl, p.lines, want)
 		}
 	}
-	trace.Configure(nil, trace.LevelOff)
 }
 
 type linesPrinter struct {

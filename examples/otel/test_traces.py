@@ -437,6 +437,17 @@ class FoldingTests(unittest.TestCase):
         self.assertIn("×12", text)
         self.assertIn("possible N+1", text)
 
+    def test_errored_sibling_is_not_folded(self):
+        trace = self._n1_trace(6)
+        last = trace["resourceSpans"][0]["scopeSpans"][0]["spans"][-1]
+        last["status"] = {"code": "STATUS_CODE_ERROR", "message": "deadlock detected"}
+        spans = traces.flatten_trace(trace)
+        roots = traces.build_tree(spans)
+        units = traces.flatten_render_units(roots, roots[0].span.start_ns, full=False)
+        text = "\n".join(line for u in units for line in u.lines)
+        self.assertIn("×5", text)
+        self.assertIn("ERROR", text)
+
     def test_below_five_no_n1_marker(self):
         trace = self._n1_trace(3)
         spans = traces.flatten_trace(trace)
@@ -885,9 +896,14 @@ class TempoErrorMappingTests(unittest.TestCase):
 
     def setUp(self):
         self._orig = traces._http_get
+        # main() resolves the base URL from TEMPO_URL; pin the default so the
+        # message assertions do not depend on the caller's environment.
+        self._orig_tempo_url = os.environ.pop("TEMPO_URL", None)
 
     def tearDown(self):
         traces._http_get = self._orig
+        if self._orig_tempo_url is not None:
+            os.environ["TEMPO_URL"] = self._orig_tempo_url
 
     def _stub(self, status, body):
         def fake(url, params=None, timeout=8.0):
