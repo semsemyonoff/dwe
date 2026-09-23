@@ -164,7 +164,7 @@ services:
 
 Traps worth knowing before the first `dwe run`:
 
-- **`dwe validate` does not see the missing `start_period`.** The failure shows up as a hung or failed `dwe run`, not as a warning.
+- **`dwe validate` does not see an image's own `HEALTHCHECK`.** Its `config.healthcheck_start_period` note covers only a `healthcheck:` block written in compose, so a slow image default like this one shows up as a hung or failed `dwe run`, not as a finding.
 - **`enable|disable --apply` restarts the whole stack.** A service without `on_enable` / `on_disable` gets the default `requires: restart`, i.e. a full `dwe restart` — database and network included (~11 s on a small Laravel stack) — and the app answers 502 through the proxy until its container is healthy again. Wait for its health endpoint, not for the `dwe` command to return. The lighter route is to drop `--apply`: `dwe services enable otel` writes the toggle, then `dwe run` (`compose up --wait` with the default `--remove-orphans`) recreates only the containers whose definition changed — `otel`, the patched apps, the proxy if the overlay touches it — and clears the pending restart.
 - **The first minutes show "No data" in every `rate()` panel.** That is the export interval, not a broken pipeline; make some requests and look in Explore → Tempo first.
 - **A `depends_on` on an optional service in the base `compose.yaml` breaks the stack while that service is disabled.** Keep the coupling inside the overlay.
