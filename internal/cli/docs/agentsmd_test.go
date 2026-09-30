@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The repo-root AGENTS.md (symlinked as CLAUDE.md) is loaded into every agent
+// The repo-root AGENTS.md is loaded into every agent
 // session in this repo, so its size is a per-session context tax exactly like
 // `dwe docs llms-txt --no-project` — which is why its budget lives next to
 // llmsTxtNoProjectBudget rather than in a package of its own.

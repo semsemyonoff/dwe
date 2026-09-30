@@ -11,7 +11,7 @@ import (
 
 // buildInfoData builds the structured JSON representation of the info dashboard.
 // It mirrors the traversal logic of core/ui/render.Info but produces data instead
-// of styled strings. The cli layer is the seam between data and rendering (CLAUDE.md).
+// of styled strings. The cli layer is the seam between data and rendering (AGENTS.md).
 func buildInfoData(cfg *config.DweConfig, infoCfg *config.InfoConfig) (infoJSON, error) {
 	result := infoJSON{
 		Title:    cfg.Project.FullName(),

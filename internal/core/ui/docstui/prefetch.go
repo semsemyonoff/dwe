@@ -83,7 +83,7 @@ func NewPrefetch(ctx context.Context, renderer mermaid.Renderer, progress chan<-
 	}
 
 	// Start the worker pool (NOT errgroup.WithContext: one worker failure must
-	// not cancel siblings — per CLAUDE.md linters pattern).
+	// not cancel siblings — per AGENTS.md linters pattern).
 	var workerWG sync.WaitGroup
 	for range MaxPrefetchWorkers {
 		workerWG.Go(func() { p.worker(pctx) })

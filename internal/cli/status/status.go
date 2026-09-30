@@ -83,7 +83,7 @@ var defaultSectionOrder = []section{
 
 // statusContext bundles everything a status subcommand needs. Built lazily
 // per command execution via loadStatusContext — never via PersistentPreRunE
-// (which would shadow the root hook; see CLAUDE.md).
+// (which would shadow the root hook; see AGENTS.md).
 type statusContext struct {
 	Cfg         *config.DweConfig
 	State       *journal.ProjectState

@@ -49,7 +49,7 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 
 // trackedServiceCompletion returns shell completion names for the deploy
 // subcommand's optional service argument. Follows the completion contract
-// from CLAUDE.md (bypasses PersistentPreRunE).
+// from AGENTS.md (bypasses PersistentPreRunE).
 func trackedServiceCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {

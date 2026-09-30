@@ -82,11 +82,11 @@ func newTreeModel(items []Item, includePrivate bool, defaultDepth int) *treeMode
 // groupOf returns the group portion of a command ID (everything before the
 // last dot). Top-level commands (no dot) belong to the root group "".
 func groupOf(id string) string {
-	i := strings.LastIndex(id, ".")
-	if i < 0 {
+	before, _, ok := strings.CutLast(id, ".")
+	if !ok {
 		return ""
 	}
-	return id[:i]
+	return before
 }
 
 func (tm *treeModel) build() {
@@ -112,8 +112,8 @@ func (tm *treeModel) ensureGroup(id string) *treeNode {
 	}
 	parent := tm.ensureGroup(groupOf(id))
 	name := id
-	if i := strings.LastIndex(id, "."); i >= 0 {
-		name = id[i+1:]
+	if _, after, ok := strings.CutLast(id, "."); ok {
+		name = after
 	}
 	n := &treeNode{
 		id:     id,

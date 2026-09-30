@@ -399,7 +399,7 @@ func looksLikeTarArchive(s string) bool {
 }
 
 // snapshotNameCompletion returns shell completion for the snapshot <name>
-// argument. Follows the CLAUDE.md completion contract (calls
+// argument. Follows the AGENTS.md completion contract (calls
 // cmdctx.CompletionConfigPath before touching the project; returns NoFileComp
 // on any error so tab-complete is never noisy).
 func snapshotNameCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
