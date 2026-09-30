@@ -4,7 +4,7 @@
 
 This is a Go CLI project named `dwe` (Dev Workspace Engine). DWE is a developer tool for local development environments running on Docker. Typical flow: a developer installs DWE locally, enters a project with DWE configuration, runs `dwe`, and the CLI detects the current directory as a DWE project. From there it automates deploy/setup steps, orchestrates Docker services, and runs project commands.
 
-Claude Code reads `AGENTS.md` natively; keep `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` out of the tree — any of them in or above the cwd suppresses `AGENTS.md`.
+Claude Code reads `AGENTS.md` natively; keep `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` out of this repo — any of them in or above the cwd suppresses `AGENTS.md`.
 
 The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Tests sit next to code as `*_test.go`; fixtures live in package-local `testdata/`.
 
