@@ -3,7 +3,7 @@
 # CodeRabbit configuration for dwe (Dev Workspace Engine) — a Go CLI.
 # Docs: https://docs.coderabbit.ai/reference/configuration
 # Project conventions that drive the review guidance below live in AGENTS.md
-# (canonical; CLAUDE.md is a symlink) and docs/internals/packages.md.
+# and docs/internals/packages.md.
 
 language: en-US
 tone_instructions: "Be concise and technical. Assume a senior Go engineer; skip basics, focus on correctness, concurrency, error handling, and the project conventions in AGENTS.md."

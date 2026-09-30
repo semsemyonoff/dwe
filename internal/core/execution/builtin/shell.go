@@ -75,7 +75,7 @@ func (Shell) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext
 	defer cancel()
 
 	var stderr bytes.Buffer
-	// Hardcoded sh -c matches deploy/condition `when:` convention (see CLAUDE.md).
+	// Hardcoded sh -c matches deploy/condition `when:` convention (see AGENTS.md).
 	c := exec.CommandContext(runCtx, "sh", "-c", cmdStr)
 	// Relative paths must mean the same thing as in condition.EvalCmd, which
 	// sets cmd.Dir = projectRoot. Without this the command ran in the process
