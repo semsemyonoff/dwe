@@ -69,11 +69,11 @@ func OverlayScrollbar(box string, yOffset, totalLines int) string {
 // leaving any surrounding ANSI styling intact (used to overwrite the box's
 // rightmost border rune with the scrollbar thumb).
 func replaceLastOverlayRune(line, old, repl string) string {
-	idx := strings.LastIndex(line, old)
-	if idx < 0 {
+	before, after, ok := strings.CutLast(line, old)
+	if !ok {
 		return line
 	}
-	return line[:idx] + repl + line[idx+len(old):]
+	return before + repl + after
 }
 
 // OverlayWheelStep is how many lines one coalesced wheel notch scrolls an

@@ -509,10 +509,7 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 		total:     len(subIndices),
 	}
 
-	phasePrefix := groupAddr
-	if i := strings.LastIndex(groupAddr, "/"); i >= 0 {
-		phasePrefix = groupAddr[:i]
-	}
+	phasePrefix, _, _ := strings.CutLast(groupAddr, "/")
 
 	if r.subs == nil {
 		r.subs = make(map[string]*subStepEntry)

@@ -199,8 +199,8 @@ func filterTopics(topics []TopicEntry, pred func(path string) bool) []TopicEntry
 }
 
 func lastSegment(p string) string {
-	if i := strings.LastIndex(p, "/"); i >= 0 {
-		return p[i+1:]
+	if _, after, ok := strings.CutLast(p, "/"); ok {
+		return after
 	}
 	return p
 }
