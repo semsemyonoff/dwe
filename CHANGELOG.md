@@ -20,6 +20,13 @@ generated from commit subjects and stay on the
 
 Nothing yet.
 
+## [0.6.4] - 2026-09-30
+
+### Removed
+
+- The repository's own `CLAUDE.md` symlink: Claude Code reads
+  `AGENTS.md` natively since [2.1.277](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21277).
+
 ## [0.6.3] - 2026-09-23
 
 ### Added
@@ -371,7 +378,8 @@ Nothing yet.
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/semsemyonoff/dwe/compare/v0.6.0...v0.6.1
