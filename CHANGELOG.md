@@ -39,6 +39,8 @@ generated from commit subjects and stay on the
 
 ### Fixed
 
+- Ralphex starter scope setup rejects symlinked and non-regular run-state settings
+  before changing any state, preventing writes outside the workspace.
 - Ralphex starter prompt generation rejects symlinked output paths and non-regular
   destinations before overwriting any prompt, agent or defaults stamp.
 - AI and IDE renderers reject directory and other non-regular file destinations

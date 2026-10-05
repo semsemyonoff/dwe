@@ -1,4 +1,4 @@
-> Translated from: guides/run-ralphex-in-a-workspace.md @ 85172e96de8f
+> Translated from: guides/run-ralphex-in-a-workspace.md @ 2ef7febbfb71
 
 # Запуск ralphex в нескольких репозиториях workspace
 
@@ -89,6 +89,8 @@ ralphex --base-ref plan-base --branch task/example docs/plans/example.md
 абсолютные пути, компоненты `..` и симлинки отклоняются. Команда записывает
 `.ralphex/run/{repos,base-ref,task-branch}`, запускает `ws-check` и восстанавливает
 предыдущее состояние при ошибке проверки. Не коммитьте это состояние запуска.
+Существующие файлы настроек состояния должны быть обычными файлами; симлинки и
+другие типы файлов отклоняются до изменения состояния.
 
 Проверить выбранные репозитории можно так:
 

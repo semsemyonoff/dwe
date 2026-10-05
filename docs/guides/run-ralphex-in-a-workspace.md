@@ -84,6 +84,8 @@ ordinary checkouts with a `.git` directory; absolute paths, `..` components and
 symlinks are rejected. The command writes `.ralphex/run/{repos,base-ref,task-branch}`,
 runs `ws-check`, and restores previous run state if validation fails. Never commit
 that run state.
+Existing run-state settings must be ordinary files; symlinks and other file types
+are rejected before changing any state.
 
 Inspect the selected repositories with:
 

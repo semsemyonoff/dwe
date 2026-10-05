@@ -26,6 +26,13 @@ run=.ralphex/run
 if [ -e "$run" ]; then
   [ -d "$run" ] || fail 'run state must be a directory'
 fi
+for setting in repos base-ref task-branch; do
+  dest=$run/$setting
+  [ ! -L "$dest" ] || fail "run state setting must be an ordinary file: $dest"
+  if [ -e "$dest" ]; then
+    [ -f "$dest" ] || fail "run state setting must be an ordinary file: $dest"
+  fi
+done
 scratch=$(mktemp -d "$root/.ralphex/.scope.XXXXXX")
 had_previous=false
 pending=false

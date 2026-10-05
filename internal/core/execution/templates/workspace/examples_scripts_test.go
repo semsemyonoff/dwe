@@ -330,6 +330,55 @@ func TestExampleRalphexScope(t *testing.T) {
 	}
 }
 
+func TestExampleRalphexScope_RejectsUnsafeSettingsBeforeWriting(t *testing.T) {
+	t.Parallel()
+	requireSh(t)
+	for _, setting := range []string{"repos", "base-ref", "task-branch"} {
+		for _, kind := range []string{"directory", "directory-symlink", "file-symlink", "dangling-symlink"} {
+			t.Run(setting+"/"+kind, func(t *testing.T) {
+				t.Parallel()
+				f := newWSGitFixture(t)
+				script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+				dest := filepath.Join(f.root, ".ralphex/run", setting)
+				if err := os.Remove(dest); err != nil {
+					t.Fatal(err)
+				}
+				external := t.TempDir()
+				writeFile(t, filepath.Join(external, setting), "external state\n")
+				if kind == "directory" {
+					if err := os.Mkdir(dest, 0o755); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					target := external
+					switch kind {
+					case "file-symlink":
+						target = filepath.Join(external, setting)
+					case "dangling-symlink":
+						target = filepath.Join(external, "missing")
+					}
+					if err := os.Symlink(target, dest); err != nil {
+						t.Fatal(err)
+					}
+				}
+				before := snapshotExampleTree(t, filepath.Join(f.root, ".ralphex"))
+				externalBefore := snapshotExampleTree(t, external)
+				cmd := f.command(script)
+				cmd.Env = append(cmd.Env, "RALPHEX_REPOS=.", "RALPHEX_BASE=base", "RALPHEX_BRANCH=task")
+				out, err := cmd.CombinedOutput()
+				if err == nil {
+					t.Fatalf("unsafe state destination accepted: %s", out)
+				}
+				assertExampleTreeUnchanged(t, external, externalBefore)
+				assertExampleTreeUnchanged(t, filepath.Join(f.root, ".ralphex"), before)
+				if !strings.Contains(string(out), "run state setting must be an ordinary file: .ralphex/run/"+setting) {
+					t.Fatalf("unexpected error: %s", out)
+				}
+			})
+		}
+	}
+}
+
 func TestExampleRalphexScope_FailedFirstRunRemovesState(t *testing.T) {
 	t.Parallel()
 	requireSh(t)

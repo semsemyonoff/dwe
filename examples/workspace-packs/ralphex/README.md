@@ -41,7 +41,8 @@ ralphex --base-ref plan-base --branch task/example docs/plans/example.md
 
 `repos` takes whitespace-separated workspace-relative paths without whitespace
 in their names. Use `repos=.` for a root-only plan. The root is always included.
-The script validates ordinary checkouts and refs, and restores previous run state
+The script rejects symlinked or non-regular run-state settings before changing
+state, validates ordinary checkouts and refs, and restores previous run state
 on failure. `ws-check`/`ws-status` can inspect release checkouts; the plan's
 preflight must prepare the task branch in every scoped repo, including the root,
 before `ws-log`/`ws-diff`/`ws-wip` work. They require the base to be an ancestor.
