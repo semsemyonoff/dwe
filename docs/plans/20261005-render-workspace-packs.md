@@ -78,18 +78,22 @@
 - Modify: `internal/core/execution/templates/ide/ide.go`
 - Create/Modify: `internal/core/execution/templates/packcommon/*_test.go`
 
-- [ ] split the current `ai.RenderTemplateFile` into `packcommon.PrepareFile` (resolve via packroot,
+- [x] split the current `ai.RenderTemplateFile` into `packcommon.PrepareFile` (resolve via packroot,
       render or verbatim-read into a buffer, mode normalized: any exec bit → `0755`, else `0644`) and `packcommon.CheckDest` + `WriteFile`
       (containment, symlink and real-path checks, refuse symlink/directory dest, write, explicit
       `os.Chmod` when mode-from-source is on); error labels are parameters
-- [ ] move `EnsureRelativeSymlink` into `packcommon` with a label/hint parameter (ai keeps its
+- [x] move `EnsureRelativeSymlink` into `packcommon` with a label/hint parameter (ai keeps its
       `render.ai.enabled` hint, ide its own)
-- [ ] switch `ai` and `ide` `RenderTemplateFile`/`EnsureRelativeSymlink` to the helpers; `ai`/`ide`
+- [x] switch `ai` and `ide` `RenderTemplateFile`/`EnsureRelativeSymlink` to the helpers; `ai`/`ide`
       stay template + `0644`, no chmod
-- [ ] write tests: template, verbatim with `{{PLAN_FILE}}` byte-for-byte, `0755` source, overwrite
+- [x] write tests: template, verbatim with `{{PLAN_FILE}}` byte-for-byte, `0755` source, overwrite
       `0644`→`0755` and back, `.local` override hit
-- [ ] write tests for errors: dest escapes root, symlinked dest, dest is a directory, symlinked parent
-- [ ] run tests — existing `ai`/`ide` tests pass unchanged; must pass before next task
+- [x] write tests for errors: dest escapes root, symlinked dest, dest is a directory, symlinked parent
+- [x] run tests — existing `ai`/`ide` tests pass unchanged; must pass before next task
+
+Validation: `make build`, the plan's scoped tests, and scoped `golangci-lint` passed.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 2: `render` root key
 

@@ -18,7 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- AI and IDE renderers reject directory and other non-regular file destinations
+  before writing, with an explicit destination error.
 
 ## [0.6.4] - 2026-09-30
 

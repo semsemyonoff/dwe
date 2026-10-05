@@ -1,12 +1,14 @@
 // Package packcommon holds infrastructure shared by the ai/ide/git template
 // packs: the extends-chain walkers, the render TemplateData context (and its
-// service-type accessors), and the in-memory dry-run renderer. The per-kind
-// resolvers (collision policy, manifest validation) deliberately stay in their
+// service-type accessors), file preparation and writes, relative symlinks,
+// and the in-memory dry-run renderer. The per-kind resolvers (collision policy,
+// manifest validation) deliberately stay in their
 // own packages — only the byte-identical scaffolding lives here.
 package packcommon
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,10 +19,172 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packroot"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
 // maxDepth bounds every extends-chain walk (defense-in-depth cycle guard).
 const maxDepth = 32
+
+// PreparedFile holds source bytes (rendered when requested) and normalized
+// permissions. Preparation never creates destination files or directories.
+type PreparedFile struct {
+	Data         []byte
+	Mode         os.FileMode
+	FromOverride bool
+}
+
+// PrepareFile resolves a pack source, then renders it or reads it verbatim.
+// Any source executable bit selects 0755; all other sources select 0644.
+func PrepareFile(kind, projectRoot, packName, rel string, data TemplateData, renderTemplate bool) (PreparedFile, error) {
+	sourcePath, fromOverride, err := packroot.Resolve(projectRoot, kind, packName, rel)
+	if err != nil {
+		return PreparedFile{}, fmt.Errorf("resolve template %s: %w", rel, err)
+	}
+	source, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return PreparedFile{}, fmt.Errorf("read template %s: %w", sourcePath, err)
+	}
+	fi, err := os.Stat(sourcePath)
+	if err != nil {
+		return PreparedFile{}, fmt.Errorf("stat template %s: %w", sourcePath, err)
+	}
+	mode := os.FileMode(0o644)
+	if fi.Mode().Perm()&0o111 != 0 {
+		mode = 0o755
+	}
+	if renderTemplate {
+		name := filepath.Base(sourcePath)
+		t, err := template.New(name).Option("missingkey=error").Parse(string(source))
+		if err != nil {
+			return PreparedFile{}, fmt.Errorf("parse template %s: %w", name, err)
+		}
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			return PreparedFile{}, fmt.Errorf("render template %s: %w", name, err)
+		}
+		source = buf.Bytes()
+	}
+	return PreparedFile{Data: source, Mode: mode, FromOverride: fromOverride}, nil
+}
+
+// DestLabels preserves each render kind's destination error vocabulary.
+type DestLabels struct {
+	Path            string
+	Boundary        string
+	ResolveBoundary string
+}
+
+// CheckDest checks containment, parent directories and the destination without
+// writing anything. Missing directories are resolved from their nearest existing
+// ancestor. Existing destinations must be regular files.
+func CheckDest(dest, absDestRoot, absRoot string, labels DestLabels) (string, error) {
+	absDest, err := filepath.Abs(filepath.Join(absDestRoot, dest))
+	if err != nil {
+		return "", fmt.Errorf("resolve destination: %w", err)
+	}
+	if filepath.IsAbs(dest) {
+		return "", fmt.Errorf("%s %q escapes %s: path is absolute", labels.Path, dest, labels.Boundary)
+	}
+	if _, err := pathsafe.ContainedRel(absDestRoot, absDest); err != nil {
+		return "", fmt.Errorf("%s %q escapes %s: %w", labels.Path, dest, labels.Boundary, err)
+	}
+	destDir := filepath.Dir(absDest)
+	if err := pathsafe.CheckNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
+		return "", err
+	}
+	realRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve project root: %w", err)
+	}
+	realDestRoot, err := resolveMissingDir(absDestRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", labels.ResolveBoundary, err)
+	}
+	realDir, err := resolveMissingDir(destDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve dir for %s: %w", dest, err)
+	}
+	if err := pathsafe.EnsureRealUnder(realDir, realRoot, realDestRoot); err != nil {
+		return "", fmt.Errorf("destination dir for %q resolves outside required boundaries via symlink: %w", dest, err)
+	}
+	fi, err := os.Lstat(absDest)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("stat %s: %w", dest, err)
+		}
+		return absDest, nil
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
+	}
+	if fi.IsDir() {
+		return "", fmt.Errorf("destination %q is a directory; will not overwrite", dest)
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("destination %q is not a regular file; will not overwrite", dest)
+	}
+	return absDest, nil
+}
+
+// resolveMissingDir projects a missing directory beneath its real existing
+// ancestor, so planning can check boundaries without creating directories.
+func resolveMissingDir(dir string) (string, error) {
+	ancestor := dir
+	for {
+		fi, err := os.Lstat(ancestor)
+		if err == nil {
+			if !fi.IsDir() && fi.Mode()&os.ModeSymlink == 0 {
+				return "", fmt.Errorf("%s is not a directory", ancestor)
+			}
+			realAncestor, err := filepath.EvalSymlinks(ancestor)
+			if err != nil {
+				return "", err
+			}
+			rel, err := filepath.Rel(ancestor, dir)
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(realAncestor, rel), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			return "", err
+		}
+		ancestor = parent
+	}
+}
+
+// WriteFile rechecks the destination and writes prepared bytes. Source mode
+// uses an explicit chmod to converge existing files; otherwise writes use 0644
+// on creation and preserve existing permissions, as ai/ide historically do.
+func WriteFile(file PreparedFile, dest, absDestRoot, absRoot string, labels DestLabels, modeFromSource bool) error {
+	absDest, err := CheckDest(dest, absDestRoot, absRoot, labels)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(absDest), 0o755); err != nil {
+		return fmt.Errorf("create dir for %s: %w", dest, err)
+	}
+	if _, err := CheckDest(dest, absDestRoot, absRoot, labels); err != nil {
+		return err
+	}
+	mode := os.FileMode(0o644)
+	if modeFromSource {
+		mode = file.Mode
+	}
+	if err := os.WriteFile(absDest, file.Data, mode); err != nil {
+		return fmt.Errorf("write %s: %w", dest, err)
+	}
+	if modeFromSource {
+		if err := os.Chmod(absDest, mode); err != nil {
+			return fmt.Errorf("chmod %s: %w", dest, err)
+		}
+	}
+	return nil
+}
 
 // ImplicitPackCandidates returns the implicit-chain pack name candidates for a
 // service: the service name, then each ancestor walked via Extends (in order),
@@ -298,6 +462,83 @@ func executeTemplateInMemory(kind, projectRoot, packName, rel string, data Templ
 	}
 	if err := t.Execute(&bytes.Buffer{}, data); err != nil {
 		return fmt.Errorf("render template %s: %w", name, err)
+	}
+	return nil
+}
+
+// EnsureRelativeSymlink creates or updates a relative symlink inside absHubDir.
+// Existing non-symlink files are refused; hint supplies optional recovery advice.
+func EnsureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot, label, hint string) error {
+	absLink := filepath.Join(absHubDir, linkPath)
+	absTarget := filepath.Join(absHubDir, targetWithinHub)
+
+	if _, err := pathsafe.ContainedRel(absHubDir, absLink); err != nil {
+		return fmt.Errorf("symlink link %q escapes %s directory: %w", linkPath, label, err)
+	}
+	if _, err := pathsafe.ContainedRel(absHubDir, absTarget); err != nil {
+		return fmt.Errorf("symlink target %q escapes %s directory: %w", targetWithinHub, label, err)
+	}
+
+	linkDir := filepath.Dir(absLink)
+	if err := pathsafe.CheckNoSymlinks(absRoot, linkDir, "symlink parent dir"); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(linkDir, 0o755); err != nil {
+		return fmt.Errorf("create dir for symlink %s: %w", linkPath, err)
+	}
+
+	realLinkDir, err := filepath.EvalSymlinks(linkDir)
+	if err != nil {
+		return fmt.Errorf("resolve symlink parent dir: %w", err)
+	}
+	realHubDir, err := filepath.EvalSymlinks(absHubDir)
+	if err != nil {
+		return fmt.Errorf("resolve %s dir: %w", label, err)
+	}
+	realRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root: %w", err)
+	}
+	if err := pathsafe.EnsureRealUnder(realLinkDir, realRoot, realHubDir); err != nil {
+		return fmt.Errorf("symlink parent dir resolves outside required boundaries via symlink: %w", err)
+	}
+
+	relTarget, err := filepath.Rel(linkDir, absTarget)
+	if err != nil {
+		return fmt.Errorf("compute relative path: %w", err)
+	}
+	if relTarget == "" {
+		return fmt.Errorf("symlink target resolves to empty relative path")
+	}
+
+	if fi, err := os.Lstat(absLink); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			currentTarget, err := os.Readlink(absLink)
+			if err != nil {
+				return fmt.Errorf("read symlink %s: %w", linkPath, err)
+			}
+			if currentTarget == relTarget {
+				return nil
+			}
+			if err := os.Remove(absLink); err != nil {
+				return fmt.Errorf("remove symlink %s: %w", linkPath, err)
+			}
+			if err := os.Symlink(relTarget, absLink); err != nil {
+				return fmt.Errorf("create symlink %s: %w", linkPath, err)
+			}
+			return nil
+		}
+		message := fmt.Sprintf("refuse to overwrite non-symlink file at %s", linkPath)
+		if hint != "" {
+			message += "; " + hint
+		}
+		return errors.New(message)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("stat %s: %w", linkPath, err)
+	}
+
+	if err := os.Symlink(relTarget, absLink); err != nil {
+		return fmt.Errorf("create symlink %s: %w", linkPath, err)
 	}
 	return nil
 }
