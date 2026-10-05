@@ -20,6 +20,8 @@ generated from commit subjects and stay on the
 
 ### Added
 
+- `dwe validate templates workspace` checks configured workspace packs without
+  writing files, including template execution and destination safety.
 - `dwe render workspace [pack…]` renders workspace template packs into the project
   root, using `render.workspace` by default, with pack-name completion.
 - Top-level `render.workspace` configuration for workspace template pack selection,

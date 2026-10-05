@@ -13,9 +13,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// sanitizedCfg returns the config the ide/ai/git dry-run renders must see.
+// sanitizedCfg returns the config the ide/ai/git/workspace dry-run renders must see.
 //
-// Those three renderers load LoadConfigSanitized at run time (their outputs are
+// Those renderers load LoadConfigSanitized at run time (their outputs are
 // git-tracked, so a secret must reach a template as its ENC[age:…] marker, never
 // as plaintext). The validator dry-runs the very same templates, so it loads the
 // same shape — otherwise `dwe validate` would exercise data the renderer never

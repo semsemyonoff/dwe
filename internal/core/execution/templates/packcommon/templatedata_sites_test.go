@@ -77,6 +77,7 @@ func TestTemplateDataSitesSetCommandIndex(t *testing.T) {
 		"internal/core/validate/templates/ai.go",
 		"internal/core/validate/templates/git.go",
 		"internal/core/validate/templates/ide.go",
+		"internal/core/validate/templates/workspace.go",
 	}
 	for _, w := range want {
 		if !slices.Contains(sites, w) {

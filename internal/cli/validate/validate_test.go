@@ -106,7 +106,7 @@ func TestValidateCommandTree(t *testing.T) {
 	}
 
 	// Check template subcommands.
-	for _, tmpl := range []string{"ide", "ai"} {
+	for _, tmpl := range []string{"ide", "ai", "git", "workspace"} {
 		found, _, _ := cmd.Find([]string{"templates", tmpl})
 		require.NotNil(t, found, "missing templates.%s", tmpl)
 		require.Equal(t, tmpl, found.Name())

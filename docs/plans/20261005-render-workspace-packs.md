@@ -197,16 +197,24 @@ because the local Docker daemon socket was unavailable; no repository test was s
 - Modify: `internal/core/validate/templates/ide.go` (validator list, `&AIValidator{}` at :213)
 - Modify: `internal/cli/validate/validate.go`
 
-- [ ] `WorkspaceValidator` (domain `templates`, id `workspace`): runs `workspace.Plan` on
+- [x] `WorkspaceValidator` (domain `templates`, id `workspace`): runs `workspace.Plan` on
       `render.workspace` with `sanitizedCfg(ctx)` and `commandIndex(ctx)`; errors as diagnostics;
       info when the list is empty
-- [ ] register it; add the `validate templates workspace` subcommand; add `workspace` to help at
+- [x] register it; add the `validate templates workspace` subcommand; add `workspace` to help at
       `validate.go:299-300` and the templates `Long` (:351)
-- [ ] add `internal/core/validate/templates/workspace.go` to `want` in `templatedata_sites_test.go`
-- [ ] write tests: clean pack (incl. verbatim `{{PLAN_FILE}}`) → no diagnostics, missing pack,
+- [x] add `internal/core/validate/templates/workspace.go` to `want` in `templatedata_sites_test.go`
+- [x] write tests: clean pack (incl. verbatim `{{PLAN_FILE}}`) → no diagnostics, missing pack,
       protected path, template execution error; the validator passes `commandIndex(ctx)` into
       `TemplateData` (own test, like `TestTemplateValidators_DryRunSeesCommandIndex`)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. Tests cover clean packs without diagnostics, verbatim
+placeholders, planning errors without writes, cross-pack collisions, command-index
+propagation, sanitized secrets and scoped CLI JSON diagnostics and exit codes.
+The built CLI help lists the workspace validator.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 7: Scaffold and llms.txt
 
