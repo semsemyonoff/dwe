@@ -1,4 +1,4 @@
-> Translated from: guides/run-ralphex-in-a-workspace.md @ 4032f1aef7a3
+> Translated from: guides/run-ralphex-in-a-workspace.md @ 85172e96de8f
 
 # Запуск ralphex в нескольких репозиториях workspace
 
@@ -62,6 +62,8 @@ git commit -m 'feat: configure workspace ralphex'
 завершающие правила сигналов, и никогда не копирует выгруженный config поверх
 отрендеренного. Маркеры ralphex вроде `{{PLAN_FILE}}` остаются буквальным текстом
 в файлах пака, которые копируются без шаблонизации.
+Генерация отклоняет симлинки в выходных каталогах и принадлежащие ей пути,
+которые не являются обычными файлами, до изменения переопределений и defaults stamp.
 
 ## Область репозиториев для каждого плана
 

@@ -104,7 +104,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 | `workspace/local.yml` | Per-developer overrides on top of `defaults.yml`: port overrides, enabled flags, credentials, wizard answers | CLI (merge layer 3) | Author manually + setup wizard + `dwe services enable/disable` | no |
 | `workspace/services/<name>/` | One folder per service. Folder name is the service ID — there is no `name:` field. | CLI service loader | Author manually | yes (except `local.yml` overrides) |
 | `workspace/commands/` | Declarative user commands surfaced under `dwe <name>` | CLI command registry | Author manually | yes |
-| `workspace/templates/` | Template packs consumed by `dwe render` — one subdir per kind: `config/`, `ai/`, `git/`, `ide/`, each holding `<pack>/manifest.yml` + files (`render env` uses no pack). The `config/` packs render per-service runtime config files (`.env`, …) into the service hub | CLI render pipeline | Author manually | yes |
+| `workspace/templates/` | Template packs consumed by `dwe render` — one subdir per kind: `config/`, `ai/`, `git/`, `ide/`, `workspace/`, each holding `<pack>/manifest.yml` + files (`render env` uses no pack). The `config/` packs render per-service runtime config files (`.env`, …) into the service hub; `workspace/` packs write manifest destinations into the project root | CLI render pipeline | Author manually | yes |
 | `workspace/i18n/` | Per-locale string overrides (`<lang>.yml`); paired with embedded defaults | CLI i18n store | Author manually + translators | yes |
 | `workspace/scripts/` | Shell scripts referenced from declarative commands and pipelines | Pipeline steps + user commands | Author manually | yes |
 | `workspace/deploy.yml` | Top-level deploy orchestrator pipeline. Optional — DWE has a built-in default. | Deploy executor | Author manually | yes |
@@ -210,7 +210,7 @@ The `src/` checkout is a normal nested repository — its own `.gitignore` is th
 
 ## Runtime-managed `.dwe/`
 
-Everything DWE writes during normal operation lands under `.dwe/`. The folder is gitignored and safe to delete — the next pipeline run rebuilds whatever it needs.
+DWE keeps its runtime state under `.dwe/`. The folder is gitignored and safe to delete — the next pipeline run rebuilds whatever it needs.
 
 | Path | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
@@ -233,7 +233,7 @@ The state file is written atomically after every step. If a deploy is interrupte
 
 ## Tracked-by-git summary
 
-A clean `.gitignore` for a DWE project covers the runtime-managed paths. The runtime never writes outside these folders.
+A clean `.gitignore` for a DWE project covers the runtime-managed paths:
 
 ```text
 .dwe/
@@ -244,7 +244,9 @@ workspace/local.yml
 workspace/docker.local.yml
 ```
 
-Everything else — `workspace.yml`, the rest of `workspace/` (including the `workspace/templates/config/` packs), all of `compose/` — is tracked. Authors edit the tracked tree; the CLI writes only inside the gitignored folders (with one exception: the setup wizard and `dwe services enable/disable` append to `workspace/local.yml`, which is itself gitignored).
+Everything else — `workspace.yml`, the rest of `workspace/` (including template packs), all of `compose/` — is tracked. Runtime state and service-hub output stay in the gitignored paths; the setup wizard and `dwe services enable/disable` update the gitignored `workspace/local.yml`.
+
+An explicit [`dwe render workspace`](../render/workspace.md) invocation can overwrite tracked root files such as `AGENTS.md` and `.ralphex/config`. Review and commit these generated outputs alongside their pack sources.
 
 Values in the tracked tree may be **encrypted at rest** — an `ENC[age:…]` scalar in any layer file, or a whole `*.age` source under `workspace/templates/config/`. Those are committed on purpose; only the private key that opens them stays outside the repository. See [Outside the project: `~/.config/dwe/`](#outside-the-project-configdwe) and [`secrets.md`](../config/secrets.md).
 

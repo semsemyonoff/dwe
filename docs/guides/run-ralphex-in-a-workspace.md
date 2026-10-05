@@ -57,6 +57,8 @@ five prompts (`task`, `review_first`, `review_second`, `codex`, `codex_review`) 
 five review agents. It preserves the installed defaults, including their trailing
 signal rules, and never copies the dumped config over the rendered config.
 Ralphex markers such as `{{PLAN_FILE}}` stay literal in the pack's verbatim files.
+Generation rejects symlinked output directories and owned destinations that are
+not ordinary files before changing any override or defaults stamp.
 
 ## Set scope for each plan
 

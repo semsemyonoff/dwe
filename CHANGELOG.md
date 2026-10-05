@@ -39,6 +39,8 @@ generated from commit subjects and stay on the
 
 ### Fixed
 
+- Ralphex starter prompt generation rejects symlinked output paths and non-regular
+  destinations before overwriting any prompt, agent or defaults stamp.
 - AI and IDE renderers reject directory and other non-regular file destinations
   before writing, with an explicit destination error.
 

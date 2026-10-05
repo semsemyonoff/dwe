@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ 8f36f7730b52
+> Translated from: reference/concepts/project-layout.md @ 6e71ec975c26
 
 # Раскладка проекта
 
@@ -106,7 +106,7 @@ project:
 | `workspace/local.yml` | Переопределения на разработчика поверх `defaults.yml`: порты, флаги enabled, креды, ответы мастера | CLI (слой merge 3) | Автор вручную + setup wizard + `dwe services enable/disable` | нет |
 | `workspace/services/<name>/` | Одна папка на сервис. Имя папки — это ID сервиса, поля `name:` нет. | Загрузчик сервисов CLI | Автор вручную | да (кроме оверрайдов `local.yml`) |
 | `workspace/commands/` | Декларативные пользовательские команды, доступные как `dwe <name>` | Реестр команд CLI | Автор вручную | да |
-| `workspace/templates/` | Template-паки для `dwe render` — по подкаталогу на вид: `config/`, `ai/`, `git/`, `ide/`, в каждом `<pack>/manifest.yml` + файлы (`render env` пак не использует). Паки `config/` рендерят рантайм-конфиги сервисов (`.env`, …) в hub сервиса | Render-пайплайн CLI | Автор вручную | да |
+| `workspace/templates/` | Template-паки для `dwe render` — по подкаталогу на вид: `config/`, `ai/`, `git/`, `ide/`, `workspace/`, в каждом `<pack>/manifest.yml` + файлы (`render env` пак не использует). Паки `config/` рендерят рантайм-конфиги сервисов (`.env`, …) в hub сервиса; паки `workspace/` записывают файлы по путям манифеста в корень проекта | Render-пайплайн CLI | Автор вручную | да |
 | `workspace/i18n/` | Переопределения строк по локалям (`<lang>.yml`); сливаются со встроенными дефолтами | i18n-стор CLI | Автор вручную + переводчики | да |
 | `workspace/scripts/` | Shell-скрипты, на которые ссылаются декларативные команды и пайплайны | Шаги пайплайна + пользовательские команды | Автор вручную | да |
 | `workspace/deploy.yml` | Верхнеуровневый оркестратор пайплайна деплоя. Опционально — у DWE есть встроенный дефолт. | Исполнитель deploy | Автор вручную | да |
@@ -212,7 +212,7 @@ services/                # gitignored
 
 ## Управляемый runtime каталог `.dwe/`
 
-Всё, что DWE пишет во время нормальной работы, попадает в `.dwe/`. Папка gitignored и её безопасно удалить — следующий запуск пайплайна пересоберёт всё, что нужно.
+DWE хранит своё runtime-состояние в `.dwe/`. Папка gitignored и её безопасно удалить — следующий запуск пайплайна пересоберёт всё, что нужно.
 
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
@@ -235,7 +235,7 @@ services/                # gitignored
 
 ## Сводка по отслеживанию в git
 
-Минимальный `.gitignore` для проекта DWE покрывает пути, которыми управляет runtime. Сам runtime никогда не пишет вне этих папок.
+Минимальный `.gitignore` для проекта DWE покрывает пути, которыми управляет runtime:
 
 ```text
 .dwe/
@@ -246,7 +246,9 @@ workspace/local.yml
 workspace/docker.local.yml
 ```
 
-Всё остальное — `workspace.yml`, остальная часть `workspace/` (включая паки `workspace/templates/config/`), весь `compose/` — отслеживается. Авторы редактируют отслеживаемое дерево; CLI пишет только внутрь gitignored-папок (с одним исключением: setup wizard и `dwe services enable/disable` дописывают в `workspace/local.yml`, который и сам gitignored).
+Всё остальное — `workspace.yml`, остальная часть `workspace/` (включая template-паки), весь `compose/` — отслеживается. Runtime-состояние и выводы в hub сервисов остаются в путях из gitignore; setup wizard и `dwe services enable/disable` обновляют gitignored-файл `workspace/local.yml`.
+
+Явный вызов [`dwe render workspace`](../render/workspace.md) может перезаписать отслеживаемые файлы в корне, например `AGENTS.md` и `.ralphex/config`. Проверяйте и коммитьте сгенерированные выводы вместе с исходниками пака.
 
 Значения в отслеживаемом дереве могут быть **зашифрованы at rest** — скаляр `ENC[age:…]` в любом файле слоя или целый источник `*.age` под `workspace/templates/config/`. Они коммитятся намеренно; вне репозитория остаётся только приватный ключ, который их открывает. См. [Вне проекта: `~/.config/dwe/`](#вне-проекта-configdwe) и [`secrets.md`](../config/secrets.md).
 

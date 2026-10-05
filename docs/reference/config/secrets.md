@@ -23,7 +23,7 @@ config load time and never written back into a tracked file as plaintext.
   - [`dwe secrets key remove`](#dwe-secrets-key-remove)
   - [`dwe secrets rekey`](#dwe-secrets-rekey)
 - [Without a key: what still works](#without-a-key-what-still-works)
-- [Output guards: no marker ever reaches a rendered file](#output-guards-no-marker-ever-reaches-a-rendered-file)
+- [Output guards: no marker ever reaches a rendered runtime file](#output-guards-no-marker-ever-reaches-a-rendered-runtime-file)
 - [Validation and preflight](#validation-and-preflight)
 - [Where plaintext goes](#where-plaintext-goes)
 - [Redaction](#redaction)
@@ -641,10 +641,10 @@ literal in the config, and:
 | `dwe secrets status` | Reports every value and its reason; exits 0 |
 | `dwe run`, `dwe restart`, `dwe deploy`, `dwe reset`, `dwe stop`, the deploy wizard | **Blocked** by the `secrets.unresolved` preflight validator. At a terminal, `dwe run` / `dwe restart` and the `dwe deploy` menu first [offer to take the identity](#the-offer-inside-dwe-deploy-dwe-run-and-dwe-restart) |
 | `dwe render env`, `dwe render config` | **Fail** naming the value that would have been written |
-| `dwe render ide` / `ai` / `git` | Work — they render against a sanitized config and emit the marker |
+| `dwe render ide` / `ai` / `git` / `workspace` | Work — they render against a sanitized config and emit the marker |
 
-A missing key never renders a secret as `""`, and never writes a marker into an
-output file.
+A missing key never renders a secret as `""`, and never writes a marker into
+runtime `.env` or config-pack output. Sanitized packs may emit the committed marker.
 
 `dwe stop` is blocked because it runs the `lifecycle.yml` stop hooks, which are
 ordinary user commands and may reference `${vars.*}`; it shares the `stop`
@@ -655,7 +655,7 @@ An encrypted `project.name` / `project.prefix` is treated as **unset** by the
 `dwe prompt` hot path, which has its own lenient parser and never loads the full
 config. A marker in the compose label filter would match no container.
 
-## Output guards: no marker ever reaches a rendered file
+## Output guards: no marker ever reaches a rendered runtime file
 
 Two renderers run with no preflight (`dwe render env`, `dwe render config`), and
 `dwe run` renders `.env` *before* its preflight, so they enforce the policy
@@ -670,18 +670,22 @@ themselves:
   `chmod`ed to `0600`.
 - **Config packs** — after the `${...}` render, an output that still contains a
   marker is refused, naming the entry's `to:` path.
-- **ide / ai / git packs** — their outputs are usually **tracked by git**, so
-  those three renderers load a **sanitized** config assembled over the raw layers
+- **ide / ai / git / workspace packs** — their outputs are usually **tracked by git**, so
+  those renderers load a **sanitized** config assembled over the raw layers
   with no decrypt pass. Every field a template can reach (`.Raw`, `.Vars`,
   `.Project`, `.Runtime`, `.Services`, `.ServiceCfg`) carries the marker where the
   real config carries plaintext, so a template that reads a secret emits
   ciphertext — already committed, harmless.
 
-`.age`-sourced pack outputs are written `0600` and explicitly `chmod`ed. Other
-pack outputs keep `0644`, so a scalar secret substituted into a rendered `.env`
+`.age`-sourced config-pack outputs are written `0600` and explicitly `chmod`ed. Other
+config-pack outputs use `0644`, so a scalar secret substituted into a rendered `.env`
 lands in the gitignored hub dir at the pack's usual mode. The container reads a
 `0600` file fine, because it runs as the host UID/GID that `exports.env`
 publishes.
+
+AI and IDE outputs use `0644` on creation and preserve existing permissions.
+[Workspace outputs](../render/workspace.md) follow the resolved source mode,
+normalized to `0644` or `0755`, with an explicit chmod on each render.
 
 ## Validation and preflight
 
@@ -741,8 +745,8 @@ Decrypted values exist, by design, in:
 
 They are kept **out of**:
 
-- **git-tracked files** — ide / ai / git pack outputs render against a sanitized
-  config (see [output guards](#output-guards-no-marker-ever-reaches-a-rendered-file));
+- **git-tracked files** — ide / ai / git / workspace pack outputs render against a sanitized
+  config (see [output guards](#output-guards-no-marker-ever-reaches-a-rendered-runtime-file));
 - **dwe's own command echoes** — `-v` / `--debug` traces, their `.dwe/logs`
   copies and every plan / dry-run surface (see below);
 - **`dwe vars` output** when the key is absent — `<encrypted>`, never the

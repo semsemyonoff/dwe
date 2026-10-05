@@ -28,6 +28,8 @@ verbatim phase blocks. The command regenerates ten prompt/agent overrides from
 `ralphex --dump-defaults`; it never copies the dumped config. Prompt variable
 markers such as `{{PLAN_FILE}}` remain literal for ralphex. Generation needs POSIX
 sh, awk, diff, and either sha256sum or shasum; Git is required for run scope.
+Before writing, it rejects symlinked output directories and owned destinations
+that are not ordinary files, leaving existing overrides and the stamp untouched.
 
 For each plan, create the same base tag/ref in EVERY scoped repository AND THE
 ROOT. Set scope before launching ralphex:

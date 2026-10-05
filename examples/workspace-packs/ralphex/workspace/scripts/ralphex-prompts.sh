@@ -12,6 +12,21 @@ cd "$root"
 [ "$#" -eq 0 ] || fail 'use dwe cmd ralphex.prompts --set check=true for check mode'
 check=${RALPHEX_CHECK:-false}
 case "$check" in true|false) ;; *) fail 'RALPHEX_CHECK must be true or false' ;; esac
+check_directory() {
+  [ ! -L "$1" ] || fail "output must be an ordinary directory: $1"
+  if [ -e "$1" ]; then
+    [ -d "$1" ] || fail "output must be an ordinary directory: $1"
+  fi
+}
+check_file() {
+  [ ! -L "$1" ] || fail "output must be an ordinary file: $1"
+  if [ -e "$1" ]; then
+    [ -f "$1" ] || fail "output must be an ordinary file: $1"
+  fi
+}
+for dir in .ralphex .ralphex/prompts .ralphex/agents; do
+  check_directory "$dir"
+done
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/ralphex-prompts.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -103,6 +118,14 @@ done
 for name in documentation implementation quality simplification testing; do
   prepare agents "$name" agent
 done
+
+# Check the entire owned output set before overwriting any existing override.
+for kind in prompts agents; do
+  for file in "$output/$kind/"*.txt; do
+    check_file ".ralphex/$kind/${file##*/}"
+  done
+done
+check_file .ralphex/defaults.stamp
 
 # Unowned files remain in place; they may silently shadow newer defaults or
 # be custom agents without the workspace scope block.

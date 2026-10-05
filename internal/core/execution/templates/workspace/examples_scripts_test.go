@@ -187,6 +187,68 @@ func TestExampleRalphexPrompts_RejectInvalidInputWithoutWrites(t *testing.T) {
 	}
 }
 
+func TestExampleRalphexPrompts_RejectUnsafeDestinationsWithoutWrites(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name string
+		path string
+		kind string
+	}{
+		{name: "root symlink", path: ".ralphex", kind: "parent"},
+		{name: "prompts symlink", path: ".ralphex/prompts", kind: "parent"},
+		{name: "agents symlink", path: ".ralphex/agents", kind: "parent"},
+		{name: "prompt symlink", path: ".ralphex/prompts/task.txt", kind: "symlink"},
+		{name: "agent symlink", path: ".ralphex/agents/testing.txt", kind: "symlink"},
+		{name: "stamp symlink", path: ".ralphex/defaults.stamp", kind: "symlink"},
+		{name: "dangling prompt symlink", path: ".ralphex/prompts/task.txt", kind: "dangling"},
+		{name: "prompt directory", path: ".ralphex/prompts/task.txt", kind: "directory"},
+		{name: "stamp directory", path: ".ralphex/defaults.stamp", kind: "directory"},
+		{name: "prompts file", path: ".ralphex/prompts", kind: "file"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newPromptsFixture(t)
+			f.run(false, true, nil)
+			writeFile(t, filepath.Join(f.root, ".ralphex/blocks/task.md"), "changed block\n")
+			outside := t.TempDir()
+			target := filepath.Join(outside, "target")
+			path := filepath.Join(f.root, tt.path)
+			if tt.kind == "parent" {
+				if err := os.Rename(path, target); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.RemoveAll(path); err != nil {
+					t.Fatal(err)
+				}
+				if tt.kind == "symlink" {
+					writeFile(t, target, "external sentinel\n")
+				}
+			}
+			switch tt.kind {
+			case "parent", "symlink", "dangling":
+				if err := os.Symlink(target, path); err != nil {
+					t.Fatal(err)
+				}
+			case "directory":
+				if err := os.Mkdir(path, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "file":
+				writeFile(t, path, "ordinary file\n")
+			}
+			before := snapshotExampleTree(t, filepath.Join(f.root, ".ralphex"))
+			externalBefore := snapshotExampleTree(t, outside)
+			out := f.run(false, false, nil)
+			if !strings.Contains(out, "ordinary") {
+				t.Errorf("missing destination diagnostic: %s", out)
+			}
+			assertExampleTreeUnchanged(t, filepath.Join(f.root, ".ralphex"), before)
+			assertExampleTreeUnchanged(t, outside, externalBefore)
+		})
+	}
+}
+
 func TestExampleRalphexScope(t *testing.T) {
 	t.Parallel()
 	requireSh(t)
@@ -420,7 +482,13 @@ func snapshotExampleTree(t *testing.T, root string) map[string]exampleFileSnapsh
 			return err
 		}
 		file := exampleFileSnapshot{Mode: info.Mode(), ModTime: info.ModTime().UnixNano()}
-		if !entry.IsDir() {
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			file.Data = target
+		} else if info.Mode().IsRegular() {
 			content, err := os.ReadFile(path)
 			if err != nil {
 				return err
