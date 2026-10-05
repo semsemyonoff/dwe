@@ -12,8 +12,8 @@ import (
 	"testing"
 )
 
-// templateDataSiteRoots are the trees that construct TemplateData: the three
-// render commands, the three dry-run validators and the git renderer.
+// templateDataSiteRoots are the trees that construct TemplateData: the render
+// commands, the dry-run validators and the git renderer.
 var templateDataSiteRoots = []string{
 	"internal/cli/render",
 	"internal/core/validate/templates",
@@ -67,11 +67,12 @@ func TestTemplateDataSitesSetCommandIndex(t *testing.T) {
 		}
 	}
 
-	// Guards against a vacuous pass (renamed type, moved tree): the six known
+	// Guards against a vacuous pass (renamed type, moved tree): the known
 	// construction sites must all be found.
 	want := []string{
 		"internal/cli/render/ai.go",
 		"internal/cli/render/ide.go",
+		"internal/cli/render/workspace.go",
 		"internal/core/execution/templates/git/git.go",
 		"internal/core/validate/templates/ai.go",
 		"internal/core/validate/templates/git.go",

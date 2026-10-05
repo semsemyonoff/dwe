@@ -171,15 +171,23 @@ because the local Docker daemon socket was unavailable; no repository test was s
 - Modify: `internal/cli/render/secrets_test.go`
 - Modify: `internal/core/execution/templates/packcommon/templatedata_sites_test.go`
 
-- [ ] subcommand: args → explicit packs, no args → `cfg.Render.Workspace`; empty → info line, exit 0
-- [ ] load config with `config.LoadConfigSanitizedOrWrap`, command index via `loadCommandIndex`,
+- [x] subcommand: args → explicit packs, no args → `cfg.Render.Workspace`; empty → info line, exit 0
+- [x] load config with `config.LoadConfigSanitizedOrWrap`, command index via `loadCommandIndex`,
       output via `render.Stdout()`; no JSON mode, same as `render ai`
-- [ ] pack-name completion via `cmdctx.CompletionConfigPath` (AGENTS.md completion path safety)
-- [ ] update `render` `Long`, `Example` and the `NewCmd` doc comment
-- [ ] add `internal/cli/render/workspace.go` to `want` in `templatedata_sites_test.go`
-- [ ] write tests (temp project + `RunE`): default list, explicit pack, empty list, listed pack
+- [x] pack-name completion via `cmdctx.CompletionConfigPath` (AGENTS.md completion path safety)
+- [x] update `render` `Long`, `Example` and the `NewCmd` doc comment
+- [x] add `internal/cli/render/workspace.go` to `want` in `templatedata_sites_test.go`
+- [x] write tests (temp project + `RunE`): default list, explicit pack, empty list, listed pack
       missing, protected path; `TestNewWorkspaceCmd_rendersMarkerNotPlaintext` in `secrets_test.go`
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. CLI tests cover default and explicit pack selection,
+empty lists, planning errors without writes, sanitized secrets, command-index
+propagation and warnings, overrides, symlinks, and silent completion safety.
+The built CLI help includes the new command and examples.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 6: `dwe validate templates workspace`
 
