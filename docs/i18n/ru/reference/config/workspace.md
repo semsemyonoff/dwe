@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 97a8392ae0c4
+> Translated from: reference/config/workspace.md @ ee176b365738
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -17,6 +17,7 @@
   - [Блок `secrets:`](#блок-secrets)
   - [Блок `update:`](#блок-update)
   - [Блок `stop:`](#блок-stop)
+  - [Блок `render:`](#блок-render)
 - [Рекомендуемое соглашение о раскладке файлов](#рекомендуемое-соглашение-о-раскладке-файлов)
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [Оверлей `services`](#оверлей-services)
@@ -101,13 +102,13 @@ Dot-path'ы используются:
 **Корень** смерженного трёхслойного конфига строгий. После слияния трёх слоёв DWE проверяет ключи верхнего уровня по фиксированному allowlist'у:
 
 ```text
-project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
+project · runtime · exports · compose · docs · render · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
 
 ```text
-workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, render, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
 ```
 
 Так опечатки в формализованных ключах (`runtim:`, `exprots:`) падают громко, а не проглатываются молча, и схему можно ужесточать, не конфликтуя со специфичными для проекта значениями. Та же ошибка выводится как error-диагностика `dwe validate`.
@@ -193,8 +194,23 @@ project:
 |-------|------|-------------|
 | `project.name` | string | Короткий идентификатор проекта (используется в именах контейнеров, `.env`) |
 | `project.prefix` | string | Префикс для имени Docker Compose-проекта и меток контейнеров |
+| `render.workspace` | список строк | Workspace-паки для рендера в корень проекта; по умолчанию `[]`. См. [workspace-паки](../render/workspace.md). |
 
 `project.prefix` и `project.name` комбинируются, образуя имя Docker Compose-проекта через шаблон в `docker.yml` (`${project.prefix}-${project.name}`).
+
+### Блок `render:`
+
+Выберите паки уровня workspace независимо от пер-сервисных настроек `render.*`:
+
+```yaml
+render:
+  workspace: [ralphex, root-agents]
+```
+
+`dwe render workspace` читает этот список; явно переданные имена паков заменяют его для одного вызова. Паки находятся в `workspace/templates/workspace/<pack>/` и пишут в корень проекта. Имена, дубликаты, манифесты и безопасность назначений проверяются при рендере и через `dwe validate templates workspace`, а не при загрузке конфига. Опечатка во вложенном ключе, например `render: {workspce: [ralphex]}`, даёт предупреждение `config.unknown_field:render` в `dwe validate`.
+
+Блок участвует во всех трёх слоях конфига. Списки заменяются целиком: `render: {workspace: []}` в `workspace/local.yml` отключает настроенные паки для этого разработчика. Рендер запускается явно; `dwe run` и deploy не рендерят эти паки автоматически. См. [workspace-паки](../render/workspace.md) и [Запуск ralphex в workspace](../../guides/run-ralphex-in-a-workspace.md).
+
 
 ### Блок `secrets:`
 
@@ -277,6 +293,7 @@ docs:
 **`docs.cache_size_mb`**: максимальный размер в MB для кеша mermaid-диаграмм (PNG-файлы, хранящиеся в `$XDG_CACHE_HOME/dwe/mermaid/`). Кеш использует LRU-вытеснение при превышении лимита. По умолчанию 100 MB. Значение должно быть неотрицательным; ноль приводит к дефолту 100.
 
 ---
+
 
 ## Рекомендуемое соглашение о раскладке файлов
 

@@ -361,13 +361,13 @@ all other Docker calls used the real executable. No repository test was skipped
 or changed to accommodate the unavailable daemon.
 
 ### Task 11: [Final] Update documentation
-- [ ] create `docs/reference/render/workspace.md` (activation, `.tmpl` vs verbatim, mode, protected
+- [x] create `docs/reference/render/workspace.md` (activation, `.tmpl` vs verbatim, mode, protected
       paths, collisions, two-phase write, template data, CLI, validate); add it to
       `docs/reference/render/index.md` (kind table, TOC), `docs/reference/index.md:11`,
       `docs/reference/templates.md:3`, `docs/reference/config/validate.md:119`
-- [ ] `docs/reference/config/workspace.md`: `render.workspace` field, allowlist block and the literal
+- [x] `docs/reference/config/workspace.md`: `render.workspace` field, allowlist block and the literal
       error message example (:102-110)
-- [ ] create `docs/guides/run-ralphex-in-a-workspace.md`: why (notes), install from the examples
+- [x] create `docs/guides/run-ralphex-in-a-workspace.md`: why (notes), install from the examples
       (link `examples/workspace-packs/ralphex/README.md`, a file — precedent
       `docs/guides/observability-otel.md:457`; fetch from the tag matching the installed dwe; do not
       inline the files), the `cp -R …/workspace/.` command and the `/.ralphex/run/` ignore line,
@@ -376,16 +376,30 @@ or changed to accommodate the unavailable daemon.
       maintenance (ralphex update → `dwe cmd ralphex.prompts --set check=true`), policy fragments,
       root in scope (base in root too), known limitations from the notes, stage 2 note; add to
       `docs/guides/index.md`; mention the examples in `docs/reference/render/workspace.md`
-- [ ] `README.md:217` render list; mirror all new/changed pages and `docs/i18n/ru/README.md:219` in
+- [x] `README.md:217` render list; mirror all new/changed pages and `docs/i18n/ru/README.md:219` in
       `docs/i18n/ru/`; after `make gen-docs-manifest` update the `> Translated from: … @ <hash>`
       headers (`TestRussianTranslationsAreFresh`)
-- [ ] `skills/dwe/SKILL.md:153` (mutating render commands) and `skills/dwe/references/render-and-vars.md`
+- [x] `skills/dwe/SKILL.md:153` (mutating render commands) and `skills/dwe/references/render-and-vars.md`
       (new bullet + "apply by source" lines :75,79) with a pointer to the guide
-- [ ] `docs/internals/packages.md`: the kind under execution templates and § `internal/cli/render/`.
+- [x] `docs/internals/packages.md`: the kind under execution templates and § `internal/cli/render/`.
       Do not grow `AGENTS.md` (32 B under `TestAgentsMdBudget`)
-- [ ] `CHANGELOG.md` `## [Unreleased]`: new kind, new root key, scaffold no longer ignores `.ralphex/`,
+- [x] `CHANGELOG.md` `## [Unreleased]`: new kind, new root key, scaffold no longer ignores `.ralphex/`,
       example packs under `examples/workspace-packs/`
-- [ ] run `make gen-docs-manifest` (commit `internal/core/docs/content_hashes_gen.go`), `make embedded-docs`, `make test`, `make lint`
+- [x] run `make gen-docs-manifest` (commit `internal/core/docs/content_hashes_gen.go`), `make embedded-docs`, `make test`, `make lint`
+
+Validation: `make gen-docs-manifest`, `make embedded-docs`, `make build`, full
+`make test`, and `make lint` passed (zero lint issues). New embedded-doc tests
+resolve the workspace reference and ralphex guide in both English and Russian,
+verify fresh translations without fallback, and check navigable document sections.
+The existing translation-freshness and link-anchor checks passed. `web/npm test`
+passed all 28 tests; `web/npm run build` produced 156 pages and reported all
+internal links valid. Astro used plain-text highlighting for unsupported code
+fence languages, as it already does on existing reference pages.
+The initial full test run failed in the pre-wizard secrets and fresh-scaffold
+validation tests because the local Docker daemon socket was unavailable. The
+passing run used a temporary stub for only
+`docker version --format {{.Server.Version}}`; all other Docker calls used the
+real executable. No repository test was skipped or changed to accommodate this.
 
 *Note: ralphex moves this plan to docs/plans/completed/ when it finishes.*
 

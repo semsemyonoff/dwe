@@ -20,6 +20,11 @@ generated from commit subjects and stay on the
 
 ### Added
 
+- Tested workspace starter packs under `examples/workspace-packs/`: ralphex
+  configuration, prompt generation and repository scope commands, plus root agent
+  documentation; installation and maintenance are covered in the new workspace
+  render reference and ralphex guide.
+
 - `dwe validate templates workspace` checks configured workspace packs without
   writing files, including template execution and destination safety.
 - `dwe render workspace [pack…]` renders workspace template packs into the project
