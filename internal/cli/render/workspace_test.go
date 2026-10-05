@@ -83,6 +83,66 @@ func TestNewWorkspaceCmd_selection(t *testing.T) {
 	}
 }
 
+func TestNewWorkspaceCmd_filesAndModes(t *testing.T) {
+	const verbatim = "#!/bin/sh\n{{PLAN_FILE}} {{ .Project.Name }}\n"
+	for _, tc := range []struct {
+		name   string
+		before os.FileMode
+		source os.FileMode
+		want   os.FileMode
+	}{
+		{name: "create", source: 0o600, want: 0o644},
+		{name: "make executable", before: 0o644, source: 0o700, want: 0o755},
+		{name: "remove executable", before: 0o755, source: 0o600, want: 0o644},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := workspaceRenderProject(t, "render:\n  workspace: [docs, scripts]\n")
+			setupWorkspacePack(t, root, "docs", map[string]string{
+				"manifest.yml": "render:\n  - from: root.tmpl\n    to: ROOT.md\n",
+				"root.tmpl":    "project={{ .Project.Name }}\n",
+			})
+			setupWorkspacePack(t, root, "scripts", map[string]string{
+				"manifest.yml": "render:\n  - from: script\n    to: .tool/scripts/run\n",
+				"script":       verbatim,
+			})
+			if tc.before != 0 {
+				for _, dest := range []string{"ROOT.md", ".tool/scripts/run"} {
+					writeWorkspaceFixture(t, root, dest, "old content")
+					if err := os.Chmod(filepath.Join(root, dest), tc.before); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for _, source := range []string{"docs/root.tmpl", "scripts/script"} {
+				if err := os.Chmod(filepath.Join(root, "workspace/templates/workspace", source), tc.source); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := newWorkspaceCmd(&cmdctx.RootFlags{ConfigPath: filepath.Join(root, "workspace.yml")})
+			if _, err := captureStdout(t, func() error { return cmd.RunE(cmd, nil) }); err != nil {
+				t.Fatal(err)
+			}
+			for _, file := range []struct {
+				path    string
+				content string
+			}{
+				{path: "ROOT.md", content: "project=test-project\n"},
+				{path: ".tool/scripts/run", content: verbatim},
+			} {
+				path := filepath.Join(root, file.path)
+				assertRenderedIndex(t, path, file.content)
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := info.Mode().Perm(); got != tc.want {
+					t.Errorf("%s mode = %04o, want %04o", file.path, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestNewWorkspaceCmd_errorsLeaveDestinationsUntouched(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -93,6 +153,9 @@ func TestNewWorkspaceCmd_errorsLeaveDestinationsUntouched(t *testing.T) {
 		{name: "listed pack missing", want: "stat workspace pack \"second\""},
 		{name: "explicit pack missing", args: []string{"first", "missing"}, want: "stat workspace pack \"missing\""},
 		{name: "protected path", dest: "workspace.yml", want: "protected"},
+		{name: "case-insensitive protected path", dest: ".GIT/hooks/pre-commit", want: "protected"},
+		{name: "equal collision", dest: "first.txt", want: "collides"},
+		{name: "file-directory collision", dest: "first.txt/child", want: "collides"},
 		{name: "duplicate packs", args: []string{"first", "first"}, want: "duplicated"},
 		{name: "invalid pack", args: []string{"../outside"}, want: "identifier-safe"},
 	} {

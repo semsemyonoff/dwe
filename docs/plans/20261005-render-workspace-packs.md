@@ -342,11 +342,23 @@ The scoped suite used a temporary stub for only `docker version --format {{.Serv
 because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 10: Verify acceptance criteria
-- [ ] `render.workspace` renders listed packs into the root; `.tmpl` templated, others verbatim,
+- [x] `render.workspace` renders listed packs into the root; `.tmpl` templated, others verbatim,
       mode follows source; protected paths and collisions rejected before any write
-- [ ] `ai`/`ide`/`git`/`config` behavior unchanged
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
+- [x] `ai`/`ide`/`git`/`config` behavior unchanged
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
+
+Validation: the full `make test` suite and `make lint` passed (zero lint issues).
+New CLI acceptance tests cover multiple configured packs, `.tmpl` rendering versus
+verbatim placeholders, source-mode normalization, overwriting files while adding
+and removing executable permissions, case-insensitive protected paths, and equal
+and file-vs-directory cross-pack collisions leaving destinations untouched.
+Existing ai/ide/git/config regression tests also passed.
+The initial full-suite run failed in the pre-wizard secrets and fresh-scaffold
+validation tests because the local Docker daemon was unavailable. The passing
+run used a temporary stub for only `docker version --format {{.Server.Version}}`;
+all other Docker calls used the real executable. No repository test was skipped
+or changed to accommodate the unavailable daemon.
 
 ### Task 11: [Final] Update documentation
 - [ ] create `docs/reference/render/workspace.md` (activation, `.tmpl` vs verbatim, mode, protected
