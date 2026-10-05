@@ -120,20 +120,26 @@ because the local Docker daemon socket was unavailable; no repository test was s
 - Create: `internal/core/execution/templates/workspace/workspace.go`
 - Create: `internal/core/execution/templates/workspace/workspace_test.go`
 
-- [ ] `ResolvePack(projectRoot, name)`: `ValidatePackName`, strict lookup under
+- [x] `ResolvePack(projectRoot, name)`: `ValidatePackName`, strict lookup under
       `workspace/templates/workspace/`, symlinked or non-directory pack → error
-- [ ] `Plan(projectRoot, names, data)`: reject duplicate names; load manifests;
+- [x] `Plan(projectRoot, names, data)`: reject duplicate names; load manifests;
       `manifest.ValidateShape` (dest root = project root); protected-path check on `to` and `link`
       (case-insensitive); cross-pack collisions incl. file-vs-directory prefixes; sources via
       `ValidateSourcesWith`
-- [ ] in the same phase prepare every render entry into memory via `packcommon.PrepareFile`
+- [x] in the same phase prepare every render entry into memory via `packcommon.PrepareFile`
       (only `.tmpl` are executed — do not reuse `DryRunRender`, it parses verbatim files) and run
       `packcommon.CheckDest` for every destination and symlink parent; return the planned writes
-- [ ] write tests for success: two packs, `.local` override, verbatim `{{PLAN_FILE}}` + template mix
-- [ ] write tests for errors: missing pack, duplicate name, each protected path for `to` and
+- [x] write tests for success: two packs, `.local` override, verbatim `{{PLAN_FILE}}` + template mix
+- [x] write tests for errors: missing pack, duplicate name, each protected path for `to` and
       `link`, case-variant (`Workspace.yml`, `.GIT/hooks`), equal and prefix collisions, missing
       source, `missingkey` error, dest is a directory
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. Tests verify that successful and failed plans leave files,
+directories, permissions and symlinks unchanged, including a failure in the second pack.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 4: Workspace pack write phase
 
