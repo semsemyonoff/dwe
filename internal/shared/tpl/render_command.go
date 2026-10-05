@@ -138,6 +138,7 @@ var KnownVarHeads = []string{
 	"exports",
 	"compose",
 	"docs",
+	"render",
 	"services",
 	"vars",
 	"update",

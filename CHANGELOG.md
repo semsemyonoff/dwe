@@ -18,6 +18,11 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+### Added
+
+- Top-level `render.workspace` configuration for workspace template pack selection,
+  with list replacement across config layers and typo warnings for unknown fields.
+
 ### Fixed
 
 - AI and IDE renderers reject directory and other non-regular file destinations

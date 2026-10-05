@@ -755,6 +755,97 @@ func TestLoadConfig_update_invalidModeNamesSourceLayer(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_renderWorkspace(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		workspace string
+		defaults  string
+		local     string
+		want      []string
+	}{
+		{
+			name: "absent key",
+		},
+		{
+			name:      "empty block",
+			workspace: "render: {}\n",
+		},
+		{
+			name:      "workspace list preserves order",
+			workspace: "render: {workspace: [root-agents, ralphex]}\n",
+			want:      []string{"root-agents", "ralphex"},
+		},
+		{
+			name:     "defaults only",
+			defaults: "render: {workspace: [ralphex]}\n",
+			want:     []string{"ralphex"},
+		},
+		{
+			name:      "defaults replace workspace list",
+			workspace: "render: {workspace: [root-agents, ralphex]}\n",
+			defaults:  "render: {workspace: [defaults-pack]}\n",
+			want:      []string{"defaults-pack"},
+		},
+		{
+			name:  "local only",
+			local: "render: {workspace: [local-pack]}\n",
+			want:  []string{"local-pack"},
+		},
+		{
+			name:      "local replaces both lower layers",
+			workspace: "render: {workspace: [root-agents, ralphex]}\n",
+			defaults:  "render: {workspace: [defaults-pack]}\n",
+			local:     "render: {workspace: [local-pack]}\n",
+			want:      []string{"local-pack"},
+		},
+		{
+			name:      "empty local block preserves list",
+			workspace: "render: {workspace: [ralphex]}\n",
+			local:     "render: {}\n",
+			want:      []string{"ralphex"},
+		},
+		{
+			name:      "local empty list clears both lower layers",
+			workspace: "render: {workspace: [root-agents, ralphex]}\n",
+			defaults:  "render: {workspace: [defaults-pack]}\n",
+			local:     "render: {workspace: []}\n",
+			want:      []string{},
+		},
+		{
+			name:      "pack name validation deferred to renderer",
+			workspace: "render: {workspace: [../invalid, ralphex, ralphex]}\n",
+			want:      []string{"../invalid", "ralphex", "ralphex"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeFullFixture(
+				t, sampleWorkspaceYML+tt.workspace, tt.defaults, tt.local, "", noToolsYML,
+			)
+			cfg, err := LoadConfig(path)
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if !reflect.DeepEqual(cfg.Render.Workspace, tt.want) {
+				t.Errorf("Render.Workspace = %#v, want %#v", cfg.Render.Workspace, tt.want)
+			}
+			if tt.want != nil {
+				value, ok := ResolvePath(cfg.Raw, "render.workspace")
+				wantRaw := make([]any, len(tt.want))
+				for i, pack := range tt.want {
+					wantRaw[i] = pack
+				}
+				if !ok || !reflect.DeepEqual(value, wantRaw) {
+					t.Errorf("Raw render.workspace = %#v (ok=%v), want %#v", value, ok, wantRaw)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
 	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
 	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)

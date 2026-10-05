@@ -44,6 +44,7 @@ var allowedRootKeys = []string{
 	"exports",
 	"compose",
 	"docs",
+	"render",
 	"services",
 	"vars",
 	"update",
@@ -119,6 +120,7 @@ type DweConfig struct {
 	Compose ComposeConfig        `yaml:"compose"`
 	Deploy  *ProjectDeployConfig `yaml:"-"`
 	Docs    DocsConfig           `yaml:"docs"`
+	Render  RenderConfig         `yaml:"render"`
 
 	// Update is the formalized top-level self-update policy. It participates in
 	// the 3-layer merge (scalar mode last-layer-wins), so a project author sets
@@ -176,6 +178,11 @@ type DweConfig struct {
 	// and .dwe/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
 	userConfig *userpkg.Config `yaml:"-"`
+}
+
+// RenderConfig selects template packs enabled at the workspace level.
+type RenderConfig struct {
+	Workspace []string `yaml:"workspace"`
 }
 
 // UpdateConfig is the formalized top-level self-update policy block. Mode must be

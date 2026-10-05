@@ -103,11 +103,16 @@ because the local Docker daemon socket was unavailable; no repository test was s
 - Modify: `internal/core/validate/config/formal_blocks.go`
 - Modify: tests in `internal/core/project/config/` and `internal/core/validate/config/`
 
-- [ ] add `render` to `allowedRootKeys` and to `tpl.KnownVarHeads`; add `Render RenderConfig` to `DweConfig`
-- [ ] register `"render": reflect.TypeFor[config.RenderConfig]()` in `formalBlockStructs`
-- [ ] write tests: decode, last-layer-wins across layers, `local.yml` `workspace: []` clears the list, absent key
-- [ ] write test: `render: {workspce: …}` yields the `config.unknown_field:render` warning
-- [ ] run tests (incl. `TestAllowedRootKeysSubsetOfKnownVarHeads`); must pass before next task
+- [x] add `render` to `allowedRootKeys` and to `tpl.KnownVarHeads`; add `Render RenderConfig` to `DweConfig`
+- [x] register `"render": reflect.TypeFor[config.RenderConfig]()` in `formalBlockStructs`
+- [x] write tests: decode, last-layer-wins across layers, `local.yml` `workspace: []` clears the list, absent key
+- [x] write test: `render: {workspce: …}` yields the `config.unknown_field:render` warning
+- [x] run tests (incl. `TestAllowedRootKeysSubsetOfKnownVarHeads`); must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed, including the root-key/template-head cross-checks.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 3: Workspace pack plan phase (resolve, validate, render in memory)
 

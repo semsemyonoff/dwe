@@ -40,9 +40,42 @@ stop:
   port_release_timeout: 2m
 update:
   mode: on
+render:
+  workspace: [ralphex]
 `)
 	diags := runFormalBlocksValidator(t, root)
 	require.Empty(t, diags, "well-formed formal blocks must produce no warnings, got %+v", diags)
+}
+
+func TestFormalBlocks_TypoUnderRender_Warns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		file string
+	}{
+		{name: "workspace", file: "workspace.yml"},
+		{name: "defaults", file: "workspace/defaults.yml"},
+		{name: "local", file: "workspace/local.yml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			writeProjectFile(t, root, tt.file, "render: {workspce: [ralphex]}\n")
+			diags := runFormalBlocksValidator(t, root)
+
+			require.Len(t, diags, 1)
+			d := diags[0]
+			require.Equal(t, validate.SeverityWarning, d.Severity)
+			require.Equal(t, "config", d.Domain)
+			require.Equal(t, "config.unknown_field:render", d.Target)
+			require.Equal(t, tt.file, d.File)
+			require.Equal(t, 1, d.Line)
+			require.Equal(t, `unknown field "workspce" under "render"`, d.Message)
+			require.Contains(t, d.Hint, "known fields: workspace")
+		})
+	}
 }
 
 func TestFormalBlocks_ComposeExtraInLocal_NotFalsePositive(t *testing.T) {
