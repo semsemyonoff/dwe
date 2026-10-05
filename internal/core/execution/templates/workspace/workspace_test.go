@@ -440,6 +440,207 @@ func TestPlanShapeAndSelection(t *testing.T) {
 	}
 }
 
+func TestRender(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	createPack(t, root, "ralphex", manifest.File{
+		Render: []manifest.RenderEntry{
+			{From: "config.tmpl", To: ".ralphex/config"},
+			{From: "task.md", To: ".ralphex/prompts/task.md"},
+			{From: "ws-git", To: ".ralphex/scripts/ws-git"},
+		},
+	}, map[string]string{
+		"config.tmpl": "canonical {{ .Project.Name }}",
+		"task.md":     "{{PLAN_FILE}}\r\n{{ .Project.Name }}\x00\xff",
+		"ws-git":      "#!/bin/sh\n",
+	})
+	override := filepath.Join(root, "workspace", "templates", "workspace", "ralphex.local", "config.tmpl")
+	writeFile(t, override, "override {{ .Project.Name }}")
+	script := filepath.Join(root, "workspace", "templates", "workspace", "ralphex", "ws-git")
+	chmod(t, script, 0o755)
+	writeFile(t, filepath.Join(root, ".ralphex", "config"), "old config")
+	createPack(t, root, "agents", manifest.File{
+		Render:   []manifest.RenderEntry{{From: "AGENTS.md.tmpl", To: "AGENTS.md"}},
+		Symlinks: []manifest.SymlinkEntry{{Link: "agent/CLAUDE.md", To: "AGENTS.md"}},
+	}, map[string]string{"AGENTS.md.tmpl": "agents for {{ .Project.Name }}"})
+	data := packcommon.TemplateData{Project: config.ProjectConfig{Name: "demo"}}
+	results, err := workspace.Render(root, []string{"ralphex", "agents"}, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []workspace.RenderResult{
+		{
+			Name:         "ralphex",
+			Files:        []string{".ralphex/config", ".ralphex/prompts/task.md", ".ralphex/scripts/ws-git"},
+			OverrideHits: []string{".ralphex/config"},
+			Symlinks:     []string{},
+		},
+		{
+			Name:         "agents",
+			Files:        []string{"AGENTS.md"},
+			OverrideHits: []string{},
+			Symlinks:     []string{"agent/CLAUDE.md"},
+		},
+	}
+	if !reflect.DeepEqual(results, want) {
+		t.Fatalf("Render results = %+v, want %+v", results, want)
+	}
+	for _, file := range []struct {
+		path, content string
+		mode          os.FileMode
+	}{
+		{path: ".ralphex/config", content: "override demo", mode: 0o644},
+		{path: ".ralphex/prompts/task.md", content: "{{PLAN_FILE}}\r\n{{ .Project.Name }}\x00\xff", mode: 0o644},
+		{path: ".ralphex/scripts/ws-git", content: "#!/bin/sh\n", mode: 0o755},
+		{path: "AGENTS.md", content: "agents for demo", mode: 0o644},
+	} {
+		path := filepath.Join(root, file.path)
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != file.content {
+			t.Errorf("%s = %q, want %q", file.path, got, file.content)
+		}
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != file.mode {
+			t.Errorf("%s mode = %o, want %o", file.path, fi.Mode().Perm(), file.mode)
+		}
+	}
+	link := filepath.Join(root, "agent", "CLAUDE.md")
+	target, err := os.Readlink(link)
+	if err != nil || target != "../AGENTS.md" {
+		t.Fatalf("symlink = %q, %v; want ../AGENTS.md", target, err)
+	}
+	before := snapshot(t, root)
+	if _, err := workspace.Render(root, []string{"ralphex", "agents"}, data); err != nil {
+		t.Fatal(err)
+	}
+	assertUnchanged(t, root, before)
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	symlink(t, "../old-target", link)
+	if _, err := workspace.Render(root, []string{"agents"}, data); err != nil {
+		t.Fatal(err)
+	}
+	target, err = os.Readlink(link)
+	if err != nil || target != "../AGENTS.md" {
+		t.Fatalf("retargeted symlink = %q, %v; want ../AGENTS.md", target, err)
+	}
+}
+
+func TestRenderModeConverges(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name                 string
+		sourceMode, destMode os.FileMode
+		want                 os.FileMode
+		override             bool
+	}{
+		{name: "add executable bit", sourceMode: 0o751, destMode: 0o644, want: 0o755},
+		{name: "remove executable bit", sourceMode: 0o640, destMode: 0o755, want: 0o644},
+		{name: "override adds executable bit", sourceMode: 0o700, destMode: 0o644, want: 0o755, override: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			dir := createPack(t, root, "test", manifest.File{
+				Render: []manifest.RenderEntry{{From: "script", To: "scripts/run"}},
+			}, map[string]string{"script": "#!/bin/sh\n"})
+			source := filepath.Join(dir, "script")
+			if tt.override {
+				source = filepath.Join(root, "workspace", "templates", "workspace", "test.local", "script")
+				writeFile(t, source, "override script")
+			}
+			chmod(t, source, tt.sourceMode)
+			dest := filepath.Join(root, "scripts", "run")
+			writeFile(t, dest, "old script")
+			for range 2 {
+				chmod(t, dest, tt.destMode)
+				if _, err := workspace.Render(root, []string{"test"}, packcommon.TemplateData{}); err != nil {
+					t.Fatal(err)
+				}
+				fi, err := os.Stat(dest)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if fi.Mode().Perm() != tt.want {
+					t.Fatalf("mode = %o, want %o", fi.Mode().Perm(), tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestRenderPlanningFailureWritesNothing(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name, content, dest, want string
+		directory                 bool
+	}{
+		{name: "bad template", content: "{{ .Cfg.Raw.absent }}", dest: "second/output", want: "map has no entry"},
+		{name: "protected path", content: "second", dest: ".GIT/hooks", want: "protected"},
+		{name: "destination directory", content: "second", dest: "second/output", want: "is a directory", directory: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			createPack(t, root, "first", manifest.File{
+				Render: []manifest.RenderEntry{
+					{From: "source", To: "first/existing"},
+					{From: "source", To: "new/output"},
+				},
+				Symlinks: []manifest.SymlinkEntry{{Link: "links/agents", To: "first/existing"}},
+			}, map[string]string{"source": "replacement"})
+			existing := filepath.Join(root, "first", "existing")
+			writeFile(t, existing, "keep existing bytes")
+			chmod(t, existing, 0o751)
+			mkdir(t, filepath.Join(root, "links"))
+			symlink(t, "../old-target", filepath.Join(root, "links", "agents"))
+			createPack(t, root, "second", manifest.File{
+				Render: []manifest.RenderEntry{{From: "source.tmpl", To: tt.dest}},
+			}, map[string]string{"source.tmpl": tt.content})
+			if tt.directory {
+				mkdir(t, filepath.Join(root, tt.dest))
+			}
+			before := snapshot(t, root)
+			results, err := workspace.Render(root, []string{"first", "second"}, packcommon.TemplateData{
+				Cfg: &config.DweConfig{Raw: map[string]any{}},
+			})
+			requireError(t, err, tt.want)
+			if !strings.Contains(err.Error(), "second") {
+				t.Errorf("error should name failing pack: %v", err)
+			}
+			if results != nil {
+				t.Fatal("failure returned partial results")
+			}
+			assertUnchanged(t, root, before)
+		})
+	}
+}
+
+func TestRenderEmptySelection(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	before := snapshot(t, root)
+	results, err := workspace.Render(root, nil, packcommon.TemplateData{})
+	if err != nil || len(results) != 0 {
+		t.Fatalf("Render = %+v, %v; want no results", results, err)
+	}
+	assertUnchanged(t, root, before)
+}
+
+func chmod(t *testing.T, path string, mode os.FileMode) {
+	t.Helper()
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func createPack(t *testing.T, root, name string, m manifest.File, sources map[string]string) string {
 	t.Helper()
 	dir := filepath.Join(root, "workspace", "templates", "workspace", name)

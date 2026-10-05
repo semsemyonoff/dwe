@@ -147,13 +147,20 @@ because the local Docker daemon socket was unavailable; no repository test was s
 - Modify: `internal/core/execution/templates/workspace/workspace.go`
 - Modify: `internal/core/execution/templates/workspace/workspace_test.go`
 
-- [ ] `Render(projectRoot, names, data)`: `Plan`, then `packcommon.WriteFile` per entry (mode from
+- [x] `Render(projectRoot, names, data)`: `Plan`, then `packcommon.WriteFile` per entry (mode from
       source, chmod) and `packcommon.EnsureRelativeSymlink` per symlink
-- [ ] return a result per pack (written files, override hits) for CLI output
-- [ ] write tests: render into a temp project, overwrite existing file, `0755` kept, mode converges on re-render
-- [ ] write tests: a failure in the second pack (bad template, protected path, dest directory) leaves
+- [x] return a result per pack (written files, override hits) for CLI output
+- [x] write tests: render into a temp project, overwrite existing file, `0755` kept, mode converges on re-render
+- [x] write tests: a failure in the second pack (bad template, protected path, dest directory) leaves
       the first pack's destinations untouched
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. Render tests cover per-pack results, template and verbatim
+output, overrides, executable mode convergence, symlink creation and retargeting,
+and second-pack planning failures leaving all destinations untouched.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 5: `dwe render workspace` command
 

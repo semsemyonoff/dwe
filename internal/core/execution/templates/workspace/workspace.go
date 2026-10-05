@@ -1,4 +1,4 @@
-// Package workspace plans template packs that write into the project root.
+// Package workspace plans and renders template packs into the project root.
 package workspace
 
 import (
@@ -30,6 +30,15 @@ type PlannedPack struct {
 	Name     string
 	Files    []PlannedFile
 	Symlinks []manifest.SymlinkEntry
+}
+
+// RenderResult records project-relative destinations in manifest order.
+// OverrideHits contains file destinations whose sources came from a .local pack.
+type RenderResult struct {
+	Name         string
+	Files        []string
+	OverrideHits []string
+	Symlinks     []string
 }
 
 // ValidatePacks rejects invalid identifiers and repeated pack names.
@@ -97,6 +106,59 @@ func Plan(projectRoot string, names []string, data packcommon.TemplateData) ([]P
 		planned = append(planned, pack)
 	}
 	return planned, nil
+}
+
+// Render plans every pack before writing any output. Planning errors leave all
+// destinations untouched; a write error does not roll back completed writes.
+func Render(projectRoot string, names []string, data packcommon.TemplateData) ([]RenderResult, error) {
+	planned, err := Plan(projectRoot, names, data)
+	if err != nil {
+		return nil, err
+	}
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("resolve project root: %w", err)
+	}
+	results := make([]RenderResult, 0, len(planned))
+	for _, pack := range planned {
+		result := RenderResult{
+			Name:         pack.Name,
+			Files:        make([]string, 0, len(pack.Files)),
+			OverrideHits: []string{},
+			Symlinks:     make([]string, 0, len(pack.Symlinks)),
+		}
+		for _, file := range pack.Files {
+			if err := packcommon.WriteFile(
+				file.File,
+				file.To,
+				absRoot,
+				absRoot,
+				destLabels,
+				true,
+			); err != nil {
+				return nil, fmt.Errorf("workspace pack %q: %w", pack.Name, err)
+			}
+			result.Files = append(result.Files, file.To)
+			if file.File.FromOverride {
+				result.OverrideHits = append(result.OverrideHits, file.To)
+			}
+		}
+		for _, link := range pack.Symlinks {
+			if err := packcommon.EnsureRelativeSymlink(
+				link.Link,
+				link.To,
+				absRoot,
+				absRoot,
+				"project root",
+				"",
+			); err != nil {
+				return nil, fmt.Errorf("workspace pack %q: %w", pack.Name, err)
+			}
+			result.Symlinks = append(result.Symlinks, link.Link)
+		}
+		results = append(results, result)
+	}
+	return results, nil
 }
 
 func planPack(root, name string, data packcommon.TemplateData, dests *[]destination) (PlannedPack, error) {
