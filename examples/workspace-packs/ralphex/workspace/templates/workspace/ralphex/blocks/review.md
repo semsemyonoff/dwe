@@ -1,0 +1,5 @@
+MULTI-REPOSITORY WORKSPACE — REVIEW ONLY THE CONFIGURED SCOPE:
+Scope is the workspace root plus .ralphex/run/repos, compared against .ralphex/run/base-ref on .ralphex/run/task-branch. Other checkouts and unrelated changes are out of scope.
+- First run `.ralphex/scripts/ws-git ws-check`. Use `.ralphex/scripts/ws-git ws-log`, `ws-diff --stat`, `ws-diff`, `ws-wip [--stat]`, and `ws-status` from the workspace root. Missing state, refs, wrong branches or helper failures are blockers, never empty reviews or permission to fall back to main.
+- Override all plain workspace `git diff/log {{DEFAULT_BRANCH}}` and `git status` instructions below with these workspace commands. Tell review agents to use `ws-diff [--stat]` instead of their plain git diff instructions, and report workspace-relative file:line paths.
+- Commit only verified task-owned fixes, with explicit paths in their owning repository (`git -C <repo> add <files>` then `git -C <repo> commit -m "<message>"`). Never stage services/ from the workspace, commit arbitrary leftovers or use --no-verify. Never push.

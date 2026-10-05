@@ -293,33 +293,33 @@ Contract: notes § "Example pack"; ficbird block source material in
 - Create: `internal/core/execution/templates/workspace/examples_test.go`
 - Create: `internal/core/execution/templates/workspace/examples_scripts_test.go`
 
-- [ ] layout mirrors a workspace; install is `cp -R examples/workspace-packs/<name>/workspace/. <ws>/workspace/`
+- [x] layout mirrors a workspace; install is `cp -R examples/workspace-packs/<name>/workspace/. <ws>/workspace/`
       (trailing `/.` — BSD and GNU cp agree) plus the snippet when present; the ralphex README adds
       `/.ralphex/run/` to and removes an older scaffold's `/.ralphex/` from the root `.gitignore`,
       and says the base must also exist in the root; the root-agents README warns that it overwrites
       the scaffold's root `AGENTS.md` (move its content into the template first; a `CLAUDE.md` copy
       fallback goes stale, a symlink does not). READMEs say packs are starters owned by the
       workspace afterwards and to take them from the tag matching the installed dwe
-- [ ] `config.tmpl` (guarded `vars.ralphex.default_branch`, default `main`), `blocks/*.md` generalized
+- [x] `config.tmpl` (guarded `vars.ralphex.default_branch`, default `main`), `blocks/*.md` generalized
       from the ficbird source per the notes (scope from `.ralphex/run/`, `ws-git ws-*`, explicit
       overrides of body git instructions, no anchor commit, no project names; agent block read-only
       and overrides the code-injected diff instruction above it; codex_review maps both
       `{{DIFF_INSTRUCTION}}` forms; no block starts with `#`)
-- [ ] `ralphex-scope.sh` + `ralphex.scope` (`repos`, `base`, `branch`, all required): `check-ignore`
+- [x] `ralphex-scope.sh` + `ralphex.scope` (`repos`, `base`, `branch`, all required): `check-ignore`
       hint, write `.ralphex/run/*`, run `ws-git ws-check`, restore on failure. `ralphex-prompts.sh` +
       `ralphex.prompts` (`check` bool, `default: false`, `env:`): 10 files, block + phase/file policy
       fragments after the leading header and a blank line (agents: after leading `#` lines and
       frontmatter), fragments starting with `#` rejected, never the dumped `config`, stamp; check mode
       regenerates into a temp dir and diffs (non-zero on difference), reports stamp drift, warns on
       unowned files, writes nothing
-- [ ] `chmod +x` both scripts on disk, then `git add`; verify `git ls-files -s` shows `100755`
-- [ ] `root-agents`: minimal pack with a `.tmpl` (root `AGENTS.md` listing `.Services`) and a verbatim file
-- [ ] write `examples_test.go` (`findRepoRoot` from Task 8 to find `examples/`):
+- [x] `chmod +x` both scripts on disk, then `git add`; verify `git ls-files -s` shows `100755`
+- [x] `root-agents`: minimal pack with a `.tmpl` (root `AGENTS.md` listing `.Services`) and a verbatim file
+- [x] write `examples_test.go` (`findRepoRoot` from Task 8 to find `examples/`):
       per example build a temp workspace (minimal `workspace.yml` + snippet when present, precedent
       `validate/templates/command_index_test.go:41`), `config.LoadConfigSanitized`, `workspace.Plan`
       → no errors, `.tmpl` rendered (also without `vars.ralphex`), verbatim byte-identical, `ws-git`
       planned `0755`; `usercommands.LoadRegistryFromConfigPath` + the `validate/commands` validator → no errors/warnings
-- [ ] write `examples_scripts_test.go` with a stub `ralphex` on PATH (`t.Skip` without `sh`) answering
+- [x] write `examples_scripts_test.go` with a stub `ralphex` on PATH (`t.Skip` without `sh`) answering
       `--version` and `--dump-defaults=<dir>` (`config`, `prompts/`, `agents/` mimicking v1.7.0:
       prompts with a `#` header, one agent with leading `#` lines + frontmatter): 10 files written;
       applying ralphex's leading-comment strip rule to each prompt leaves the block's first line
@@ -328,7 +328,18 @@ Contract: notes § "Example pack"; ficbird block source material in
       block / hand-edited prompt / changed stub defaults → non-zero, stale unowned prompt → warning,
       nothing written; `ralphex-scope.sh` writes run state, rejects a missing repo or ref and
       restores the previous files, fails when `.ralphex/run/` is not ignored
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. `shellcheck -s sh` and `dash -n` passed for both new
+scripts; Git records each as `100755`. Tests validate both starter packs and
+command definitions, guarded branch defaults, verbatim blocks and executable
+mode, all ten prompt overrides, policy ordering, preserved headers/frontmatter,
+stamp drift, unowned-file warnings, check-mode immutability, and scope rollback
+against real temporary Git repositories. The prompt tests use a ralphex stub
+matching the documented v1.7.0 dump layout.
+The scoped suite used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 10: Verify acceptance criteria
 - [ ] `render.workspace` renders listed packs into the root; `.tmpl` templated, others verbatim,

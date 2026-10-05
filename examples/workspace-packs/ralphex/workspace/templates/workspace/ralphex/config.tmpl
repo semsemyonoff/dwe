@@ -1,0 +1,12 @@
+{{- $branch := "main" -}}
+{{- with .Cfg.Vars -}}
+  {{- with index . "ralphex" -}}
+    {{- with index . "default_branch" -}}
+      {{- $branch = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+default_branch = {{ $branch }}
+vcs_command = .ralphex/scripts/ws-git
+use_worktree = false
+finalize_enabled = false

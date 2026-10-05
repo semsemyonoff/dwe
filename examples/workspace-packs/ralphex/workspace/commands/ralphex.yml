@@ -1,0 +1,37 @@
+group:
+  title: Ralphex
+  description: Prepare workspace prompts and per-plan repository scope
+commands:
+  scope:
+    type: shell
+    description: |
+      Configure and validate the repository scope for a ralphex plan
+      Pass repos as whitespace-separated workspace-relative paths (use . for root only).
+      The base must exist in the root and every scoped checkout.
+    cmd: sh workspace/scripts/ralphex-scope.sh
+    params:
+      repos:
+        type: string
+        required: true
+      base:
+        type: string
+        required: true
+      branch:
+        type: string
+        required: true
+    env:
+      RALPHEX_REPOS: '${param.repos}'
+      RALPHEX_BASE: '${param.base}'
+      RALPHEX_BRANCH: '${param.branch}'
+  prompts:
+    type: shell
+    description: |
+      Regenerate the ten workspace prompt and agent overrides from ralphex defaults
+      Use --set check=true to compare without writing; differences exit non-zero.
+    cmd: sh workspace/scripts/ralphex-prompts.sh
+    params:
+      check:
+        type: bool
+        default: false
+    env:
+      RALPHEX_CHECK: '${param.check}'

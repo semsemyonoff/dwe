@@ -1,0 +1,9 @@
+# {{ .Project.Name }} workspace
+
+Read `dwe docs llms-txt --lang en` for project context and the declared commands.
+Use `dwe commands list --output json` to find tasks before invoking tools directly.
+
+## Services
+{{ range $name, $svc := .Services }}
+- {{ $name }} ({{ $svc.Type }}){{ with $svc.Dir }}: {{ . }}{{ end }}
+{{ end }}
