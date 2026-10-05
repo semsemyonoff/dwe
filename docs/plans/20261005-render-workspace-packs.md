@@ -248,16 +248,16 @@ Contract: notes § "Example pack" (`ws-git` contract); ficbird `repos.sh` semant
 - Create: `examples/workspace-packs/ralphex/workspace/templates/workspace/ralphex/scripts/ws-git`
 - Create: `internal/core/execution/templates/workspace/examples_wsgit_test.go`
 
-- [ ] `ws-git` (POSIX sh, `#!/bin/sh`) per the notes contract: scope = root + `.ralphex/run/repos`
+- [x] `ws-git` (POSIX sh, `#!/bin/sh`) per the notes contract: scope = root + `.ralphex/run/repos`
       (root always in scope); intercepts exactly `rev-parse HEAD`, `diff HEAD`,
       `ls-files -z --others --exclude-standard` (NUL via `xargs -0`, per notes), silent on success;
       near-miss argv passes through; no run state → intercepted calls root only, every `ws-*` errors;
       partial/invalid run state → non-zero exit; `ws-check`, `ws-status`, `ws-log`,
       `ws-diff [--stat]`, `ws-wip [--stat]` with branch/ancestor checks
-- [ ] `chmod +x` the file on disk, then `git add` it; verify `git ls-files -s` shows `100755`
-- [ ] add the go.mod walk-up helper (`findRepoRoot`, as in `ide/source_regression_test.go:146`) to
+- [x] `chmod +x` the file on disk, then `git add` it; verify `git ls-files -s` shows `100755`
+- [x] add the go.mod walk-up helper (`findRepoRoot`, as in `ide/source_regression_test.go:146`) to
       the test package; Task 9 reuses it
-- [ ] write `ws-git` behavior test (`t.Skip` without `git`; `gitInit`/`requireGit` pattern from
+- [x] write `ws-git` behavior test (`t.Skip` without `git`; `gitInit`/`requireGit` pattern from
       `stack/gitworkspace_test.go:86-108`): copy the script to `<tmp>/.ralphex/scripts/ws-git` (0755)
       and exec it directly, not via `sh`; root with `/services/` and `/.ralphex/run/` in
       `.gitignore`, 2 scoped nested repos + 1 unscoped dirty repo, base tag and task branch in root
@@ -267,7 +267,15 @@ Contract: notes § "Example pack" (`ws-git` contract); ficbird `repos.sh` semant
       through; no run state → root only and `ws-check` fails; missing scoped repo, base missing in
       a repo or in the root → non-zero; `ws-diff` fails off the task branch;
       `hash-object -- <prefixed name>` and pass-through work from the root
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. `shellcheck -s sh` and `dash -n` passed; Git records the
+script as `100755`. Tests execute the installed script directly against real
+temporary Git repositories and cover scoped fingerprints, prefixed diffs, NUL
+filenames, pass-through calls, root-only bootstrap, invalid state and branch/ancestor gates.
+The scoped suite used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 9: ralphex pack, commands and minimal example
 

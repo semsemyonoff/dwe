@@ -1,0 +1,210 @@
+#!/bin/sh
+# Ralphex's fingerprints must include only the repositories named for this run.
+set -eu
+
+fail() {
+  printf 'ws-git: %s\n' "$*" >&2
+  exit 1
+}
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)
+cd "$root"
+run=.ralphex/run
+scope=.
+newline='
+'
+has_state=false
+
+read_setting() {
+  [ -f "$1" ] && [ ! -L "$1" ] || fail "missing ordinary state file: $1"
+  {
+    setting=
+    IFS= read -r setting || [ -n "$setting" ] || fail "$1 must contain one nonempty line"
+    [ -n "$setting" ] || fail "$1 must contain one nonempty line"
+    extra=
+    if IFS= read -r extra || [ -n "$extra" ]; then
+      fail "$1 must contain one nonempty line"
+    fi
+  } < "$1"
+  printf '%s\n' "$setting"
+}
+
+# Normalize aliases before deduplication and check every component for symlinks.
+normalize_repo() {
+  case "$1" in
+    ''|/*) fail "invalid repository path: $1" ;;
+  esac
+  rest=$1
+  normalized=.
+  while [ -n "$rest" ]; do
+    component=${rest%%/*}
+    case "$rest" in
+      */*) rest=${rest#*/} ;;
+      *) rest= ;;
+    esac
+    case "$component" in
+      ..) fail "repository path contains ..: $1" ;;
+      ''|.) continue ;;
+    esac
+    if [ "$normalized" = . ]; then
+      normalized=$component
+    else
+      normalized=$normalized/$component
+    fi
+    [ ! -L "$normalized" ] || fail "symlinked repository path: $1"
+  done
+}
+
+if [ -e "$run" ] || [ -L "$run" ]; then
+  [ -d "$run" ] && [ ! -L "$run" ] || fail "run state must be an ordinary directory: $run"
+  has_state=true
+  base_ref=$(read_setting "$run/base-ref")
+  task_branch=$(read_setting "$run/task-branch")
+  case "$base_ref" in -*) fail "invalid base ref: $base_ref" ;; esac
+  case "$task_branch" in -*) fail "invalid task branch: $task_branch" ;; esac
+  branch_name=$(git check-ref-format --branch "$task_branch") || fail "invalid task branch: $task_branch"
+  [ "$branch_name" = "$task_branch" ] || fail "task branch must be a literal branch name: $task_branch"
+  [ -f "$run/repos" ] && [ ! -L "$run/repos" ] || fail "missing ordinary state file: $run/repos"
+  saw_repo=false
+  while IFS= read -r repo || [ -n "$repo" ]; do
+    normalize_repo "$repo"
+    saw_repo=true
+    case "$newline$scope$newline" in
+      *"$newline$normalized$newline"*) ;;
+      *) scope=$scope$newline$normalized ;;
+    esac
+  done < "$run/repos"
+  [ "$saw_repo" = true ] || fail "$run/repos must not be empty"
+fi
+
+operation=git
+case "${1:-}" in
+  ws-check|ws-status|ws-log)
+    [ "$#" -eq 1 ] || fail "usage: $1"
+    operation=$1
+    ;;
+  ws-diff|ws-wip)
+    [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$2" = --stat ]; } || fail "usage: $1 [--stat]"
+    operation=$1
+    ;;
+  ws-*) fail "unknown workspace command: $1" ;;
+esac
+
+if [ "$operation" != git ] && [ "$has_state" = false ]; then
+  fail "missing run state; configure $run/{repos,base-ref,task-branch} first"
+fi
+
+# Validate the entire scope before any output, including the implicit root.
+while IFS= read -r repo; do
+  [ -d "$repo/.git" ] && [ ! -L "$repo/.git" ] || fail "missing ordinary checkout: $repo"
+  if [ "$has_state" = true ]; then
+    git -C "$repo" rev-parse --verify --end-of-options "$base_ref^{commit}" >/dev/null ||
+      fail "$repo: configured base does not resolve: $base_ref"
+    if [ "$operation" != git ]; then
+      current=$(git -C "$repo" symbolic-ref --quiet HEAD) || fail "$repo: detached HEAD"
+      current=${current#refs/heads/}
+      case "$operation" in
+        ws-log|ws-diff|ws-wip)
+          [ "$current" = "$task_branch" ] || fail "$repo: expected task branch $task_branch, found $current"
+          git -C "$repo" merge-base --is-ancestor "$base_ref" HEAD ||
+            fail "$repo: configured base is not an ancestor of HEAD"
+          ;;
+      esac
+    fi
+  fi
+done <<EOF
+$scope
+EOF
+
+if [ "$operation" = git ]; then
+  if [ "$#" -eq 2 ] && [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then
+    operation='head'
+  elif [ "$#" -eq 2 ] && [ "$1" = diff ] && [ "$2" = HEAD ]; then
+    operation='diff'
+  elif [ "$#" -eq 4 ] && [ "$1" = ls-files ] && [ "$2" = -z ] &&
+    [ "$3" = --others ] && [ "$4" = --exclude-standard ]; then
+    operation=untracked
+  else
+    exec git "$@"
+  fi
+fi
+
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/ws-git.XXXXXX")
+trap 'rm -rf "$scratch"' 0
+trap 'exit 1' HUP INT TERM
+
+untracked() {
+  # Separate Git from xargs: POSIX pipelines would hide a failed Git exit code.
+  git -C "$repo" ls-files -z --others --exclude-standard > "$scratch/untracked"
+  # Expansion belongs to the child shell, after xargs has split the NUL records.
+  # shellcheck disable=SC2016
+  xargs -0 sh -c '
+    prefix=$1
+    shift
+    for file do printf "%s%s\000" "$prefix" "$file"; done
+  ' sh "$prefix" < "$scratch/untracked"
+}
+
+while IFS= read -r repo; do
+  label=$repo
+  prefix=$repo/
+  if [ "$repo" = . ]; then
+    label=workspace
+    prefix=
+  fi
+  case "$operation" in
+    head)
+      head=$(git -C "$repo" rev-parse HEAD)
+      printf '%s %s\n' "$repo" "$head" >> "$scratch/heads"
+      ;;
+    diff)
+      git -C "$repo" --no-pager diff --src-prefix="a/$prefix" --dst-prefix="b/$prefix" HEAD
+      ;;
+    untracked) untracked ;;
+    ws-check)
+      current=$(git -C "$repo" symbolic-ref --quiet HEAD)
+      printf '%s: branch=%s base=%s task=%s\n' "$label" "${current#refs/heads/}" "$base_ref" "$task_branch"
+      ;;
+    ws-status)
+      git -C "$repo" status --porcelain > "$scratch/status"
+      if [ -s "$scratch/status" ]; then
+        printf '### %s\n' "$label"
+        cat "$scratch/status"
+      fi
+      ;;
+    ws-log)
+      printf '### %s (base: %s)\n' "$label" "$base_ref"
+      git -C "$repo" --no-pager log --oneline "$base_ref..HEAD"
+      ;;
+    ws-diff|ws-wip)
+      if [ "$operation" = ws-wip ]; then
+        git -C "$repo" status --porcelain > "$scratch/status"
+        [ -s "$scratch/status" ] || continue
+        comparison=HEAD
+      else
+        comparison=$base_ref...HEAD
+      fi
+      printf '### %s (base: %s)\n' "$label" "$base_ref"
+      if [ "$#" -eq 2 ]; then
+        git -C "$repo" --no-pager diff --src-prefix="a/$prefix" --dst-prefix="b/$prefix" --stat "$comparison"
+      else
+        git -C "$repo" --no-pager diff --src-prefix="a/$prefix" --dst-prefix="b/$prefix" "$comparison"
+      fi
+      if [ "$operation" = ws-wip ]; then
+        git -C "$repo" ls-files -z --others --exclude-standard > "$scratch/untracked"
+        # shellcheck disable=SC2016
+        xargs -0 sh -c '
+          prefix=$1
+          shift
+          for file do printf "untracked: %s%s\n" "$prefix" "$file"; done
+        ' sh "$prefix" < "$scratch/untracked"
+      fi
+      ;;
+  esac
+done <<EOF
+$scope
+EOF
+
+if [ "$operation" = head ]; then
+  git hash-object --stdin < "$scratch/heads"
+fi
