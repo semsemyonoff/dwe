@@ -27,6 +27,11 @@ generated from commit subjects and stay on the
 - Top-level `render.workspace` configuration for workspace template pack selection,
   with list replacement across config layers and typo warnings for unknown fields.
 
+### Changed
+
+- `dwe init` no longer ignores `/.ralphex/`, so workspace pack output can be tracked.
+- `dwe docs llms-txt` documents workspace render packs and their `.tmpl`-only templating.
+
 ### Fixed
 
 - AI and IDE renderers reject directory and other non-regular file destinations

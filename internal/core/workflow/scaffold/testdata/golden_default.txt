@@ -81,7 +81,6 @@ snapshots/
 /.idea/
 /.vscode/
 /.zed/
-/.ralphex/
 
 --------
 === AGENTS.md ===

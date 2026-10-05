@@ -223,11 +223,21 @@ because the local Docker daemon socket was unavailable; no repository test was s
 - Modify: `internal/core/workflow/scaffold/testdata/golden_default.txt`
 - Modify: `internal/core/docs/llmstxt/generator.go`
 
-- [ ] remove `/.ralphex/` from `dweGitignoreBlock`; update the golden (check
+- [x] remove `/.ralphex/` from `dweGitignoreBlock`; update the golden (check
       `starter_artefacts_test.go` and `docs/guides/start-a-new-project.md` for other mentions)
-- [ ] llms.txt "Template syntax by site" row (`generator.go:306`): add `workspace`, note only `.tmpl`
+- [x] llms.txt "Template syntax by site" row (`generator.go:306`): add `workspace`, note only `.tmpl`
       files are templates; stay within `TestDocsLlmsTxtCommand_SizeBudget`
-- [ ] run `go test ./internal/core/workflow/scaffold/... ./internal/core/docs/llmstxt/... ./internal/cli/docs/...`
+- [x] run `go test ./internal/core/workflow/scaffold/... ./internal/core/docs/llmstxt/... ./internal/cli/docs/...`
+
+Validation: `make embedded-docs`, `make build`, Task 7's focused tests, the plan's
+scoped tests, and scoped `golangci-lint` (also covering `internal/cli/docs/...`) passed.
+The generic llms.txt is 9,456 bytes, below the 12 KB budget. Golden snapshots and
+regression tests cover the workspace syntax note and fresh/merged gitignore files;
+existing user-provided `/.ralphex/` rules remain intact. No other ralphex mentions
+were found in `starter_artefacts_test.go` or `docs/guides/start-a-new-project.md`.
+Task 7's focused tests passed without a stub. The broader scoped suite used a
+temporary stub for only `docker version --format {{.Server.Version}}` because
+the local Docker daemon socket was unavailable; no repository test was skipped or changed.
 
 ### Task 8: `ws-git` for the ralphex example
 

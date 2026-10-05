@@ -36,7 +36,7 @@ A `when:` needing anything else uses `when: {type: shell, cmd: …}`; a `check:`
 | `info.yml` — `text`, `value`, `title`; custom columns | `{{ ... }}` and `${...}` | resolved project config |
 | `message` builtin — `text` | `{{ ... }}` | resolved project config (`{{ .Project.Name }}`) |
 | `workspace/templates/config/**` | `${...}` | lenient (absent → `""`); the only site where `${generated.<name>}` resolves |
-| `workspace/templates/{ide,ai,git}/**` | `{{ ... }}` | strict render packs; `${...}` is NOT interpreted here |
+| `workspace/templates/{ide,ai,git,workspace}/**` | `{{ ... }}` | strict render packs; `${...}` is NOT interpreted; workspace: only `.tmpl` files are templates, others copied verbatim |
 | `docker.yml` — `project_name` | `${...}` | separate resolver: any `Raw` dot-path, and an unresolved path is a hard error |
 | `params.*.default_from`, `context.*.from` | — | plain dot-paths, no template expressions |
 
