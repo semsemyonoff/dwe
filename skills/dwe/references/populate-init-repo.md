@@ -31,7 +31,7 @@ If no `workspace.yml` yet, hand over (safe to re-run: gap-fills; `--force` overw
 dwe init --name <project> --prefix <prefix> --service <first-service> --default
 ```
 
-Result: `workspace.yml`, `workspace/{defaults,styles,docker}.yml`, one starter `services/<name>/{service.yml,deploy.yml}`, a root `AGENTS.md` (+ `CLAUDE.md` symlink), the `ai` render pack, and `workspace/tests/smoke.yml`. `workspace/{deploy,lifecycle,info}.yml` and the service `deploy.yml` are **inert commented mirrors** (uncommenting replaces the whole section); `smoke.yml` and the ai pack ship **active**; `compose.yaml` is comment-only; `local.yml` is created lazily. For several services, init one and add the rest by hand.
+Result: `workspace.yml`, `workspace/{defaults,styles,docker}.yml`, one starter `services/<name>/{service.yml,deploy.yml}`, a root `AGENTS.md`, the `ai` render pack, and `workspace/tests/smoke.yml`. `workspace/{deploy,lifecycle,info}.yml` and the service `deploy.yml` are **inert commented mirrors** (uncommenting replaces the whole section); `smoke.yml` and the ai pack ship **active**; `compose.yaml` is comment-only; `local.yml` is created lazily. For several services, init one and add the rest by hand.
 
 ## Step 3 — Per repo: the service
 

@@ -30,6 +30,15 @@ Three things worth doing before you trust the new version in a project:
    `dwe bridge status` shows the running daemon; `dwe version` from inside a bridged container shows which build it answers with.
 3. **Force a redeploy when the release notes say so.** A behaviour change that does not alter the deployment hash is invisible to `dwe deploy run`, which will report `already up-to-date` and skip the very step whose semantics moved. `dwe deploy run --force` re-runs every step; `when:` guards still apply.
 
+## Upgrading to 0.7.1
+
+Nothing in an existing project has to change: `dwe init` and its default ai pack stopped creating `CLAUDE.md`, but a project keeps the pack it was scaffolded with. Claude Code reads `AGENTS.md` natively, and a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in or above the working directory makes it skip every `AGENTS.md`. To drop the links from an older project, all at once:
+
+- Delete the root `CLAUDE.md` symlink and remove the `symlinks:` entry for `CLAUDE.md` from each `workspace/templates/ai/*/manifest.yml`.
+- Delete the `services/*/CLAUDE.md` symlinks by hand on every machine — rendering never removes an output it no longer declares.
+- A service repository that ships its own `CLAUDE.md` still suppresses `AGENTS.md` inside it, the project root's included. Rename it to `AGENTS.md`, or set Claude Code's **Project instructions** to `claude-md-and-agents-md` (`/config`).
+- `symlink_fallback` in `dwe init --output json` is always `false` now and goes away in the next minor release.
+
 ## Upgrading to 0.7.0
 
 Nothing in an existing project has to change. One thing to coordinate:

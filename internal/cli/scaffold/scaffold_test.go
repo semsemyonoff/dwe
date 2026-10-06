@@ -201,6 +201,10 @@ func TestJSONOutputShape(t *testing.T) {
 	if !strings.Contains(out, `"created"`) || strings.Contains(out, `"created":null`) {
 		t.Errorf("created should be a JSON array: %s", out)
 	}
+	// symlink_fallback is deprecated but stays in the contract, always false.
+	if !strings.Contains(out, `"symlink_fallback":false`) {
+		t.Errorf("symlink_fallback should be present and false: %s", out)
+	}
 }
 
 // TestSecondRunRefusesWithoutForce verifies that, once a project exists, a

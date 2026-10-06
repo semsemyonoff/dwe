@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ c31b5f448b7f
+> Translated from: reference/render/index.md @ 75efe1d051b0
 
 # Справочник Render
 
@@ -20,7 +20,7 @@
 |---------|-------|----------|
 | `dwe render env` | содержимое `.env` (stdout или `--out <path>`) | правила `exports.env` в `workspace/defaults.yml` + системные переменные |
 | `dwe render ide` | IDE-файлы по каждому сервису внутри hub-каталога сервиса | пакеты шаблонов в `workspace/templates/ide/<pack>/`, управляемые `manifest.yml` |
-| `dwe render ai` | agent-доки на уровне hub (`AGENTS.md`, симлинк `CLAUDE.md`, …) | пакеты шаблонов в `workspace/templates/ai/<pack>/`, управляемые `manifest.yml` |
+| `dwe render ai` | agent-доки на уровне hub (`AGENTS.md`, …) | пакеты шаблонов в `workspace/templates/ai/<pack>/`, управляемые `manifest.yml` |
 | `dwe render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов в `workspace/templates/git/<pack>/`, управляемые `manifest.yml` |
 | `dwe render config` | config-файлы по каждому сервису (`.env`, `env.php`, …) внутри hub-каталога сервиса, с воспроизведением собранных секретов | пакеты шаблонов в `workspace/templates/config/<pack>/`, управляемые `manifest.yml` |
 | `dwe render workspace` | файлы в корне проекта (`.ralphex/`, `AGENTS.md`, `.mcp.json`, …) | пакеты в `workspace/templates/workspace/<pack>/`, выбранные через `render.workspace` или аргументы CLI |
@@ -46,7 +46,7 @@ flowchart LR
 
   E --> EOUT[".env / stdout"]
   I --> IOUT["services/{name}/..."]
-  A --> AOUT["services/{name}/AGENTS.md<br/>services/{name}/CLAUDE.md<br/>..."]
+  A --> AOUT["services/{name}/AGENTS.md<br/>..."]
   G --> GOUT["services/{name}/src/.git/hooks/...<br/>(режим 0755)"]
   C --> COUT["services/{name}/.env<br/>services/{name}/env.php<br/>..."]
   W --> WOUT[".ralphex/...<br/>AGENTS.md<br/>.mcp.json<br/>..."]

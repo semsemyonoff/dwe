@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/fields.md @ 24e5a460a42b
+> Translated from: reference/config/services/fields.md @ 848027334c75
 
 # Справочник полей сервиса
 
@@ -493,7 +493,7 @@ render:
 - `render`: исходные файлы шаблонов (должны оканчиваться на `.tmpl`) и их пути назначения
 - `symlinks`: относительные симлинки для создания внутри hub сервиса (должны ссылаться на выводы из `render`)
 
-Все назначения относительны hub-каталога сервиса (например, `services/main/`). Вложенные пути допустимы (например, `.claude/CLAUDE.md`).
+Все назначения относительны hub-каталога сервиса (например, `services/main/`). Вложенные пути допустимы (например, `.github/copilot-instructions.md`).
 
 #### Разрешение коллизий
 
@@ -517,7 +517,7 @@ workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
-    .claude/CLAUDE.md.tmpl
+    .github/copilot-instructions.md.tmpl
 ```
 
 **Манифест (`workspace/templates/ai/default/manifest.yml`):**
@@ -526,11 +526,11 @@ workspace/templates/ai/
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-  - from: .claude/CLAUDE.md.tmpl
-    to: .claude/CLAUDE.md
+  - from: .github/copilot-instructions.md.tmpl
+    to: .github/copilot-instructions.md
 
 symlinks:
-  - link: CLAUDE.md
+  - link: GEMINI.md
     to: AGENTS.md
 ```
 
@@ -559,9 +559,9 @@ dir: ./services/main
 ```
 services/main/
   AGENTS.md          ← отрендерено из AGENTS.md.tmpl
-  CLAUDE.md          ← симлинк на AGENTS.md
-  .claude/
-    CLAUDE.md        ← отрендерено из .claude/CLAUDE.md.tmpl
+  GEMINI.md          ← симлинк на AGENTS.md
+  .github/
+    copilot-instructions.md ← отрендерено из .github/copilot-instructions.md.tmpl
 ```
 
 ### Блок `render.git`

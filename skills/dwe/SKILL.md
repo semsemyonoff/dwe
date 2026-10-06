@@ -32,7 +32,7 @@ Two different `AGENTS.md` files exist — do not confuse them:
 | **root** `AGENTS.md` (next to `workspace.yml`) | written once by `dwe init`, then hand-maintained | **yes**, directly |
 | **hub** `AGENTS.md` (inside a service hub, `services/<name>/`) | **generated** by the `ai` render pack (`dwe render ai`, or a `render ai` deploy step) | **no** — edit `workspace/templates/ai/<pack>/`, hand off `dwe render ai` |
 
-Both have a `CLAUDE.md` symlink beside them; the generated one says so in its footer.
+Neither has a `CLAUDE.md` beside it: Claude Code reads `AGENTS.md` natively, and a `CLAUDE.md` in or above the cwd would make it skip every `AGENTS.md`.
 
 ## Project anatomy
 

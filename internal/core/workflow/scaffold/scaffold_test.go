@@ -116,7 +116,6 @@ func TestScaffold_ReportsCreated(t *testing.T) {
 		".gitignore",
 		".editorconfig",
 		"AGENTS.md",
-		"CLAUDE.md",
 		".dwe/config",
 		"workspace/defaults.yml",
 		"workspace/styles.yml",
@@ -267,24 +266,40 @@ func TestScaffold_NestedWarning(t *testing.T) {
 	}
 }
 
-func TestScaffold_ClaudeSymlink(t *testing.T) {
+// TestScaffold_NoClaudeMd pins that dwe init writes no CLAUDE.md: Claude Code
+// reads AGENTS.md natively, and a CLAUDE.md in or above the working directory
+// would suppress every AGENTS.md. A CLAUDE.md the user already has is theirs —
+// even --force leaves it byte-identical.
+func TestScaffold_NoClaudeMd(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := Scaffold(scaffoldOptions(dir)); err != nil {
+	res, err := Scaffold(scaffoldOptions(dir))
+	if err != nil {
 		t.Fatalf("Scaffold: %v", err)
 	}
-	info, err := os.Lstat(filepath.Join(dir, "CLAUDE.md"))
+	if _, err := os.Lstat(filepath.Join(dir, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Fatalf("CLAUDE.md exists after init (lstat err %v)", err)
+	}
+	for _, p := range append(res.Created, res.Skipped...) {
+		if strings.Contains(p, "CLAUDE.md") {
+			t.Errorf("result reports %q", p)
+		}
+	}
+
+	own := []byte("user-owned instructions\n")
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), own, 0o644); err != nil {
+		t.Fatalf("write CLAUDE.md: %v", err)
+	}
+	opts := scaffoldOptions(dir)
+	opts.Force = true
+	if _, err := Scaffold(opts); err != nil {
+		t.Fatalf("Scaffold --force: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
 	if err != nil {
-		t.Fatalf("lstat CLAUDE.md: %v", err)
+		t.Fatalf("read CLAUDE.md: %v", err)
 	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		t.Fatalf("CLAUDE.md is not a symlink (mode %v)", info.Mode())
-	}
-	tgt, err := os.Readlink(filepath.Join(dir, "CLAUDE.md"))
-	if err != nil {
-		t.Fatalf("readlink: %v", err)
-	}
-	if tgt != "AGENTS.md" {
-		t.Errorf("CLAUDE.md -> %q, want AGENTS.md", tgt)
+	if string(got) != string(own) {
+		t.Errorf("--force rewrote the user's CLAUDE.md: %q", got)
 	}
 }
 

@@ -1,7 +1,7 @@
 # Root agent document starter
 
-This workspace-owned starter renders root `AGENTS.md`, copies
-`workspace-notes.txt` verbatim, and links `CLAUDE.md` to `AGENTS.md`. Take it from
+This workspace-owned starter renders root `AGENTS.md` and copies
+`workspace-notes.txt` verbatim. Take it from
 the DWE tag matching your installed `dwe --version`, then maintain your copy.
 
 ```sh
@@ -15,8 +15,7 @@ the existing regular file. The template lists `.Services` and project commands.
 Adapt it to the workspace's rules; `workspace-notes.txt` demonstrates verbatim
 copying even when a file contains `{{PLAN_FILE}}`.
 
-The `CLAUDE.md` symlink stays current with `AGENTS.md`; a copied fallback goes
-stale on the next render. If this workspace reads `AGENTS.md` natively and does
-not allow `CLAUDE.md`, remove the `symlinks` entry before rendering. An existing
-regular `CLAUDE.md` must be removed or migrated first: the symlink writer refuses
-to replace it. Commit the pack and rendered files together.
+Claude Code reads `AGENTS.md` natively, so the pack renders no `CLAUDE.md`: with its
+default setting, a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in or above
+the working directory makes it skip every `AGENTS.md`. Commit the pack and rendered
+files together.

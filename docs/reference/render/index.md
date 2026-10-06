@@ -18,7 +18,7 @@
 |---------|--------|--------|
 | `dwe render env` | `.env` content (stdout or `--out <path>`) | `exports.env` rules in `workspace/defaults.yml` + system vars |
 | `dwe render ide` | Per-service IDE config files inside each service hub | Template packs under `workspace/templates/ide/<pack>/` driven by `manifest.yml` |
-| `dwe render ai` | Hub-level agent docs (`AGENTS.md`, `CLAUDE.md` symlink, …) | Template packs under `workspace/templates/ai/<pack>/` driven by `manifest.yml` |
+| `dwe render ai` | Hub-level agent docs (`AGENTS.md`, …) | Template packs under `workspace/templates/ai/<pack>/` driven by `manifest.yml` |
 | `dwe render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `workspace/templates/git/<pack>/` driven by `manifest.yml` |
 | `dwe render config` | Per-service config files (`.env`, `env.php`, …) inside each service hub, replaying harvested secrets | Template packs under `workspace/templates/config/<pack>/` driven by `manifest.yml` |
 | `dwe render workspace` | Project-root files (`.ralphex/`, `AGENTS.md`, `.mcp.json`, …) | Packs under `workspace/templates/workspace/<pack>/`, selected by `render.workspace` or CLI arguments |
@@ -44,7 +44,7 @@ flowchart LR
 
   E --> EOUT[".env / stdout"]
   I --> IOUT["services/{name}/..."]
-  A --> AOUT["services/{name}/AGENTS.md<br/>services/{name}/CLAUDE.md<br/>..."]
+  A --> AOUT["services/{name}/AGENTS.md<br/>..."]
   G --> GOUT["services/{name}/src/.git/hooks/...<br/>(mode 0755)"]
   C --> COUT["services/{name}/.env<br/>services/{name}/env.php<br/>..."]
   W --> WOUT[".ralphex/...<br/>AGENTS.md<br/>.mcp.json<br/>..."]

@@ -260,11 +260,9 @@ func TestEmbeddedTemplates_AIPackRenders(t *testing.T) {
 	if strings.Contains(string(rendered), "## Declared commands") {
 		t.Errorf("rendered hub AGENTS.md carries a Declared commands block with no commands:\n%s", rendered)
 	}
-	target, err := os.Readlink(filepath.Join(absHub, "CLAUDE.md"))
-	if err != nil {
-		t.Fatalf("readlink hub CLAUDE.md: %v", err)
-	}
-	if target != "AGENTS.md" {
-		t.Errorf("hub CLAUDE.md -> %q, want AGENTS.md", target)
+	// The starter pack renders no hub CLAUDE.md: one there would make Claude
+	// Code skip the hub AGENTS.md and the project's root AGENTS.md alike.
+	if _, err := os.Lstat(filepath.Join(absHub, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Errorf("hub CLAUDE.md exists after render ai (lstat err %v)", err)
 	}
 }

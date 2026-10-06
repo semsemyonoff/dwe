@@ -125,7 +125,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - `dwe secrets status` — report every encrypted value and whether it can be read here
 - `dwe render env` — generate `.env` from the merged config export rules
 - `dwe render ide` — generate IDE configs
-- `dwe render ai` — generate hub-level AGENTS.md and CLAUDE.md symlinks
+- `dwe render ai` — generate hub-level AGENTS.md
 - `dwe render git` — generate shell git hooks into `<svc.Dir>/src/.git/hooks/`
 - `dwe info` — render the info dashboard from `info.yml`
 - `dwe deploy plan` — show the resolved deploy pipeline

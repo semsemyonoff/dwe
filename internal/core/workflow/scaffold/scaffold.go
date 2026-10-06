@@ -76,9 +76,6 @@ type Result struct {
 	// Skipped lists the project-relative paths that already existed and were
 	// left untouched (force was not set).
 	Skipped []string
-	// SymlinkFallback is true when CLAUDE.md could not be symlinked to AGENTS.md
-	// and was written as a verbatim copy instead.
-	SymlinkFallback bool
 	// NestedWarning is true when an ancestor workspace.yml was detected, meaning
 	// the new project is being created nested inside an existing one.
 	NestedWarning bool
@@ -87,7 +84,8 @@ type Result struct {
 // Scaffold creates a fresh DWE project from opts. It resolves the target
 // directory, renders the embedded template plan, writes each file atomically
 // (skipping pre-existing files unless opts.Force is set), merges the .gitignore
-// block, and links CLAUDE.md to AGENTS.md (with a copy fallback).
+// block. It writes no CLAUDE.md: Claude Code reads AGENTS.md natively, and any
+// CLAUDE.md in or above the working directory would suppress every AGENTS.md.
 //
 // It is idempotent: a second run with the same opts leaves every file untouched
 // and reports them all as Skipped. It never blocks on a nested project — if an
@@ -151,26 +149,6 @@ func Scaffold(opts Options) (Result, error) {
 		result.Created = append(result.Created, ".gitignore")
 	} else {
 		result.Skipped = append(result.Skipped, ".gitignore")
-	}
-
-	// CLAUDE.md mirrors AGENTS.md (symlink, or a copy where symlinks are
-	// unavailable). AGENTS.md was just written above, so it is on disk for the
-	// copy fallback.
-	//
-	// Use os.Stat (not Lstat) so a dangling symlink — where the inode exists but
-	// the target does not — is treated as absent: linkClaudeMd will fix it and
-	// the file correctly appears as Created rather than Skipped.
-	_, claudeStatErr := os.Stat(filepath.Join(absTarget, "CLAUDE.md"))
-	claudeExisted := claudeStatErr == nil
-	fallback, err := linkClaudeMd(absTarget, opts.Force)
-	if err != nil {
-		return Result{}, err
-	}
-	result.SymlinkFallback = fallback
-	if claudeExisted && !opts.Force {
-		result.Skipped = append(result.Skipped, "CLAUDE.md")
-	} else {
-		result.Created = append(result.Created, "CLAUDE.md")
 	}
 
 	sort.Strings(result.Created)

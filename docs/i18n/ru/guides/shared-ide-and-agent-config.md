@@ -1,8 +1,8 @@
-> Translated from: guides/shared-ide-and-agent-config.md @ 8e10b630fa17
+> Translated from: guides/shared-ide-and-agent-config.md @ 5bc8d05be7a8
 
 # Общий конфиг IDE и AI-агентов
 
-Сделайте так, чтобы у каждого разработчика в команде были одинаковые настройки VS Code, одинаковые `AGENTS.md` / `CLAUDE.md` и одинаковые git-хуки — и при этом никто не правил бы эти файлы вручную. Три подкоманды рендеринга DWE (`dwe render ide`, `dwe render ai`, `dwe render git`) делают всё это из template-паков, закоммиченных в репозиторий.
+Сделайте так, чтобы у каждого разработчика в команде были одинаковые настройки VS Code, одинаковый `AGENTS.md` и одинаковые git-хуки — и при этом никто не правил бы эти файлы вручную. Три подкоманды рендеринга DWE (`dwe render ide`, `dwe render ai`, `dwe render git`) делают всё это из template-паков, закоммиченных в репозиторий.
 
 Это руководство проведёт вас от нуля до работающего общего конфига с возможностью индивидуальных настроек для каждого разработчика. Полная схема и краевые случаи — в [справочнике render](../reference/render/index.md).
 
@@ -43,6 +43,8 @@ workspace/templates/
 
 Каждый пак — это каталог; рендерер никогда не идёт по симлинкам на паки. Template-файлы оканчиваются на `.tmpl` и используют [синтаксис Go text/template](../reference/templates.md).
 
+Пак `ai` считает `AGENTS.md` единственным файлом для агентов: не рендерите и не линкуйте `CLAUDE.md` — в Claude Code он подавил бы `AGENTS.md`.
+
 Результат попадает в hub-каталог каждого включённого сервиса:
 
 | Вид | Куда пишется результат |
@@ -63,10 +65,6 @@ render:
     to:   .vscode/settings.json
   - from: .devcontainer/devcontainer.json.tmpl
     to:   .devcontainer/devcontainer.json
-
-symlinks:                              # только ide / ai — git отвергает симлинки
-  - link: CLAUDE.md
-    to:   AGENTS.md
 ```
 
 Ограничения по видам:
@@ -182,7 +180,7 @@ using local override: workspace/templates/ide/default.local/.vscode/settings.jso
 | `workspace/templates/<kind>/<pack>/` | да | Командный пак — источник правды. |
 | `workspace/templates/<kind>/<pack>.local/` | **нет** | Личные оверрайды. Игнорируйте паттерн `.local/`. |
 | `services/<name>/.vscode/settings.json` (и подобные IDE-файлы) | обычно да | Отрендеренный результат; коммитьте, чтобы у коллег сразу был тот же конфиг редактора без вызова `dwe render ide`. |
-| `services/<name>/AGENTS.md`, `services/<name>/CLAUDE.md` | обычно да | Отрендеренный результат; то же обоснование. |
+| `services/<name>/AGENTS.md` | обычно да | Отрендеренный результат; то же обоснование. |
 | `services/<name>/src/.git/hooks/<name>` | **никогда** | Лежит внутри `.git/`, который git игнорирует сам. |
 
 Типичный проект коммитит отрендеренные файлы IDE и AI, чтобы свежий клон сразу имел рабочие конфиги, и затем перезапускает `dwe render ide` / `dwe render ai` при каждом изменении пака или `service.yml` — а для пака, который перечисляет команды проекта (так делает [блок `Declared commands`](../reference/render/ai.md#индекс-объявленных-команд) AI-пака `default`), и при каждом изменении `workspace/commands/`. Git-хуки — исключение: они лежат внутри `.git/` и должны рендериться заново после каждого клона.
