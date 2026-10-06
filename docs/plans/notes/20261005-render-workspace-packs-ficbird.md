@@ -2,7 +2,7 @@
 
 Unified diffs of the ficbird workspace's `.ralphex/` overrides (prompts/agents dated 2026-10-03)
 against `ralphex --dump-defaults` of the same build (v1.7.0-24c19b1). Source material for the
-example pack's phase blocks in `docs/plans/20261005-render-workspace-packs.md` Tasks 8–9; not to be
+example pack's phase blocks in `docs/plans/completed/20261005-render-workspace-packs.md` Tasks 8–9; not to be
 copied verbatim: drop the anchor `--allow-empty` commit (replaced by `ws-git` as `vcs_command`),
 `repos.sh` → `ws-git ws-*`, project-specific names, and ficbird policy lines (they belong in
 workspace policy fragments). `finalize` is omitted: its override is fully commented out, so

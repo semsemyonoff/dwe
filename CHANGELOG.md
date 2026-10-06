@@ -20,34 +20,33 @@ generated from commit subjects and stay on the
 
 ### Added
 
-- Tested workspace starter packs under `examples/workspace-packs/`: ralphex
-  configuration, prompt generation and repository scope commands, plus root agent
-  documentation. The scope command can prepare base tags and task branches
-  (`prepare=true`) and prints the ralphex launch line; installation and
-  maintenance are covered in the new workspace render reference and ralphex guide.
-
-- `dwe validate templates workspace` checks configured workspace packs without
-  writing files, including template execution and destination safety.
-- `dwe render workspace [pack…]` renders workspace template packs into the project
-  root, using `render.workspace` by default, with pack-name completion.
-- Top-level `render.workspace` configuration for workspace template pack selection,
-  with list replacement across config layers and typo warnings for unknown fields.
+- Custom render packs for the project root. The new `workspace` render kind
+  puts tool configuration, root agent docs, `.mcp.json` and similar files at the
+  workspace root. Packs live in `workspace/templates/workspace/<pack>/` and are
+  selected by the top-level `render.workspace` list. `dwe render workspace`
+  renders them, and `dwe validate templates workspace` checks them without
+  writing. Only `.tmpl` sources are templates; other files are copied verbatim
+  with their permissions. Protected paths and colliding destinations fail
+  before anything is written. See
+  [`dwe render workspace`](docs/reference/render/workspace.md).
+- Starter packs in [`examples/workspace-packs/`](examples/workspace-packs/README.md).
+  One of them runs [ralphex](https://ralphex.com/) across the root and the
+  service repositories a plan names:
+  [ralphex starter](examples/workspace-packs/ralphex/README.md), guide
+  [Run ralphex in a workspace](docs/guides/run-ralphex-in-a-workspace.md).
 
 ### Changed
 
-- `dwe init` no longer ignores `/.ralphex/`, so workspace pack output can be tracked.
-- `dwe docs llms-txt` documents workspace render packs and their `.tmpl`-only templating.
+- **A workspace that sets `render:` needs this version on every machine.**
+  Older `dwe` rejects the unknown top-level key, and so does every git hook or
+  command that calls it.
+- `dwe init` no longer ignores `/.ralphex/`, so pack output at the root can be
+  committed.
 
 ### Fixed
 
-- Ralphex starter scope setup rejects symlinked and non-regular run-state settings
-  before changing any state, preventing writes outside the workspace.
-- Ralphex starter prompt generation rejects symlinked output paths and non-regular
-  destinations before overwriting any prompt, agent or defaults stamp.
-- AI and IDE renderers reject directory and other non-regular file destinations
-  before writing, with an explicit destination error.
-- `dwe validate templates workspace` reports valid packs as passing instead of
-  "validation skipped".
+- AI and IDE renderers reject a destination that is a directory or another
+  non-regular file before writing.
 
 ## [0.6.4] - 2026-09-30
 

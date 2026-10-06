@@ -1,6 +1,6 @@
 # Notes: render kind `workspace`
 
-Side file for `docs/plans/20261005-render-workspace-packs.md`. Research and rationale live
+Side file for `docs/plans/completed/20261005-render-workspace-packs.md`. Research and rationale live
 here so the plan stays compact.
 
 ## Why a generic kind instead of a ralphex pack in dwe
