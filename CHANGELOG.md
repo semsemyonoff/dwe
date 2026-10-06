@@ -47,6 +47,8 @@ generated from commit subjects and stay on the
 
 - AI and IDE renderers reject a destination that is a directory or another
   non-regular file before writing.
+- Template functions `repeat`, `indent` / `nindent` and `ellipsis` no longer
+  crash `dwe` on a negative count or an out-of-range offset (go-sprout 1.1.2).
 
 ## [0.6.4] - 2026-09-30
 
