@@ -1,6 +1,6 @@
 # dwe render ai
 
-Generate hub-level agent documentation for each enabled service from a template pack. The pack declares a `manifest.yml` listing files to render and symlinks to create inside the service's hub directory (e.g. `services/main/AGENTS.md` plus `services/main/CLAUDE.md → AGENTS.md`).
+Generate hub-level agent documentation for each enabled service from a template pack. The pack declares a `manifest.yml` listing files to render and symlinks to create inside the service's hub directory (e.g. `services/main/AGENTS.md` plus `services/main/GEMINI.md → AGENTS.md`).
 
 `render ai` and [`render ide`](ide.md) share most of the per-service plumbing — selection, template resolution, path-safety guards, manifest schema. They differ in one important place: the **collision policy** is inverted (shallowest wins, not deepest).
 
@@ -154,11 +154,11 @@ Each pack must contain a `manifest.yml` at its root. The manifest declares what 
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-  - from: .claude/CLAUDE.md.tmpl
-    to: .claude/CLAUDE.md
+  - from: .github/copilot-instructions.md.tmpl
+    to: .github/copilot-instructions.md
 
 symlinks:
-  - link: CLAUDE.md
+  - link: GEMINI.md
     to: AGENTS.md
 ```
 
@@ -169,7 +169,7 @@ The manifest is loaded with **strict YAML decode**: unknown fields are a hard er
 | Field | Required | Description |
 |-------|----------|-------------|
 | `from` | yes | Path to the template file relative to the pack root. Must end in `.tmpl` and must not be absolute. The file must exist as a regular file (not symlink, not directory). |
-| `to` | yes | Destination path relative to the **service hub directory**. May be nested (e.g. `.claude/CLAUDE.md`). Must not escape the hub. Empty or `..` is rejected. |
+| `to` | yes | Destination path relative to the **service hub directory**. May be nested (e.g. `.github/copilot-instructions.md`). Must not escape the hub. Empty or `..` is rejected. |
 
 ### `symlinks` entries
 
@@ -228,7 +228,7 @@ Templates receive the same object shape as IDE templates:
 | `.ServiceCommandGroups` | method: the `.CommandGroups` that own at least one `.ServiceCommands` entry, collapsed to the shallowest. |
 | `.Cfg` | merged `DweConfig` (advanced). `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
-> **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.claude/CLAUDE.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `workspace/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
+> **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.github/copilot-instructions.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `workspace/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
 Strict-mode rendering means a typo like `{{.Servic.Name}}` aborts rendering instead of producing `<no value>`. Use `{{if ...}}` for fields that may legitimately be empty.
 
@@ -347,7 +347,7 @@ workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
-    .claude/CLAUDE.md.tmpl
+    .github/copilot-instructions.md.tmpl
 ```
 
 Manifest `workspace/templates/ai/default/manifest.yml`:
@@ -356,11 +356,11 @@ Manifest `workspace/templates/ai/default/manifest.yml`:
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-  - from: .claude/CLAUDE.md.tmpl
-    to: .claude/CLAUDE.md
+  - from: .github/copilot-instructions.md.tmpl
+    to: .github/copilot-instructions.md
 
 symlinks:
-  - link: CLAUDE.md
+  - link: GEMINI.md
     to: AGENTS.md
 ```
 
@@ -398,17 +398,17 @@ dir: ./services/main          # same hub as parent — collision
 1. Selection: both services pass the activation gate (default `render.ai.enabled: true`). They share `dir: ./services/main`. `main` has the shallower extends chain (depth 0 vs `main-debug`'s 1), so **`main` wins**. `main-debug` is reported as a collision skip.
 2. Pack resolution for `main`: `render.ai.template` is unset; the implicit chain tries `workspace/templates/ai/main/` (not found), then `workspace/templates/ai/default/` (used).
 3. Manifest is loaded and validated: two render entries, one symlink. The symlink targets `AGENTS.md`, which is one of the render destinations.
-4. Each render entry is processed: `AGENTS.md` and `.claude/CLAUDE.md` are written into `services/main/`.
-5. The symlink `services/main/CLAUDE.md → AGENTS.md` is created.
+4. Each render entry is processed: `AGENTS.md` and `.github/copilot-instructions.md` are written into `services/main/`.
+5. The symlink `services/main/GEMINI.md → AGENTS.md` is created.
 
 Result:
 
 ```
 services/main/
   AGENTS.md           ← rendered from AGENTS.md.tmpl
-  CLAUDE.md           ← symlink to AGENTS.md
-  .claude/
-    CLAUDE.md         ← rendered from .claude/CLAUDE.md.tmpl
+  GEMINI.md           ← symlink to AGENTS.md
+  .github/
+    copilot-instructions.md ← rendered from .github/copilot-instructions.md.tmpl
 ```
 
 `dwe render ai main-debug` produces the same files — the explicit argument is validated, but the hub-anchor resolution picks `main` (shallowest) and prints `ai [main-debug] — resolved to main (hub services/main)`.
@@ -429,7 +429,7 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Common pitfalls
 
-- **Pre-existing non-symlink at a managed symlink path.** If `CLAUDE.md` already exists as a regular file (perhaps from a previous manual edit), `render ai` refuses to overwrite it. Delete the file or set `render.ai.enabled: false` for the service.
+- **Pre-existing non-symlink at a managed symlink path.** If `GEMINI.md` already exists as a regular file (perhaps from a previous manual edit), `render ai` refuses to overwrite it. Delete the file or set `render.ai.enabled: false` for the service.
 - **Symlink `to` must reference a render destination.** The manifest validator enforces this; you cannot symlink to an arbitrary file outside the manifest.
 - **Manifest typos are hard errors.** Strict YAML decode means a misspelled key like `renders:` or `symlink:` aborts loading. Fix the spelling.
 - **Empty manifest is rejected.** A manifest with both `render: []` and `symlinks: []` is almost always a mistake.

@@ -1,6 +1,6 @@
 # Shared IDE and Agent Config
 
-Make sure every developer on the team gets the same VS Code settings, the same `AGENTS.md` / `CLAUDE.md`, and the same git hooks — without anyone hand-editing those files. DWE's three rendering subcommands (`dwe render ide`, `dwe render ai`, `dwe render git`) drive all of this from template packs checked into the repo.
+Make sure every developer on the team gets the same VS Code settings, the same `AGENTS.md`, and the same git hooks — without anyone hand-editing those files. DWE's three rendering subcommands (`dwe render ide`, `dwe render ai`, `dwe render git`) drive all of this from template packs checked into the repo.
 
 This guide gets you from zero to a working shared config with room for per-developer tweaks. For the full schema and edge cases, see the [render reference](../reference/render/index.md).
 
@@ -41,6 +41,8 @@ workspace/templates/
 
 Each pack is a directory; the renderer never follows symlinked packs. Template files end in `.tmpl` and use [Go text/template syntax](../reference/templates.md).
 
+The `ai` pack treats `AGENTS.md` as the single agent file: do not render or link a `CLAUDE.md` — in Claude Code it would suppress `AGENTS.md`.
+
 Outputs land in each enabled service's hub directory:
 
 | Kind | Output destination |
@@ -61,10 +63,6 @@ render:
     to:   .vscode/settings.json
   - from: .devcontainer/devcontainer.json.tmpl
     to:   .devcontainer/devcontainer.json
-
-symlinks:                              # ide / ai only — git rejects symlinks
-  - link: CLAUDE.md
-    to:   AGENTS.md
 ```
 
 Per-kind constraints:
@@ -180,7 +178,7 @@ For `ide` and `ai`, the rendered output is typically a tracked file (`.vscode/se
 | `workspace/templates/<kind>/<pack>/` | yes | The team-wide pack — the source of truth. |
 | `workspace/templates/<kind>/<pack>.local/` | **no** | Personal overrides. Gitignore the `.local/` pattern. |
 | `services/<name>/.vscode/settings.json` (and similar IDE outputs) | usually yes | Rendered output; commit so teammates see the same editor config without running `dwe render ide`. |
-| `services/<name>/AGENTS.md`, `services/<name>/CLAUDE.md` | usually yes | Rendered output; same reasoning. |
+| `services/<name>/AGENTS.md` | usually yes | Rendered output; same reasoning. |
 | `services/<name>/src/.git/hooks/<name>` | **never** | Lives inside `.git/`, which git itself ignores. |
 
 A typical project commits the rendered IDE and AI outputs so a fresh clone has working configs immediately, then re-runs `dwe render ide` / `dwe render ai` whenever the pack or `service.yml` changes — and, for a pack that lists the project's commands (the `default` AI pack's [`Declared commands` block](../reference/render/ai.md#declared-command-index) does), whenever `workspace/commands/` changes. Git hooks are the exception — they live inside `.git/` and must be re-rendered after every clone.

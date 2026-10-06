@@ -1,8 +1,8 @@
-> Translated from: reference/render/ai.md @ 1d06a08a9e37
+> Translated from: reference/render/ai.md @ b8237c47ab3e
 
 # dwe render ai
 
-Сгенерировать hub-уровневую документацию для агентов для каждого включённого сервиса из пакета шаблонов. Пакет объявляет `manifest.yml`, перечисляющий файлы для рендера и симлинки для создания внутри hub-каталога сервиса (например, `services/main/AGENTS.md` плюс `services/main/CLAUDE.md → AGENTS.md`).
+Сгенерировать hub-уровневую документацию для агентов для каждого включённого сервиса из пакета шаблонов. Пакет объявляет `manifest.yml`, перечисляющий файлы для рендера и симлинки для создания внутри hub-каталога сервиса (например, `services/main/AGENTS.md` плюс `services/main/GEMINI.md → AGENTS.md`).
 
 `render ai` и [`render ide`](ide.md) делят большую часть пер-сервисной инфраструктуры — выборку, разрешение шаблонов, гарды безопасности путей, схему manifest. Отличаются в одном важном месте: **политика коллизий** инвертирована (выигрывает поверхностнейший, а не глубочайший).
 
@@ -156,11 +156,11 @@ flowchart TD
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-  - from: .claude/CLAUDE.md.tmpl
-    to: .claude/CLAUDE.md
+  - from: .github/copilot-instructions.md.tmpl
+    to: .github/copilot-instructions.md
 
 symlinks:
-  - link: CLAUDE.md
+  - link: GEMINI.md
     to: AGENTS.md
 ```
 
@@ -171,7 +171,7 @@ Manifest загружается со **строгим YAML-декодом**: н�
 | Поле | Обязательно | Описание |
 |------|-------------|----------|
 | `from` | да | путь к файлу шаблона относительно корня пакета. Должен оканчиваться на `.tmpl` и не быть абсолютным. Файл должен существовать как обычный (не симлинк, не каталог) |
-| `to` | да | путь назначения относительно **hub-каталога сервиса**. Может быть вложенным (например, `.claude/CLAUDE.md`). Не должен выходить из hub. Пусто или `..` отвергается |
+| `to` | да | путь назначения относительно **hub-каталога сервиса**. Может быть вложенным (например, `.github/copilot-instructions.md`). Не должен выходить из hub. Пусто или `..` отвергается |
 
 ### Записи `symlinks`
 
@@ -230,7 +230,7 @@ Manifest валидируется до записи любого файла:
 | `.ServiceCommandGroups` | метод: группы `.CommandGroups`, которым принадлежит хотя бы один элемент `.ServiceCommands`, свёрнутые до самых поверхностных. |
 | `.Cfg` | объединённый `DweConfig` (продвинутое). `.Cfg.Raw` — мапа после слияния и нормализации DWE (`services.*` подставляется из per-service `service.yml`) — см. [Шаблоны](../templates.md#render-контекст-по-местам-использования). Для обычных случаев предпочитайте выделенные поля выше. |
 
-> **Совет.** AI-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`AGENTS.md`, `.claude/CLAUDE.md`, …). Избегайте использования developer-local или секретных ключей через `.Cfg.Raw` в AI-шаблонах: любое значение, попавшее из `workspace/local.yml`, всплывёт в отрендеренном файле и даст разные диффы у разных разработчиков в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для общих для всего проекта соглашений.
+> **Совет.** AI-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`AGENTS.md`, `.github/copilot-instructions.md`, …). Избегайте использования developer-local или секретных ключей через `.Cfg.Raw` в AI-шаблонах: любое значение, попавшее из `workspace/local.yml`, всплывёт в отрендеренном файле и даст разные диффы у разных разработчиков в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для общих для всего проекта соглашений.
 
 Строгий режим рендера означает, что опечатка `{{.Servic.Name}}` прерывает рендер вместо вывода `<no value>`. Используйте `{{if ...}}` для полей, которые могут быть законно пустыми.
 
@@ -349,7 +349,7 @@ workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
-    .claude/CLAUDE.md.tmpl
+    .github/copilot-instructions.md.tmpl
 ```
 
 Manifest `workspace/templates/ai/default/manifest.yml`:
@@ -358,11 +358,11 @@ Manifest `workspace/templates/ai/default/manifest.yml`:
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-  - from: .claude/CLAUDE.md.tmpl
-    to: .claude/CLAUDE.md
+  - from: .github/copilot-instructions.md.tmpl
+    to: .github/copilot-instructions.md
 
 symlinks:
-  - link: CLAUDE.md
+  - link: GEMINI.md
     to: AGENTS.md
 ```
 
@@ -400,17 +400,17 @@ dir: ./services/main          # тот же hub, что у родителя — 
 1. Выборка: оба сервиса проходят гейт активации (дефолтный `render.ai.enabled: true`). Они делят `dir: ./services/main`. У `main` цепочка extends поверхностнее (глубина 0 против 1 у `main-debug`), поэтому **выигрывает `main`**. `main-debug` сообщается как пропуск из-за коллизии.
 2. Разрешение пакета для `main`: `render.ai.template` не задан; implicit-цепочка пробует `workspace/templates/ai/main/` (не найдено), затем `workspace/templates/ai/default/` (используется).
 3. Manifest загружен и валиден: две записи рендера, один симлинк. Симлинк указывает на `AGENTS.md`, который и есть одно из render-назначений.
-4. Каждая запись рендера обрабатывается: `AGENTS.md` и `.claude/CLAUDE.md` записываются в `services/main/`.
-5. Создаётся симлинк `services/main/CLAUDE.md → AGENTS.md`.
+4. Каждая запись рендера обрабатывается: `AGENTS.md` и `.github/copilot-instructions.md` записываются в `services/main/`.
+5. Создаётся симлинк `services/main/GEMINI.md → AGENTS.md`.
 
 Результат:
 
 ```
 services/main/
   AGENTS.md           ← отрендерен из AGENTS.md.tmpl
-  CLAUDE.md           ← симлинк на AGENTS.md
-  .claude/
-    CLAUDE.md         ← отрендерен из .claude/CLAUDE.md.tmpl
+  GEMINI.md           ← симлинк на AGENTS.md
+  .github/
+    copilot-instructions.md ← отрендерен из .github/copilot-instructions.md.tmpl
 ```
 
 `dwe render ai main-debug` производит те же файлы — явный аргумент валидируется, но hub-anchor разрешение выбирает `main` (поверхностнейший) и печатает `ai [main-debug] — resolved to main (hub services/main)`.
@@ -431,7 +431,7 @@ services/main/
 
 ## Частые ловушки
 
-- **Предсуществующий не-симлинк по пути управляемого симлинка.** Если `CLAUDE.md` уже существует как обычный файл (например, после прошлой ручной правки), `render ai` откажется его перезаписать. Удалите файл или задайте `render.ai.enabled: false` для сервиса.
+- **Предсуществующий не-симлинк по пути управляемого симлинка.** Если `GEMINI.md` уже существует как обычный файл (например, после прошлой ручной правки), `render ai` откажется его перезаписать. Удалите файл или задайте `render.ai.enabled: false` для сервиса.
 - **`to` симлинка должен ссылаться на render-назначение.** Валидатор manifest это обеспечивает; нельзя симлинкнуть на произвольный файл вне manifest.
 - **Опечатки в manifest — жёсткие ошибки.** Строгий YAML-декод означает, что опечатанный ключ вроде `renders:` или `symlink:` прерывает загрузку. Исправьте написание.
 - **Пустой manifest отвергается.** Manifest с обоими `render: []` и `symlinks: []` почти всегда ошибка.

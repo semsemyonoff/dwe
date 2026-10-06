@@ -80,9 +80,6 @@ render:
     to: AGENTS.md
   - from: workspace-notes.txt
     to: workspace-notes.txt
-symlinks:
-  - link: CLAUDE.md
-    to: AGENTS.md
 ```
 
 The manifest uses strict YAML decoding: unknown fields, empty files, and empty
@@ -95,6 +92,14 @@ ignored.
 | `render[].to` | Required output path relative to the project root. Nested paths are allowed; absolute paths, the root itself, and escaping paths are rejected. |
 | `symlinks[].link` | Required link path relative to the project root, subject to the same destination protections. |
 | `symlinks[].to` | Required target relative to the project root. Must match a `render[].to` in the same manifest. |
+
+For example, to expose `AGENTS.md` under a second name for another tool:
+
+```yaml
+symlinks:
+  - link: GEMINI.md
+    to: AGENTS.md
+```
 
 The pack directory, manifest, sources, and their parent paths must not be
 symlinks. Generated symlinks use relative targets computed from the link's
@@ -266,7 +271,7 @@ The repository includes tested, workspace-owned starters under
   scope, tool config, scripts and prompt blocks. Follow
   [Run ralphex in a workspace](../../guides/run-ralphex-in-a-workspace.md).
 - [root-agents](../../../examples/workspace-packs/root-agents/README.md) — root
-  `AGENTS.md`, a verbatim file, and a `CLAUDE.md` symlink. Move the existing root
+  `AGENTS.md` from a template and a verbatim file. Move the existing root
   document into the template first: rendering overwrites it.
 
 Take the examples from the release tag matching your installed `dwe --version`,

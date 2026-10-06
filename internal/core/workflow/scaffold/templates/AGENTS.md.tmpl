@@ -95,5 +95,6 @@ Lifecycle and reference:
   Never edit the generated file; edit `workspace/templates/ai/<pack>/` instead.
   It appears only after the hub directory exists (i.e. after the first clone).
 
-> `CLAUDE.md` next to this file is a symlink to it (a copy on platforms without
-> symlinks). Edit `AGENTS.md`.
+> Claude Code reads `AGENTS.md` natively. Keep `CLAUDE.md`, `.claude/CLAUDE.md`
+> and `CLAUDE.local.md` out of this project and its service hubs: any of them in
+> or above the working directory makes Claude Code skip every `AGENTS.md`.

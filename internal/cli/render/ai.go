@@ -25,7 +25,7 @@ func newAICmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ai [service]",
 		Short: "Generate hub-level agents docs from template packs",
-		Long: `Generate agents documentation files (such as AGENTS.md, CLAUDE.md) for the service hub.
+		Long: `Generate agents documentation files (such as AGENTS.md) for the service hub.
 
 The command reads manifest.yml from the chosen template pack
 (workspace/templates/ai/<pack-name>/) and processes only the entries it declares:

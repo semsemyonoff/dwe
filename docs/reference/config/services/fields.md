@@ -491,7 +491,7 @@ Once a pack is selected, the command reads the pack's `manifest.yml` to determin
 - `render`: source template files (must end in `.tmpl`) and their destination paths
 - `symlinks`: relative symlinks to create inside the service hub (must reference outputs from `render`)
 
-All destinations are relative to the service hub directory (e.g. `services/main/`). Nested paths are allowed (e.g. `.claude/CLAUDE.md`).
+All destinations are relative to the service hub directory (e.g. `services/main/`). Nested paths are allowed (e.g. `.github/copilot-instructions.md`).
 
 #### Collision resolution
 
@@ -515,7 +515,7 @@ workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
-    .claude/CLAUDE.md.tmpl
+    .github/copilot-instructions.md.tmpl
 ```
 
 **Manifest (`workspace/templates/ai/default/manifest.yml`):**
@@ -524,11 +524,11 @@ workspace/templates/ai/
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-  - from: .claude/CLAUDE.md.tmpl
-    to: .claude/CLAUDE.md
+  - from: .github/copilot-instructions.md.tmpl
+    to: .github/copilot-instructions.md
 
 symlinks:
-  - link: CLAUDE.md
+  - link: GEMINI.md
     to: AGENTS.md
 ```
 
@@ -557,9 +557,9 @@ dir: ./services/main
 ```
 services/main/
   AGENTS.md          ← rendered from AGENTS.md.tmpl
-  CLAUDE.md          ← symlink to AGENTS.md
-  .claude/
-    CLAUDE.md        ← rendered from .claude/CLAUDE.md.tmpl
+  GEMINI.md          ← symlink to AGENTS.md
+  .github/
+    copilot-instructions.md ← rendered from .github/copilot-instructions.md.tmpl
 ```
 
 ### `render.git` block

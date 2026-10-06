@@ -414,28 +414,28 @@ func interactive(stdin io.Reader, flags *cmdctx.RootFlags, useDefaults bool) boo
 
 // initJSON is the machine-readable result shape for --output json.
 type initJSON struct {
-	Target          string   `json:"target"`
-	Created         []string `json:"created"`
-	Skipped         []string `json:"skipped"`
-	SymlinkFallback bool     `json:"symlink_fallback"`
-	NestedWarning   bool     `json:"nested_warning"`
+	Target  string   `json:"target"`
+	Created []string `json:"created"`
+	Skipped []string `json:"skipped"`
+	// Deprecated: dwe init no longer writes CLAUDE.md, so this is always false.
+	// Kept in the JSON contract until the next minor release.
+	SymlinkFallback bool `json:"symlink_fallback"`
+	NestedWarning   bool `json:"nested_warning"`
 }
 
 // writeResult renders the scaffold Result in the active output mode.
 func writeResult(flags *cmdctx.RootFlags, cmd *cobra.Command, res core.Result) error {
 	dto := initJSON{
-		Target:          res.Target,
-		Created:         orEmpty(res.Created),
-		Skipped:         orEmpty(res.Skipped),
-		SymlinkFallback: res.SymlinkFallback,
-		NestedWarning:   res.NestedWarning,
+		Target:        res.Target,
+		Created:       orEmpty(res.Created),
+		Skipped:       orEmpty(res.Skipped),
+		NestedWarning: res.NestedWarning,
 	}
 	return cmdctx.WriteData(flags, cmd, dto, renderInitText)
 }
 
 // renderInitText renders the human-facing summary: a nested-project warning (if
-// any), grouped created/skipped lists, a symlink-fallback note, and a
-// next-steps footer.
+// any), grouped created/skipped lists, and a next-steps footer.
 func renderInitText(d initJSON) string {
 	var b strings.Builder
 
@@ -463,13 +463,6 @@ func renderInitText(d initJSON) string {
 		for _, p := range d.Skipped {
 			fmt.Fprintf(&b, "  · %s\n", styles.StyleMuted(p))
 		}
-	}
-
-	if d.SymlinkFallback {
-		b.WriteString("\n")
-		b.WriteString(styles.StyleMuted(
-			"note: CLAUDE.md was written as a copy of AGENTS.md (symlinks unavailable on this platform)"))
-		b.WriteString("\n")
 	}
 
 	b.WriteString("\nNext steps:\n")

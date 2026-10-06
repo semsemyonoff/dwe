@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ 00a1843a72e3
+> Translated from: reference/config/index.md @ e924a023a8b6
 
 # Справочник конфигурации
 
@@ -127,7 +127,7 @@ flowchart LR
 - `dwe secrets status` — сообщает про каждое зашифрованное значение и можно ли его прочитать здесь
 - `dwe render env` — генерирует `.env` из правил экспорта смерженного конфига
 - `dwe render ide` — генерирует IDE-конфиги
-- `dwe render ai` — генерирует hub-level AGENTS.md и симлинки CLAUDE.md
+- `dwe render ai` — генерирует hub-level AGENTS.md
 - `dwe render git` — генерирует shell-хуки git в `<svc.Dir>/src/.git/hooks/`
 - `dwe info` — рендерит info-дашборд из `info.yml`
 - `dwe deploy plan` — показывает итоговый deploy-пайплайн

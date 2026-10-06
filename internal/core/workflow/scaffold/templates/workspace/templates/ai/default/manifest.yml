@@ -14,8 +14,3 @@
 render:
   - from: AGENTS.md.tmpl
     to: AGENTS.md
-
-# The hub CLAUDE.md mirrors the hub AGENTS.md, exactly as the project root does.
-symlinks:
-  - link: CLAUDE.md
-    to: AGENTS.md

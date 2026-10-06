@@ -67,7 +67,7 @@ With `--output json` you get a structured report instead of prose:
 }
 ```
 
-`skipped` lists files that already existed (and were left alone), `symlink_fallback` is true when `CLAUDE.md` had to be written as a copy instead of a symlink, and `nested_warning` is true when an ancestor `workspace.yml` was found.
+`skipped` lists files that already existed (and were left alone), `symlink_fallback` is deprecated and always `false` (kept for compatibility; `dwe init` no longer creates `CLAUDE.md`), and `nested_warning` is true when an ancestor `workspace.yml` was found.
 
 ## What ends up on disk
 
@@ -78,7 +78,6 @@ With `--output json` you get a structured report instead of prose:
 ├─ .gitignore           DWE runtime entries (append-merged if the file already exists)
 ├─ .editorconfig        repo conventions (only written if absent)
 ├─ AGENTS.md            brief project prompt for AI agents
-├─ CLAUDE.md          → symlink to AGENTS.md (a copy where symlinks are unavailable)
 ├─ .dwe/
 │  └─ config            gitignored, all-commented per-developer user-config template
 └─ workspace/
@@ -130,7 +129,6 @@ From there the usual authoring path applies: [add a service](add-a-service.md), 
 - **Existing `.gitignore` / `.editorconfig`.** `.gitignore` is append-merged; `.editorconfig` is written only when absent. Neither is clobbered.
 - **Nested projects.** If an ancestor directory already has a `workspace.yml`, `dwe init` warns (`nested_warning` in JSON) but does not block — sometimes a nested project is what you want.
 - **No starter service.** `--service ""` scaffolds a valid, service-less project. Everything that references the starter service is dropped with it — its folder, the AI template pack and the starter scenario — so nothing is left dangling. Add services later as folders under `workspace/services/`.
-- **Windows symlinks.** Where `CLAUDE.md` cannot be symlinked to `AGENTS.md`, it is written as a verbatim copy and the run notes the fallback.
 
 ## See also
 

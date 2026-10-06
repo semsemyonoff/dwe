@@ -181,8 +181,9 @@ Lifecycle and reference:
   Never edit the generated file; edit `workspace/templates/ai/<pack>/` instead.
   It appears only after the hub directory exists (i.e. after the first clone).
 
-> `CLAUDE.md` next to this file is a symlink to it (a copy on platforms without
-> symlinks). Edit `AGENTS.md`.
+> Claude Code reads `AGENTS.md` natively. Keep `CLAUDE.md`, `.claude/CLAUDE.md`
+> and `CLAUDE.local.md` out of this project and its service hubs: any of them in
+> or above the working directory makes Claude Code skip every `AGENTS.md`.
 
 --------
 === compose.yaml ===
@@ -588,7 +589,7 @@ npm/composer/make/docker command directly until that check has been made.
 
 > This file is **generated** by `dwe render ai` from
 > `workspace/templates/ai/default/AGENTS.md.tmpl` in the project root. Edit the
-> template, not this file. `CLAUDE.md` next to it is a symlink to this file.
+> template, not this file.
 >
 > The project root has its own `AGENTS.md` — that one is scaffolded once and is
 > meant to be edited by hand.
@@ -610,11 +611,6 @@ npm/composer/make/docker command directly until that check has been made.
 
 render:
   - from: AGENTS.md.tmpl
-    to: AGENTS.md
-
-# The hub CLAUDE.md mirrors the hub AGENTS.md, exactly as the project root does.
-symlinks:
-  - link: CLAUDE.md
     to: AGENTS.md
 
 --------
@@ -668,5 +664,3 @@ DIR workspace/templates/ai
 DIR workspace/templates/ai/default
 --------
 DIR workspace/tests
---------
-SYMLINK CLAUDE.md -> AGENTS.md

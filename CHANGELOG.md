@@ -18,7 +18,20 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- `dwe init` no longer creates `CLAUDE.md`, and the default ai pack it
+  scaffolds no longer links a hub `CLAUDE.md` to `AGENTS.md`. Claude Code reads
+  `AGENTS.md` natively since
+  [2.1.277](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21277),
+  and a `CLAUDE.md` in or above the working directory makes it skip every
+  `AGENTS.md`. Existing projects keep their own pack and links;
+  [Upgrading DWE](docs/guides/upgrading.md) shows how to drop them.
+
+### Deprecated
+
+- `symlink_fallback` in `dwe init --output json` is always `false` and will be
+  removed in the next minor release.
 
 ## [0.7.0] - 2026-10-06
 
