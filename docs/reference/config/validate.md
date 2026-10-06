@@ -118,6 +118,8 @@ For `deploy.yml` and `reset.yml` these two Info states have a direct remedy: `dw
 
 `templates.ai` / `templates.ide` / `templates.git` warn about a missing template pack only once the service sets `render.<kind>.enabled` explicitly. A `type: app` service running on the implicit default with no pack on disk is the scaffolded state, not a defect, and stays silent. `templates.git` applies the same rule to its "no `src/.git`" notice — the repository may still be populated by a deploy step before render runs.
 
+`templates.workspace` validates the entire `render.workspace` list together using the [workspace pack plan](../render/workspace.md#cli-and-validation). It checks pack names and duplicates, manifests, sources, `.tmpl` execution, protected destinations, cross-pack collisions and filesystem safety without writing. A missing listed pack is an error; an absent or empty list emits an info diagnostic. Run `dwe validate templates workspace` to scope to this validator. It does not run in preflight.
+
 `config.reset` is the one exception to the paragraph above on the absent state: it stays **completely silent** when `workspace/reset.yml` is missing. Unlike `deploy.yml` / `lifecycle.yml`, the file is never shipped by the scaffold, so its absence is the universal default on nearly every project rather than a deliberate opt-out. A `reset.yml` that *is* present but all-comment or empty is reported like the other two.
 
 The `checks.*` validators are synthesized one per `validate.yml` entry. Each dispatches to either a built-in inspection routine or a locked-down user command at run time.

@@ -1,0 +1,5 @@
+render:
+  - {from: AGENTS.md.tmpl, to: AGENTS.md}
+  - {from: workspace-notes.txt, to: workspace-notes.txt}
+symlinks:
+  - {link: CLAUDE.md, to: AGENTS.md}

@@ -33,6 +33,8 @@ For developers who write DWE config — author services, commands, daemons, snap
 
 ### Integrations
 
+- [Running ralphex in a workspace](run-ralphex-in-a-workspace.md) — install a workspace pack, generate prompt overrides, and scope a plan across the root and service repositories.
+
 - [Starship prompt integration](starship.md) — render a compact, project-aware DWE segment inside your [Starship](https://starship.rs/) shell prompt.
 - [Observability with OpenTelemetry](observability-otel.md) — an opt-in `otel` tool service (Grafana LGTM bundle) whose overlay instruments your app services; per-language recipes and a text trace lookup for the agent.
 

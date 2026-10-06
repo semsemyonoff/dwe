@@ -1,0 +1,422 @@
+# Render kind `workspace`: template packs at the workspace root
+
+## Overview
+- New render kind `workspace`: packs under `workspace/templates/workspace/<pack>/` render into
+  the project root, enabled by a top-level `render.workspace: [<pack>…]` list.
+- Solves running per-workspace tools generically: tools configured at the workspace root (ralphex `.ralphex/`,
+  root agent docs, `.mcp.json`, …) get a pack without a dwe change per tool. ralphex is the
+  first consumer; its pack lives in the workspace repo, dwe ships the mechanism, a guide and a
+  tested starter pack under `examples/workspace-packs/` (not embedded in the binary).
+- Reuses the shared manifest schema, `packroot` `.local` overrides and `packcommon.TemplateData`.
+- Rationale, code facts, safety rules and the ralphex recipe:
+  `docs/plans/notes/20261005-render-workspace-packs.md`.
+
+## Context (from discovery)
+- Packs: `internal/core/execution/templates/{ai,ide,git,config,manifest,packroot,packcommon}`.
+- CLI: `internal/cli/render/{render.go,ai.go,common.go,secrets_test.go}`; validate:
+  `internal/core/validate/templates/{ai.go,ide.go,overrides.go}`, `internal/cli/validate/validate.go`.
+- Config root: `allowedRootKeys` (`internal/core/project/config/workspace.go:40`) mirrored by
+  `tpl.KnownVarHeads` (`internal/shared/tpl/render_command.go:131`); unknown nested keys via
+  `formalBlockStructs` (`internal/core/validate/config/formal_blocks.go:25`).
+- Scaffold gitignore: `internal/core/workflow/scaffold/gitignore.go:45` (`/.ralphex/`).
+
+## Development Approach
+- **testing approach**: Regular (code first, then tests in the same task)
+- complete each task fully before moving to the next; small, focused changes
+- every task includes new/updated tests; all tests pass before the next task
+- update this plan when scope changes; keep `ai`/`ide`/`git`/`config` behavior unchanged
+
+## Testing Strategy
+- unit tests per task, table-driven; temp projects built in Go
+- CLI tests follow `internal/cli/render` style: temp project + `cmd.RunE` (`ai_test.go`), no goldens
+
+## Progress Tracking
+- mark completed items `[x]` immediately; new tasks get ➕, blockers ⚠️
+
+## Solution Overview
+- Kind `workspace`, dest root = project root. No service selection; packs come from an explicit list.
+- Manifest schema unchanged. `from` ending in `.tmpl` renders through `text/template` with
+  `missingkey=error`; any other `from` is copied byte-for-byte (ralphex prompts contain their own
+  `{{PLAN_FILE}}`). Destination mode follows the source (`0755`/`0644`), applied with an explicit
+  chmod so re-renders converge.
+- `TemplateData` is `packcommon.TemplateData` with empty `Service`/`Resolved`/`ServiceCfg`, built
+  from the sanitized config like `render ai`.
+- Two phases: plan (validate + render every entry into memory + all destination filesystem
+  checks), then write. Any failure in the plan phase writes nothing.
+
+## Technical Details
+- Config: `render: { workspace: [ralphex] }`; `RenderConfig{Workspace []string}` on
+  `DweConfig.Render`. `deepMerge` replaces lists wholesale, so `workspace: []` in `local.yml`
+  clears it. No name validation at load time.
+- Pack name/duplicate validation lives in `workspace.ValidatePacks` (render + validator).
+- Protected destinations, case-insensitive per path component, for render `to` and
+  `symlinks[].link`: `workspace.yml`, `workspace/`, `services/`, `.dwe/`, `.git/`, `.env`.
+- Cross-pack collisions: equal paths and file-vs-directory prefixes (`.ralphex` vs `.ralphex/config`).
+- CLI: `dwe render workspace [pack…]`; no args → `render.workspace` (empty → info line, exit 0);
+  explicit names work outside the list; listed pack not found → hard error. No JSON mode (same as
+  `render ai`). Pack-name completion through `cmdctx.CompletionConfigPath`.
+- Writes: dest symlink or directory → refuse; existing regular file → overwrite.
+- Out of scope: removing files dropped from a manifest (documented as a limitation), hooks or
+  commands inside render, automatic render in `dwe run`/deploy (explicit step only).
+
+## What Goes Where
+- Implementation Steps: dwe code, tests, example packs, docs, skill references, CHANGELOG.
+- Post-Completion: installing the ralphex starter in ficbird/podlapka, upstream ralphex proposal.
+
+## Validation Commands
+- `make embedded-docs` (once, and after docs edits)
+- `go test ./internal/core/execution/templates/... ./internal/cli/render/... ./internal/core/validate/templates/... ./internal/core/validate/config/... ./internal/core/project/config/... ./internal/shared/tpl/... ./internal/cli/validate/... ./internal/core/workflow/scaffold/... ./internal/core/docs/llmstxt/... ./internal/cli/docs/...`
+- `golangci-lint run ./internal/core/execution/templates/... ./internal/cli/render/... ./internal/core/validate/... ./internal/core/project/config/... ./internal/shared/tpl/... ./internal/cli/validate/... ./internal/core/workflow/scaffold/... ./internal/core/docs/llmstxt/...`
+
+## Implementation Steps
+
+### Task 1: Extract shared file writer and symlink helper into `packcommon`
+
+**Files:**
+- Modify: `internal/core/execution/templates/packcommon/packcommon.go`
+- Modify: `internal/core/execution/templates/ai/ai.go`
+- Modify: `internal/core/execution/templates/ide/ide.go`
+- Create/Modify: `internal/core/execution/templates/packcommon/*_test.go`
+
+- [x] split the current `ai.RenderTemplateFile` into `packcommon.PrepareFile` (resolve via packroot,
+      render or verbatim-read into a buffer, mode normalized: any exec bit → `0755`, else `0644`) and `packcommon.CheckDest` + `WriteFile`
+      (containment, symlink and real-path checks, refuse symlink/directory dest, write, explicit
+      `os.Chmod` when mode-from-source is on); error labels are parameters
+- [x] move `EnsureRelativeSymlink` into `packcommon` with a label/hint parameter (ai keeps its
+      `render.ai.enabled` hint, ide its own)
+- [x] switch `ai` and `ide` `RenderTemplateFile`/`EnsureRelativeSymlink` to the helpers; `ai`/`ide`
+      stay template + `0644`, no chmod
+- [x] write tests: template, verbatim with `{{PLAN_FILE}}` byte-for-byte, `0755` source, overwrite
+      `0644`→`0755` and back, `.local` override hit
+- [x] write tests for errors: dest escapes root, symlinked dest, dest is a directory, symlinked parent
+- [x] run tests — existing `ai`/`ide` tests pass unchanged; must pass before next task
+
+Validation: `make build`, the plan's scoped tests, and scoped `golangci-lint` passed.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 2: `render` root key
+
+**Files:**
+- Modify: `internal/core/project/config/workspace.go`
+- Modify: `internal/shared/tpl/render_command.go`
+- Modify: `internal/core/validate/config/formal_blocks.go`
+- Modify: tests in `internal/core/project/config/` and `internal/core/validate/config/`
+
+- [x] add `render` to `allowedRootKeys` and to `tpl.KnownVarHeads`; add `Render RenderConfig` to `DweConfig`
+- [x] register `"render": reflect.TypeFor[config.RenderConfig]()` in `formalBlockStructs`
+- [x] write tests: decode, last-layer-wins across layers, `local.yml` `workspace: []` clears the list, absent key
+- [x] write test: `render: {workspce: …}` yields the `config.unknown_field:render` warning
+- [x] run tests (incl. `TestAllowedRootKeysSubsetOfKnownVarHeads`); must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed, including the root-key/template-head cross-checks.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 3: Workspace pack plan phase (resolve, validate, render in memory)
+
+**Files:**
+- Create: `internal/core/execution/templates/workspace/workspace.go`
+- Create: `internal/core/execution/templates/workspace/workspace_test.go`
+
+- [x] `ResolvePack(projectRoot, name)`: `ValidatePackName`, strict lookup under
+      `workspace/templates/workspace/`, symlinked or non-directory pack → error
+- [x] `Plan(projectRoot, names, data)`: reject duplicate names; load manifests;
+      `manifest.ValidateShape` (dest root = project root); protected-path check on `to` and `link`
+      (case-insensitive); cross-pack collisions incl. file-vs-directory prefixes; sources via
+      `ValidateSourcesWith`
+- [x] in the same phase prepare every render entry into memory via `packcommon.PrepareFile`
+      (only `.tmpl` are executed — do not reuse `DryRunRender`, it parses verbatim files) and run
+      `packcommon.CheckDest` for every destination and symlink parent; return the planned writes
+- [x] write tests for success: two packs, `.local` override, verbatim `{{PLAN_FILE}}` + template mix
+- [x] write tests for errors: missing pack, duplicate name, each protected path for `to` and
+      `link`, case-variant (`Workspace.yml`, `.GIT/hooks`), equal and prefix collisions, missing
+      source, `missingkey` error, dest is a directory
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. Tests verify that successful and failed plans leave files,
+directories, permissions and symlinks unchanged, including a failure in the second pack.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 4: Workspace pack write phase
+
+**Files:**
+- Modify: `internal/core/execution/templates/workspace/workspace.go`
+- Modify: `internal/core/execution/templates/workspace/workspace_test.go`
+
+- [x] `Render(projectRoot, names, data)`: `Plan`, then `packcommon.WriteFile` per entry (mode from
+      source, chmod) and `packcommon.EnsureRelativeSymlink` per symlink
+- [x] return a result per pack (written files, override hits) for CLI output
+- [x] write tests: render into a temp project, overwrite existing file, `0755` kept, mode converges on re-render
+- [x] write tests: a failure in the second pack (bad template, protected path, dest directory) leaves
+      the first pack's destinations untouched
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. Render tests cover per-pack results, template and verbatim
+output, overrides, executable mode convergence, symlink creation and retargeting,
+and second-pack planning failures leaving all destinations untouched.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 5: `dwe render workspace` command
+
+**Files:**
+- Create: `internal/cli/render/workspace.go`
+- Create: `internal/cli/render/workspace_test.go`
+- Modify: `internal/cli/render/render.go`
+- Modify: `internal/cli/render/secrets_test.go`
+- Modify: `internal/core/execution/templates/packcommon/templatedata_sites_test.go`
+
+- [x] subcommand: args → explicit packs, no args → `cfg.Render.Workspace`; empty → info line, exit 0
+- [x] load config with `config.LoadConfigSanitizedOrWrap`, command index via `loadCommandIndex`,
+      output via `render.Stdout()`; no JSON mode, same as `render ai`
+- [x] pack-name completion via `cmdctx.CompletionConfigPath` (AGENTS.md completion path safety)
+- [x] update `render` `Long`, `Example` and the `NewCmd` doc comment
+- [x] add `internal/cli/render/workspace.go` to `want` in `templatedata_sites_test.go`
+- [x] write tests (temp project + `RunE`): default list, explicit pack, empty list, listed pack
+      missing, protected path; `TestNewWorkspaceCmd_rendersMarkerNotPlaintext` in `secrets_test.go`
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. CLI tests cover default and explicit pack selection,
+empty lists, planning errors without writes, sanitized secrets, command-index
+propagation and warnings, overrides, symlinks, and silent completion safety.
+The built CLI help includes the new command and examples.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 6: `dwe validate templates workspace`
+
+**Files:**
+- Create: `internal/core/validate/templates/workspace.go`
+- Create: `internal/core/validate/templates/workspace_test.go`
+- Modify: `internal/core/validate/templates/ide.go` (validator list, `&AIValidator{}` at :213)
+- Modify: `internal/cli/validate/validate.go`
+
+- [x] `WorkspaceValidator` (domain `templates`, id `workspace`): runs `workspace.Plan` on
+      `render.workspace` with `sanitizedCfg(ctx)` and `commandIndex(ctx)`; errors as diagnostics;
+      info when the list is empty
+- [x] register it; add the `validate templates workspace` subcommand; add `workspace` to help at
+      `validate.go:299-300` and the templates `Long` (:351)
+- [x] add `internal/core/validate/templates/workspace.go` to `want` in `templatedata_sites_test.go`
+- [x] write tests: clean pack (incl. verbatim `{{PLAN_FILE}}`) → no diagnostics, missing pack,
+      protected path, template execution error; the validator passes `commandIndex(ctx)` into
+      `TemplateData` (own test, like `TestTemplateValidators_DryRunSeesCommandIndex`)
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. Tests cover clean packs without diagnostics, verbatim
+placeholders, planning errors without writes, cross-pack collisions, command-index
+propagation, sanitized secrets and scoped CLI JSON diagnostics and exit codes.
+The built CLI help lists the workspace validator.
+The scoped tests used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 7: Scaffold and llms.txt
+
+**Files:**
+- Modify: `internal/core/workflow/scaffold/gitignore.go`
+- Modify: `internal/core/workflow/scaffold/testdata/golden_default.txt`
+- Modify: `internal/core/docs/llmstxt/generator.go`
+
+- [x] remove `/.ralphex/` from `dweGitignoreBlock`; update the golden (check
+      `starter_artefacts_test.go` and `docs/guides/start-a-new-project.md` for other mentions)
+- [x] llms.txt "Template syntax by site" row (`generator.go:306`): add `workspace`, note only `.tmpl`
+      files are templates; stay within `TestDocsLlmsTxtCommand_SizeBudget`
+- [x] run `go test ./internal/core/workflow/scaffold/... ./internal/core/docs/llmstxt/... ./internal/cli/docs/...`
+
+Validation: `make embedded-docs`, `make build`, Task 7's focused tests, the plan's
+scoped tests, and scoped `golangci-lint` (also covering `internal/cli/docs/...`) passed.
+The generic llms.txt is 9,456 bytes, below the 12 KB budget. Golden snapshots and
+regression tests cover the workspace syntax note and fresh/merged gitignore files;
+existing user-provided `/.ralphex/` rules remain intact. No other ralphex mentions
+were found in `starter_artefacts_test.go` or `docs/guides/start-a-new-project.md`.
+Task 7's focused tests passed without a stub. The broader scoped suite used a
+temporary stub for only `docker version --format {{.Server.Version}}` because
+the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 8: `ws-git` for the ralphex example
+
+Contract: notes § "Example pack" (`ws-git` contract); ficbird `repos.sh` semantics in
+`docs/plans/notes/20261005-render-workspace-packs-ficbird.md`.
+
+**Files:**
+- Create: `examples/workspace-packs/ralphex/workspace/templates/workspace/ralphex/scripts/ws-git`
+- Create: `internal/core/execution/templates/workspace/examples_wsgit_test.go`
+
+- [x] `ws-git` (POSIX sh, `#!/bin/sh`) per the notes contract: scope = root + `.ralphex/run/repos`
+      (root always in scope); intercepts exactly `rev-parse HEAD`, `diff HEAD`,
+      `ls-files -z --others --exclude-standard` (NUL via `xargs -0`, per notes), silent on success;
+      near-miss argv passes through; no run state → intercepted calls root only, every `ws-*` errors;
+      partial/invalid run state → non-zero exit; `ws-check`, `ws-status`, `ws-log`,
+      `ws-diff [--stat]`, `ws-wip [--stat]` with branch/ancestor checks
+- [x] `chmod +x` the file on disk, then `git add` it; verify `git ls-files -s` shows `100755`
+- [x] add the go.mod walk-up helper (`findRepoRoot`, as in `ide/source_regression_test.go:146`) to
+      the test package; Task 9 reuses it
+- [x] write `ws-git` behavior test (`t.Skip` without `git`; `gitInit`/`requireGit` pattern from
+      `stack/gitworkspace_test.go:86-108`): copy the script to `<tmp>/.ralphex/scripts/ws-git` (0755)
+      and exec it directly, not via `sh`; root with `/services/` and `/.ralphex/run/` in
+      `.gitignore`, 2 scoped nested repos + 1 unscoped dirty repo, base tag and task branch in root
+      and scoped repos; HEAD changes after a scoped commit, not after an unscoped one;
+      `diff HEAD`/`ls-files -z` repo-prefixed, NUL-separated, stderr empty, untracked names with a
+      space and non-ASCII survive, empty untracked set yields empty output; near-miss argv passes
+      through; no run state → root only and `ws-check` fails; missing scoped repo, base missing in
+      a repo or in the root → non-zero; `ws-diff` fails off the task branch;
+      `hash-object -- <prefixed name>` and pass-through work from the root
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. `shellcheck -s sh` and `dash -n` passed; Git records the
+script as `100755`. Tests execute the installed script directly against real
+temporary Git repositories and cover scoped fingerprints, prefixed diffs, NUL
+filenames, pass-through calls, root-only bootstrap, invalid state and branch/ancestor gates.
+The scoped suite used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 9: ralphex pack, commands and minimal example
+
+Contract: notes § "Example pack"; ficbird block source material in
+`docs/plans/notes/20261005-render-workspace-packs-ficbird.md`.
+
+**Files:**
+- Create: `examples/workspace-packs/README.md`, `examples/workspace-packs/ralphex/README.md`
+- Create: `examples/workspace-packs/ralphex/workspace/templates/workspace/ralphex/{manifest.yml,config.tmpl,blocks/task.md,blocks/review.md,blocks/codex_review.md,blocks/agent.md}`
+  (`manifest.yml` per the notes table, including `scripts/ws-git` from Task 8)
+- Create: `examples/workspace-packs/ralphex/workspace/scripts/{ralphex-prompts.sh,ralphex-scope.sh}`
+- Create: `examples/workspace-packs/ralphex/workspace/commands/ralphex.yml`
+- Create: `examples/workspace-packs/ralphex/workspace.yml.snippet`
+- Create: `examples/workspace-packs/root-agents/workspace/templates/workspace/root-agents/{manifest.yml,AGENTS.md.tmpl,...}`
+- Create: `internal/core/execution/templates/workspace/examples_test.go`
+- Create: `internal/core/execution/templates/workspace/examples_scripts_test.go`
+
+- [x] layout mirrors a workspace; install is `cp -R examples/workspace-packs/<name>/workspace/. <ws>/workspace/`
+      (trailing `/.` — BSD and GNU cp agree) plus the snippet when present; the ralphex README adds
+      `/.ralphex/run/` to and removes an older scaffold's `/.ralphex/` from the root `.gitignore`,
+      and says the base must also exist in the root; the root-agents README warns that it overwrites
+      the scaffold's root `AGENTS.md` (move its content into the template first; a `CLAUDE.md` copy
+      fallback goes stale, a symlink does not). READMEs say packs are starters owned by the
+      workspace afterwards and to take them from the tag matching the installed dwe
+- [x] `config.tmpl` (guarded `vars.ralphex.default_branch`, default `main`), `blocks/*.md` generalized
+      from the ficbird source per the notes (scope from `.ralphex/run/`, `ws-git ws-*`, explicit
+      overrides of body git instructions, no anchor commit, no project names; agent block read-only
+      and overrides the code-injected diff instruction above it; codex_review maps both
+      `{{DIFF_INSTRUCTION}}` forms; no block starts with `#`)
+- [x] `ralphex-scope.sh` + `ralphex.scope` (`repos`, `base`, `branch`, all required): `check-ignore`
+      hint, write `.ralphex/run/*`, run `ws-git ws-check`, restore on failure. `ralphex-prompts.sh` +
+      `ralphex.prompts` (`check` bool, `default: false`, `env:`): 10 files, block + phase/file policy
+      fragments after the leading header and a blank line (agents: after leading `#` lines and
+      frontmatter), fragments starting with `#` rejected, never the dumped `config`, stamp; check mode
+      regenerates into a temp dir and diffs (non-zero on difference), reports stamp drift, warns on
+      unowned files, writes nothing
+- [x] `chmod +x` both scripts on disk, then `git add`; verify `git ls-files -s` shows `100755`
+- [x] `root-agents`: minimal pack with a `.tmpl` (root `AGENTS.md` listing `.Services`) and a verbatim file
+- [x] write `examples_test.go` (`findRepoRoot` from Task 8 to find `examples/`):
+      per example build a temp workspace (minimal `workspace.yml` + snippet when present, precedent
+      `validate/templates/command_index_test.go:41`), `config.LoadConfigSanitized`, `workspace.Plan`
+      → no errors, `.tmpl` rendered (also without `vars.ralphex`), verbatim byte-identical, `ws-git`
+      planned `0755`; `usercommands.LoadRegistryFromConfigPath` + the `validate/commands` validator → no errors/warnings
+- [x] write `examples_scripts_test.go` with a stub `ralphex` on PATH (`t.Skip` without `sh`) answering
+      `--version` and `--dump-defaults=<dir>` (`config`, `prompts/`, `agents/` mimicking v1.7.0:
+      prompts with a `#` header, one agent with leading `#` lines + frontmatter): 10 files written;
+      applying ralphex's leading-comment strip rule to each prompt leaves the block's first line
+      first; phase and file policy fragments in order; block after frontmatter; a fragment starting
+      with `#` is rejected; `config` untouched; stamp written; check mode: clean → zero exit, edited
+      block / hand-edited prompt / changed stub defaults → non-zero, stale unowned prompt → warning,
+      nothing written; `ralphex-scope.sh` writes run state, rejects a missing repo or ref and
+      restores the previous files, fails when `.ralphex/run/` is not ignored
+- [x] run tests — must pass before next task
+
+Validation: `make embedded-docs`, `make build`, the plan's scoped tests, and scoped
+`golangci-lint` passed. `shellcheck -s sh` and `dash -n` passed for both new
+scripts; Git records each as `100755`. Tests validate both starter packs and
+command definitions, guarded branch defaults, verbatim blocks and executable
+mode, all ten prompt overrides, policy ordering, preserved headers/frontmatter,
+stamp drift, unowned-file warnings, check-mode immutability, and scope rollback
+against real temporary Git repositories. The prompt tests use a ralphex stub
+matching the documented v1.7.0 dump layout.
+The scoped suite used a temporary stub for only `docker version --format {{.Server.Version}}`
+because the local Docker daemon socket was unavailable; no repository test was skipped or changed.
+
+### Task 10: Verify acceptance criteria
+- [x] `render.workspace` renders listed packs into the root; `.tmpl` templated, others verbatim,
+      mode follows source; protected paths and collisions rejected before any write
+- [x] `ai`/`ide`/`git`/`config` behavior unchanged
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
+
+Validation: the full `make test` suite and `make lint` passed (zero lint issues).
+New CLI acceptance tests cover multiple configured packs, `.tmpl` rendering versus
+verbatim placeholders, source-mode normalization, overwriting files while adding
+and removing executable permissions, case-insensitive protected paths, and equal
+and file-vs-directory cross-pack collisions leaving destinations untouched.
+Existing ai/ide/git/config regression tests also passed.
+The initial full-suite run failed in the pre-wizard secrets and fresh-scaffold
+validation tests because the local Docker daemon was unavailable. The passing
+run used a temporary stub for only `docker version --format {{.Server.Version}}`;
+all other Docker calls used the real executable. No repository test was skipped
+or changed to accommodate the unavailable daemon.
+
+### Task 11: [Final] Update documentation
+- [x] create `docs/reference/render/workspace.md` (activation, `.tmpl` vs verbatim, mode, protected
+      paths, collisions, two-phase write, template data, CLI, validate); add it to
+      `docs/reference/render/index.md` (kind table, TOC), `docs/reference/index.md:11`,
+      `docs/reference/templates.md:3`, `docs/reference/config/validate.md:119`
+- [x] `docs/reference/config/workspace.md`: `render.workspace` field, allowlist block and the literal
+      error message example (:102-110)
+- [x] create `docs/guides/run-ralphex-in-a-workspace.md`: why (notes), install from the examples
+      (link `examples/workspace-packs/ralphex/README.md`, a file — precedent
+      `docs/guides/observability-otel.md:457`; fetch from the tag matching the installed dwe; do not
+      inline the files), the `cp -R …/workspace/.` command and the `/.ralphex/run/` ignore line,
+      first `dwe render workspace` + `dwe cmd ralphex.prompts`, commit `.ralphex/`; per plan:
+      `dwe cmd ralphex.scope …` then `ralphex --base-ref <base> --branch <branch> <plan>`;
+      maintenance (ralphex update → `dwe cmd ralphex.prompts --set check=true`), policy fragments,
+      root in scope (base in root too), known limitations from the notes, stage 2 note; add to
+      `docs/guides/index.md`; mention the examples in `docs/reference/render/workspace.md`
+- [x] `README.md:217` render list; mirror all new/changed pages and `docs/i18n/ru/README.md:219` in
+      `docs/i18n/ru/`; after `make gen-docs-manifest` update the `> Translated from: … @ <hash>`
+      headers (`TestRussianTranslationsAreFresh`)
+- [x] `skills/dwe/SKILL.md:153` (mutating render commands) and `skills/dwe/references/render-and-vars.md`
+      (new bullet + "apply by source" lines :75,79) with a pointer to the guide
+- [x] `docs/internals/packages.md`: the kind under execution templates and § `internal/cli/render/`.
+      Do not grow `AGENTS.md` (32 B under `TestAgentsMdBudget`)
+- [x] `CHANGELOG.md` `## [Unreleased]`: new kind, new root key, scaffold no longer ignores `.ralphex/`,
+      example packs under `examples/workspace-packs/`
+- [x] run `make gen-docs-manifest` (commit `internal/core/docs/content_hashes_gen.go`), `make embedded-docs`, `make test`, `make lint`
+
+Validation: `make gen-docs-manifest`, `make embedded-docs`, `make build`, full
+`make test`, and `make lint` passed (zero lint issues). New embedded-doc tests
+resolve the workspace reference and ralphex guide in both English and Russian,
+verify fresh translations without fallback, and check navigable document sections.
+The existing translation-freshness and link-anchor checks passed. `web/npm test`
+passed all 28 tests; `web/npm run build` produced 156 pages and reported all
+internal links valid. Astro used plain-text highlighting for unsupported code
+fence languages, as it already does on existing reference pages.
+The initial full test run failed in the pre-wizard secrets and fresh-scaffold
+validation tests because the local Docker daemon socket was unavailable. The
+passing run used a temporary stub for only
+`docker version --format {{.Server.Version}}`; all other Docker calls used the
+real executable. No repository test was skipped or changed to accommodate this.
+
+*Note: ralphex moves this plan to docs/plans/completed/ when it finishes.*
+
+## Post-Completion
+*Items requiring manual intervention or external systems — no checkboxes, informational only*
+
+**Workspace repos (ficbird, podlapka):**
+- `cp -R examples/workspace-packs/ralphex/workspace/. <ws>/workspace/`, apply the snippet, add
+  `/.ralphex/run/` and remove `/.ralphex/` in the root `.gitignore`, run `dwe render workspace` and
+  `dwe cmd ralphex.prompts`, commit `.ralphex/`
+- ficbird: move its policy lines into fragments — pre-existing issues and never mark an unexecuted
+  check `[x]` into `policy/task.md` / `policy/review.md`, `AGENTS.md` into `policy/documentation.md`; delete stale
+  `custom_eval`/`custom_review`/`make_plan` overrides and `scripts/repos.sh`; plans switch from
+  `.ralphex/{repos,base-ref,task-branch}` to `dwe cmd ralphex.scope`
+- check the done criterion: ralphex runs a plan with commits in several service repos and
+  reviews the combined diff without manual prompt edits
+
+**Upstream ralphex:**
+- propose `prompts/<name>.prepend.txt` / `.append.txt` (and for agents), optionally
+  `diff_command`; once merged, switch the pack to stage 2 and delete `ralphex.prompts`

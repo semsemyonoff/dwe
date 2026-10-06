@@ -2,12 +2,14 @@
 
 Load when a config file is not being generated, an app secret must survive a re-render, you need to know where free-form values go, or something has to land in `.env`. You edit the source (template / var / export rule); the user runs every render/deploy. Never hand-edit a generated artifact.
 
-## 1. Four pack kinds, two substrates
+## 1. Five pack kinds, two substrates
 
-Packs live under `workspace/templates/<kind>/<pack>/`, each with a `manifest.yml` mapping template files to outputs (`to:` relative to the service hub; `src/` is the checkout).
+Packs live under `workspace/templates/<kind>/<pack>/`, each with a `manifest.yml` mapping template files to outputs (`to:` relative to the kind's destination root; `src/` is the service checkout).
 
 - **`config/<svc>/`** — runtime files into the hub (`.env`, `env.php`, `config.yaml`) via the **`${...}` substrate**: `${vars.x}`, `${generated.x}`, `${services.<svc>.hosts.web}`; absent → `""`. Runs inside `dwe deploy run` (`service_configs_render`) and via `dwe render config`. Wired by `render.config.template: <pack>` in `service.yml`.
 - **`ide/`, `ai/`, `git/`** — hub dotfiles (devcontainer, hub `AGENTS.md`, git hooks) via **Go templates** (`.Project.Name`, `.Service`, `.ServiceCfg.Container`, `.Commands`, `.ServiceCommandGroups`; command and group entries carry `.Summary`, the description's first line, beside the full `.Description` — use it in one-line list items); `${...}` is **not** interpreted there. `ai` packs also declare `symlinks:` (how `CLAUDE.md` mirrors `AGENTS.md`). The shipped `default` ai pack renders a `Declared commands` block into each hub `AGENTS.md`; a project scaffolded before that block existed adopts it by pasting the snippet from `dwe docs show 'render/ai#shipped-declared-commands-block' --lang en` into its template.
+
+- **`workspace/`** — project-root artifacts (`.ralphex/`, root agent docs, `.mcp.json`) selected by top-level `render.workspace: [<pack>…]`. Only `.tmpl` sources execute Go templates; other sources copy verbatim. Uses the sanitized project config and declared command index with empty service bindings; source modes normalize to `0755`/`0644`. Protected paths and destination collisions fail before writes. No automatic deploy/run render. See `dwe docs show render/workspace --lang en` and `dwe docs show guides/run-ralphex-in-a-workspace --lang en`.
 
 Escape an app-owned `${...}` literal in a config template as `{{ "$" }}{APP_NAME}` so DWE leaves it alone.
 
@@ -72,8 +74,8 @@ A host port exported `from: services.<name>.ports.<x>` or `from: vars.<path>` is
 
 ## 6. Render handoff
 
-Renders normally run inside `dwe deploy run`. To iterate on one pack, hand over the scoped render (all mutating): `dwe render config [<svc>]`, `dwe render ide|ai|git [<svc>]`, `dwe render env --out <project-root>/.env`. `dwe render config --harvest` does not render — it stores declared `generated:` values write-if-absent (host-only).
+Service renders can run inside `dwe deploy run` when wired into the pipeline; workspace renders are explicit. To iterate on one pack, hand over the scoped render (all mutating): `dwe render config [<svc>]`, `dwe render ide|ai|git [<svc>]`, `dwe render workspace [<pack>…]`, `dwe render env --out <project-root>/.env`. `dwe render config --harvest` does not render — it stores declared `generated:` values write-if-absent (host-only).
 
 `.env` re-renders for free inside `dwe deploy run` (implicit first step), `dwe run` / `restart`, `dwe services enable|disable`, and `dwe docker up|run|exec|restart|build` — so a **`vars`** edit followed by any of those needs no separate render. An **`exports.env`-only** edit is the exception: that block is in no config hash, so `dwe deploy run` journal-skips the render step (the built-in pipeline's always-run `up` then re-ups against the stale file). Apply it with `dwe run` or `dwe deploy run --force`.
 
-Apply by source: `config` template / `generated:` / `service.yml` → `dwe deploy run`; `ide` / `ai` / `git` template → `dwe render <kind>` (or the next deploy if the pipeline has a render step).
+Apply by source: `config` template / `generated:` / `service.yml` → `dwe deploy run`; `ide` / `ai` / `git` template → `dwe render <kind>` (or the next deploy if the pipeline has a render step); `workspace` template / top-level `render.workspace` → `dwe render workspace [<pack>…]` explicitly. Ralphex install, scope and prompt maintenance: `dwe docs show guides/run-ralphex-in-a-workspace --lang en`; plan writers run `dwe cmd ralphex.scope … --set prepare=true --set plan=<path>` and hand the printed `ralphex` launch line to the human.

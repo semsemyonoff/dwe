@@ -42,7 +42,6 @@ snapshots/
 /.idea/
 /.vscode/
 /.zed/
-/.ralphex/
 `
 
 // dweGitignorePatterns returns the ignore-pattern lines from the canonical block,

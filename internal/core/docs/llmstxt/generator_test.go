@@ -210,7 +210,8 @@ func TestGenerate_StaticBriefingSections(t *testing.T) {
 	for _, want := range []string{
 		"| Site | Syntax | Notes |",
 		"plan-resolution time",
-		"workspace/templates/{ide,ai,git}/**",
+		"workspace/templates/{ide,ai,git,workspace}/**",
+		"workspace: only `.tmpl` files are templates, others copied verbatim",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("expected template-syntax content %q", want)

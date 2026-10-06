@@ -298,7 +298,7 @@ func TestTemplateValidatorsIncludeOptedInNonAppServices(t *testing.T) {
 
 func TestAllFunction(t *testing.T) {
 	validators := All()
-	require.Len(t, validators, 3)
+	require.Len(t, validators, 4)
 
 	ids := make(map[string]bool)
 	for _, v := range validators {
@@ -307,6 +307,7 @@ func TestAllFunction(t *testing.T) {
 	require.True(t, ids["ide"], "IDE validator should be present")
 	require.True(t, ids["ai"], "AI validator should be present")
 	require.True(t, ids["git"], "Git validator should be present")
+	require.True(t, ids["workspace"], "Workspace validator should be present")
 }
 
 func ideSvc(dir string) config.ServiceConfig {

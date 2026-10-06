@@ -106,7 +106,7 @@ func TestValidateCommandTree(t *testing.T) {
 	}
 
 	// Check template subcommands.
-	for _, tmpl := range []string{"ide", "ai"} {
+	for _, tmpl := range []string{"ide", "ai", "git", "workspace"} {
 		found, _, _ := cmd.Find([]string{"templates", tmpl})
 		require.NotNil(t, found, "missing templates.%s", tmpl)
 		require.Equal(t, tmpl, found.Name())
@@ -1341,9 +1341,22 @@ func TestValidateFilterHint_SuppressedWhenAlreadyFiltering(t *testing.T) {
 // workspace/tests/smoke.yml first pushed the count past 20 — cannot silently
 // re-trip it.
 func TestValidateFilterHint_SilentOnFreshScaffold(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	targetDir := t.TempDir()
 	_, err := scaffold.Scaffold(scaffold.Options{TargetDir: targetDir, Name: "hintcheck", Prefix: "dwe", Service: "app"})
 	require.NoError(t, err)
+
+	dockerPath := filepath.Join(t.TempDir(), "docker")
+	require.NoError(t, os.WriteFile(dockerPath, []byte(`#!/bin/sh
+case "$*" in
+  'version --format {{.Server.Version}}') printf '27.0.0\n' ;;
+  'compose version --short') printf '2.30.0\n' ;;
+  *) printf 'unexpected Docker arguments: %s\n' "$*" >&2; exit 1 ;;
+esac
+`), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, ".dwe"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, ".dwe/config"),
+		fmt.Appendf(nil, "binary_docker = %s\n", dockerPath), 0o644))
 
 	workspacePath := filepath.Join(targetDir, "workspace.yml")
 

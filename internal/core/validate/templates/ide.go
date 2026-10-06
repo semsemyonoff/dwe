@@ -1,4 +1,4 @@
-// Package templates provides validators for template packs (IDE, AI, and git hooks).
+// Package templates provides validators for template packs (IDE, AI, git hooks, and workspace).
 package templates
 
 import (
@@ -212,5 +212,6 @@ func All() []validate.Validator {
 		&IDEValidator{},
 		&AIValidator{},
 		&GitValidator{},
+		&WorkspaceValidator{},
 	}
 }

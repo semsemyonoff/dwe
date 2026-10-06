@@ -1,4 +1,4 @@
-> Translated from: guides/index.md @ 741830772008
+> Translated from: guides/index.md @ bda8d409a2bc
 
 # Руководства
 
@@ -34,6 +34,8 @@
 - [Написание интеграционных тестов](integration-tests.md) — авторство сценариев `workspace/tests/*.yml`: изолированные деплой-тесты, проверки, тестирование проектных команд, отладка через `--keep`.
 
 ### Интеграции
+
+- [Запуск ralphex в workspace](run-ralphex-in-a-workspace.md) — установить workspace-пак, собрать оверрайды промптов и задать область плана в корневом и сервисных репозиториях.
 
 - [Интеграция со Starship](starship.md) — компактный, проектно-ориентированный сегмент DWE внутри промта [Starship](https://starship.rs/).
 - [Наблюдаемость с OpenTelemetry](observability-otel.md) — опциональный tool-сервис `otel` (бандл Grafana LGTM), чей оверлей инструментирует ваши app-сервисы; рецепты под каждый язык и текстовый поиск трейсов для агента.

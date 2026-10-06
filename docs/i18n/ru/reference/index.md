@@ -1,4 +1,4 @@
-> Translated from: reference/index.md @ be9e62d4ee6d
+> Translated from: reference/index.md @ d12d18e1a292
 
 # Справочная документация DWE
 
@@ -10,7 +10,7 @@
 
 - [Концепции (`concepts/`)](concepts/index.md) — высокоуровневая ориентация: начало работы, архитектура, раскладка проекта, взаимодействие с оркестратором контейнеров, интеграция с системой контроля версий, пайплайны, состояние и блокировки, а также [хост-бридж](concepts/bridge.md) (запуск `dwe` изнутри dev-контейнеров)
 - [Конфигурация (`config/`)](config/index.md) — раскладка проекта, сервисы, команды, vars, зашифрованные секреты, пайплайны deploy / reset / lifecycle, снапшоты, информационная панель, валидация, мастер настройки, стили, UI, состояние, i18n, уведомления, интеграция с Docker
-- [Render-паки (`render/`)](render/index.md) — `dwe render config`, `render env`, `render ide`, `render ai`, `render git`; схема манифеста пака, политики коллизий, локальные оверрайды
+- [Render-паки (`render/`)](render/index.md) — `dwe render config`, `render env`, `render ide`, `render ai`, `render git`, `render workspace`; схема манифеста пака, политики коллизий, локальные оверрайды
 - [Подсистема документации (`docs/`)](docs/index.md) — TUI-браузер `dwe docs`, неинтерактивные подкоманды (`show`, `list`, `export`, `llms-txt`, `cache clear`), переводы и проверка свежести через хэш контента
 - [Шаблоны (`templates.md`)](templates.md) — общий движок Go-шаблонов: `{{ ... }}` vs `${ ... }`, реестры sprout, контекст рендеринга по местам использования, резолверы команд
 

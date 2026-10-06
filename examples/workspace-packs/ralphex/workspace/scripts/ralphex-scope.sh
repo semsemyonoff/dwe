@@ -1,0 +1,125 @@
+#!/bin/sh
+# Keep the previous run state until the wrapper has validated the new scope.
+set -eu
+
+fail() {
+  printf 'ralphex-scope: %s\n' "$*" >&2
+  exit 1
+}
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)
+cd "$root"
+[ "$#" -eq 0 ] || fail 'use dwe cmd ralphex.scope --set repos=... --set base=... --set branch=... [--set prepare=true] [--set plan=...]'
+[ -n "${RALPHEX_REPOS:-}" ] || fail 'repos is required'
+[ -n "${RALPHEX_BASE:-}" ] || fail 'base is required'
+[ -n "${RALPHEX_BRANCH:-}" ] || fail 'branch is required'
+case "$RALPHEX_BASE$RALPHEX_BRANCH" in
+  *'
+'*) fail 'base and branch must each contain one nonempty line' ;;
+esac
+# Case variants name the same loose ref on case-insensitive filesystems.
+base_lower=$(printf '%s\n' "$RALPHEX_BASE" | tr '[:upper:]' '[:lower:]')
+branch_lower=$(printf '%s\n' "$RALPHEX_BRANCH" | tr '[:upper:]' '[:lower:]')
+[ "$base_lower" != "$branch_lower" ] || fail 'base and branch must differ'
+prepare=${RALPHEX_PREPARE:-false}
+case "$prepare" in true|false) ;; *) fail 'RALPHEX_PREPARE must be true or false' ;; esac
+plan=${RALPHEX_PLAN:-}
+if [ -n "$plan" ]; then
+  case "$plan" in
+    *' '*|*'	'*|*'
+'*) fail "plan path must not contain whitespace (ralphex cannot handle whitespace in plan paths): $plan" ;;
+    /*) fail "plan must be relative to the workspace root: $plan" ;;
+    # The printed launch command passes the plan positionally to ralphex.
+    -*) fail "plan must not start with -: $plan" ;;
+  esac
+  [ -f "$plan" ] || fail "plan is not a regular file: $plan"
+fi
+git check-ignore -q -- .ralphex/run/repos ||
+  fail 'run state must be ignored: add /.ralphex/run/ and remove an older /.ralphex/ rule from the root .gitignore'
+[ -d .ralphex ] && [ ! -L .ralphex ] || fail 'render the ralphex workspace pack first'
+[ -x .ralphex/scripts/ws-git ] || fail 'render the ralphex workspace pack first'
+run=.ralphex/run
+[ ! -L "$run" ] || fail 'run state must not be a symlink'
+if [ -e "$run" ]; then
+  [ -d "$run" ] || fail 'run state must be a directory'
+fi
+for setting in repos base-ref task-branch; do
+  dest=$run/$setting
+  [ ! -L "$dest" ] || fail "run state setting must be an ordinary file: $dest"
+  if [ -e "$dest" ]; then
+    [ -f "$dest" ] || fail "run state setting must be an ordinary file: $dest"
+  fi
+done
+scratch=$(mktemp -d "$root/.ralphex/.scope.XXXXXX")
+had_previous=false
+pending=false
+cleanup() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$pending" = true ]; then
+    rm -rf "$run" || { printf 'ralphex-scope: failed to remove rejected state\n' >&2; exit 1; }
+    if [ "$had_previous" = true ]; then
+      mv "$scratch/previous" "$run" || {
+        printf 'ralphex-scope: restore failed; previous state remains in %s/previous\n' "$scratch" >&2
+        exit 1
+      }
+    fi
+  fi
+  rm -rf "$scratch"
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+if [ -d "$run" ]; then
+  cp -R "$run" "$scratch/previous"
+  had_previous=true
+fi
+# The command accepts whitespace-separated paths; disable glob expansion.
+set -f
+printf '%s\n' "$RALPHEX_REPOS" | awk '{ for (i = 1; i <= NF; i++) print $i }' > "$scratch/repos"
+[ -s "$scratch/repos" ] || fail 'repos must contain at least one path (use . for root only)'
+printf '%s\n' "$RALPHEX_BASE" > "$scratch/base-ref"
+printf '%s\n' "$RALPHEX_BRANCH" > "$scratch/task-branch"
+pending=true
+mkdir -p "$run"
+for setting in repos base-ref task-branch; do
+  mv "$scratch/$setting" "$run/$setting"
+done
+if [ "$prepare" = true ]; then
+  .ralphex/scripts/ws-git ws-prepare
+fi
+.ralphex/scripts/ws-git ws-check
+pending=false
+
+shell_quote() {
+  case "$1" in
+    ''|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./:=@%+-]*) ;;
+    *)
+      printf '%s' "$1"
+      return
+      ;;
+  esac
+  rest=$1
+  quoted=
+  while :; do
+    case "$rest" in
+      *"'"*)
+        quoted=$quoted${rest%%"'"*}"'\\''"
+        rest=${rest#*"'"}
+        ;;
+      *)
+        quoted=$quoted$rest
+        break
+        ;;
+    esac
+  done
+  printf "'%s'" "$quoted"
+}
+
+if [ -n "$plan" ]; then
+  plan_arg=$(shell_quote "$plan")
+else
+  plan_arg='<plan>'
+fi
+printf 'Launch ralphex with:\n'
+printf 'ralphex --base-ref %s --branch %s %s\n' "$(shell_quote "$RALPHEX_BASE")" "$(shell_quote "$RALPHEX_BRANCH")" "$plan_arg"

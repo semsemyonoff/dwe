@@ -1,6 +1,6 @@
 # Templates
 
-Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function library) are evaluated across multiple DWE surfaces: info dashboard items, declarative commands, pipeline `when:` conditions, the `message` builtin, and the IDE / AI / git / config render packs. This page is the single reference for the template engine, the available helpers, and the conventions shared by every site. Note that the **config** render pack diverges from the other render kinds: it uses the `${...}` shorthand substrate (lenient — absent → `""`), not the strict `{{ ... }}` syntax of the ide/ai/git packs.
+Go templates are evaluated in info dashboard items, declarative commands, pipeline `when:` conditions, the `message` builtin, and the IDE / AI / git / workspace / config render packs. This page describes their syntax, context, and available functions. Info, commands, conditions, and `message` use the [go-sprout](https://docs.atom.codes/sprout/) function library. The ide / ai / git / workspace packs use strict Go `text/template` with built-in functions only; Sprout helpers and `appURL` are unavailable there. Workspace packs evaluate only `.tmpl` sources and copy other files byte-for-byte. **Config** packs use the `${...}` shorthand substrate (lenient — absent → `""`); see [`render config`](render/config.md).
 
 ## Contents
 
@@ -8,7 +8,7 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 - [Two syntaxes: shorthand and full templates](#two-syntaxes-shorthand-and-full-templates)
   - [Quoting templates inside YAML](#quoting-templates-inside-yaml)
 - [Render context per site](#render-context-per-site)
-  - [ide / ai / git packs never see a decrypted secret](#ide--ai--git-packs-never-see-a-decrypted-secret)
+  - [ide / ai / git / workspace packs never see a decrypted secret](#ide--ai--git--workspace-packs-never-see-a-decrypted-secret)
 - [Built-in `text/template` functions](#built-in-texttemplate-functions)
 - [Domain helper: appURL](#domain-helper-appurl)
 - [Sprout registries](#sprout-registries)
@@ -32,15 +32,16 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`, `.Commands`, `.CommandGroups`) | Strict mode. See [render/ide.md](render/ide.md) |
 | `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`, `.Commands`, `.CommandGroups`) | Strict mode. See [render/ai.md](render/ai.md) |
 | `workspace/templates/config/<pack>/**` | `${...}` | Resolved project config (`.Raw`) + curated `${services.<name>...}` subset + `${generated.<name>}` | Lenient (absent → `""`). See [render/config.md](render/config.md) |
+| `workspace/templates/workspace/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Runtime`, `.Services`, `.Cfg`, `.Commands`, `.CommandGroups`); `.Service` / `.Resolved` empty, `.ServiceCfg` zero-valued | Strict mode; other sources copied byte-for-byte. See [render/workspace.md](render/workspace.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
 ## Two syntaxes: shorthand and full templates
 
-Two interpolation layers exist; both are evaluated by the same engine.
+Two interpolation layers exist; their availability depends on the site in the table above.
 
 **`${...}` — shorthand lookups.** Compact, no logic. Used in command definitions and `docker.yml`'s `project_name`. The compiler rewrites each `${...}` into an equivalent `{{ ... }}` expression at parse time.
 
-**`{{ ... }}` — full Go `text/template`.** Conditionals, loops, pipelines, helper functions. Available everywhere templates are evaluated.
+**`{{ ... }}` — full Go `text/template`.** Conditionals, loops, pipelines, helper functions. Additional function availability depends on the site; config packs document the `${...}` substrate.
 
 ```yaml
 # Mixed in a single string (command site)
@@ -102,7 +103,7 @@ The data exposed to a template depends on the site. Field access uses dot syntax
 
 **Info, pipelines, `message` builtin:** the resolved project config — addressed via the same dot syntax as the render-pack `.Cfg` below (e.g. `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
 
-**Render packs (git / ide / ai, strict):**
+**Render packs (git / ide / ai / workspace, strict):**
 
 | Variable | Source |
 |----------|--------|
@@ -115,11 +116,13 @@ The data exposed to a template depends on the site. Field access uses dot syntax
 | `.Cfg` | the merged project config (advanced). `.Cfg.Raw` is the post-merge config tree (`services.*` is injected from per-service `service.yml` files). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
 | `.Commands` / `.CommandGroups` | the project's **declared** commands and authored command groups, plus the `.ServiceCommands` / `.ServiceCommandGroups` methods — see [Declared command index](render/ai.md#declared-command-index) |
 
-IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
+Workspace packs share this context without service selection: `.Service` and `.Resolved` are empty, and `.ServiceCfg` is zero-valued. `.ServiceCommands` and `.ServiceCommandGroups` return empty lists; `.Commands` and `.CommandGroups` contain the project-wide index.
 
-### ide / ai / git packs never see a decrypted secret
+IDE, AI, and workspace packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
 
-Because their outputs are usually tracked by git, those three renderers load a **sanitized** config: the same three-layer assembly, but with **no decrypt pass at all**. Every field a template can reach — `.Raw`, `.Cfg`, `.Project`, `.Runtime`, `.Services`, `.ServiceCfg` — carries the committed `ENC[age:…]` marker where the real runtime config carries plaintext.
+### ide / ai / git / workspace packs never see a decrypted secret
+
+Because their outputs are usually tracked by git, those four renderers load a **sanitized** config: the same three-layer assembly, but with **no decrypt pass at all**. Every field a template can reach — `.Cfg.Raw`, `.Cfg`, `.Project`, `.Runtime`, `.Services`, `.ServiceCfg` — carries the committed `ENC[age:…]` marker where the real runtime config carries plaintext.
 
 So a template that reads an [encrypted value](config/secrets.md) emits the ciphertext (already committed, harmless), never the plaintext — no path bookkeeping, no ambiguity for sequences or dotted keys. It is a structural guarantee rather than an allowlist, which is why the "avoid secret keys here" advice above is about *diff noise*, not about leaking.
 
@@ -174,7 +177,7 @@ cmd: |-
 
 ## Domain helper: appURL
 
-The only project-specific helper. Builds a URL from host, port, HTTPS flag, and optional path. The port is omitted when it matches the scheme default (80 for http, 443 for https).
+Available in info, commands, pipeline conditions, and `message`, but not ide / ai / git / workspace packs. The only project-specific helper. Builds a URL from host, port, HTTPS flag, and optional path. The port is omitted when it matches the scheme default (80 for http, 443 for https).
 
 Signature: `appURL host port useHTTPS [path]`
 
@@ -190,7 +193,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 ## Sprout registries
 
-The following registries from [go-sprout](https://docs.atom.codes/sprout/registries/) are available everywhere templates are evaluated.
+The following registries from [go-sprout](https://docs.atom.codes/sprout/registries/) are available in info, commands, pipeline conditions, and `message`. The ide / ai / git / workspace packs use only built-in `text/template` functions; these registries are unavailable there.
 
 | Registry | Examples | Description |
 |----------|----------|-------------|
@@ -226,15 +229,19 @@ These exist so the `${...}` shorthand can be expanded to portable Go-template fo
 
 ## Strict rendering (render packs)
 
-`render ide`, `render ai`, and `render git` parse templates with `{{.Option "missingkey=error"}}` semantics: a typo like `{{.Servic.Name}}` aborts the entire pack render rather than writing `<no value>` to disk. Guard genuinely optional fields with `{{if ...}}`:
+`render ide`, `render ai`, `render git`, and `.tmpl` sources in `render workspace` parse templates with the `missingkey=error` option: a typo like `{{.Servic.Name}}` aborts the entire pack render rather than writing `<no value>` to disk. Guard genuinely optional fields with `{{if ...}}`:
 
 ```gotemplate
 {{if .ServiceCfg.CLI.Workdir}}WORKDIR={{.ServiceCfg.CLI.Workdir}}{{end}}
 ```
 
+For `render workspace`, every selected pack is validated and rendered in memory before any writes. Other sources are copied byte-for-byte, so placeholders for another tool such as `{{PLAN_FILE}}` survive unchanged.
+
 Other sites (info, commands, pipeline conditions, `message`) use lenient rendering — a missing key resolves to `<no value>` or empty string, never an error.
 
 ## Common patterns
+
+Patterns using Sprout helpers or `appURL` below apply to info / commands / pipeline conditions / `message`; ide / ai / git / workspace packs support only Go template built-ins.
 
 | Task | Snippet |
 |------|---------|
@@ -263,7 +270,7 @@ Other sites (info, commands, pipeline conditions, `message`) use lenient renderi
 
 - **No env, FS, network, or randomness.** Templates are evaluated in a hermetic FuncMap by design. If a template needs project state, surface it through the resolved project config (info / pipelines) or through a `context.<name>: from: <dot.path>` declaration (commands).
 
-- **Mixing `${...}` and `{{ ... }}` is fine.** They share the same context and render in one pass — `${...}` is rewritten to template calls before parsing.
+- **Mixing `${...}` and `{{ ... }}` in commands is fine.** They share the same context and render in one pass — `${...}` is rewritten to template calls before parsing.
 
 ## Further reading
 

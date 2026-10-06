@@ -15,6 +15,7 @@ The three layers of the merged DWE config.
   - [The `secrets:` block](#the-secrets-block)
   - [The `update:` block](#the-update-block)
   - [The `stop:` block](#the-stop-block)
+  - [The `render:` block](#the-render-block)
 - [Recommended file-layout convention](#recommended-file-layout-convention)
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [`services` overlay](#services-overlay)
@@ -100,13 +101,13 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · exports · compose · docs · services · vars · update · bridge · stop · secrets
+project · runtime · exports · compose · docs · render · services · vars · update · bridge · stop · secrets
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
 
 ```text
-workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*); allowed top-level keys: schema_version, project, runtime, exports, compose, docs, render, services, vars, update, bridge, stop, secrets; a key you did not invent may come from a newer dwe version — check `dwe version`
 ```
 
 This makes typos in formalized keys (`runtim:`, `exprots:`) fail loudly instead of being silently swallowed, and lets the schema tighten without colliding with project-specific values. The same error is surfaced as a `dwe validate` error diagnostic.
@@ -192,8 +193,23 @@ project:
 |-------|------|-------------|
 | `project.name` | string | Short project identifier (used in container names, `.env`) |
 | `project.prefix` | string | Prefix for Docker project name and container labels |
+| `render.workspace` | list of strings | Workspace packs to render into the project root; default `[]`. See [workspace packs](../render/workspace.md). |
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
+
+### The `render:` block
+
+Select workspace-level packs independently of per-service `render.*` settings:
+
+```yaml
+render:
+  workspace: [ralphex, root-agents]
+```
+
+`dwe render workspace` reads this list; explicit pack arguments replace it for that invocation. Packs live under `workspace/templates/workspace/<pack>/` and write into the project root. Pack names, duplicates, manifests, and destination safety are checked by rendering and `dwe validate templates workspace`, not at config-load time. A nested typo such as `render: {workspce: [ralphex]}` produces a `config.unknown_field:render` warning in `dwe validate`.
+
+The block participates in all three config layers. Lists replace wholesale: `render: {workspace: []}` in `workspace/local.yml` disables configured packs for this developer. Rendering is explicit; `dwe run` and deploy do not render these packs automatically. See [workspace packs](../render/workspace.md) and [Running ralphex in a workspace](../../guides/run-ralphex-in-a-workspace.md).
+
 
 ### The `secrets:` block
 
@@ -276,6 +292,7 @@ docs:
 **`docs.cache_size_mb`**: Maximum size in MB for the mermaid diagram cache (PNG files stored in `$XDG_CACHE_HOME/dwe/mermaid/`). Cache uses LRU eviction when over the limit. Default is 100 MB. Must be non-negative; zero defaults to 100.
 
 ---
+
 
 ## Recommended file-layout convention
 

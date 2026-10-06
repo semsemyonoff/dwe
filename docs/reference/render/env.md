@@ -197,7 +197,7 @@ rather than in preflight because none of the `.env` write paths run preflight:
   keyless machine this is the first thing `dwe run` reports
 
 All four fail identically and name the fix. See
-[`secrets.md` → Output guards](../config/secrets.md#output-guards-no-marker-ever-reaches-a-rendered-file).
+[`secrets.md` → Output guards](../config/secrets.md#output-guards-no-marker-ever-reaches-a-rendered-runtime-file).
 
 ## Output format
 

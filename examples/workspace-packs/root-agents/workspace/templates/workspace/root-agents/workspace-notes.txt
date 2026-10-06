@@ -1,0 +1,2 @@
+Workspace-owned notes; this file is copied verbatim.
+Literal template examples such as {{PLAN_FILE}} remain unchanged.

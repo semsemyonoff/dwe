@@ -296,8 +296,8 @@ Scope targets:
   dwe validate                                   - all (config + templates + commands + env + checks + linters + translations + snapshot + bridge + tests)
   dwe validate config                            - all config validators
   dwe validate config <workspace|services|...>   - specific config validator
-  dwe validate templates                         - all template validators (ide, ai, git)
-  dwe validate templates <ide|ai|git>            - specific template validator
+  dwe validate templates                         - all template validators (ide, ai, git, workspace)
+  dwe validate templates <ide|ai|git|workspace>  - specific template validator
   dwe validate commands                          - commands validator
   dwe validate env                               - environment readiness probes
   dwe validate checks [id]                       - project checks from workspace/validate.yml
@@ -348,7 +348,7 @@ Scope targets:
 	templatesCmd := &cobra.Command{
 		Use:          "templates",
 		Short:        "Validate template packs",
-		Long:         `Check IDE, AI, and git template packs for validity and integrity.`,
+		Long:         `Check IDE, AI, git, and workspace template packs for validity and integrity.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -359,6 +359,7 @@ Scope targets:
 		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "ide", "Validate IDE template pack"),
 		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "ai", "Validate AI template pack"),
 		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "git", "Validate git hooks template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "workspace", "Validate workspace template packs"),
 	)
 	cmd.AddCommand(templatesCmd)
 

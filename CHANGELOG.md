@@ -18,7 +18,37 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Custom render packs for the project root. The new `workspace` render kind
+  puts tool configuration, root agent docs, `.mcp.json` and similar files at the
+  workspace root. Packs live in `workspace/templates/workspace/<pack>/` and are
+  selected by the top-level `render.workspace` list. `dwe render workspace`
+  renders them, and `dwe validate templates workspace` checks them without
+  writing. Only `.tmpl` sources are templates; other files are copied verbatim
+  with their permissions. Protected paths and colliding destinations fail
+  before anything is written. See
+  [`dwe render workspace`](docs/reference/render/workspace.md).
+- Starter packs in [`examples/workspace-packs/`](examples/workspace-packs/README.md).
+  One of them runs [ralphex](https://ralphex.com/) across the root and the
+  service repositories a plan names:
+  [ralphex starter](examples/workspace-packs/ralphex/README.md), guide
+  [Run ralphex in a workspace](docs/guides/run-ralphex-in-a-workspace.md).
+
+### Changed
+
+- **A workspace that sets `render:` needs this version on every machine.**
+  Older `dwe` rejects the unknown top-level key, and so does every git hook or
+  command that calls it.
+- `dwe init` no longer ignores `/.ralphex/`, so pack output at the root can be
+  committed.
+
+### Fixed
+
+- AI and IDE renderers reject a destination that is a directory or another
+  non-regular file before writing.
+- Template functions `repeat`, `indent` / `nindent` and `ellipsis` no longer
+  crash `dwe` on a negative count or an out-of-range offset (go-sprout 1.1.2).
 
 ## [0.6.4] - 2026-09-30
 

@@ -40,7 +40,7 @@ Both have a `CLAUDE.md` symlink beside them; the generated one says so in its fo
 - **`workspace/docker.yml`** — compose project name, shared volumes, per-subcommand compose args, build prepull. Loaded **separately**, not in the 3-layer merge; per-key override, per-dev in `docker.local.yml` → `config/docker`.
 - **Services = folders**: `workspace/services/<name>/service.yml`; the folder name **is** the key (no `name:` field). The container itself lives in the compose base or an overlay. Optional per-service `deploy.yml` / `reset.yml`.
 - **User commands**: `workspace/commands/**.yml`; path + filename + key = dot-ID; run with `dwe cmd <id>`.
-- **Render packs**: `workspace/templates/{config,ide,ai,git}/` — `config` writes runtime files into the service hub; `ide`/`ai`/`git` write hub dotfiles (devcontainer, hub `AGENTS.md`, git hooks).
+- **Render packs**: `workspace/templates/{config,ide,ai,git,workspace}/` — `config` writes runtime files into the service hub; `ide`/`ai`/`git` write hub dotfiles (devcontainer, hub `AGENTS.md`, git hooks); `workspace` writes project-root artifacts selected by top-level `render.workspace` (explicit render only).
 - **Pipelines (optional, full-replacement)**: `workspace/{deploy,lifecycle,reset}.yml`. Absent = built-in default (reported `ⓘ`, not an error). Also `setup.yml` (first-deploy wizard), `validate.yml` (project checks), `snapshot.yml`, `info.yml` / `styles.yml` (dashboard, branding), `i18n/`.
 - **Integration tests**: `workspace/tests/<scenario>.yml` (name = basename; deploy step schema).
 - **Generated, never hand-edited**: `.env`, `.dwe/**` (deploy journal, `generated.yml`, logs, test runs), `workspace/local.yml`, rendered hub files.
@@ -103,9 +103,10 @@ Most work in an existing project is running its own tasks. Two commands, not int
 
 After editing yml, hand the user the command that matches **what** changed (never run it yourself):
 
-- `service.yml` / a service's `deploy.yml` / `configs` / `dirs` / `render` / **added a service** / `workspace/deploy.yml` → `dwe deploy run`
+- `service.yml` / a service's `deploy.yml` / `configs` / `dirs` / service `render` / **added a service** / `workspace/deploy.yml` → `dwe deploy run`
 - `workspace/lifecycle.yml` or the compose base/overlays → `dwe run`
 - toggled a service → `dwe services enable|disable <name> --apply`
+- `workspace` template / top-level `render.workspace` → `dwe render workspace [pack…]` (explicit; not automatic on deploy)
 - `exports.env` **only** → `dwe run` (or `dwe deploy run --force`) — that block is in no config hash, so a plain `dwe deploy run` journal-skips the `.env` render (`references/render-and-vars.md` § 6)
 - only icon / host / display strings → `dwe validate` (then `run` / `deploy run` if runtime is affected)
 - authored a `workspace/tests/<scenario>.yml` → `dwe validate tests`, then `dwe test run <scenario>` (gated — see below)
@@ -150,7 +151,7 @@ Run unattended only when all hard stops are clear **and** you can account for th
 - `dwe init` (safe to re-run: gap-fills; `--force` overwrites)
 - `dwe deploy run [--service|--force|--resume]`, `dwe run` / `stop` / `restart`, `dwe reset run` (destructive)
 - `dwe services enable|disable <name> --apply`
-- `dwe vars set`, `dwe render config|ide|ai|git`, `dwe render env --out <path>`, `dwe render config --harvest`
+- `dwe vars set`, `dwe render config|ide|ai|git|workspace`, `dwe render env --out <path>`, `dwe render config --harvest`
 - `dwe deploy eject --out` / `dwe reset eject --out`, `dwe deploy state clear|repair`
 - `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`
 - `dwe secrets init|set|get|encrypt|decrypt|rekey|key import|export|remove` — each writes a layer / keyfile or prints secret material. `key import` is a **human handoff**: it opens a hidden prompt; never ask the user for the identity text so you can paste it (it would land in a transcript).

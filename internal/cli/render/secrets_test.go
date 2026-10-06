@@ -10,7 +10,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/secrets"
 )
 
-// The ide/ai/git packs render into git-tracked files, so they load a sanitized
+// The ide/ai/git/workspace packs render into git-tracked files, so they load a sanitized
 // config: every field a template can reach carries the ENC[age:…] marker where
 // the real config carries plaintext. These tests run WITH a working identity —
 // the point is that a usable key must not make a tracked output leak.
@@ -106,6 +106,22 @@ func TestNewAICmd_rendersMarkerNotPlaintext(t *testing.T) {
 	}
 
 	assertCiphertextOnly(t, filepath.Join(projectRoot, "services", "api", "AGENTS.md"), marker)
+}
+
+func TestNewWorkspaceCmd_rendersMarkerNotPlaintext(t *testing.T) {
+	projectRoot, marker := setupSecretProject(t)
+	setupWorkspacePack(t, projectRoot, "root-agents", map[string]string{
+		"manifest.yml":   "render:\n  - from: AGENTS.md.tmpl\n    to: AGENTS.md\n",
+		"AGENTS.md.tmpl": secretTemplate,
+	})
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newWorkspaceCmd(flags)
+	if err := cmd.RunE(cmd, []string{"root-agents"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	assertCiphertextOnly(t, filepath.Join(projectRoot, "AGENTS.md"), marker)
 }
 
 func TestNewGitCmd_rendersMarkerNotPlaintext(t *testing.T) {

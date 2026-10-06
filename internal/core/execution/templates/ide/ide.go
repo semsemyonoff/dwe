@@ -5,14 +5,12 @@
 package ide
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"text/template"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packcommon"
@@ -249,139 +247,20 @@ func RenderTemplateFile(projectRoot, packName, rel string, data TemplateData, de
 	if data.Cfg == nil {
 		return false, errors.New("ide: nil cfg")
 	}
-	sourcePath, fromOverride, err := packroot.Resolve(projectRoot, "ide", packName, rel)
+	file, err := packcommon.PrepareFile("ide", projectRoot, packName, rel, data, true)
 	if err != nil {
-		return false, fmt.Errorf("resolve template %s: %w", rel, err)
-	}
-
-	tplBytes, err := os.ReadFile(sourcePath)
-	if err != nil {
-		return false, fmt.Errorf("read template %s: %w", sourcePath, err)
-	}
-
-	name := filepath.Base(sourcePath)
-	t, err := template.New(name).Option("missingkey=error").Parse(string(tplBytes))
-	if err != nil {
-		return false, fmt.Errorf("parse template %s: %w", name, err)
-	}
-
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return false, fmt.Errorf("render template %s: %w", name, err)
-	}
-
-	absDest, err := filepath.Abs(filepath.Join(absHubDir, dest))
-	if err != nil {
-		return false, fmt.Errorf("resolve destination: %w", err)
-	}
-	if _, err := pathsafe.ContainedRel(absHubDir, absDest); err != nil {
-		return false, fmt.Errorf("dest %q escapes service dir: %w", dest, err)
-	}
-
-	destDir := filepath.Dir(absDest)
-	if err := pathsafe.CheckNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
 		return false, err
 	}
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return false, fmt.Errorf("create dir for %s: %w", dest, err)
+	labels := packcommon.DestLabels{Path: "dest", Boundary: "service dir", ResolveBoundary: "service dir"}
+	if err := packcommon.WriteFile(file, dest, absHubDir, absRoot, labels, false); err != nil {
+		return false, err
 	}
-
-	realRoot, err := filepath.EvalSymlinks(absRoot)
-	if err != nil {
-		return false, fmt.Errorf("resolve project root: %w", err)
-	}
-	realHubDir, err := filepath.EvalSymlinks(absHubDir)
-	if err != nil {
-		return false, fmt.Errorf("resolve service dir: %w", err)
-	}
-	realDir, err := filepath.EvalSymlinks(destDir)
-	if err != nil {
-		return false, fmt.Errorf("resolve dir for %s: %w", dest, err)
-	}
-	if err := pathsafe.EnsureRealUnder(realDir, realRoot, realHubDir); err != nil {
-		return false, fmt.Errorf("destination dir for %q resolves outside required boundaries via symlink: %w", dest, err)
-	}
-
-	if fi, err := os.Lstat(absDest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return false, fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
-	}
-
-	if err := os.WriteFile(absDest, buf.Bytes(), 0o644); err != nil {
-		return false, fmt.Errorf("write %s: %w", dest, err)
-	}
-	return fromOverride, nil
+	return file.FromOverride, nil
 }
 
 // EnsureRelativeSymlink creates or updates a relative symlink inside the hub
 // dir. If the symlink already points to the correct target, it is left
 // unchanged. If a non-symlink file exists at linkPath, returns an error.
 func EnsureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string) error {
-	absLink := filepath.Join(absHubDir, linkPath)
-	absTarget := filepath.Join(absHubDir, targetWithinHub)
-
-	if _, err := pathsafe.ContainedRel(absHubDir, absLink); err != nil {
-		return fmt.Errorf("symlink link %q escapes hub directory: %w", linkPath, err)
-	}
-	if _, err := pathsafe.ContainedRel(absHubDir, absTarget); err != nil {
-		return fmt.Errorf("symlink target %q escapes hub directory: %w", targetWithinHub, err)
-	}
-
-	linkDir := filepath.Dir(absLink)
-	if err := pathsafe.CheckNoSymlinks(absRoot, linkDir, "symlink parent dir"); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(linkDir, 0o755); err != nil {
-		return fmt.Errorf("create dir for symlink %s: %w", linkPath, err)
-	}
-
-	realLinkDir, err := filepath.EvalSymlinks(linkDir)
-	if err != nil {
-		return fmt.Errorf("resolve symlink parent dir: %w", err)
-	}
-	realHubDir, err := filepath.EvalSymlinks(absHubDir)
-	if err != nil {
-		return fmt.Errorf("resolve hub dir: %w", err)
-	}
-	realRoot, err := filepath.EvalSymlinks(absRoot)
-	if err != nil {
-		return fmt.Errorf("resolve project root: %w", err)
-	}
-	if err := pathsafe.EnsureRealUnder(realLinkDir, realRoot, realHubDir); err != nil {
-		return fmt.Errorf("symlink parent dir resolves outside required boundaries via symlink: %w", err)
-	}
-
-	relTarget, err := filepath.Rel(linkDir, absTarget)
-	if err != nil {
-		return fmt.Errorf("compute relative path: %w", err)
-	}
-	if relTarget == "" {
-		return fmt.Errorf("symlink target resolves to empty relative path")
-	}
-
-	if fi, err := os.Lstat(absLink); err == nil {
-		if fi.Mode()&os.ModeSymlink != 0 {
-			currentTarget, err := os.Readlink(absLink)
-			if err != nil {
-				return fmt.Errorf("read symlink %s: %w", linkPath, err)
-			}
-			if currentTarget == relTarget {
-				return nil
-			}
-			if err := os.Remove(absLink); err != nil {
-				return fmt.Errorf("remove symlink %s: %w", linkPath, err)
-			}
-			if err := os.Symlink(relTarget, absLink); err != nil {
-				return fmt.Errorf("create symlink %s: %w", linkPath, err)
-			}
-			return nil
-		}
-		return fmt.Errorf("refuse to overwrite non-symlink file at %s", linkPath)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("stat %s: %w", linkPath, err)
-	}
-
-	if err := os.Symlink(relTarget, absLink); err != nil {
-		return fmt.Errorf("create symlink %s: %w", linkPath, err)
-	}
-	return nil
+	return packcommon.EnsureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot, "hub", "")
 }

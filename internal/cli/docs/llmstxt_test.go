@@ -197,6 +197,8 @@ func TestDocsLlmsTxtCommand_BriefingSections(t *testing.T) {
 
 	// Reserved names come from config.ReservedExportNames.
 	require.Contains(t, got, "`PROJECT`, `UID`, `GID`")
+	require.Contains(t, got, "workspace/templates/{ide,ai,git,workspace}/**")
+	require.Contains(t, got, "workspace: only `.tmpl` files are templates, others copied verbatim")
 }
 
 func TestDocsLlmsTxtCommand_InventoryMatchesRegistries(t *testing.T) {

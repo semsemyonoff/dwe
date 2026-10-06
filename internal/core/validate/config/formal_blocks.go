@@ -28,6 +28,7 @@ var formalBlockStructs = map[string]reflect.Type{
 	"exports": reflect.TypeFor[config.ExportsConfig](),
 	"compose": reflect.TypeFor[config.ComposeConfig](),
 	"docs":    reflect.TypeFor[config.DocsConfig](),
+	"render":  reflect.TypeFor[config.RenderConfig](),
 	"update":  reflect.TypeFor[config.UpdateConfig](),
 	"bridge":  reflect.TypeFor[config.BridgeConfig](),
 	"stop":    reflect.TypeFor[config.StopConfig](),

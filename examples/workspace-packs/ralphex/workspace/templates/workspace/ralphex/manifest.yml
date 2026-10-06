@@ -1,0 +1,7 @@
+render:
+  - {from: config.tmpl, to: .ralphex/config}
+  - {from: scripts/ws-git, to: .ralphex/scripts/ws-git}
+  - {from: blocks/task.md, to: .ralphex/blocks/task.md}
+  - {from: blocks/review.md, to: .ralphex/blocks/review.md}
+  - {from: blocks/codex_review.md, to: .ralphex/blocks/codex_review.md}
+  - {from: blocks/agent.md, to: .ralphex/blocks/agent.md}

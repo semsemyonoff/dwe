@@ -624,10 +624,22 @@ func TestIsEmptyLocal(t *testing.T) {
 
 // TestRunPreWizardPreflight_SecretsUnresolvedBlocks mirrors the preflight.Run
 // pin: the early gate must refuse before the user answers wizard questions, and
-// go quiet once the identity is available. Only the secrets rows are asserted —
-// the env probes report whatever the host looks like.
+// go quiet once the identity is available. Docker readiness is fixed so only
+// secret availability determines whether the gate blocks.
 func TestRunPreWizardPreflight_SecretsUnresolvedBlocks(t *testing.T) {
+	isolateHome(t)
 	root := t.TempDir()
+	dockerPath := filepath.Join(t.TempDir(), "docker")
+	require.NoError(t, os.WriteFile(dockerPath, []byte(`#!/bin/sh
+case "$*" in
+  'version --format {{.Server.Version}}') printf '27.0.0\n' ;;
+  'compose version --short') printf '2.30.0\n' ;;
+  *) printf 'unexpected Docker arguments: %s\n' "$*" >&2; exit 1 ;;
+esac
+`), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".dwe"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".dwe/config"),
+		fmt.Appendf(nil, "binary_docker = %s\n", dockerPath), 0o644))
 	id, err := secrets.Keygen()
 	require.NoError(t, err)
 	marker, err := secrets.Encrypt("s3cr3t-value", id.Recipient())

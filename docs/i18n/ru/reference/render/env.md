@@ -1,4 +1,4 @@
-> Translated from: reference/render/env.md @ cbc70de8fea6
+> Translated from: reference/render/env.md @ a8fa39717dbe
 
 # dwe render env
 
@@ -199,7 +199,7 @@ compose-проекта) **и** каждое правило экспорта, в�
   на машине без ключа именно это `dwe run` сообщает первым
 
 Все четыре падают одинаково и называют, что делать. См.
-[`secrets.md` → Защита вывода](../config/secrets.md#защита-вывода-маркер-никогда-не-попадает-в-отрендеренный-файл).
+[`secrets.md` → Защита вывода](../config/secrets.md#защита-вывода-маркер-никогда-не-попадает-в-отрендеренный-runtime-файл).
 
 ## Формат вывода
 

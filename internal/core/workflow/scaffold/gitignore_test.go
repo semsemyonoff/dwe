@@ -46,6 +46,31 @@ func TestMergeGitignore_EmptyTreatedAsAbsent(t *testing.T) {
 	}
 }
 
+func TestMergeGitignore_Ralphex(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		existing string
+		want     int
+	}{
+		{name: "fresh"},
+		{name: "existing", existing: "node_modules/\n"},
+		{name: "user rule preserved", existing: "/.ralphex/\n", want: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			merged, changed := mergeGitignore([]byte(tt.existing))
+			if !changed {
+				t.Fatal("expected missing DWE patterns to be added")
+			}
+			if n := countLines(string(merged), "/.ralphex/"); n != tt.want {
+				t.Errorf("/.ralphex/ appears %d times, want %d", n, tt.want)
+			}
+			if tt.existing != "" && !strings.HasPrefix(string(merged), tt.existing) {
+				t.Error("existing user content was changed")
+			}
+		})
+	}
+}
+
 func TestMergeGitignore_PresentWithoutBlock(t *testing.T) {
 	existing := []byte("node_modules/\n*.log\n")
 	merged, changed := mergeGitignore(existing)
