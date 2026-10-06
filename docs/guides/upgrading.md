@@ -30,6 +30,12 @@ Three things worth doing before you trust the new version in a project:
    `dwe bridge status` shows the running daemon; `dwe version` from inside a bridged container shows which build it answers with.
 3. **Force a redeploy when the release notes say so.** A behaviour change that does not alter the deployment hash is invisible to `dwe deploy run`, which will report `already up-to-date` and skip the very step whose semantics moved. `dwe deploy run --force` re-runs every step; `when:` guards still apply.
 
+## Upgrading to 0.7.0
+
+Nothing in an existing project has to change. One thing to coordinate:
+
+- **A workspace that sets the new top-level `render:` key needs 0.7.0 on every machine.** Older versions reject the unknown key, so `dwe` fails to load the project — and so does every git hook or command that calls `dwe`. Upgrade everyone before committing `render.workspace` to the workspace repository.
+
 ## Upgrading to 0.6.3
 
 Nothing in a project has to change, and no redeploy is needed. Three behaviours moved:

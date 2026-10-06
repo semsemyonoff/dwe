@@ -18,6 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.7.0] - 2026-10-06
+
 ### Added
 
 - Custom render packs for the project root. The new `workspace` render kind
@@ -408,7 +412,8 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/semsemyonoff/dwe/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/semsemyonoff/dwe/compare/v0.6.1...v0.6.2
