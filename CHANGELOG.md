@@ -18,6 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.7.1] - 2026-10-06
+
 ### Changed
 
 - `dwe init` no longer creates `CLAUDE.md`, and the default ai pack it
@@ -425,7 +429,8 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/semsemyonoff/dwe/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/semsemyonoff/dwe/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/semsemyonoff/dwe/compare/v0.6.2...v0.6.3
