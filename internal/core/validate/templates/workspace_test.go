@@ -67,9 +67,7 @@ func TestWorkspaceValidator(t *testing.T) {
 			}
 			diags := (&WorkspaceValidator{}).Run(validate.Context{ProjectRoot: root, Cfg: cfg})
 			if tt.wantMessage == "" {
-				if len(diags) != 0 {
-					t.Fatalf("clean pack diagnostics: %+v", diags)
-				}
+				requireWorkspaceOK(t, diags)
 			} else {
 				if len(diags) != 1 {
 					t.Fatalf("got diagnostics %+v, want one", diags)
@@ -114,9 +112,7 @@ func TestWorkspaceValidator_PlanSeesCommandIndex(t *testing.T) {
 		CommandRegistry: reg,
 	}
 	v := &WorkspaceValidator{}
-	if diags := v.Run(ctx); len(diags) != 0 {
-		t.Fatalf("command index did not reach template: %+v", diags)
-	}
+	requireWorkspaceOK(t, v.Run(ctx))
 	ctx.CommandRegistry = nil
 	if diags := v.Run(ctx); findDiag(diags, validate.SeverityError, "templates.workspace") == nil {
 		t.Fatalf("template should fail without a command index: %+v", diags)
@@ -149,11 +145,20 @@ func TestWorkspaceValidator_PlanSeesSanitizedConfig(t *testing.T) {
 	}
 	v := &WorkspaceValidator{}
 	ctx := validate.Context{ProjectRoot: root, ConfigPath: configPath, Cfg: loaded}
-	if diags := v.Run(ctx); len(diags) != 0 {
-		t.Fatalf("template did not see the encrypted marker: %+v", diags)
-	}
+	requireWorkspaceOK(t, v.Run(ctx))
 	ctx.ConfigPath = ""
 	if diags := v.Run(ctx); findDiag(diags, validate.SeverityError, "templates.workspace") == nil {
 		t.Fatalf("control template should fail with plaintext config: %+v", diags)
+	}
+}
+
+func requireWorkspaceOK(t *testing.T, diags []validate.Diagnostic) {
+	t.Helper()
+	if len(diags) != 1 {
+		t.Fatalf("got diagnostics %+v, want exactly one OK", diags)
+	}
+	d := diags[0]
+	if d.Severity != validate.SeverityOK || d.Domain != "templates" || d.Target != "templates.workspace" || d.Message != "all workspace template packs valid" {
+		t.Fatalf("unexpected diagnostic: %+v", d)
 	}
 }

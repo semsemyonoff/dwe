@@ -31,23 +31,47 @@ sh, awk, diff, and either sha256sum or shasum; Git is required for run scope.
 Before writing, it rejects symlinked output directories and owned destinations
 that are not ordinary files, leaving existing overrides and the stamp untouched.
 
-For each plan, create the same base tag/ref in EVERY scoped repository AND THE
-ROOT. Set scope before launching ralphex:
+For each plan, the agent that writes it prepares git and scope in one command,
+then hands the printed launch line to a human, who runs ralphex in a terminal:
 
 ```sh
-dwe cmd ralphex.scope --set repos='services/api/src services/web/src' --set base=plan-base --set branch=task/example
-ralphex --base-ref plan-base --branch task/example docs/plans/example.md
+dwe cmd ralphex.scope --set repos='services/api/src services/web/src' --set base=plan-base --set branch=task/example --set prepare=true --set plan=docs/plans/example.md
+# prints ws-prepare/ws-check lines, then:
+# Launch ralphex with:
+# ralphex --base-ref plan-base --branch task/example docs/plans/example.md
 ```
 
 `repos` takes whitespace-separated workspace-relative paths without whitespace
 in their names. Use `repos=.` for a root-only plan. The root is always included.
+`prepare=true` runs `ws-git ws-prepare` for the root and every scoped repo. It
+validates everything before changing anything, except failures only `git switch`
+can detect (dirty-tree conflicts, a branch checked out in another worktree). A
+base that does not resolve becomes a lightweight tag at the current HEAD. In non-root repos it switches to an existing
+task branch, which must contain the base, or creates the branch from the base
+(not from HEAD) without an upstream. The root is different: when it is on
+ralphex's `default_branch` (from `.ralphex/config`, `main`/`master` if absent) its
+branch is left alone, because ralphex creates or switches `--branch` there at
+launch and auto-commits the plan; otherwise the root is handled like the others.
+Created tags and branches are not rolled back on a later failure. Prepare is
+idempotent: fix the cause and rerun. Dirty trees are not pre-checked, so a `git
+switch` conflict fails with git's message. Without `prepare` (default `false`),
+repos must already be prepared.
+
+`plan` is optional: a relative path, not starting with `-`, to an existing regular
+file. When omitted, the printed line contains a literal `<plan>` placeholder.
+Values are POSIX-quoted in the printed line when needed. Plan paths with
+whitespace are rejected: ralphex v1.7.0 refuses to create the root branch for
+such a plan. The base must not refer to `HEAD` or the task branch in any
+spelling (compared case-insensitively), and a base created as a tag cannot be
+named like a ref path (`refs/…`, `heads/…`, `tags/…`, `remotes/…`).
+
 The script rejects symlinked or non-regular run-state settings before changing
-state, validates ordinary checkouts and refs, and restores previous run state
-on failure. `ws-check`/`ws-status` can inspect release checkouts; the plan's
-preflight must prepare the task branch in every scoped repo, including the root,
-before `ws-log`/`ws-diff`/`ws-wip` work. They require the base to be an ancestor.
-Ralphex creates `--branch` in the root only when it starts on `default_branch`.
-The base and branch passed to ralphex must match the scope settings.
+state and restores previous run state on failure. `ws-check` is strict: every
+non-root repo must be on the task branch with the base as an ancestor. The root
+must be on the task branch, or on `default_branch` with the base as an ancestor of
+the existing task branch (or of HEAD when that branch is absent). `ws-log`,
+`ws-diff` and `ws-wip` rely on this. The base and branch passed to ralphex must
+match the scope settings; use the printed line.
 
 Review reads go through `.ralphex/scripts/ws-git ws-diff [--stat]`, `ws-log`,
 `ws-wip [--stat]`, and `ws-status`. The wrapper also combines the scoped Git

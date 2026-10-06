@@ -22,8 +22,9 @@ generated from commit subjects and stay on the
 
 - Tested workspace starter packs under `examples/workspace-packs/`: ralphex
   configuration, prompt generation and repository scope commands, plus root agent
-  documentation; installation and maintenance are covered in the new workspace
-  render reference and ralphex guide.
+  documentation. The scope command can prepare base tags and task branches
+  (`prepare=true`) and prints the ralphex launch line; installation and
+  maintenance are covered in the new workspace render reference and ralphex guide.
 
 - `dwe validate templates workspace` checks configured workspace packs without
   writing files, including template execution and destination safety.
@@ -45,6 +46,8 @@ generated from commit subjects and stay on the
   destinations before overwriting any prompt, agent or defaults stamp.
 - AI and IDE renderers reject directory and other non-regular file destinations
   before writing, with an explicit destination error.
+- `dwe validate templates workspace` reports valid packs as passing instead of
+  "validation skipped".
 
 ## [0.6.4] - 2026-09-30
 

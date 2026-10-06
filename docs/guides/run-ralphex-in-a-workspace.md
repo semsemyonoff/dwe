@@ -62,30 +62,74 @@ not ordinary files before changing any override or defaults stamp.
 
 ## Set scope for each plan
 
-Choose a base ref and task branch. The same base ref must exist in every scoped
-repository and in the root, which is always included. For example, cut a local
-`plan-base` tag at the intended starting commit in each repository, including the
-root. Prepare the task branch in each service repository as part of the plan's
-preflight; `ralphex.scope` validates scope and refs but does not create branches.
+The agent that writes the plan prepares git and scope in one step, then hands the
+launch line to a human, who runs ralphex in a terminal.
 
-```sh
-dwe cmd ralphex.scope --set repos='services/api/src services/web/src' --set base=plan-base --set branch=task/example
-ralphex --base-ref plan-base --branch task/example docs/plans/example.md
-```
+1. Choose a base ref, a task branch and the repositories in scope (`repos` is a
+   whitespace-separated list of workspace-relative paths without spaces in their
+   names; `repos=.` means a root-only plan). The root is always included.
+2. Write the plan, then run scope with `prepare=true` and the plan path:
 
-Use the same base and branch in both commands. Ralphex creates `--branch` in the
-root only when the root starts on `default_branch`; otherwise prepare the root's
-task branch too. The rendered default branch is `main`, or the value of
-`vars.ralphex.default_branch` when set.
+   ```sh
+   dwe cmd ralphex.scope --set repos='services/api/src services/web/src' --set base=plan-base --set branch=task/example --set prepare=true --set plan=docs/plans/example.md
+   ```
 
-`repos` is a whitespace-separated list of workspace-relative paths without spaces
-in their names. Use `--set repos=.` for a root-only plan. Repositories must be
-ordinary checkouts with a `.git` directory; absolute paths, `..` components and
-symlinks are rejected. The command writes `.ralphex/run/{repos,base-ref,task-branch}`,
-runs `ws-check`, and restores previous run state if validation fails. Never commit
-that run state.
-Existing run-state settings must be ordinary files; symlinks and other file types
-are rejected before changing any state.
+3. Give the last line of the output to the human. It is ready to paste; the
+   `ws-prepare` and `ws-check` lines come before it:
+
+   ```text
+   Launch ralphex with:
+   ralphex --base-ref plan-base --branch task/example docs/plans/example.md
+   ```
+
+Values are POSIX-quoted in that line when needed. `plan` is optional: it must be a
+relative path, must not start with `-`, and must be an existing regular file. When
+omitted, the line contains a literal `<plan>` placeholder to fill in. Plan paths
+with whitespace are rejected: ralphex v1.7.0 does not recognize such a plan as the
+only uncommitted file when it creates the root branch, and refuses to start.
+
+The base must not refer to `HEAD` or to the task branch in any spelling
+(`task/example`, `heads/task/example`, `refs/heads/task/example`, `task/example~1`):
+it would follow the task branch tip and hide the task's changes. Spellings are
+compared case-insensitively, because macOS file systems usually are. A base that has to
+be created as a tag cannot be named like a ref path (`refs/…`, `heads/…`, `tags/…`,
+`remotes/…`).
+
+`prepare=true` runs `ws-git ws-prepare` for the root and every scoped repository:
+
+- If the base does not resolve, it creates a lightweight tag at the current HEAD.
+- In non-root repositories it switches to an existing task branch, which must
+  contain the base, or creates the branch from the base (not from HEAD) with no
+  upstream.
+- The root is handled differently. If it is on ralphex's `default_branch` (read
+  from `.ralphex/config`; `main` or `master` if absent), its branch is left alone:
+  ralphex creates or switches `--branch` there at launch and auto-commits the plan.
+  Otherwise the root is treated like the other repositories. The rendered default
+  branch is `main`, or `vars.ralphex.default_branch` when set.
+- Everything is validated in every repository before anything is changed, except
+  failures only `git switch` can detect (a dirty-tree conflict, a branch checked
+  out in another worktree).
+- Created tags and branches are not rolled back on a later failure. Prepare is
+  idempotent: fix the cause and rerun it.
+- Dirty working trees are not pre-checked; a `git switch` conflict fails with git's
+  message.
+
+Manual alternative: prepare the tags and branches yourself in every scoped
+repository and the root, then run the same command with `prepare=false` (the
+default) and, optionally, `plan=…`. Launch ralphex with the same base and branch.
+
+The command writes `.ralphex/run/{repos,base-ref,task-branch}`, runs `ws-check` and
+restores previous run state if validation fails. Never commit that run state.
+Repositories must be ordinary checkouts with a `.git` directory; absolute paths,
+`..` components and symlinks are rejected. Existing run-state settings must be
+ordinary files; symlinks and other file types are rejected before changing any
+state.
+
+`ws-check` is strict. Every non-root repository must be on the task branch with the
+base as an ancestor. The root must be either on the task branch, or on
+`default_branch` with the base as an ancestor of the existing task branch (or of
+HEAD when that branch is absent). A failure is a blocker for the run, not
+something to fix by creating branches ad hoc.
 
 Inspect the selected repositories with:
 
@@ -97,10 +141,11 @@ Inspect the selected repositories with:
 .ralphex/scripts/ws-git ws-wip
 ```
 
-`ws-log`, `ws-diff` and `ws-wip` require every scoped repository, including the
-root, to be on the task branch with the base as an ancestor. They fail explicitly
-when that contract is broken. The prompt blocks direct task and review agents to
-these commands and to commits made per repository with explicit task-owned paths.
+`ws-check` enforces the contract above. During the run, `ws-log`, `ws-diff` and
+`ws-wip` need every scoped repository, including the root, on the task branch with
+the base as an ancestor (ralphex switches the root at launch). They fail explicitly
+when that is not so. The prompt blocks direct task and review agents to these
+commands and to commits made per repository with explicit task-owned paths.
 The wrapper also combines the scoped HEADs and working-tree changes for ralphex's
 change detection. Before any run state exists, intercepted Git probes cover the
 root only so bootstrap and plan generation can work; every `ws-*` command and

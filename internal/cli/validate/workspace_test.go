@@ -69,8 +69,8 @@ func TestValidateWorkspaceTemplates(t *testing.T) {
 				t.Fatalf("unexpected summary: %+v", result.Summary)
 			}
 			if tt.wantText == "" {
-				if len(result.Diagnostics) != 0 {
-					t.Fatalf("unexpected diagnostics: %+v", result.Diagnostics)
+				if len(result.Diagnostics) != 1 || result.Diagnostics[0].Severity != "ok" || result.Diagnostics[0].Scope != "templates/templates.workspace" || result.Diagnostics[0].Message != "all workspace template packs valid" {
+					t.Fatalf("want one OK diagnostic, got: %+v", result.Diagnostics)
 				}
 			} else if len(result.Diagnostics) != 1 || result.Diagnostics[0].Scope != "templates/templates.workspace" || !strings.Contains(result.Diagnostics[0].Message, tt.wantText) {
 				t.Fatalf("unexpected diagnostics: %+v", result.Diagnostics)

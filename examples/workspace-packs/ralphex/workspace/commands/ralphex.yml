@@ -7,7 +7,11 @@ commands:
     description: |
       Configure and validate the repository scope for a ralphex plan
       Pass repos as whitespace-separated workspace-relative paths (use . for root only).
-      The base must exist in the root and every scoped checkout.
+      The base must exist in the root and every scoped checkout, and each scoped
+      checkout must be on the task branch (the root may stay on ralphex's default_branch).
+      --set prepare=true first tags a missing base at HEAD and switches to the task
+      branch, creating it from the base. --set plan=<path> completes the printed
+      ralphex launch command.
     cmd: sh workspace/scripts/ralphex-scope.sh
     params:
       repos:
@@ -19,10 +23,17 @@ commands:
       branch:
         type: string
         required: true
+      prepare:
+        type: bool
+        default: false
+      plan:
+        type: string
     env:
       RALPHEX_REPOS: '${param.repos}'
       RALPHEX_BASE: '${param.base}'
       RALPHEX_BRANCH: '${param.branch}'
+      RALPHEX_PREPARE: '${param.prepare}'
+      RALPHEX_PLAN: '${param.plan}'
   prompts:
     type: shell
     description: |

@@ -143,8 +143,12 @@ func TestExampleWSGit_NoRunState(t *testing.T) {
 			t.Errorf("root-only %v = %q, want %q", args, got, want)
 		}
 	}
-	for _, name := range []string{"ws-check", "ws-status", "ws-log", "ws-diff", "ws-wip", "ws-unknown"} {
+	for _, name := range []string{"ws-check", "ws-status", "ws-log", "ws-diff", "ws-wip", "ws-prepare", "ws-unknown"} {
 		f.failure(name)
+	}
+	f.success("rev-parse", "HEAD")
+	if got := f.current("."); got != "task" {
+		t.Fatalf("ws-prepare without run state changed the root branch: %s", got)
 	}
 }
 
@@ -154,7 +158,8 @@ func TestExampleWSGit_InvalidState(t *testing.T) {
 		"missing repos", "missing base", "missing branch", "empty run directory", "empty repos", "empty base", "empty branch",
 		"multiline base", "multiline branch", "invalid branch", "reserved branch", "checkout shorthand", "absolute repo", "parent repo", "symlink repo",
 		"symlink parent", "symlink git", "git file", "symlink state file", "symlink run", "run file",
-		"missing repo", "nested base missing", "root base missing", "blank repo line",
+		"missing repo", "nested base missing", "root base missing", "blank repo line", "base equals branch",
+		"base aliases branch", "case variant base",
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -235,6 +240,12 @@ func TestExampleWSGit_InvalidState(t *testing.T) {
 				f.git(".", "tag", "-d", "base")
 			case "blank repo line":
 				f.setScope("services/one/src\n\n")
+			case "base equals branch":
+				writeFile(t, filepath.Join(run, "base-ref"), "task\n")
+			case "base aliases branch":
+				writeFile(t, filepath.Join(run, "base-ref"), "heads/task\n")
+			case "case variant base":
+				writeFile(t, filepath.Join(run, "base-ref"), "Refs/Heads/TASK\n")
 			}
 			for _, args := range [][]string{
 				{"rev-parse", "HEAD"}, {"diff", "HEAD"}, {"ls-files", "-z", "--others", "--exclude-standard"},
@@ -265,8 +276,14 @@ func TestExampleWSGit_BranchAndAncestor(t *testing.T) {
 					f.git(repo, "reset", "--hard", "HEAD~1")
 				}
 				if problem == "wrong branch" {
-					f.success("ws-check")
 					f.success("ws-status")
+				}
+				// The root may wait on ralphex's default branch (main without config);
+				// every other scoped repository must already be on the task branch.
+				if problem == "wrong branch" && repo == "." {
+					f.success("ws-check")
+				} else {
+					f.failure("ws-check")
 				}
 				for _, args := range [][]string{{"ws-log"}, {"ws-diff"}, {"ws-diff", "--stat"}, {"ws-wip"}, {"ws-wip", "--stat"}} {
 					f.failure(args...)
@@ -284,7 +301,7 @@ func TestExampleWSGit_ArgumentsAndRootOnlyScope(t *testing.T) {
 		t.Fatalf("root-only scope = %s", got)
 	}
 	for _, args := range [][]string{{"ws-check", "extra"}, {"ws-status", "--stat"}, {"ws-log", "extra"},
-		{"ws-diff", "--name-only"}, {"ws-wip", "--stat", "extra"}, {"ws-unknown"}} {
+		{"ws-diff", "--name-only"}, {"ws-wip", "--stat", "extra"}, {"ws-prepare", "extra"}, {"ws-unknown"}} {
 		f.failure(args...)
 	}
 	// State files also accept the final line without a newline.
@@ -292,6 +309,284 @@ func TestExampleWSGit_ArgumentsAndRootOnlyScope(t *testing.T) {
 	writeFile(t, filepath.Join(f.root, ".ralphex/run/base-ref"), "base")
 	writeFile(t, filepath.Join(f.root, ".ralphex/run/task-branch"), "task")
 	f.success("ws-check")
+}
+
+func TestExampleWSGit_SilentWithAmbiguousBase(t *testing.T) {
+	t.Parallel()
+	f := newWSGitFixture(t)
+	// A branch named like the base tag makes "base" ambiguous; Git warns on
+	// every lookup, which must not reach ralphex through intercepted calls.
+	f.git("services/one/src", "branch", "base", "refs/tags/base")
+	probe := f.command("git", "-C", filepath.Join(f.root, "services/one/src"), "rev-parse", "--verify", "base^{commit}")
+	if raw, err := probe.CombinedOutput(); err != nil || !strings.Contains(string(raw), "ambiguous") {
+		t.Fatalf("fixture must produce an ambiguous-ref warning: %v, %s", err, raw)
+	}
+	writeFile(t, filepath.Join(f.root, "services/one/src/tracked.txt"), "dirty\n")
+	for _, args := range [][]string{
+		{"rev-parse", "HEAD"}, {"diff", "HEAD"}, {"ls-files", "-z", "--others", "--exclude-standard"},
+		{"ws-check"}, {"ws-status"},
+	} {
+		f.success(args...)
+	}
+}
+
+func TestExampleWSGit_StrictCheck(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name   string
+		config string
+		setup  func(*wsGitFixture)
+		passes bool
+	}{
+		{name: "all on task branch", passes: true},
+		{name: "nested off task branch", setup: func(f *wsGitFixture) { f.git("services/two/src", "checkout", "main") }},
+		{name: "nested on default branch", config: "default_branch = trunk\n",
+			setup: func(f *wsGitFixture) { f.git("services/one/src", "checkout", "-b", "trunk") }},
+		{name: "root on configured default with task branch", config: "default_branch = trunk\n", passes: true,
+			setup: func(f *wsGitFixture) { f.git(".", "checkout", "-b", "trunk", "main") }},
+		{name: "root on default without task branch", passes: true, setup: func(f *wsGitFixture) {
+			f.git(".", "checkout", "main")
+			f.git(".", "branch", "-D", "task")
+		}},
+		{name: "root on master without config", passes: true,
+			setup: func(f *wsGitFixture) { f.git(".", "checkout", "-b", "master", "main") }},
+		{name: "root on main with other configured default", config: "default_branch = trunk\n",
+			setup: func(f *wsGitFixture) { f.git(".", "checkout", "main") }},
+		{name: "root on unrelated branch", setup: func(f *wsGitFixture) { f.git(".", "checkout", "-b", "feature", "main") }},
+		{name: "root default task branch lacks base", setup: func(f *wsGitFixture) {
+			f.git(".", "checkout", "main")
+			f.commit(".", "new base")
+			f.git(".", "tag", "-f", "base")
+		}},
+		{name: "root default HEAD lacks base", setup: func(f *wsGitFixture) {
+			f.commit(".", "new base")
+			f.git(".", "tag", "-f", "base")
+			f.git(".", "checkout", "main")
+			f.git(".", "branch", "-D", "task")
+		}},
+		{name: "nested base not ancestor", setup: func(f *wsGitFixture) {
+			f.commit("services/one/src", "future base")
+			f.git("services/one/src", "tag", "-f", "base")
+			f.git("services/one/src", "reset", "--hard", "HEAD~1")
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			if tt.config != "" {
+				writeFile(t, filepath.Join(f.root, ".ralphex/config"), "vcs_command = .ralphex/scripts/ws-git\n"+tt.config)
+			}
+			if tt.setup != nil {
+				tt.setup(f)
+			}
+			if !tt.passes {
+				f.failure("ws-check")
+				return
+			}
+			out := f.success("ws-check")
+			if !strings.Contains(out, "workspace: branch=") || !strings.Contains(out, "services/two/src: branch=task base=base task=task\n") {
+				t.Fatalf("unexpected ws-check output: %s", out)
+			}
+		})
+	}
+}
+
+func TestExampleWSGit_Prepare(t *testing.T) {
+	t.Parallel()
+	scoped := []string{".", "services/one/src", "services/two/src"}
+	t.Run("creates base and branches", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		f.unprepare(append(scoped, "services/unscoped/src")...)
+		// HEAD ahead of an existing base: the new branch starts at the base.
+		f.git("services/two/src", "tag", "base")
+		f.commit("services/two/src", "ahead of base")
+		heads := map[string]string{}
+		for _, repo := range scoped {
+			heads[repo] = f.rev(repo, "HEAD")
+		}
+		unscoped := f.refState("services/unscoped/src")
+		out := f.success("ws-prepare")
+		for _, want := range []string{
+			"workspace: created tag base at HEAD\n", "workspace: left on main; ralphex switches to task at launch\n",
+			"services/one/src: created task from base\n", "services/two/src: created task from base\n",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("prepare output missing %q: %s", want, out)
+			}
+		}
+		if strings.Contains(out, "services/two/src: created tag") {
+			t.Errorf("existing base was replaced: %s", out)
+		}
+		if got := f.current("."); got != "main" {
+			t.Errorf("root on default branch moved to %s", got)
+		}
+		if f.hasRef(".", "refs/heads/task") {
+			t.Error("prepare created the task branch in a root on its default branch")
+		}
+		for _, repo := range scoped[1:] {
+			if got := f.current(repo); got != "task" {
+				t.Errorf("%s on %s, want task", repo, got)
+			}
+		}
+		for repo, head := range map[string]string{".": heads["."], "services/one/src": heads["services/one/src"]} {
+			if got := f.rev(repo, "base^{commit}"); got != head {
+				t.Errorf("%s base tag = %s, want HEAD %s", repo, got, head)
+			}
+			if typ := strings.TrimSpace(f.git(repo, "cat-file", "-t", "refs/tags/base")); typ != "commit" {
+				t.Errorf("%s base tag must be lightweight, got %s", repo, typ)
+			}
+		}
+		if got, base := f.rev("services/two/src", "task"), f.rev("services/two/src", "base"); got != base || got == heads["services/two/src"] {
+			t.Errorf("task branch tip %s, want base %s (HEAD was %s)", got, base, heads["services/two/src"])
+		}
+		if upstream := f.gitStatus("services/one/src", "config", "branch.task.merge"); upstream == nil {
+			t.Error("task branch must not track its base")
+		}
+		if got := f.refState("services/unscoped/src"); got != unscoped {
+			t.Errorf("unscoped repository changed: %s -> %s", unscoped, got)
+		}
+		f.success("ws-check")
+		before := f.refState(scoped...)
+		f.success("ws-prepare")
+		if got := f.refState(scoped...); got != before {
+			t.Errorf("second prepare changed refs:\n%s\n%s", before, got)
+		}
+	})
+	t.Run("switches to existing branch", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		f.commit("services/one/src", "task work")
+		tip := f.rev("services/one/src", "task")
+		f.git("services/one/src", "checkout", "main")
+		f.git(".", "checkout", "-b", "feature", "main")
+		f.git(".", "branch", "-D", "task")
+		out := f.success("ws-prepare")
+		if !strings.Contains(out, "services/one/src: switched to task\n") || !strings.Contains(out, "services/two/src: on task\n") ||
+			!strings.Contains(out, "workspace: created task from base\n") {
+			t.Errorf("unexpected prepare output: %s", out)
+		}
+		if f.current("services/one/src") != "task" || f.rev("services/one/src", "HEAD") != tip {
+			t.Error("existing task branch not checked out unchanged")
+		}
+		if f.current(".") != "task" || f.rev(".", "task") != f.rev(".", "base") {
+			t.Error("root on a non-default branch must get the task branch from base")
+		}
+		f.success("ws-check")
+	})
+	t.Run("root on non-default branch with configured default", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		writeFile(t, filepath.Join(f.root, ".ralphex/config"), "default_branch = trunk\n")
+		f.git(".", "checkout", "main")
+		f.success("ws-prepare")
+		if got := f.current("."); got != "task" {
+			t.Errorf("root on main with default_branch=trunk stayed on %s", got)
+		}
+		f.git(".", "checkout", "-b", "trunk")
+		f.success("ws-prepare")
+		if got := f.current("."); got != "trunk" {
+			t.Errorf("root on configured default switched to %s", got)
+		}
+	})
+	for _, tt := range []struct {
+		name  string
+		setup func(*wsGitFixture)
+	}{
+		{name: "existing branch lacks base", setup: func(f *wsGitFixture) {
+			f.git("services/two/src", "checkout", "main")
+			f.commit("services/two/src", "newer base")
+			f.git("services/two/src", "tag", "-f", "base")
+		}},
+		{name: "existing branch lacks new base at HEAD", setup: func(f *wsGitFixture) {
+			f.git("services/two/src", "checkout", "main")
+			f.commit("services/two/src", "ahead")
+			f.git("services/two/src", "tag", "-d", "base")
+		}},
+		{name: "invalid tag name", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "bad..base\n")
+		}},
+		{name: "tag is not a commit", setup: func(f *wsGitFixture) {
+			f.git("services/two/src", "tag", "-d", "base")
+			f.git("services/two/src", "tag", "base", "HEAD^{tree}")
+		}},
+		{name: "root default HEAD lacks existing base", setup: func(f *wsGitFixture) {
+			f.git(".", "checkout", "-b", "side")
+			f.commit(".", "side commit")
+			f.git(".", "tag", "base")
+			f.git(".", "checkout", "main")
+		}},
+		{name: "base equals branch", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "task\n")
+		}},
+		{name: "base aliases branch via heads", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "heads/task\n")
+		}},
+		{name: "base aliases branch via refs/heads", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "refs/heads/task\n")
+		}},
+		{name: "base relative to task branch", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "task~0\n")
+		}},
+		{name: "base relative to HEAD", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "HEAD~0\n")
+		}},
+		{name: "missing base named like a ref path", setup: func(f *wsGitFixture) {
+			writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "tags/new-base\n")
+		}},
+		// Spelling-based, so these hold on case-sensitive filesystems too.
+		{name: "case variant of task branch", setup: setWSGitBase("TASK")},
+		{name: "case variant via heads", setup: setWSGitBase("Heads/task")},
+		{name: "case variant via refs/heads", setup: setWSGitBase("REFS/HEADS/task")},
+		{name: "case variant of HEAD", setup: setWSGitBase("HeAd~0")},
+		{name: "case variant ref path tag", setup: setWSGitBase("Tags/new-base")},
+		{name: "unborn repository", setup: func(f *wsGitFixture) {
+			if err := os.RemoveAll(filepath.Join(f.root, "services/two/src/.git")); err != nil {
+				f.t.Fatal(err)
+			}
+			f.git("services/two/src", "init", "-b", "main")
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			// Earlier repositories in scope order need changes, so a late
+			// rejection would show up as a partial mutation.
+			f.unprepare(".", "services/one/src")
+			tt.setup(f)
+			before := f.refState(scoped...)
+			f.failure("ws-prepare")
+			if got := f.refState(scoped...); got != before {
+				t.Fatalf("rejected prepare mutated repositories:\n%s\n%s", before, got)
+			}
+		})
+	}
+	t.Run("base differing from branch by more than case", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		f.unprepare(".", "services/one/src")
+		setWSGitBase("Task2")(f)
+		f.success("ws-prepare")
+		f.success("ws-check")
+		if got := f.current("services/one/src"); got != "task" || f.rev("services/one/src", "task") != f.rev("services/one/src", "Task2") {
+			t.Fatalf("prepare with base Task2 left %s at the wrong commit", got)
+		}
+	})
+	t.Run("switch conflict fails", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		f.git("services/one/src", "checkout", "main")
+		f.git("services/one/src", "branch", "-D", "task")
+		f.commit("services/one/src", "ahead of base")
+		writeFile(t, filepath.Join(f.root, "services/one/src/tracked.txt"), "dirty\n")
+		cmd := f.command(f.script, "ws-prepare")
+		if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "cannot create task from base") {
+			t.Fatalf("conflicting switch must fail: %v, %s", err, out)
+		}
+		if got := f.current("services/one/src"); got != "main" {
+			t.Errorf("failed switch left %s checked out", got)
+		}
+	})
 }
 
 func findRepoRoot(t *testing.T) string {
@@ -397,6 +692,54 @@ func (f *wsGitFixture) commit(repo, message string) {
 	writeFile(f.t, filepath.Join(f.root, repo, "tracked.txt"), message+"\n")
 	f.git(repo, "add", "tracked.txt")
 	f.git(repo, "commit", "-m", message)
+}
+
+func setWSGitBase(base string) func(*wsGitFixture) {
+	return func(f *wsGitFixture) {
+		writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), base+"\n")
+	}
+}
+
+// unprepare puts repositories on main without the task branch or base tag.
+func (f *wsGitFixture) unprepare(repos ...string) {
+	f.t.Helper()
+	for _, repo := range repos {
+		f.git(repo, "checkout", "main")
+		f.git(repo, "branch", "-D", "task")
+		f.git(repo, "tag", "-d", "base")
+	}
+}
+
+func (f *wsGitFixture) current(repo string) string {
+	f.t.Helper()
+	return strings.TrimSpace(f.git(repo, "symbolic-ref", "--short", "HEAD"))
+}
+
+func (f *wsGitFixture) rev(repo, ref string) string {
+	f.t.Helper()
+	return strings.TrimSpace(f.git(repo, "rev-parse", "--verify", ref))
+}
+
+func (f *wsGitFixture) hasRef(repo, ref string) bool {
+	f.t.Helper()
+	return f.gitStatus(repo, "rev-parse", "--verify", "--quiet", ref) == nil
+}
+
+func (f *wsGitFixture) gitStatus(repo string, args ...string) error {
+	f.t.Helper()
+	return f.command("git", append([]string{"-C", filepath.Join(f.root, repo)}, args...)...).Run()
+}
+
+// refState captures every ref and the checked-out branch of each repository.
+func (f *wsGitFixture) refState(repos ...string) string {
+	f.t.Helper()
+	var state strings.Builder
+	for _, repo := range repos {
+		state.WriteString("### " + repo + "\n")
+		state.WriteString(f.git(repo, "for-each-ref", "--format=%(refname) %(objectname)"))
+		state.Write(readExampleFile(f.t, filepath.Join(f.root, repo, ".git/HEAD")))
+	}
+	return state.String()
 }
 
 func (f *wsGitFixture) success(args ...string) string {

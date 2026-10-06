@@ -9,7 +9,7 @@ fail() {
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)
 cd "$root"
-[ "$#" -eq 0 ] || fail 'use dwe cmd ralphex.scope --set repos=... --set base=... --set branch=...'
+[ "$#" -eq 0 ] || fail 'use dwe cmd ralphex.scope --set repos=... --set base=... --set branch=... [--set prepare=true] [--set plan=...]'
 [ -n "${RALPHEX_REPOS:-}" ] || fail 'repos is required'
 [ -n "${RALPHEX_BASE:-}" ] || fail 'base is required'
 [ -n "${RALPHEX_BRANCH:-}" ] || fail 'branch is required'
@@ -17,6 +17,23 @@ case "$RALPHEX_BASE$RALPHEX_BRANCH" in
   *'
 '*) fail 'base and branch must each contain one nonempty line' ;;
 esac
+# Case variants name the same loose ref on case-insensitive filesystems.
+base_lower=$(printf '%s\n' "$RALPHEX_BASE" | tr '[:upper:]' '[:lower:]')
+branch_lower=$(printf '%s\n' "$RALPHEX_BRANCH" | tr '[:upper:]' '[:lower:]')
+[ "$base_lower" != "$branch_lower" ] || fail 'base and branch must differ'
+prepare=${RALPHEX_PREPARE:-false}
+case "$prepare" in true|false) ;; *) fail 'RALPHEX_PREPARE must be true or false' ;; esac
+plan=${RALPHEX_PLAN:-}
+if [ -n "$plan" ]; then
+  case "$plan" in
+    *' '*|*'	'*|*'
+'*) fail "plan path must not contain whitespace (ralphex cannot handle whitespace in plan paths): $plan" ;;
+    /*) fail "plan must be relative to the workspace root: $plan" ;;
+    # The printed launch command passes the plan positionally to ralphex.
+    -*) fail "plan must not start with -: $plan" ;;
+  esac
+  [ -f "$plan" ] || fail "plan is not a regular file: $plan"
+fi
 git check-ignore -q -- .ralphex/run/repos ||
   fail 'run state must be ignored: add /.ralphex/run/ and remove an older /.ralphex/ rule from the root .gitignore'
 [ -d .ralphex ] && [ ! -L .ralphex ] || fail 'render the ralphex workspace pack first'
@@ -68,5 +85,41 @@ mkdir -p "$run"
 for setting in repos base-ref task-branch; do
   mv "$scratch/$setting" "$run/$setting"
 done
+if [ "$prepare" = true ]; then
+  .ralphex/scripts/ws-git ws-prepare
+fi
 .ralphex/scripts/ws-git ws-check
 pending=false
+
+shell_quote() {
+  case "$1" in
+    ''|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./:=@%+-]*) ;;
+    *)
+      printf '%s' "$1"
+      return
+      ;;
+  esac
+  rest=$1
+  quoted=
+  while :; do
+    case "$rest" in
+      *"'"*)
+        quoted=$quoted${rest%%"'"*}"'\\''"
+        rest=${rest#*"'"}
+        ;;
+      *)
+        quoted=$quoted$rest
+        break
+        ;;
+    esac
+  done
+  printf "'%s'" "$quoted"
+}
+
+if [ -n "$plan" ]; then
+  plan_arg=$(shell_quote "$plan")
+else
+  plan_arg='<plan>'
+fi
+printf 'Launch ralphex with:\n'
+printf 'ralphex --base-ref %s --branch %s %s\n' "$(shell_quote "$RALPHEX_BASE")" "$(shell_quote "$RALPHEX_BRANCH")" "$plan_arg"

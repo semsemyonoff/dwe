@@ -58,5 +58,10 @@ func (v *WorkspaceValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			Hint:     "check render.workspace and workspace/templates/workspace pack manifests and sources",
 		}}
 	}
-	return nil
+	return []validate.Diagnostic{{
+		Severity: validate.SeverityOK,
+		Domain:   "templates",
+		Target:   "templates.workspace",
+		Message:  "all workspace template packs valid",
+	}}
 }

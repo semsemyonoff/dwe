@@ -26,6 +26,7 @@ case "$1" in
       [ "$name" != "${RALPHEX_STUB_MISSING:-}" ] || continue
       {
         printf '# %s prompt\n# variables: {{PLAN_FILE}} {{DEFAULT_BRANCH}}\n#\n\n' "$name"
+        [ "${RALPHEX_STUB_LAYOUT:-}" != irregular ] || printf '\n'
         printf 'DEFAULT %s %s\n\n' "$name" "${RALPHEX_STUB_DEFAULTS:-original}"
         printf 'SIGNAL RULES STAY LAST\n'
       } > "$dest/prompts/$name.txt"
@@ -37,6 +38,7 @@ case "$1" in
           [ "${RALPHEX_STUB_FRONTMATTER:-closed}" != closed ] || printf '%s\n' '---'
           printf '\n'
         fi
+        [ "${RALPHEX_STUB_LAYOUT:-}" != irregular ] || printf '\n\n'
         printf 'DEFAULT %s %s\n\n' "$name" "${RALPHEX_STUB_DEFAULTS:-original}"
         printf 'SIGNAL RULES STAY LAST\n'
       } > "$dest/agents/$name.txt"
@@ -48,50 +50,59 @@ esac
 
 func TestExampleRalphexPrompts_Generate(t *testing.T) {
 	t.Parallel()
+	// Irregular defaults: two blank lines after the prompt header and the agent
+	// frontmatter, and headerless agents starting with blank lines. Both
+	// layouts must produce the same normalized output.
+	for _, layout := range []string{"regular", "irregular"} {
+		t.Run(layout, func(t *testing.T) {
+			t.Parallel()
+			testRalphexPromptsGenerate(t, []string{"RALPHEX_STUB_LAYOUT=" + layout})
+		})
+	}
+}
+
+func testRalphexPromptsGenerate(t *testing.T, env []string) {
+	t.Helper()
 	f := newPromptsFixture(t)
-	for _, policy := range []string{"task", "review", "review_first", "agent", "documentation"} {
-		writeFile(t, filepath.Join(f.root, ".ralphex/policy", policy+".md"), "POLICY "+policy+"\n")
+	// Irregular fragment endings must still produce one blank line between parts.
+	policies := map[string]string{
+		"task": "POLICY task", "review": "POLICY review\n\n\n", "review_first": "POLICY review_first\n",
+		"agent": "POLICY agent\n", "documentation": "POLICY documentation\n\n",
+	}
+	for policy, content := range policies {
+		writeFile(t, filepath.Join(f.root, ".ralphex/policy", policy+".md"), content)
 	}
 	configBefore := readExampleFile(t, filepath.Join(f.root, ".ralphex/config"))
-	f.run(false, true, nil)
+	f.run(false, true, env)
 	owned := ownedRalphexFiles()
 	for file, phase := range owned {
 		content := string(readExampleFile(t, filepath.Join(f.root, ".ralphex", file)))
 		block := string(readExampleFile(t, filepath.Join(f.root, ".ralphex/blocks", phase+".md")))
+		if !strings.HasSuffix(block, ".\n") {
+			t.Fatalf("block %s must end with one newline: %q", phase, block)
+		}
 		name := strings.TrimSuffix(filepath.Base(file), ".txt")
-		body := content
+		fragments := []string{block}
+		if _, ok := policies[phase]; ok {
+			fragments = append(fragments, "POLICY "+phase+"\n")
+		}
+		if _, ok := policies[name]; ok && name != phase {
+			fragments = append(fragments, "POLICY "+name+"\n")
+		}
+		inserted := strings.Join(fragments, "\n") + "\n"
+		body := "DEFAULT " + name + " original\n\nSIGNAL RULES STAY LAST\n"
+		var want string
 		switch {
 		case strings.HasPrefix(file, "prompts/"):
-			body = stripRalphexPromptHeader(content)
-			if !strings.HasPrefix(body, block) {
-				t.Errorf("%s body must begin with the complete block after comment stripping: %s", file, body)
-			}
+			want = "# " + name + " prompt\n# variables: {{PLAN_FILE}} {{DEFAULT_BRANCH}}\n#\n\n" + inserted + body
 		case file == "agents/documentation.txt":
-			preamble := "# agent comments\n# preserved\n---\nname: documentation\ndescription: Review docs\n---\n\n"
-			if !strings.HasPrefix(content, preamble+block) {
-				t.Errorf("block must follow intact frontmatter: %s", content)
-			}
-		case !strings.HasPrefix(strings.TrimLeft(content, "\n"), block):
-			t.Errorf("%s block must lead the body: %s", file, content)
+			want = "# agent comments\n# preserved\n---\nname: documentation\ndescription: Review docs\n---\n\n" + inserted + body
+		default:
+			// v1.7.0 agents have no header: the block is the first line of the file.
+			want = inserted + body
 		}
-		blockIndex := strings.Index(body, block)
-		defaultIndex := strings.Index(body, "DEFAULT "+name+" original")
-		phasePolicy := "POLICY " + phase + "\n"
-		filePolicy := "POLICY " + name + "\n"
-		if phase == "task" || phase == "review" || phase == "agent" {
-			phaseIndex := strings.Index(body, phasePolicy)
-			if phaseIndex <= blockIndex || phaseIndex >= defaultIndex || strings.Count(body, phasePolicy) != 1 {
-				t.Errorf("%s phase policy order/count: %s", file, body)
-			}
-			if name == "review_first" || name == "documentation" {
-				fileIndex := strings.Index(body, filePolicy)
-				if fileIndex <= phaseIndex || fileIndex >= defaultIndex || strings.Count(body, filePolicy) != 1 {
-					t.Errorf("%s file policy order/count: %s", file, body)
-				}
-			}
-		}
-		if defaultIndex < blockIndex || !strings.HasSuffix(content, "SIGNAL RULES STAY LAST\n") {
-			t.Errorf("default body or signal rules lost: %s", content)
+		if content != want {
+			t.Errorf("%s layout:\n got: %q\nwant: %q", file, content, want)
 		}
 	}
 	if got := countOverrideFiles(t, f.root); got != 10 {
@@ -106,7 +117,7 @@ func TestExampleRalphexPrompts_Generate(t *testing.T) {
 		t.Fatalf("invalid defaults stamp: %s", stamp)
 	}
 	before := snapshotExampleTree(t, filepath.Join(f.root, ".ralphex"))
-	f.run(true, true, nil)
+	f.run(true, true, env)
 	assertExampleTreeUnchanged(t, filepath.Join(f.root, ".ralphex"), before)
 }
 
@@ -257,12 +268,41 @@ func TestExampleRalphexScope(t *testing.T) {
 		repos   string
 		base    string
 		branch  string
+		env     []string
 		prepare func(*testing.T, *wsGitFixture)
 		passes  bool
 		want    string
 	}{
-		{name: "valid", repos: "services/one/src services/two/src", base: "base", branch: "new-task", passes: true},
+		{name: "valid", repos: "services/one/src services/two/src", base: "base", branch: "task", passes: true},
 		{name: "root only", repos: ".", base: "base", branch: "task", passes: true},
+		{name: "unprepared without prepare", repos: "services/one/src", base: "base", branch: "new-task",
+			want: "expected task branch new-task"},
+		{name: "nested off task branch", repos: "services/one/src", base: "base", branch: "task",
+			prepare: func(_ *testing.T, f *wsGitFixture) { f.git("services/one/src", "checkout", "main") },
+			want:    "services/one/src: expected task branch task, found main"},
+		{name: "explicit prepare false", repos: "services/one/src", base: "base", branch: "new-task",
+			env: []string{"RALPHEX_PREPARE=false"}, want: "expected task branch new-task"},
+		{name: "invalid prepare", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PREPARE=yes"},
+			want: "RALPHEX_PREPARE must be true or false"},
+		{name: "prepare rejected", repos: "services/one/src", base: "base", branch: "task", env: []string{"RALPHEX_PREPARE=true"},
+			prepare: func(_ *testing.T, f *wsGitFixture) {
+				f.git("services/one/src", "checkout", "main")
+				f.commit("services/one/src", "newer base")
+				f.git("services/one/src", "tag", "-f", "base")
+			},
+			want: "existing branch task does not contain base base"},
+		{name: "absolute plan", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PLAN=" + os.DevNull},
+			want: "plan must be relative"},
+		{name: "missing plan", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PLAN=docs/missing.md"},
+			want: "plan is not a regular file: docs/missing.md"},
+		{name: "directory plan", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PLAN=services"},
+			want: "plan is not a regular file"},
+		{name: "dash plan", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PLAN=-x.md"},
+			want: "plan must not start with -"},
+		{name: "plan with space", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PLAN=docs/a plan.md"},
+			want: "plan path must not contain whitespace (ralphex cannot handle whitespace in plan paths): docs/a plan.md"},
+		{name: "base equals branch", repos: ".", base: "task", branch: "task", env: []string{"RALPHEX_PREPARE=true"},
+			want: "base and branch must differ"},
 		{name: "missing repo", repos: "services/missing/src", base: "base", branch: "task", want: "ordinary checkout"},
 		{name: "missing base", repos: "services/one/src", base: "absent", branch: "task", want: "base does not resolve"},
 		{name: "base missing in nested repo", repos: "services/one/src", base: "base", branch: "task",
@@ -290,6 +330,7 @@ func TestExampleRalphexScope(t *testing.T) {
 			before := snapshotExampleTree(t, filepath.Join(f.root, ".ralphex/run"))
 			cmd := f.command(script)
 			cmd.Env = append(cmd.Env, "RALPHEX_REPOS="+tt.repos, "RALPHEX_BASE="+tt.base, "RALPHEX_BRANCH="+tt.branch)
+			cmd.Env = append(cmd.Env, tt.env...)
 			out, err := cmd.CombinedOutput()
 			if (err == nil) != tt.passes {
 				t.Fatalf("scope success = %v, want %v: %s", err == nil, tt.passes, out)
@@ -328,6 +369,138 @@ func TestExampleRalphexScope(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExampleRalphexScope_Prepare(t *testing.T) {
+	t.Parallel()
+	requireSh(t)
+	for _, tt := range []struct {
+		name string
+		plan string
+		want string
+	}{
+		{name: "plan given", plan: "docs/plans/x.md", want: "ralphex --base-ref plan-base --branch task/x docs/plans/x.md"},
+		{name: "plan omitted", want: "ralphex --base-ref plan-base --branch task/x <plan>"},
+		{name: "plan needs quoting", plan: "docs/plans/it's-$plan.md",
+			want: `ralphex --base-ref plan-base --branch task/x 'docs/plans/it'\''s-$plan.md'`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+			scoped := []string{".", "services/one/src", "services/two/src"}
+			f.unprepare(append(scoped, "services/unscoped/src")...)
+			unscoped := f.refState("services/unscoped/src")
+			if tt.plan != "" {
+				writeFile(t, filepath.Join(f.root, tt.plan), "# plan\n")
+			}
+			cmd := f.command(script)
+			cmd.Env = append(cmd.Env, "RALPHEX_REPOS=services/one/src services/two/src", "RALPHEX_BASE=plan-base",
+				"RALPHEX_BRANCH=task/x", "RALPHEX_PREPARE=true", "RALPHEX_PLAN="+tt.plan)
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			out, err := cmd.Output()
+			if err != nil || stderr.Len() != 0 {
+				t.Fatalf("prepared scope failed: %v, stderr=%s, stdout=%s", err, stderr.String(), out)
+			}
+			if !strings.HasSuffix(string(out), "\nLaunch ralphex with:\n"+tt.want+"\n") {
+				t.Errorf("missing launch command %q: %s", tt.want, out)
+			}
+			if !strings.Contains(string(out), "services/one/src: created task/x from plan-base\n") ||
+				!strings.Contains(string(out), "services/two/src: branch=task/x base=plan-base task=task/x\n") {
+				t.Errorf("missing prepare or check output: %s", out)
+			}
+			for setting, want := range map[string]string{
+				"repos": "services/one/src\nservices/two/src\n", "base-ref": "plan-base\n", "task-branch": "task/x\n",
+			} {
+				if got := string(readExampleFile(t, filepath.Join(f.root, ".ralphex/run", setting))); got != want {
+					t.Errorf("%s = %q, want %q", setting, got, want)
+				}
+			}
+			for _, repo := range scoped {
+				want := "task/x"
+				if repo == "." {
+					want = "main"
+				}
+				if got := f.current(repo); got != want {
+					t.Errorf("%s on %s, want %s", repo, got, want)
+				}
+				if !f.hasRef(repo, "refs/tags/plan-base") {
+					t.Errorf("%s lacks the base tag", repo)
+				}
+			}
+			if got := f.refState("services/unscoped/src"); got != unscoped {
+				t.Errorf("unscoped repository changed: %s -> %s", unscoped, got)
+			}
+		})
+	}
+}
+
+func TestExampleRalphexScope_RejectedInputChangesNothing(t *testing.T) {
+	t.Parallel()
+	requireSh(t)
+	for _, tt := range []struct {
+		name, base, branch, plan, want string
+		// early rejections happen before the previous run state is backed up.
+		early bool
+	}{
+		{name: "missing plan", plan: "docs/missing.md", want: "plan is not a regular file", early: true},
+		{name: "absolute plan", plan: "/absolute.md", want: "plan must be relative", early: true},
+		{name: "plan with space", plan: "docs/plans/my plan.md", want: "plan path must not contain whitespace", early: true},
+		{name: "plan with tab", plan: "docs/plans/my\tplan.md", want: "plan path must not contain whitespace", early: true},
+		{name: "base equals branch", base: "feat/s", branch: "feat/s", want: "base and branch must differ", early: true},
+		{name: "base equals branch ignoring case", base: "FEAT/S", branch: "feat/s", want: "base and branch must differ", early: true},
+		{name: "case variant alias", base: "Heads/FEAT/s", branch: "feat/s",
+			want: "base ref must not resolve through HEAD or the task branch: Heads/FEAT/s"},
+		{name: "base aliases branch via heads", base: "heads/feat/s", branch: "feat/s",
+			want: "base ref must not resolve through HEAD or the task branch: heads/feat/s"},
+		{name: "base aliases branch via refs/heads", base: "refs/heads/feat/s", branch: "feat/s",
+			want: "base ref must not resolve through HEAD or the task branch: refs/heads/feat/s"},
+		{name: "base ref path tag", base: "tags/plan-base", branch: "task/x",
+			want: "cannot become a tag named like a ref path: tags/plan-base"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+			scoped := []string{".", "services/one/src", "services/two/src"}
+			f.unprepare(scoped...)
+			if tt.plan != "" && !filepath.IsAbs(tt.plan) && tt.plan != "docs/missing.md" {
+				writeFile(t, filepath.Join(f.root, tt.plan), "# plan\n")
+			}
+			base, branch := tt.base, tt.branch
+			if base == "" {
+				base, branch = "plan-base", "task/x"
+			}
+			refs := f.refState(scoped...)
+			before := snapshotExampleTree(t, filepath.Join(f.root, ".ralphex"))
+			run := snapshotWithoutModTime(t, filepath.Join(f.root, ".ralphex/run"))
+			cmd := f.command(script)
+			cmd.Env = append(cmd.Env, "RALPHEX_REPOS=services/one/src services/two/src", "RALPHEX_BASE="+base,
+				"RALPHEX_BRANCH="+branch, "RALPHEX_PREPARE=true", "RALPHEX_PLAN="+tt.plan)
+			if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), tt.want) {
+				t.Fatalf("rejection %q missing: %v, %s", tt.want, err, out)
+			}
+			if tt.early {
+				assertExampleTreeUnchanged(t, filepath.Join(f.root, ".ralphex"), before)
+			} else if got := snapshotWithoutModTime(t, filepath.Join(f.root, ".ralphex/run")); !reflect.DeepEqual(got, run) {
+				t.Fatalf("previous scope not restored: before=%+v, after=%+v", run, got)
+			}
+			if got := f.refState(scoped...); got != refs {
+				t.Fatalf("rejected scope mutated repositories:\n%s\n%s", refs, got)
+			}
+		})
+	}
+}
+
+func snapshotWithoutModTime(t *testing.T, root string) map[string]exampleFileSnapshot {
+	t.Helper()
+	snapshot := snapshotExampleTree(t, root)
+	for name, file := range snapshot {
+		file.ModTime = 0
+		snapshot[name] = file
+	}
+	return snapshot
 }
 
 func TestExampleRalphexScope_RejectsUnsafeSettingsBeforeWriting(t *testing.T) {
@@ -382,20 +555,30 @@ func TestExampleRalphexScope_RejectsUnsafeSettingsBeforeWriting(t *testing.T) {
 func TestExampleRalphexScope_FailedFirstRunRemovesState(t *testing.T) {
 	t.Parallel()
 	requireSh(t)
-	f := newWSGitFixture(t)
-	script := installRalphexScript(t, f.root, "ralphex-scope.sh")
-	if err := os.RemoveAll(filepath.Join(f.root, ".ralphex/run")); err != nil {
-		t.Fatal(err)
+	for _, tt := range []struct {
+		name, repos, branch string
+	}{
+		{name: "missing repo", repos: "missing", branch: "task"},
+		{name: "unprepared without prepare", repos: "services/one/src", branch: "new-task"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+			if err := os.RemoveAll(filepath.Join(f.root, ".ralphex/run")); err != nil {
+				t.Fatal(err)
+			}
+			cmd := f.command(script)
+			cmd.Env = append(cmd.Env, "RALPHEX_REPOS="+tt.repos, "RALPHEX_BASE=base", "RALPHEX_BRANCH="+tt.branch)
+			if out, err := cmd.CombinedOutput(); err == nil {
+				t.Fatalf("invalid first scope succeeded: %s", out)
+			}
+			if _, err := os.Stat(filepath.Join(f.root, ".ralphex/run")); !os.IsNotExist(err) {
+				t.Fatalf("failed first run left partial state: %v", err)
+			}
+			f.success("rev-parse", "HEAD")
+		})
 	}
-	cmd := f.command(script)
-	cmd.Env = append(cmd.Env, "RALPHEX_REPOS=missing", "RALPHEX_BASE=base", "RALPHEX_BRANCH=task")
-	if out, err := cmd.CombinedOutput(); err == nil {
-		t.Fatalf("invalid first scope succeeded: %s", out)
-	}
-	if _, err := os.Stat(filepath.Join(f.root, ".ralphex/run")); !os.IsNotExist(err) {
-		t.Fatalf("failed first run left partial state: %v", err)
-	}
-	f.success("rev-parse", "HEAD")
 }
 
 type promptsFixture struct {
@@ -482,18 +665,6 @@ func ownedRalphexFiles() map[string]string {
 		"agents/documentation.txt": "agent", "agents/implementation.txt": "agent", "agents/quality.txt": "agent",
 		"agents/simplification.txt": "agent", "agents/testing.txt": "agent",
 	}
-}
-
-func stripRalphexPromptHeader(content string) string {
-	lines := strings.Split(content, "\n")
-	leading := 0
-	for leading < len(lines) && strings.HasPrefix(lines[leading], "#") {
-		leading++
-	}
-	if leading < 2 {
-		return content
-	}
-	return strings.TrimLeft(strings.Join(lines[leading:], "\n"), "\n")
 }
 
 func countOverrideFiles(t *testing.T, root string) int {

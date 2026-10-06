@@ -89,6 +89,26 @@ func TestExamplePacks(t *testing.T) {
 						t.Errorf("scope param %s is not required", param)
 					}
 				}
+				// Optional params must not open the interactive form when omitted.
+				if p := scope.Params["prepare"]; p.Required || p.Default != "false" || p.Type != usercommands.ParamTypeBool {
+					t.Errorf("prepare param must be an optional bool defaulting to false: %+v", p)
+				}
+				if p := scope.Params["plan"]; p.Required || p.Default != "" || p.DefaultFrom != "" ||
+					(p.Type != usercommands.ParamTypeString && p.Type != "") {
+					t.Errorf("plan param must be an optional string without default: %+v", p)
+				}
+				resolved, err := usercommands.ResolveParams(scope.Params,
+					map[string]string{"repos": ".", "base": "base", "branch": "task"}, cfg)
+				if err != nil || resolved["prepare"] != false || resolved["plan"] != "" {
+					t.Errorf("omitted optional params resolved to %+v, %v", resolved, err)
+				}
+				for name, want := range map[string]string{
+					"RALPHEX_PREPARE": "${param.prepare}", "RALPHEX_PLAN": "${param.plan}",
+				} {
+					if got := scope.Env[name]; got != want {
+						t.Errorf("scope env %s = %q, want %q", name, got, want)
+					}
+				}
 				prompts, err := reg.Get("ralphex.prompts")
 				if err != nil {
 					t.Fatal(err)

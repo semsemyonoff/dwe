@@ -65,8 +65,16 @@ append_fragment() {
   [ -f "$1" ] || fail "missing fragment: $1 (run dwe render workspace first)"
   first=$(sed -n '1p' "$1")
   case "$first" in \#*) fail "fragment must not start with #: $1" ;; esac
-  cat "$1" >> "$scratch/fragments"
-  printf '\n\n' >> "$scratch/fragments"
+  # Normalize each fragment to end with its last nonblank line plus one blank
+  # separator line, whether or not the file ends with a newline.
+  awk '
+    { lines[++n] = $0 }
+    END {
+      while (n > 0 && lines[n] == "") n--
+      for (i = 1; i <= n; i++) print lines[i]
+      if (n > 0) print ""
+    }
+  ' "$1" >> "$scratch/fragments"
 }
 
 prepare() {
@@ -91,16 +99,20 @@ prepare() {
     END {
       start = 1
       while (start <= n && lines[start] ~ /^#/) start++
+      preamble = start - 1
       while (start <= n && lines[start] == "") start++
       if (kind == "agents" && lines[start] == "---") {
         start++
         while (start <= n && lines[start] != "---") start++
         if (start > n) { print "ralphex-prompts: unclosed agent frontmatter" > "/dev/stderr"; exit 1 }
         start++
+        preamble = start - 1
         while (start <= n && lines[start] == "") start++
       }
-      for (i = 1; i < start; i++) print lines[i]
-      if (start == 1 || lines[start-1] != "") print ""
+      # Layout: preamble, one blank line, fragments (each ends with its own
+      # blank separator), body without its leading blank lines.
+      for (i = 1; i <= preamble; i++) print lines[i]
+      if (preamble > 0) print ""
       printf "%s", fragments
       for (i = start; i <= n; i++) print lines[i]
     }
