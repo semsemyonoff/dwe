@@ -18,6 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.7.2] - 2026-10-29
+
 ### Changed
 
 - The ralphex workspace-pack starter pins the base per repository at scope time in
@@ -27,6 +31,13 @@ generated from commit subjects and stay on the
   `ralphex-scope.sh`, `ws-git`, `blocks/task.md` and `ralphex.yml`, then run
   `dwe render workspace` and `dwe cmd ralphex.prompts`; run state written by the old
   scope fails with a rerun-scope message until scope runs again.
+
+### Fixed
+
+- The command browser preserves the highlighted search result when Enter closes
+  the filter, instead of selecting a different command from the group's full list.
+  Collapsed ancestors of nested matches are expanded even when automatic filter
+  expansion is disabled, so confirming a match cannot fall back to another group.
 
 ## [0.7.1] - 2026-10-06
 
@@ -437,7 +448,8 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/semsemyonoff/dwe/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/semsemyonoff/dwe/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/semsemyonoff/dwe/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...v0.6.4

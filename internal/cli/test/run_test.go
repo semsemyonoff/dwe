@@ -746,7 +746,9 @@ func TestRunTest_Parallel_PeakConcurrencyBounded(t *testing.T) {
 	for _, ch := range release {
 		close(ch)
 	}
-	<-done
+	if err := <-done; err != nil {
+		t.Fatalf("runTest: %v", err)
+	}
 
 	if peak := f.peak.Load(); peak != 2 {
 		t.Errorf("peak concurrency = %d, want exactly 2 (>1 proves parallelism, ≤2 proves the limit held)", peak)

@@ -345,6 +345,8 @@ Focus moves between the two panels with `Tab` / `Shift+Tab`. Navigation and sele
 
 While the **inline filter** is active (`/`), typed characters refine the fuzzy query — the query line renders inside the tree panel, the tree narrows live with updated `M/N` match counts, `Enter` commits the filtered expansion, and `Esc` restores the prior expansion state. Action letters (`i`, `e`, `y`, …) are typed into the query, not dispatched, while filtering.
 
+Use `↑/↓` to highlight a search result. The first `Enter` closes the query and focuses the command's group, keeping that same command highlighted in the full group list. Press `Enter` again to select it; closing the query alone never runs a command.
+
 While the **inspect overlay** is open (`i`), it captures input: `↑/↓`, `k/j`, `PgUp/PgDn`, `Home`/`End` scroll the centred viewport, `Enter` confirms (returns the same `Result` as `Enter` from the list), and `Esc` closes the overlay.
 
 #### Parameter form (in-TUI overlay)
