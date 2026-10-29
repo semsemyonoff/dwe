@@ -190,6 +190,83 @@ func TestBrowser_FilterEnterCommitsKeepingExpansion(t *testing.T) {
 	}
 }
 
+func TestBrowser_FilterEnterPreservesSelectedCommand(t *testing.T) {
+	tests := []struct {
+		name  string
+		items []Item
+		query string
+		down  bool
+		want  int
+	}{
+		{
+			name: "match after other commands in group",
+			items: []Item{
+				{ID: "admin.build"},
+				{ID: "app.lint"},
+				{ID: "app.migrate"},
+				{ID: "app.test"},
+			},
+			query: "migrate",
+			want:  2,
+		},
+		{
+			name: "second ranked match",
+			items: []Item{
+				{ID: "app.lint"},
+				{ID: "app.migrate"},
+				{ID: "app.revision"},
+				{ID: "app.remigrate"},
+			},
+			query: "migrate",
+			down:  true,
+			want:  3,
+		},
+		{
+			name: "root command",
+			items: []Item{
+				{ID: "build"},
+				{ID: "migrate"},
+				{ID: "services.api.test"},
+			},
+			query: "migrate",
+			want:  1,
+		},
+		{
+			name: "nested group",
+			items: []Item{
+				{ID: "admin.build"},
+				{ID: "services.api.lint"},
+				{ID: "services.api.migrate"},
+			},
+			query: "migrate",
+			want:  2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newBrowser("pick", tt.items, DefaultOptions())
+			b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
+			b.HandleAction(tui.ActionFilter)
+			typeFilter(b, tt.query)
+			if tt.down {
+				b.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+			}
+			if idx, ok := b.selectedOrigIdx(); !ok || idx != tt.want {
+				t.Fatalf("search selected index %d (ok=%v), want %d", idx, ok, tt.want)
+			}
+
+			b.Update(syntheticKey("enter"))
+			if idx, ok := b.selectedOrigIdx(); !ok || idx != tt.want {
+				t.Fatalf("committing search selected index %d (ok=%v), want %d", idx, ok, tt.want)
+			}
+			b.HandleAction(tui.ActionSelect)
+			if b.result.Action != ActionRun || b.result.Idx != tt.want {
+				t.Errorf("selection result = %+v, want ActionRun for %s", b.result, tt.items[tt.want].ID)
+			}
+		})
+	}
+}
+
 // TestBrowser_FilterRoundTripCursorStable verifies that opening the filter,
 // typing a query, and exiting via esc lands the tree cursor on the SAME row it
 // started on — the engine's RebuildVisible must not re-park the cursor and the

@@ -28,6 +28,11 @@ generated from commit subjects and stay on the
   `dwe render workspace` and `dwe cmd ralphex.prompts`; run state written by the old
   scope fails with a rerun-scope message until scope runs again.
 
+### Fixed
+
+- The command browser preserves the highlighted search result when Enter closes
+  the filter, instead of selecting a different command from the group's full list.
+
 ## [0.7.1] - 2026-10-06
 
 ### Changed

@@ -539,13 +539,15 @@ func (b *browser) exitFilter() {
 // commitFilter (Enter) ends the capture session but KEEPS the filter-induced
 // expansion (the auto-collapsed view that surfaces the matches), unlike
 // exitFilter which restores the pre-filter expansion. Tree focus moves to the
-// nearest visible ancestor of the highlighted match so navigation resumes near
-// the result the user picked.
+// nearest visible ancestor of the highlighted match, preserving that command's
+// identity when the ranked results are replaced by the group's full list.
 func (b *browser) commitFilter() {
 	if b.filter == nil {
 		return
 	}
+	targetOrigIdx := -1
 	if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
+		targetOrigIdx = it.origIdx
 		b.tree.eng.SetCursorByKey(b.nearestRestoredAncestor(b.items[it.origIdx].ID))
 	}
 	if b.tree.focusedID() != "" && !b.tree.focusVisible() {
@@ -554,6 +556,7 @@ func (b *browser) commitFilter() {
 	b.filter = nil
 	b.active = panelList
 	b.refreshList()
+	b.reselectOrigIdx(targetOrigIdx)
 }
 
 // requestFocus returns a command that asks the Frame to focus panel p. The
