@@ -18,6 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.7.2] - 2026-10-29
+
 ### Changed
 
 - The ralphex workspace-pack starter pins the base per repository at scope time in
@@ -444,7 +448,8 @@ generated from commit subjects and stay on the
   document, unlike the pipeline files which fall back to the built-in default,
   and the error again names the file it came from.
 
-[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/semsemyonoff/dwe/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/semsemyonoff/dwe/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/semsemyonoff/dwe/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/semsemyonoff/dwe/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/semsemyonoff/dwe/compare/v0.6.3...v0.6.4
