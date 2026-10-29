@@ -384,7 +384,7 @@ func TestExampleWSGit_StrictCheck(t *testing.T) {
 				return
 			}
 			out := f.success("ws-check")
-			if !strings.Contains(out, "workspace: branch=") || !strings.Contains(out, "services/two/src: branch=task base=base task=task\n") {
+			if !strings.Contains(out, "workspace: branch=") || !strings.Contains(out, "services/two/src: branch=task base=base base_sha="+f.rev("services/two/src", "base")+" task=task\n") {
 				t.Fatalf("unexpected ws-check output: %s", out)
 			}
 		})
@@ -567,6 +567,7 @@ func TestExampleWSGit_Prepare(t *testing.T) {
 		f.unprepare(".", "services/one/src")
 		setWSGitBase("Task2")(f)
 		f.success("ws-prepare")
+		f.pin("Task2")
 		f.success("ws-check")
 		if got := f.current("services/one/src"); got != "task" || f.rev("services/one/src", "task") != f.rev("services/one/src", "Task2") {
 			t.Fatalf("prepare with base Task2 left %s at the wrong commit", got)
@@ -621,7 +622,7 @@ func newWSGitFixture(t *testing.T) *wsGitFixture {
 	}
 	f := &wsGitFixture{t: t, root: t.TempDir()}
 	for _, value := range os.Environ() {
-		if !strings.HasPrefix(value, "GIT_") {
+		if !strings.HasPrefix(value, "GIT_") && !strings.HasPrefix(value, "RALPHEX_") && !strings.HasPrefix(value, "WS_GIT_") {
 			f.env = append(f.env, value)
 		}
 	}
@@ -667,6 +668,20 @@ func (f *wsGitFixture) setScope(repos string) {
 	writeFile(f.t, filepath.Join(f.root, ".ralphex/run/repos"), repos)
 	writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "base\n")
 	writeFile(f.t, filepath.Join(f.root, ".ralphex/run/task-branch"), "task\n")
+	f.pin("base")
+}
+
+// pin writes base-sha for the fixture repositories the base currently resolves in;
+// entries beyond the scope are ignored by ws-git.
+func (f *wsGitFixture) pin(base string) {
+	f.t.Helper()
+	var pins strings.Builder
+	for _, repo := range []string{".", "services/one/src", "services/two/src", "services/unscoped/src"} {
+		if sha, err := f.command("git", "-C", filepath.Join(f.root, repo), "rev-parse", "--verify", "--quiet", base+"^{commit}").Output(); err == nil {
+			pins.WriteString(repo + " " + strings.TrimSpace(string(sha)) + "\n")
+		}
+	}
+	writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), pins.String())
 }
 
 func (f *wsGitFixture) command(name string, args ...string) *exec.Cmd {
@@ -697,6 +712,7 @@ func (f *wsGitFixture) commit(repo, message string) {
 func setWSGitBase(base string) func(*wsGitFixture) {
 	return func(f *wsGitFixture) {
 		writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), base+"\n")
+		f.pin(base)
 	}
 }
 
@@ -756,6 +772,12 @@ func (f *wsGitFixture) success(args ...string) string {
 
 func (f *wsGitFixture) failure(args ...string) {
 	f.t.Helper()
+	f.failureStderr(args...)
+}
+
+// failureStderr asserts the failure contract and returns the diagnostic.
+func (f *wsGitFixture) failureStderr(args ...string) string {
+	f.t.Helper()
 	cmd := f.command(f.script, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -764,6 +786,7 @@ func (f *wsGitFixture) failure(args ...string) {
 		f.t.Fatalf("ws-git %v must fail with stderr and no stdout: err=%v, stderr=%q, stdout=%q",
 			args, err, stderr.String(), out)
 	}
+	return stderr.String()
 }
 
 func nulNames(t *testing.T, out string) []string {
@@ -775,4 +798,182 @@ func nulNames(t *testing.T, out string) []string {
 		t.Fatalf("untracked output missing final NUL: %q", out)
 	}
 	return strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+}
+
+var wsGitPinnedOperations = [][]string{
+	{"ws-check"}, {"ws-status"}, {"ws-log"}, {"ws-diff"}, {"ws-wip"},
+	{"rev-parse", "HEAD"}, {"diff", "HEAD"}, {"ls-files", "-z", "--others", "--exclude-standard"},
+	{"status", "--porcelain"}, {"rev-parse", "--show-toplevel"},
+}
+
+func TestExampleWSGit_BasePin(t *testing.T) {
+	t.Parallel()
+	t.Run("check prints the pinned SHA", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		out := f.success("ws-check")
+		for _, repo := range []string{".", "services/one/src", "services/two/src"} {
+			label := repo
+			if repo == "." {
+				label = "workspace"
+			}
+			if want := " base=base base_sha=" + f.rev(repo, "base") + " task=task\n"; !strings.Contains(out, label+": branch="+f.current(repo)+want) {
+				t.Errorf("ws-check lacks %s base_sha: %s", label, out)
+			}
+		}
+	})
+	t.Run("pin step prints normalized paths", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		f.setScope("./services/two/src\nservices/one/src/\nservices/two/src\n")
+		want := ". " + f.rev(".", "base") + "\nservices/two/src " + f.rev("services/two/src", "base") +
+			"\nservices/one/src " + f.rev("services/one/src", "base") + "\n"
+		if got := f.success("ws-pin"); got != want {
+			t.Errorf("ws-pin = %q, want %q", got, want)
+		}
+		f.success("ws-check")
+	})
+	t.Run("moved base stops every operation", func(t *testing.T) {
+		t.Parallel()
+		for _, moved := range []string{".", "services/two/src"} {
+			f := newWSGitFixture(t)
+			pinned := f.rev(moved, "base")
+			f.moveBase(moved)
+			want := moved + ": base base moved since scope: " + pinned + " -> " + f.rev(moved, "base")
+			for _, args := range wsGitPinnedOperations {
+				if got := f.failureStderr(args...); !strings.Contains(got, want) {
+					t.Errorf("ws-git %v in %s: stderr = %q, want %q", args, moved, got, want)
+				}
+			}
+		}
+	})
+	t.Run("pin problems stop with the rerun message", func(t *testing.T) {
+		t.Parallel()
+		sha := strings.Repeat("a", 40)
+		for _, tt := range []struct {
+			name, want string
+			setup      func(*wsGitFixture)
+		}{
+			{name: "missing file", want: "missing .ralphex/run/base-sha; rerun dwe cmd ralphex.scope",
+				setup: func(f *wsGitFixture) { _ = os.Remove(filepath.Join(f.root, ".ralphex/run/base-sha")) }},
+			{name: "symlink", want: "missing .ralphex/run/base-sha; rerun dwe cmd ralphex.scope", setup: func(f *wsGitFixture) {
+				path := filepath.Join(f.root, ".ralphex/run/base-sha")
+				writeFile(t, filepath.Join(f.root, ".ralphex/real-sha"), f.readPins())
+				_ = os.Remove(path)
+				if err := os.Symlink("../real-sha", path); err != nil {
+					t.Fatal(err)
+				}
+			}},
+			{name: "directory", want: "missing .ralphex/run/base-sha; rerun dwe cmd ralphex.scope", setup: func(f *wsGitFixture) {
+				path := filepath.Join(f.root, ".ralphex/run/base-sha")
+				_ = os.Remove(path)
+				if err := os.Mkdir(path, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}},
+			{name: "missing entry", want: "missing base pin for services/two/src; rerun dwe cmd ralphex.scope", setup: func(f *wsGitFixture) {
+				writeFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"),
+					". "+f.rev(".", "base")+"\nservices/one/src "+f.rev("services/one/src", "base")+"\n")
+			}},
+			{name: "missing root entry", want: "missing base pin for .; rerun dwe cmd ralphex.scope", setup: func(f *wsGitFixture) {
+				writeFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"),
+					"services/one/src "+f.rev("services/one/src", "base")+"\nservices/two/src "+f.rev("services/two/src", "base")+"\n")
+			}},
+			{name: "entry under unnormalized path", want: "missing base pin for services/one/src;", setup: func(f *wsGitFixture) {
+				writeFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"),
+					". "+f.rev(".", "base")+"\n./services/one/src "+sha+"\nservices/two/src "+f.rev("services/two/src", "base")+"\n")
+			}},
+			{name: "malformed sha", want: "invalid base pin for .; rerun dwe cmd ralphex.scope", setup: func(f *wsGitFixture) {
+				writeFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"), ". base\n")
+			}},
+			{name: "extra field", want: "invalid base pin for .; rerun dwe cmd ralphex.scope", setup: func(f *wsGitFixture) {
+				writeFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"),
+					". "+f.rev(".", "base")+" garbage\nservices/one/src "+f.rev("services/one/src", "base")+"\nservices/two/src "+f.rev("services/two/src", "base")+"\n")
+			}},
+			{name: "short sha", want: "invalid base pin for .;", setup: func(f *wsGitFixture) {
+				writeFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"), ". "+f.rev(".", "base")[:12]+"\n")
+			}},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				f := newWSGitFixture(t)
+				tt.setup(f)
+				for _, args := range wsGitPinnedOperations {
+					if got := f.failureStderr(args...); !strings.Contains(got, tt.want) {
+						t.Errorf("ws-git %v: stderr = %q, want %q", args, got, tt.want)
+					}
+				}
+			})
+		}
+	})
+	t.Run("pin step writes the SHA it checked", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		realGit, err := exec.LookPath("git")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The shim answers the first three base lookups (one per scoped repo, the
+		// validation pass) truthfully and any later one with a different commit, as if
+		// the base moved between passes.
+		shim := t.TempDir()
+		writeFile(t, filepath.Join(shim, "git"), `#!/bin/sh
+case "$*" in
+  *'base^{commit}'*)
+    n=$(cat "$SHIM_COUNT" 2>/dev/null || echo 0)
+    n=$((n + 1))
+    echo "$n" > "$SHIM_COUNT"
+    if [ "$n" -gt 3 ]; then
+      echo cccccccccccccccccccccccccccccccccccccccc
+      exit 0
+    fi
+    ;;
+esac
+exec "$SHIM_REAL_GIT" "$@"
+`)
+		if err := os.Chmod(filepath.Join(shim, "git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		cmd := f.command(f.script, "ws-pin")
+		cmd.Env = append(cmd.Env, "PATH="+shim+string(os.PathListSeparator)+os.Getenv("PATH"),
+			"SHIM_REAL_GIT="+realGit, "SHIM_COUNT="+filepath.Join(shim, "count"))
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("ws-pin: %v", err)
+		}
+		want := ". " + f.rev(".", "base") + "\nservices/one/src " + f.rev("services/one/src", "base") +
+			"\nservices/two/src " + f.rev("services/two/src", "base") + "\n"
+		if string(out) != want {
+			t.Errorf("ws-pin = %q, want the SHAs of the validation pass %q", out, want)
+		}
+	})
+	t.Run("prepare and pin do not need an existing pin", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		if err := os.Remove(filepath.Join(f.root, ".ralphex/run/base-sha")); err != nil {
+			t.Fatal(err)
+		}
+		f.success("ws-prepare")
+		f.success("ws-pin")
+	})
+	t.Run("previous pins are honoured only by prepare and pin", func(t *testing.T) {
+		t.Parallel()
+		f := newWSGitFixture(t)
+		previous := filepath.Join(f.root, "previous-sha")
+		writeFile(t, previous, ". "+strings.Repeat("b", 40)+"\n")
+		run := func(env string, args ...string) (string, error) {
+			cmd := f.command(f.script, args...)
+			cmd.Env = append(cmd.Env, env)
+			out, err := cmd.CombinedOutput()
+			return string(out), err
+		}
+		if out, err := run("WS_GIT_PREVIOUS_PINS="+previous, "ws-check"); err != nil {
+			t.Errorf("ws-check must ignore previous pins: %v, %s", err, out)
+		}
+		for _, name := range []string{"ws-pin", "ws-prepare"} {
+			if out, err := run("WS_GIT_PREVIOUS_PINS="+previous, name); err == nil || !strings.Contains(out, ".: base base moved since scope") {
+				t.Errorf("%s must refuse the moved base: %v, %s", name, err, out)
+			}
+		}
+	})
 }

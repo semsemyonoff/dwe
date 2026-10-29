@@ -18,7 +18,7 @@ var ContentHashes = map[string]string{
 	"guides/localize-for-your-team.md":         "7651e1c5c14c",
 	"guides/observability-otel.md":             "b31faac46057",
 	"guides/preflight-checks.md":               "0118a90a2c11",
-	"guides/run-ralphex-in-a-workspace.md":     "1687c525c7f0",
+	"guides/run-ralphex-in-a-workspace.md":     "a92a3f1f5813",
 	"guides/shared-ide-and-agent-config.md":    "5bc8d05be7a8",
 	"guides/starship.md":                       "585d118b6b71",
 	"guides/start-a-new-project.md":            "315aa209f46d",

@@ -73,6 +73,17 @@ the existing task branch (or of HEAD when that branch is absent). `ws-log`,
 `ws-diff` and `ws-wip` rely on this. The base and branch passed to ralphex must
 match the scope settings; use the printed line.
 
+Scope pins the base per repository (root as `.`) in `.ralphex/run/base-sha`, one
+`<repo> <sha>` line each, after `prepare` ran; `ws-check` prints it as `base_sha=`.
+Every `ws-git` command, passthrough included, fails with `<repo>: base <ref> moved
+since scope: <pinned> -> <now>` when a base resolves elsewhere, and with a
+rerun-scope message when the pin file or an entry is missing. Rerunning scope with
+the same base (case-insensitive) keeps the pins and refuses a moved base before
+`prepare` touches any repository, or an invalid previous pin file; `--set
+repin=true` accepts the new commits. A different base or a repository without a
+previous pin is pinned fresh. A plan preflight cites the `ws-check` output rather than
+deriving the base. Re-pinning is a human decision.
+
 Review reads go through `.ralphex/scripts/ws-git ws-diff [--stat]`, `ws-log`,
 `ws-wip [--stat]`, and `ws-status`. The wrapper also combines the scoped Git
 fingerprints used by ralphex's review loop. No root anchor commit is needed.

@@ -97,7 +97,7 @@ fi
 
 operation=git
 case "${1:-}" in
-  ws-check|ws-status|ws-log|ws-prepare)
+  ws-check|ws-status|ws-log|ws-prepare|ws-pin)
     [ "$#" -eq 1 ] || fail "usage: $1"
     operation=$1
     ;;
@@ -111,6 +111,75 @@ esac
 if [ "$operation" != git ] && [ "$has_state" = false ]; then
   fail "missing run state; configure $run/{repos,base-ref,task-branch} first"
 fi
+
+# The per-repo base SHAs pinned by ralphex.scope; everything except the steps
+# that create the pin must still find the base at the pinned commit.
+pins=
+pin_lines=
+if [ "$has_state" = true ] && [ "$operation" != ws-prepare ] && [ "$operation" != ws-pin ]; then
+  [ -f "$run/base-sha" ] && [ ! -L "$run/base-sha" ] ||
+    fail "missing $run/base-sha; rerun dwe cmd ralphex.scope"
+  pins=$(cat "$run/base-sha")
+fi
+
+valid_sha() {
+  case "$1" in
+    *[!0123456789abcdef]*|'') return 1 ;;
+  esac
+  [ "${#1}" -eq 40 ] || [ "${#1}" -eq 64 ]
+}
+
+# Sets pin to the SHA recorded for $repo in the pin lines given as $1, and
+# pin_extra to anything after it: a valid line is exactly "<path> <sha>".
+find_pin() {
+  pin=
+  pin_extra=
+  while IFS=' ' read -r pin_repo pin_sha pin_rest; do
+    if [ "$pin_repo" = "$repo" ]; then
+      pin=$pin_sha
+      pin_extra=$pin_rest
+      break
+    fi
+  done <<EOF
+$1
+EOF
+}
+
+pinned_sha() {
+  find_pin "$pins"
+  [ -n "$pin" ] || fail "missing base pin for $repo; rerun dwe cmd ralphex.scope"
+  { [ -z "$pin_extra" ] && valid_sha "$pin"; } || fail "invalid base pin for $repo; rerun dwe cmd ralphex.scope"
+}
+
+# ralphex.scope hands the pins of the previous run to ws-prepare and ws-pin when
+# the same base is rescoped without repin: a moved base is refused before
+# anything is tagged or switched. Every line must be exactly "<path> <sha>".
+previous_pins=
+if [ -n "${WS_GIT_PREVIOUS_PINS:-}" ] && { [ "${1:-}" = ws-prepare ] || [ "${1:-}" = ws-pin ]; }; then
+  [ -f "$WS_GIT_PREVIOUS_PINS" ] && [ ! -L "$WS_GIT_PREVIOUS_PINS" ] ||
+    fail "invalid previous base pin file; rerun with --set repin=true to accept"
+  previous_pins=$(cat "$WS_GIT_PREVIOUS_PINS")
+  [ -n "$previous_pins" ] || fail "invalid previous base pin: empty file; rerun with --set repin=true to accept"
+  while IFS=' ' read -r pin_repo pin_sha pin_extra; do
+    if [ -z "$pin_repo" ] || [ -n "$pin_extra" ] || ! valid_sha "$pin_sha"; then
+      fail "invalid previous base pin line: $pin_repo $pin_sha $pin_extra; rerun with --set repin=true to accept"
+    fi
+  done <<EOF
+$previous_pins
+EOF
+fi
+
+# $1 is the commit the base resolves to now in $repo.
+check_previous_pin() {
+  [ -n "$previous_pins" ] || return 0
+  find_pin "$previous_pins"
+  [ -z "$pin" ] || [ "$pin" = "$1" ] ||
+    fail "$repo: base $base_ref moved since scope: $pin -> $1; rerun with --set repin=true to accept"
+}
+
+resolve_base() {
+  git -C "$repo" rev-parse --verify --quiet --end-of-options "$base_ref^{commit}" 2>/dev/null
+}
 
 # Ralphex creates or switches to --branch in the root only while the root is on
 # its default_branch; without the setting ralphex treats main or master as default.
@@ -173,7 +242,7 @@ check_branch() {
 check_prepare() {
   git -C "$repo" rev-parse --verify --quiet HEAD >/dev/null 2>&1 || fail "$repo: HEAD does not point to a commit"
   if base_commit=$(git -C "$repo" rev-parse --verify --quiet --end-of-options "$base_ref^{commit}" 2>/dev/null); then
-    :
+    check_previous_pin "$base_commit"
   else
     git check-ref-format "refs/tags/$base_ref" ||
       fail "$repo: base does not resolve and is not a valid tag name: $base_ref"
@@ -187,6 +256,8 @@ check_prepare() {
       fail "$repo: tag $base_ref does not point to a commit"
     fi
     base_commit=$(git -C "$repo" rev-parse --verify HEAD)
+    # The tag will be created exactly at HEAD.
+    check_previous_pin "$base_commit"
   fi
   current=$(git -C "$repo" symbolic-ref --quiet HEAD 2>/dev/null) || current=
   current=${current#refs/heads/}
@@ -208,8 +279,15 @@ while IFS= read -r repo; do
     check_prepare
     continue
   fi
-  git -C "$repo" rev-parse --verify --quiet --end-of-options "$base_ref^{commit}" >/dev/null 2>&1 ||
-    fail "$repo: configured base does not resolve: $base_ref"
+  now=$(resolve_base) || fail "$repo: configured base does not resolve: $base_ref"
+  if [ "$operation" = ws-pin ]; then
+    check_previous_pin "$now"
+    # Emit exactly the commit that was checked; resolving again could race a moving base.
+    pin_lines=$pin_lines$repo' '$now$newline
+  else
+    pinned_sha
+    [ "$now" = "$pin" ] || fail "$repo: base $base_ref moved since scope: $pin -> $now"
+  fi
   [ "$operation" != git ] || continue
   current=$(git -C "$repo" symbolic-ref --quiet HEAD 2>/dev/null) || fail "$repo: detached HEAD"
   current=${current#refs/heads/}
@@ -292,9 +370,14 @@ while IFS= read -r repo; do
       ;;
     untracked) untracked ;;
     ws-prepare) prepare_repo ;;
+    ws-pin)
+      find_pin "$pin_lines"
+      printf '%s %s\n' "$repo" "$pin"
+      ;;
     ws-check)
       current=$(git -C "$repo" symbolic-ref --quiet HEAD)
-      printf '%s: branch=%s base=%s task=%s\n' "$label" "${current#refs/heads/}" "$base_ref" "$task_branch"
+      pinned_sha
+      printf '%s: branch=%s base=%s base_sha=%s task=%s\n' "$label" "${current#refs/heads/}" "$base_ref" "$pin" "$task_branch"
       ;;
     ws-status)
       git -C "$repo" status --porcelain > "$scratch/status"

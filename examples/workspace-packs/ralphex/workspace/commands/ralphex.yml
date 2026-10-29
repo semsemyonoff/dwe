@@ -10,8 +10,9 @@ commands:
       The base must exist in the root and every scoped checkout, and each scoped
       checkout must be on the task branch (the root may stay on ralphex's default_branch).
       --set prepare=true first tags a missing base at HEAD and switches to the task
-      branch, creating it from the base. --set plan=<path> completes the printed
-      ralphex launch command.
+      branch, creating it from the base. The base is pinned per repository to its SHA
+      in .ralphex/run/base-sha; a rerun keeps the pins and fails if the same base moved,
+      unless --set repin=true. --set plan=<path> completes the printed ralphex launch command.
     cmd: sh workspace/scripts/ralphex-scope.sh
     params:
       repos:
@@ -26,6 +27,9 @@ commands:
       prepare:
         type: bool
         default: false
+      repin:
+        type: bool
+        default: false
       plan:
         type: string
     env:
@@ -33,6 +37,7 @@ commands:
       RALPHEX_BASE: '${param.base}'
       RALPHEX_BRANCH: '${param.branch}'
       RALPHEX_PREPARE: '${param.prepare}'
+      RALPHEX_REPIN: '${param.repin}'
       RALPHEX_PLAN: '${param.plan}'
   prompts:
     type: shell

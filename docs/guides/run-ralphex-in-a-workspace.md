@@ -118,12 +118,34 @@ Manual alternative: prepare the tags and branches yourself in every scoped
 repository and the root, then run the same command with `prepare=false` (the
 default) and, optionally, `plan=…`. Launch ralphex with the same base and branch.
 
-The command writes `.ralphex/run/{repos,base-ref,task-branch}`, runs `ws-check` and
-restores previous run state if validation fails. Never commit that run state.
+The command writes `.ralphex/run/{repos,base-ref,task-branch,base-sha}`, runs
+`ws-check` and restores previous run state, `base-sha` included, if validation
+fails. Never commit that run state.
 Repositories must be ordinary checkouts with a `.git` directory; absolute paths,
 `..` components and symlinks are rejected. Existing run-state settings must be
 ordinary files; symlinks and other file types are rejected before changing any
 state.
+
+### Pinned base
+
+Scope pins the base per repository, the root included, to the commit it resolves to
+once `prepare` has run. `.ralphex/run/base-sha` holds one `<repo> <sha>` line per
+repository (the root as `.`), and `ws-check` prints the SHA as `base_sha=`. A plan
+preflight cites that output instead of deriving the base itself or comparing it with
+`origin/*`; a missing or malformed pin file is a blocker too.
+
+Every `ws-git` command, including the Git calls ralphex routes through the wrapper,
+stops with `<repo>: base <ref> moved since scope: <pinned> -> <now>` when a base
+resolves to another commit, for example after a fetch moved a remote-tracking base or
+a tag was recreated. A missing pin file or a missing entry for a scoped repository
+stops with a message to rerun scope; the wrapper never falls back to resolving the base
+by name. A moved base is a stop with evidence: re-pinning is a human decision.
+
+Rerunning scope with the same base (compared case-insensitively) keeps the pins. If a
+base moved, scope is refused before `prepare` creates, switches or tags anything and the
+previous run state stays in place; an unreadable previous pin file is refused the same
+way. Accept the new commits explicitly with `--set repin=true`. A different base name
+or a repository without a previous pin gets a fresh pin.
 
 `ws-check` is strict. Every non-root repository must be on the task branch with the
 base as an ancestor. The root must be either on the task branch, or on

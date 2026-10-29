@@ -284,7 +284,7 @@ func TestExampleRalphexScope(t *testing.T) {
 			env: []string{"RALPHEX_PREPARE=false"}, want: "expected task branch new-task"},
 		{name: "invalid prepare", repos: ".", base: "base", branch: "task", env: []string{"RALPHEX_PREPARE=yes"},
 			want: "RALPHEX_PREPARE must be true or false"},
-		{name: "prepare rejected", repos: "services/one/src", base: "base", branch: "task", env: []string{"RALPHEX_PREPARE=true"},
+		{name: "prepare rejected", repos: "services/one/src", base: "base", branch: "task", env: []string{"RALPHEX_PREPARE=true", "RALPHEX_REPIN=true"},
 			prepare: func(_ *testing.T, f *wsGitFixture) {
 				f.git("services/one/src", "checkout", "main")
 				f.commit("services/one/src", "newer base")
@@ -407,7 +407,7 @@ func TestExampleRalphexScope_Prepare(t *testing.T) {
 				t.Errorf("missing launch command %q: %s", tt.want, out)
 			}
 			if !strings.Contains(string(out), "services/one/src: created task/x from plan-base\n") ||
-				!strings.Contains(string(out), "services/two/src: branch=task/x base=plan-base task=task/x\n") {
+				!strings.Contains(string(out), "services/two/src: branch=task/x base=plan-base base_sha="+f.rev("services/two/src", "plan-base")+" task=task/x\n") {
 				t.Errorf("missing prepare or check output: %s", out)
 			}
 			for setting, want := range map[string]string{
@@ -416,6 +416,13 @@ func TestExampleRalphexScope_Prepare(t *testing.T) {
 				if got := string(readExampleFile(t, filepath.Join(f.root, ".ralphex/run", setting))); got != want {
 					t.Errorf("%s = %q, want %q", setting, got, want)
 				}
+			}
+			var pins strings.Builder
+			for _, repo := range scoped {
+				pins.WriteString(repo + " " + f.rev(repo, "plan-base") + "\n")
+			}
+			if got := string(readExampleFile(t, filepath.Join(f.root, ".ralphex/run/base-sha"))); got != pins.String() {
+				t.Errorf("base-sha = %q, want the created tags' SHAs %q", got, pins.String())
 			}
 			for _, repo := range scoped {
 				want := "task/x"
@@ -506,7 +513,7 @@ func snapshotWithoutModTime(t *testing.T, root string) map[string]exampleFileSna
 func TestExampleRalphexScope_RejectsUnsafeSettingsBeforeWriting(t *testing.T) {
 	t.Parallel()
 	requireSh(t)
-	for _, setting := range []string{"repos", "base-ref", "task-branch"} {
+	for _, setting := range []string{"repos", "base-ref", "task-branch", "base-sha"} {
 		for _, kind := range []string{"directory", "directory-symlink", "file-symlink", "dangling-symlink"} {
 			t.Run(setting+"/"+kind, func(t *testing.T) {
 				t.Parallel()
@@ -729,5 +736,187 @@ func assertExampleTreeUnchanged(t *testing.T, root string, before map[string]exa
 	after := snapshotExampleTree(t, root)
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("script changed files: before=%+v, after=%+v", before, after)
+	}
+}
+
+// runScope runs the installed scope script with the given settings.
+func runScope(f *wsGitFixture, script, repos, base, branch string, env ...string) (string, error) {
+	cmd := f.command(script)
+	cmd.Env = append(cmd.Env, "RALPHEX_REPOS="+repos, "RALPHEX_BASE="+base, "RALPHEX_BRANCH="+branch)
+	cmd.Env = append(cmd.Env, env...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func (f *wsGitFixture) readPins() string {
+	f.t.Helper()
+	return string(readExampleFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha")))
+}
+
+// moveBase repoints the base tag of a repository at a new commit on its task branch.
+func (f *wsGitFixture) moveBase(repo string) {
+	f.t.Helper()
+	f.commit(repo, "moved base")
+	f.git(repo, "tag", "-f", "base")
+}
+
+func TestExampleRalphexScope_PinsFreshRun(t *testing.T) {
+	t.Parallel()
+	requireSh(t)
+	f := newWSGitFixture(t)
+	script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+	if err := os.RemoveAll(filepath.Join(f.root, ".ralphex/run")); err != nil {
+		t.Fatal(err)
+	}
+	// Aliases and duplicates collapse the way ws-git normalizes them; the root is always pinned.
+	out, err := runScope(f, script, "./services/two/src services/one/src/ services/two/src", "base", "task")
+	if err != nil {
+		t.Fatalf("scope failed: %v, %s", err, out)
+	}
+	want := ". " + f.rev(".", "base") + "\nservices/two/src " + f.rev("services/two/src", "base") +
+		"\nservices/one/src " + f.rev("services/one/src", "base") + "\n"
+	if got := f.readPins(); got != want {
+		t.Errorf("base-sha = %q, want %q", got, want)
+	}
+	if !strings.Contains(out, "services/one/src: branch=task base=base base_sha="+f.rev("services/one/src", "base")+" task=task\n") {
+		t.Errorf("ws-check output lacks base_sha: %s", out)
+	}
+}
+
+func TestExampleRalphexScope_RescopeAndMovedBase(t *testing.T) {
+	t.Parallel()
+	requireSh(t)
+	const repos = "services/one/src services/two/src"
+	for _, tt := range []struct {
+		name     string
+		setup    func(*wsGitFixture)
+		base     string
+		branch   string
+		env      []string
+		want     string // diagnostic when the scope is refused
+		repinned bool   // pins follow the moved base
+	}{
+		{name: "unchanged keeps pins", base: "base", branch: "task"},
+		{name: "moved base refused", setup: func(f *wsGitFixture) { f.moveBase("services/one/src") }, base: "base", branch: "task",
+			want: "services/one/src: base base moved since scope: "},
+		{name: "moved root base refused", setup: func(f *wsGitFixture) { f.moveBase(".") }, base: "base", branch: "task",
+			want: ".: base base moved since scope: "},
+		{name: "moved base with repin", setup: func(f *wsGitFixture) { f.moveBase("services/one/src") }, base: "base", branch: "task",
+			env: []string{"RALPHEX_REPIN=true"}, repinned: true},
+		{name: "explicit repin false", setup: func(f *wsGitFixture) { f.moveBase("services/one/src") }, base: "base", branch: "task",
+			env: []string{"RALPHEX_REPIN=false"}, want: "rerun with --set repin=true to accept"},
+		{name: "previous base-ref case variant", base: "base", branch: "task", want: "base base moved since scope",
+			setup: func(f *wsGitFixture) {
+				writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "BASE\n")
+				f.moveBase("services/two/src")
+			}},
+		{name: "previous base-ref without newline", base: "base", branch: "task", want: "base base moved since scope",
+			setup: func(f *wsGitFixture) {
+				writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-ref"), "base")
+				f.moveBase("services/two/src")
+			}},
+		{name: "different base name pins fresh", base: "other-base", branch: "task", repinned: true,
+			setup: func(f *wsGitFixture) {
+				f.moveBase("services/one/src")
+				for _, repo := range []string{".", "services/one/src", "services/two/src"} {
+					f.git(repo, "tag", "other-base")
+				}
+			}},
+		{name: "repo without previous pin pins fresh", base: "base", branch: "task", repinned: true,
+			setup: func(f *wsGitFixture) {
+				writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), ". "+f.rev(".", "base")+"\n")
+			}},
+		{name: "invalid previous pin refused", base: "base", branch: "task", want: "invalid previous base pin line: services/one/src",
+			setup: func(f *wsGitFixture) {
+				writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), ". "+f.rev(".", "base")+"\nservices/one/src\n")
+			}},
+		{name: "unrecognized previous pin line refused", base: "base", branch: "task", want: "invalid previous base pin line",
+			setup: func(f *wsGitFixture) {
+				writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), ". "+f.rev(".", "base")+" extra\n")
+			}},
+		{name: "short previous sha refused", base: "base", branch: "task", want: "invalid previous base pin line",
+			setup: func(f *wsGitFixture) {
+				writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), ". abc123\n")
+			}},
+		{name: "empty previous pin file refused", base: "base", branch: "task", want: "invalid previous base pin",
+			setup: func(f *wsGitFixture) { writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), "") }},
+		{name: "invalid previous pin with repin", base: "base", branch: "task", env: []string{"RALPHEX_REPIN=true"}, repinned: true,
+			setup: func(f *wsGitFixture) { writeFile(f.t, filepath.Join(f.root, ".ralphex/run/base-sha"), "garbage\n") }},
+		{name: "invalid repin value", base: "base", branch: "task", env: []string{"RALPHEX_REPIN=yes"},
+			want: "RALPHEX_REPIN must be true or false"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+			if tt.setup != nil {
+				tt.setup(f)
+			}
+			before := snapshotWithoutModTime(t, filepath.Join(f.root, ".ralphex/run"))
+			out, err := runScope(f, script, repos, tt.base, tt.branch, tt.env...)
+			if tt.want != "" {
+				if err == nil || !strings.Contains(out, tt.want) {
+					t.Fatalf("scope must fail with %q: %v, %s", tt.want, err, out)
+				}
+				if got := snapshotWithoutModTime(t, filepath.Join(f.root, ".ralphex/run")); !reflect.DeepEqual(got, before) {
+					t.Fatalf("refused scope changed run state: before=%+v, after=%+v", before, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("scope failed: %v, %s", err, out)
+			}
+			var want strings.Builder
+			for _, repo := range []string{".", "services/one/src", "services/two/src"} {
+				want.WriteString(repo + " " + f.rev(repo, tt.base) + "\n")
+			}
+			if tt.repinned || tt.name == "unchanged keeps pins" {
+				if got := f.readPins(); got != want.String() {
+					t.Errorf("base-sha = %q, want %q", got, want.String())
+				}
+			}
+			f.success("ws-check")
+		})
+	}
+}
+
+func TestExampleRalphexScope_MovedBaseDoesNotMutateReposBeforeRefusing(t *testing.T) {
+	t.Parallel()
+	requireSh(t)
+	for _, tt := range []struct {
+		name  string
+		setup func(*wsGitFixture)
+	}{
+		{name: "base tag moved", setup: func(f *wsGitFixture) { f.moveBase("services/two/src") }},
+		// prepare would recreate the tag at HEAD, which is not the pinned commit.
+		{name: "base tag deleted", setup: func(f *wsGitFixture) {
+			f.git("services/two/src", "tag", "-d", "base")
+			f.git("services/two/src", "checkout", "main")
+			f.commit("services/two/src", "main moved on")
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newWSGitFixture(t)
+			script := installRalphexScript(t, f.root, "ralphex-scope.sh")
+			scoped := []string{".", "services/one/src", "services/two/src"}
+			tt.setup(f)
+			for _, repo := range scoped {
+				f.git(repo, "checkout", "main")
+			}
+			refs := f.refState(scoped...)
+			before := snapshotWithoutModTime(t, filepath.Join(f.root, ".ralphex/run"))
+			out, err := runScope(f, script, "services/one/src services/two/src", "base", "task-y", "RALPHEX_PREPARE=true")
+			if err == nil || !strings.Contains(out, "services/two/src: base base moved since scope") ||
+				!strings.Contains(out, "rerun with --set repin=true to accept") {
+				t.Fatalf("scope must refuse the moved base: %v, %s", err, out)
+			}
+			if got := f.refState(scoped...); got != refs {
+				t.Fatalf("refused scope mutated repositories:\n%s\n%s", refs, got)
+			}
+			if got := snapshotWithoutModTime(t, filepath.Join(f.root, ".ralphex/run")); !reflect.DeepEqual(got, before) {
+				t.Fatalf("refused scope changed run state: before=%+v, after=%+v", before, got)
+			}
+		})
 	}
 }

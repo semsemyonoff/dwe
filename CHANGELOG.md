@@ -18,7 +18,15 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The ralphex workspace-pack starter pins the base per repository at scope time in
+  `.ralphex/run/base-sha`. `ws-check` prints `base_sha=`, and every `ws-git` command,
+  Git passthrough included, stops when a base moved. Rerunning scope refuses a moved
+  base unless `--set repin=true`. Projects that copied the starter take the new
+  `ralphex-scope.sh`, `ws-git`, `blocks/task.md` and `ralphex.yml`, then run
+  `dwe render workspace` and `dwe cmd ralphex.prompts`; run state written by the old
+  scope fails with a rerun-scope message until scope runs again.
 
 ## [0.7.1] - 2026-10-06
 
