@@ -32,6 +32,8 @@ generated from commit subjects and stay on the
 
 - The command browser preserves the highlighted search result when Enter closes
   the filter, instead of selecting a different command from the group's full list.
+  Collapsed ancestors of nested matches are expanded even when automatic filter
+  expansion is disabled, so confirming a match cannot fall back to another group.
 
 ## [0.7.1] - 2026-10-06
 

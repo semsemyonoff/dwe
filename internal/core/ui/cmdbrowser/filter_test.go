@@ -192,11 +192,12 @@ func TestBrowser_FilterEnterCommitsKeepingExpansion(t *testing.T) {
 
 func TestBrowser_FilterEnterPreservesSelectedCommand(t *testing.T) {
 	tests := []struct {
-		name  string
-		items []Item
-		query string
-		down  bool
-		want  int
+		name               string
+		items              []Item
+		query              string
+		down               bool
+		want               int
+		collapsedAncestors bool
 	}{
 		{
 			name: "match after other commands in group",
@@ -241,10 +242,36 @@ func TestBrowser_FilterEnterPreservesSelectedCommand(t *testing.T) {
 			query: "migrate",
 			want:  2,
 		},
+		{
+			name: "collapsed parent without auto expansion",
+			items: []Item{
+				{ID: "app.status"},
+				{ID: "app.db.migrate"},
+			},
+			query:              "migrate",
+			want:               1,
+			collapsedAncestors: true,
+		},
+		{
+			name: "multiple collapsed ancestors without auto expansion",
+			items: []Item{
+				{ID: "app.status"},
+				{ID: "app.db.status"},
+				{ID: "app.db.schema.migrate"},
+			},
+			query:              "migrate",
+			want:               2,
+			collapsedAncestors: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newBrowser("pick", tt.items, DefaultOptions())
+			opts := DefaultOptions()
+			if tt.collapsedAncestors {
+				opts.AutoCollapseEmpty = false
+				opts.DefaultExpandedDepth = 0
+			}
+			b := newBrowser("pick", tt.items, opts)
 			b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
 			b.HandleAction(tui.ActionFilter)
 			typeFilter(b, tt.query)
