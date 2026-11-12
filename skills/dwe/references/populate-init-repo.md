@@ -42,7 +42,7 @@ type: app
 container: <name>
 icon: "🧩"
 required: true                  # or omit + `services.<name>.enabled` toggle in defaults.yml
-dir: ./services/<name>          # the hub — mount it whole (SKILL.md § Rules)
+dir: ./services/<name>          # the hub — mount it whole (pipelines-and-orchestration.md § 9)
 dir_internal: /workspace
 work_dir_internal: /workspace/src
 hosts:
@@ -82,4 +82,4 @@ Fix, re-validate. `validate` executes nothing.
 dwe deploy run
 ```
 
-It inlines every enabled service's `deploy.yml` in dependency order and ends with `docker up --wait`. Not `--service <name>` for a new service, not `--force` as a clean install (`SKILL.md` § Picking the apply command). The hub `AGENTS.md` appears only after the first clone creates the hub and a `render ai` step runs — expected, not an error.
+It inlines every enabled service's `deploy.yml` in dependency order and ends with `docker up --wait`. Not `--service <name>` for a new service, not `--force` as a clean install (`pipelines-and-orchestration.md` § 8). The hub `AGENTS.md` appears only after the first clone creates the hub and a `render ai` step runs — expected, not an error.

@@ -2,7 +2,7 @@
 
 Load when the task is "customize deploy/run/stop", "add a setup question", "add a preflight check", a post-up hook, or the info dashboard / branding. Covers per-service & project `deploy.yml`, `lifecycle.yml`, `setup.yml`, `validate.yml`, `info.yml` / `styles.yml`, `docker.yml`.
 
-Edit the yml, show the diff, hand the user the apply command (`SKILL.md` § Picking the apply command). `dwe deploy plan` / `dwe reset plan` / `dwe validate` / `dwe info` are reads.
+Edit the yml, show the diff, hand the user the apply command (see § 8). `dwe deploy plan` / `dwe reset plan` / `dwe validate` / `dwe info` are reads.
 
 ## 1. Full replacement (load-bearing)
 
@@ -23,7 +23,7 @@ Prefer `workspace/services/<name>/deploy.yml` over a project-level pipeline: the
 
 **Gate the step, never the phase.** Per-step gates keep `dwe deploy run` re-runnable after a mid-pipeline failure — only unfinished steps execute.
 
-`when:` is typed: `{type: builtin, cmd: "<predicate> <args>"}` (the seven condition predicates — `SKILL.md` § Rules), `{type: shell, cmd: "<sh test>"}`, or `{type: template, expr: '{{ ne .Raw.vars.x "" }}'}`. `check:` takes the same shape as a step body (a step builtin, `type: shell`, …), or the scalar **`check: auto`** = the inverse of the step's own shell `when:` (write the predicate once; only valid with `when: {type: shell}`). A step with a `check:` re-runs every deploy.
+`when:` is typed: `{type: builtin, cmd: "<predicate> <args>"}` (the seven condition predicates — see § 9), `{type: shell, cmd: "<sh test>"}`, or `{type: template, expr: '{{ ne .Raw.vars.x "" }}'}`. `check:` takes the same shape as a step body (a step builtin, `type: shell`, …), or the scalar **`check: auto`** = the inverse of the step's own shell `when:` (write the predicate once; only valid with `when: {type: shell}`). A step with a `check:` re-runs every deploy.
 
 Step builtins you will actually use: `service_dirs_ensure` · `source_clone` · `service_configs_render` (+ `service_configs_render_check` as its `check:`) · `service_generated_harvest` · `containers_running` · `docker_wait_healthy` · `http_check` · `remove_paths` · `message`. **Predicate builtins as a step body are assertions** (`http_check`, `containers_running`, `file_exists`, `tcp_reachable`, `env_keys_present`, `config_keys_present`, `shell`): false fails the step, and such a step always re-runs. Catalogue: `dwe docs show config/deploy/builtins --lang en`.
 
@@ -132,3 +132,30 @@ Pins `project_name` (resolved lowercased; default `${project.prefix}-${project.n
 | `validate.yml` | `dwe validate --output json`, then whatever it gates |
 | `info.yml` / `styles.yml` | display-only → `dwe validate`, `dwe info` |
 | `reset.yml` | destructive → `snapshots-reset-troubleshoot.md` |
+
+After editing yml, hand the user the command matching what changed; never run it yourself:
+
+- `service.yml`, a service's `deploy.yml`, `configs`, `dirs`, service `render`, an added service, or `workspace/deploy.yml` → `dwe deploy run`.
+- `workspace/lifecycle.yml` or the compose base/overlays → `dwe run`.
+- A service toggle → `dwe services enable|disable <name> --apply`.
+- A workspace template or top-level `render.workspace` → `dwe render workspace [pack…]` (explicit, not automatic on deploy).
+- `exports.env` only → `dwe run` or `dwe deploy run --force`: it is in no config hash, so a plain deploy journal-skips the `.env` render (`render-and-vars.md` § 6).
+- Only icon / host / display strings → `dwe validate`, then `run` / `deploy run` if runtime is affected.
+- A `workspace/tests/<scenario>.yml` → `dwe validate tests`, then `dwe test run <scenario>` subject to the gate in `integration-tests.md`.
+- Mixed / unsure → `dwe deploy run`, which ends in `docker up --wait` and covers a restart.
+
+`dwe deploy run --service <name>` requires that service's own `deploy.yml` and skips the final stack up: only re-run one provisioned service this way, never a new one. `--force` is not a clean install: it ignores prior state but `when:` still applies. A true clean install is `dwe reset run && dwe deploy run`; reset is destructive and a human handoff (see `snapshots-reset-troubleshoot.md`).
+
+## 9. Authoring traps and project anatomy
+
+`dwe validate` checks shape, not judgement. `when: {type: builtin}` takes seven condition predicates: `dir-empty`, `dir-not-empty`, `dir-exists`, `dir-missing`, `file-exists`, `file-missing`, `generated-missing <svc> <field>`. Step bodies and `check:` take the separate step builtins (`source_clone`, `service_configs_render`, `containers_running`, `http_check`, …); neither registry accepts the other's names. For a missing predicate use `type: shell`, and for its inverse check use `check: auto`. Both registries are in `dwe docs llms-txt --lang en` § Builtins.
+
+Mount the whole hub, not just `src/`: use `dir: ./services/<name>`, `dir_internal: /workspace`, and `work_dir_internal: /workspace/src` together. Otherwise rendered configs, caches and tooling state are outside the container. A deploy step that runs a declared project command uses `type: command` + `cmd: <id>`, never a pasted `type: shell` copy: copies drift and shell runs on the host without the command's service/workdir/user/env.
+
+A `service.yml` `ports:` entry does not publish a port: compose binds it when an `exports.env` rule surfaces it (e.g. `{name: APP_PORT, from: services.<name>.ports.http}`) and compose interpolates that var. Keep the declaration: `ports_free` checks it and `dwe test` remaps it. `PROJECT`, `UID`, `GID`, `COMPOSE_PROJECT_NAME` are injected into `.env` and cannot be redeclared; set the compose project name with `docker.yml` `project_name`, always lowercased.
+
+Config layers deep-merge maps, later wins: root `workspace.yml` (identity: `project`, `update`, `compose`, `secrets`), tracked `workspace/defaults.yml` (services toggles, runtime, vars, exports, bridge), and tool-written gitignored `workspace/local.yml`. Root keys are strict; free-form values belong only under `vars:`. A `vars.*` value may be an `ENC[age:…]` committed secret decrypted at load (`config/secrets`). `workspace/docker.yml` is separate, with per-key per-dev overrides in `docker.local.yml` (`config/docker`).
+
+Services are `workspace/services/<name>/service.yml`: the folder is the key, not a `name:` field; containers live in compose base or overlays, and per-service `deploy.yml` / `reset.yml` are optional. Command IDs derive from path + filename + key under `workspace/commands/**.yml`. Render packs in `workspace/templates/{config,ide,ai,git,workspace}/` write service-hub runtime files, hub dotfiles, or explicitly selected project-root artifacts respectively.
+
+Optional `workspace/{deploy,lifecycle,reset}.yml` pipelines replace defaults in full; absent defaults are reported `ⓘ`, not errors. Other project files include `setup.yml`, `validate.yml`, `snapshot.yml`, `info.yml`, `styles.yml`, and `i18n/`. Integration scenarios are `workspace/tests/<scenario>.yml`, named by basename and using deploy step schema. See `dwe docs show concepts/project-layout --lang en`.

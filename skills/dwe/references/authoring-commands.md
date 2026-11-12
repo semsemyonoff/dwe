@@ -14,6 +14,16 @@ dwe cmd -i <id> --output json             # resolved shape: type, service, argv,
 dwe cmd <id> [--set key=value] [-- args]  # run (`dwe cmd` is an alias of `dwe commands`)
 ```
 
+For an unfamiliar command inspect its `--set key=value` params, `${args}` pass-through after `--` (e.g. `dwe cmd site.test -- --run x.test.ts`) and `confirmation:`. If it rejects extra arguments, it has no `${args}` slot; the error names the one-line fix, which is preferable to a workaround. A scoped listing can miss project-wide and workflow commands with no `service:`; run a full listing before falling back to `dwe shell`. Hub command block counts are declared counts; `hide:` can shorten the live listing.
+
+The `▶ <id>` banner is on stderr and absent with `-o json`; stdout is the command's own output. `dwe -v cmd <id>` also echoes the exact spawned process to stderr. For a long-running one-off, `dwe shell … --tty` avoids pipe buffering that makes output look hung (`dwe cmd` has no such flag); omit the PTY for parsed output because it converts `\n` to `\r\n`. If a shell task recurs, suggest declaring it rather than running it a third time.
+
+## Output formats for inspection
+
+Use `--output json` (`-o json`) for parsed data from `status`, `validate`, `services list`, `vars get|list|inspect`, `snapshot list|inspect`, `info`, `logs`, `commands list`, `docs list|search`, `test list|run|clean`, `deploy plan`, and `secrets status`. Read envelope keys before indexing: a wrong key can return empty with exit 0. `status` is `{project, apps, tools, infra, daemons, deploy, topology, git}`, not top-level `services`; `info` is `{title, sections[]}`; `validate` is `{summary, diagnostics[]}`; `commands list` is `{commands[]}` with `id`, `type`, optional `group`, localized `description`, first-line `summary`, `service`, `params`; `deploy plan` is `{phases[{name, steps[{name, type, cmd, unresolved[], when, check, …}]}]}`. Match command IDs, not localized descriptions.
+
+`docs show` and `docs llms-txt` always emit markdown and ignore `-o json` (`docs show --raw` for piping; `llms-txt --out PATH` writes a file). `deploy state show` is YAML; `render env` is dotenv text. Scope docs with `<topic>#<anchor>`, `--anchors`, or `--toc`. Bare `dwe commands`, `dwe docs`, `dwe status`, and `dwe vars` open a TUI on a terminal and fall back to plain output in a pipe; use explicit read forms instead.
+
 ## 2. File shape
 
 ```yaml
@@ -131,6 +141,6 @@ dwe cmd -i <id> --output json
 dwe validate commands --output json   # also: a service: naming no compose service, a hide: that does not evaluate
 ```
 
-A command referenced from a pipeline step (`type: command`) applies when the user runs that pipeline (`dwe deploy run` / `dwe run`); a standalone command is run by the user via `dwe cmd <id>` — or by you when the task it carries only reads or verifies (`SKILL.md` § Running project tasks).
+A command referenced from a pipeline step (`type: command`) applies when the user runs that pipeline (`dwe deploy run` / `dwe run`); a standalone command is run by the user via `dwe cmd <id>` — or by you when the task it carries only reads or verifies (`SKILL.md` § Permission boundary).
 
 Cross-links: pipeline wiring → `pipelines-and-orchestration.md`; `${vars.*}` / `default_from` → `render-and-vars.md`; calling a `private` command from a test scenario → `integration-tests.md`.

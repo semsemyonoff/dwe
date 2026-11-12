@@ -18,7 +18,10 @@ generated from commit subjects and stay on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The DWE agent skill now keeps navigation and safety boundaries in a shorter
+  core, with test isolation, apply choices and authoring details loaded on demand.
 
 ## [0.7.2] - 2026-10-29
 

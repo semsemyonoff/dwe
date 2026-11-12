@@ -1,6 +1,6 @@
 # Integration tests — `dwe test`
 
-Load when the task is "verify a clean deploy still works", "add an integration test / scenario", "test with redis off", "assert the app answers after deploy". You **author** scenario yml under `workspace/tests/`; whether you may also run `dwe test run` is decided per scenario by the gate in `SKILL.md` (§ The `dwe test run` gate).
+Load when the task is "verify a clean deploy still works", "add an integration test / scenario", "test with redis off", "assert the app answers after deploy", or before running `dwe test run`. You author scenario yml under `workspace/tests/`; the gate below decides whether you may run it.
 
 `dwe test run` copies the project into `.dwe/tests/runs/<scenario>/`, gives the copy its own compose project and freshly allocated host ports, runs `dwe validate` + a real `dwe deploy run` from a clean slate, runs your steps, then tears it down. Reference: `dwe docs show config/tests --lang en`; guide: `guides/integration-tests`.
 
@@ -15,6 +15,17 @@ Load when the task is "verify a clean deploy still works", "add an integration t
 | `dwe test clean [scenario...]` | **mutating** — hand over; manifest-driven teardown of kept / crashed runs |
 
 Isolation is real but not total: `shared: true` volumes are reused verbatim, named / `external:` compose resources bypass project scoping, and host side effects of host-executing steps are not sandboxed. Those leaks are exactly the profile's three hard stops (`shared_volumes`, `isolation_findings`, `host_steps`).
+
+### Unattended test gate — cheap AND isolated, or hand off
+
+Read `dwe test list --output json` first; each scenario's `cost_profile` decides:
+
+- **Hard stops — hand it over, no judgement call:** `isolation_findings` non-empty after dropping entries with `"shared": true`; `shared_volumes` > 0; `host_steps` > 0. Host steps include project-authored `type: shell`, the `shell` builtin, host commands, and shell `when:`/`check:`; DWE's own subcommands do not count, so the built-in pipeline reports 0. Fix `interpolated_host_port` by routing the port through `services.<name>.ports` or an `exports.env` rule `from: vars.<path>`.
+- **Cost — judge it:** `build_services`, `external_images`, `max_start_period_seconds`. A build is not an automatic stop: read the Dockerfile. The profile reports that a build exists, not its cost; layer-cache warmth is not modelled.
+
+Run unattended only when all hard stops are clear **and** you can account for cost; otherwise, or when unsure, hand over the exact command. Always run `dwe validate tests` first. Propose a run only for substantial changes (new service, reworked pipeline, provisioning/secrets), never a display-only edit.
+
+A project test that reaches the live database or another stateful service needs permission: it may truncate and re-seed working data. Inspect its connections; a request to "run the tests" does not authorize writes against the live stack. When the stack is needed, use a `workspace/tests/` scenario subject to this gate.
 
 ## 2. Author a scenario
 

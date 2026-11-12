@@ -18,7 +18,7 @@ Deeper, still read-only: `dwe compose argv up` (exact compose argv), `dwe compos
 - **Stale journal after a branch switch** → `dwe deploy state show`; if out of sync hand off `dwe deploy state repair` (reconcile) or `dwe deploy state clear` (wipe). Never hand-edit `.dwe/deploy/state.yml`.
 - **Container won't come up** → `dwe logs <svc> --tail 0`, then `dwe compose argv up` / `dwe compose files` to confirm the assembled overlays. Fixes land in `service.yml`, the service's `deploy.yml`, or an overlay (`pipelines-and-orchestration.md`).
 - **Build fails fetching a base image** from a private/LAN registry while `docker pull` works → set `build.prepull_bases: true` in `workspace/docker.yml` (daemon-side pull of missing bases before compose builds; best-effort). `dwe docs show config/docker --lang en`.
-- **`<encrypted>` / `secrets.unresolved`** → `dwe secrets status --output json`; `SKILL.md` § Anti-patterns.
+- **`<encrypted>` / `secrets.unresolved`** → `dwe secrets status --output json`; `SKILL.md` § Permission boundary.
 
 ## Snapshots — read first
 
